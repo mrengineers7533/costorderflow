@@ -112,7 +112,8 @@ export function OrderPreview(p: Props) {
         {/* Items */}
         <div className="border rounded">
           <div className="grid grid-cols-12 gap-1 px-2 py-1.5 text-[11px] font-semibold uppercase bg-muted/40 border-b">
-            <div className="col-span-6">Description</div>
+            <div className="col-span-1">S.No.</div>
+            <div className="col-span-5">Description</div>
             <div className="col-span-1 text-right">Qty</div>
             <div className="col-span-2 text-right">Rate</div>
             <div className="col-span-3 text-right">Amount</div>
@@ -122,7 +123,8 @@ export function OrderPreview(p: Props) {
           ) : (
             p.items.map((it, idx) => (
               <div key={it.id || idx} className="grid grid-cols-12 gap-1 px-2 py-1.5 border-b last:border-b-0 text-xs">
-                <div className="col-span-6">
+                <div className="col-span-1 tabular-nums text-muted-foreground">{idx + 1}</div>
+                <div className="col-span-5">
                   <div className="truncate" title={it.description}>{it.description || <Placeholder text="(blank)" />}</div>
                   {it.hsn_code && <div className="text-[10px] text-muted-foreground">HSN {it.hsn_code}</div>}
                 </div>
