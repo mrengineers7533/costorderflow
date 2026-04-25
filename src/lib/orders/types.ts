@@ -6,6 +6,9 @@ export interface Address {
   gstin?: string;
   state?: string;
   state_code?: string;
+  contact_person?: string;
+  contact_number?: string;
+  email?: string;
 }
 
 export interface LineItem {
