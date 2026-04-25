@@ -40,6 +40,24 @@ export interface Charges {
   currency_symbol?: string; // e.g. "$", "€"; defaults derived from currency
   fx_rate?: number;        // 1 unit foreign = X INR (e.g. 81.85)
   advance_percent?: number; // e.g. 40 for "Advance Required @ 40%"
+  /** Ex-works Murthal (GMS imports landed-cost) breakdown.
+   *  Each toggle hides the line from the preview & total. Percentages are
+   *  applied against (basic_total + sea_freight + insurance) per the spec. */
+  ex_murthal_enabled?: boolean;
+  hike_enabled?: boolean;
+  hike_amount?: number;       // optional manual hike on basic
+  sea_freight_enabled?: boolean;
+  sea_freight?: number;       // INR
+  sea_insurance_enabled?: boolean;
+  sea_insurance?: number;     // INR
+  custom_enabled?: boolean;
+  custom_percent?: number;    // default 8.25
+  clearing_enabled?: boolean;
+  clearing_percent?: number;  // default 1.5
+  landed_gst_enabled?: boolean;
+  landed_gst_percent?: number; // default 18
+  landed_discount_enabled?: boolean;
+  landed_discount?: number;    // one-time INR
 }
 
 export interface Totals {
