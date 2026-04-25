@@ -348,6 +348,29 @@ export default function OrderEditor() {
               <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
               <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
               <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+              <div className="pt-2 border-t">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Foreign Currency (Ex-works)</Label>
+                <p className="text-[11px] text-muted-foreground mb-2">For GMS imports (e.g. Ex-works Turkey in USD). Leave currency blank or "INR" for domestic orders.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Currency</Label>
+                    <Select
+                      value={charges.currency || "INR"}
+                      onValueChange={(v) => setCharges({ ...charges, currency: v === "INR" ? undefined : v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="INR">INR (domestic)</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <NumberField label="FX Rate (₹)" value={charges.fx_rate || 0} onChange={(v) => setCharges({ ...charges, fx_rate: v })} />
+                  <NumberField label="Advance %" value={charges.advance_percent ?? 40} onChange={(v) => setCharges({ ...charges, advance_percent: v })} />
+                </div>
+              </div>
             </div>
             <div className="rounded-lg border p-4 space-y-2 bg-card">
               <Row k="Basic Total" v={totals.basic_total} />
