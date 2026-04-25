@@ -111,6 +111,8 @@ export default function OrderEditor() {
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate, prepared_by: preparedBy,
       line_items: itemsWithAmounts, charges, totals, amount_in_words: words, notes,
+    } as never; void 0; const _payload = payload;
+    /*
     };
 
     const res = isNew
