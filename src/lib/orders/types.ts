@@ -56,3 +56,71 @@ export interface OrderRecord {
   created_at: string;
   updated_at: string;
 }
+
+/** A single placement on a template page. Coordinates are normalized 0..1
+ * relative to the page (origin top-left). */
+export interface FieldPlacement {
+  page: number;          // 1-based page index
+  x: number;             // 0..1 (left)
+  y: number;             // 0..1 (top)
+  width?: number;        // 0..1 (optional, used for wrapping/tables)
+  fontSize?: number;     // points; default 10
+  align?: "left" | "right" | "center";
+  bold?: boolean;
+}
+
+/** Keys map to data extracted from an OrderRecord; "items_table" is special. */
+export type FieldMapKey =
+  | "oa_number"
+  | "order_date"
+  | "reference"
+  | "cost_sheet_number"
+  | "prepared_by"
+  | "company_name"
+  | "bill_to_name" | "bill_to_address" | "bill_to_gstin" | "bill_to_state"
+  | "ship_to_name" | "ship_to_address" | "ship_to_gstin" | "ship_to_state"
+  | "items_table"
+  | "basic_total" | "pf_amount" | "insurance" | "freight"
+  | "subtotal" | "gst_amount" | "grand_total" | "discount" | "net_payable"
+  | "amount_in_words"
+  | "notes";
+
+export type FieldMap = Partial<Record<FieldMapKey, FieldPlacement>>;
+
+export interface OrderTemplate {
+  id: string;
+  format: OrderFormat;
+  file_path: string;
+  page_count: number;
+  field_map: FieldMap;
+  updated_at: string;
+}
+
+export const FIELD_LABELS: Record<FieldMapKey, string> = {
+  oa_number: "OA Number",
+  order_date: "Order Date",
+  reference: "Reference",
+  cost_sheet_number: "Cost Sheet No.",
+  prepared_by: "Prepared By",
+  company_name: "Company Name",
+  bill_to_name: "Bill To · Name",
+  bill_to_address: "Bill To · Address",
+  bill_to_gstin: "Bill To · GSTIN",
+  bill_to_state: "Bill To · State",
+  ship_to_name: "Ship To · Name",
+  ship_to_address: "Ship To · Address",
+  ship_to_gstin: "Ship To · GSTIN",
+  ship_to_state: "Ship To · State",
+  items_table: "Line Items Table",
+  basic_total: "Basic Total",
+  pf_amount: "P&F Amount",
+  insurance: "Insurance",
+  freight: "Freight",
+  subtotal: "Subtotal",
+  gst_amount: "GST Amount",
+  grand_total: "Grand Total",
+  discount: "Discount",
+  net_payable: "Net Payable",
+  amount_in_words: "Amount in Words",
+  notes: "Notes",
+};
