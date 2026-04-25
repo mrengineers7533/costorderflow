@@ -111,13 +111,11 @@ export default function OrderEditor() {
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate, prepared_by: preparedBy,
       line_items: itemsWithAmounts, charges, totals, amount_in_words: words, notes,
-    } as never; void 0; const _payload = payload;
-    /*
     };
 
     const res = isNew
-      ? await supabase.from("orders").insert(payload).select().single()
-      : await supabase.from("orders").update(payload).eq("id", orderId!).select().single();
+      ? await supabase.from("orders").insert(payload as never).select().single()
+      : await supabase.from("orders").update(payload as never).eq("id", orderId!).select().single();
 
     setSaving(false);
     if (res.error) return toast({ title: "Save failed", description: res.error.message, variant: "destructive" });
