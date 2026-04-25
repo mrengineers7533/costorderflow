@@ -127,13 +127,31 @@ export function OrderPreview(p: Props) {
         {p.format === "MR" ? (
           <>
             <MRHeader />
-            {/* Meta */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <Field label="OA No." value={p.oaNumber || <Placeholder text="auto on save" />} />
-              <Field label="Date" value={p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"} />
-              <Field label="Reference" value={p.reference || <Placeholder />} />
-              <Field label="Cost Sheet" value={p.costSheetNumber || <Placeholder />} />
-            </div>
+            {/* Meta — bordered table matching template */}
+            <table className="w-full border-collapse text-[11px] border border-foreground">
+              <tbody>
+                <tr>
+                  <td className="border border-foreground px-2 py-1 w-1/2">
+                    <span className="font-bold">OA No.: </span>
+                    {p.oaNumber || <Placeholder text="auto on save" />}
+                  </td>
+                  <td className="border border-foreground px-2 py-1 w-1/2">
+                    <span className="font-bold">Dated: </span>
+                    {p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-foreground px-2 py-1">
+                    <span className="font-bold">Ref. NO.: </span>
+                    {p.reference || p.costSheetNumber || <Placeholder />}
+                  </td>
+                  <td className="border border-foreground px-2 py-1">
+                    <span className="font-bold">Prepared By: </span>
+                    {p.preparedBy || <Placeholder />}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </>
         ) : (
           <GMSHeader
@@ -147,11 +165,23 @@ export function OrderPreview(p: Props) {
           />
         )}
 
-        {/* Addresses */}
-        <div className="grid grid-cols-2 gap-3">
-          <AddressBlock title="Bill To" addr={p.billTo} fallbackName={p.companyName} />
-          <AddressBlock title="Ship To" addr={ship} fallbackName={p.companyName} />
-        </div>
+        {/* Addresses — bordered table */}
+        <table className="w-full border-collapse text-[11px] border border-foreground">
+          <tbody>
+            <tr>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Bill To</td>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Ship To</td>
+            </tr>
+            <tr>
+              <td className="border border-foreground px-2 py-1 align-top">
+                <AddressCellContent addr={p.billTo} fallbackName={p.companyName} />
+              </td>
+              <td className="border border-foreground px-2 py-1 align-top">
+                <AddressCellContent addr={ship} fallbackName={p.companyName} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Items + Totals — unified bordered table matching reference template */}
         <table className="w-full border-collapse text-[11px] border border-foreground">
