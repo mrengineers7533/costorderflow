@@ -29,11 +29,15 @@ interface CostSheetRow {
   created_at: string;
 }
 
-export function CostSheetPicker({ onApply }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow) => void }) {
+export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow) => void; onParsingChange?: (parsing: boolean) => void }) {
   const [sheets, setSheets] = useState<CostSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    onParsingChange?.(sheets.some((s) => s.status === "parsing"));
+  }, [sheets, onParsingChange]);
 
   async function refresh() {
     setLoading(true);
