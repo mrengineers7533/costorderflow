@@ -42,10 +42,9 @@ export function QuickOrderPanel() {
 
   function applyCostSheet(data: ExtractedCostSheet) {
     setHasData(true);
-    if (data.company_name) {
-      setCompanyName(data.company_name);
-      setFormat(detectFormat(data.company_name));
-    }
+    if (data.company_name) setCompanyName(data.company_name);
+    // Decide format from company name AND line items (any "GMS" → GMS).
+    setFormat(detectFormat(data.company_name || "", data.line_items));
     if (data.bill_to) setBillTo({ ...emptyAddress, ...data.bill_to });
     if (data.ship_to && (data.ship_to.name || data.ship_to.address)) {
       setShipTo({ ...emptyAddress, ...data.ship_to });
