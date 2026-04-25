@@ -16,6 +16,7 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
+import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, type BankDetails } from "@/lib/orders/defaults";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -48,6 +49,8 @@ export default function OrderEditor() {
   const [charges, setCharges] = useState<Charges>(emptyCharges);
   const [notes, setNotes] = useState("");
   const [parsing, setParsing] = useState(false);
+  const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
+  const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
 
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit_rate: 0, amount: 0, make: "MR" };
@@ -362,6 +365,33 @@ export default function OrderEditor() {
           <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
           <CardContent><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} /></CardContent>
         </Card>
+
+        {format === "MR" && (
+          <>
+            <Card>
+              <CardHeader><CardTitle>Terms &amp; Conditions</CardTitle></CardHeader>
+              <CardContent>
+                <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} rows={8} className="font-mono text-xs" />
+                <div className="mt-2 flex justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setTerms(DEFAULT_MR_TERMS)}>Reset to default</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+              <CardContent className="grid md:grid-cols-2 gap-3">
+                <div><Label>Bank Name</Label><Input value={bank.bank_name} onChange={(e) => setBank({ ...bank, bank_name: e.target.value })} /></div>
+                <div><Label>Branch</Label><Input value={bank.branch} onChange={(e) => setBank({ ...bank, branch: e.target.value })} /></div>
+                <div><Label>Account Number</Label><Input value={bank.account_no} onChange={(e) => setBank({ ...bank, account_no: e.target.value })} /></div>
+                <div><Label>IFSC Code</Label><Input value={bank.ifsc} onChange={(e) => setBank({ ...bank, ifsc: e.target.value })} /></div>
+                <div className="md:col-span-2 flex justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setBank(DEFAULT_MR_BANK)}>Reset to default</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
           </div>
 
           <aside className="lg:sticky lg:top-4 lg:self-start">
@@ -385,6 +415,8 @@ export default function OrderEditor() {
               splitMode={splitMode}
               onFormatChange={(f) => { setAutoFormat(false); setFormat(f); }}
               onDownloadPDF={downloadPDF}
+              terms={terms}
+              bank={bank}
             />
           </aside>
         </div>
