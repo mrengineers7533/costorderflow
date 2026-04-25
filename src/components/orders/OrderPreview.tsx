@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 import mrLogo from "@/assets/mr-logo.png";
+import gmsLogo from "@/assets/gms-logo.png";
 import { MR_FOOTER_ADDRESS, type BankDetails } from "@/lib/orders/defaults";
 
 interface Props {
@@ -102,15 +103,28 @@ export function OrderPreview(p: Props) {
 
       <div className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body">
         {/* Header */}
-        {p.format === "MR" ? <MRHeader /> : <GMSHeader />}
-
-        {/* Meta */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          <Field label="OA No." value={p.oaNumber || <Placeholder text="auto on save" />} />
-          <Field label="Date" value={p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"} />
-          <Field label="Reference" value={p.reference || <Placeholder />} />
-          <Field label="Cost Sheet" value={p.costSheetNumber || <Placeholder />} />
-        </div>
+        {p.format === "MR" ? (
+          <>
+            <MRHeader />
+            {/* Meta */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <Field label="OA No." value={p.oaNumber || <Placeholder text="auto on save" />} />
+              <Field label="Date" value={p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"} />
+              <Field label="Reference" value={p.reference || <Placeholder />} />
+              <Field label="Cost Sheet" value={p.costSheetNumber || <Placeholder />} />
+            </div>
+          </>
+        ) : (
+          <GMSHeader
+            companyName={p.companyName}
+            billTo={p.billTo}
+            oaNumber={p.oaNumber}
+            orderDate={p.orderDate}
+            reference={p.reference}
+            costSheetNumber={p.costSheetNumber}
+            preparedBy={p.preparedBy}
+          />
+        )}
 
         {/* Addresses */}
         <div className="grid grid-cols-2 gap-3">
@@ -309,11 +323,51 @@ function MRHeader() {
   );
 }
 
-function GMSHeader() {
+function GMSHeader({
+  companyName, billTo, oaNumber, orderDate, reference, costSheetNumber, preparedBy,
+}: {
+  companyName: string; billTo: Address; oaNumber: string; orderDate: string;
+  reference: string; costSheetNumber: string; preparedBy: string;
+}) {
+  const customerName = billTo?.name || companyName;
+  const addressLine = billTo?.address?.split("\n")[0] || "";
+  const dateStr = orderDate ? new Date(orderDate).toLocaleDateString("en-IN") : "—";
   return (
-    <div className="text-center space-y-0.5 border-b pb-3">
-      <div className="font-bold text-base">GMS Engineering</div>
-      <div className="text-xs text-muted-foreground">Order Acceptance</div>
+    <div className="space-y-0">
+      {/* Logo + company name */}
+      <div className="flex flex-col items-center pb-2">
+        <img
+          src={gmsLogo}
+          alt="GMS Grain Milling Solutions logo"
+          width={120}
+          height={120}
+          loading="lazy"
+          className="h-20 w-auto object-contain"
+        />
+        <div className="text-base font-extrabold tracking-tight mt-1">
+          GRAIN MILLING SOLUTIONS PVT. LTD.
+        </div>
+      </div>
+      {/* ORDER ACCEPTANCE band */}
+      <div className="bg-gradient-to-r from-muted via-background to-muted border-y border-foreground/40 py-1 text-center">
+        <div className="text-sm font-bold tracking-[0.2em]">ORDER ACCEPTANCE</div>
+      </div>
+      {/* Customer / OA meta two-column block */}
+      <div className="grid grid-cols-2 gap-4 pt-3 text-xs">
+        <div className="space-y-0.5">
+          <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
+          {addressLine && <div>{addressLine}</div>}
+          {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
+          {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
+          {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
+        </div>
+        <div className="space-y-0.5 text-right">
+          <div><span className="font-semibold">Date :</span> {dateStr}</div>
+          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
+          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+          {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
+        </div>
+      </div>
     </div>
   );
 }
