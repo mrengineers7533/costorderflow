@@ -34,6 +34,7 @@ export default function OrdersList() {
           <h1 className="text-2xl font-bold">Order Acceptances</h1>
           <div className="flex gap-2">
             <Button asChild><Link to="/orders/new">+ New Order</Link></Button>
+            <Button variant="outline" asChild><Link to="/orders/templates">Templates</Link></Button>
             <Button variant="outline" onClick={signOut}>Sign out</Button>
           </div>
         </div>
