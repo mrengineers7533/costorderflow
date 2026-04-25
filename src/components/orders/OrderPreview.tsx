@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
+import { calcExMurthal } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import {
@@ -52,6 +53,8 @@ export function OrderPreview(p: Props) {
   const advancePct = p.charges.advance_percent ?? 40;
   const inrAmount = isFX ? p.totals.basic_total * fxRate : p.totals.basic_total;
   const advanceAmount = (inrAmount * advancePct) / 100;
+  const isMurthal = !!p.charges.ex_murthal_enabled;
+  const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -177,8 +180,17 @@ export function OrderPreview(p: Props) {
           )}
         </div>
 
-        {/* Totals — Ex-works foreign-currency layout */}
-        {isFX ? (
+        {/* Totals — Ex-works Murthal landed-cost layout (highest priority) */}
+        {isMurthal && murthal ? (
+          <ExMurthalBlock
+            m={murthal}
+            c={p.charges}
+            fxSymbol={fxSymbol}
+            fxRate={fxRate}
+            isFX={isFX}
+            basicFX={p.totals.basic_total}
+          />
+        ) : isFX ? (
           <div className="border rounded overflow-hidden text-xs">
             <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Price Ex-works {p.charges.currency}</div>
@@ -248,6 +260,58 @@ export function OrderPreview(p: Props) {
         )}
       </div>
     </Card>
+  );
+}
+
+function ExMurthalBlock({
+  m, c, fxSymbol, fxRate, isFX, basicFX,
+}: {
+  m: ReturnType<typeof calcExMurthal>;
+  c: Charges;
+  fxSymbol: string;
+  fxRate: number;
+  isFX: boolean;
+  basicFX: number;
+}) {
+  const inr = (n: number) =>
+    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const Row = ({ k, v, bold, sub }: { k: string; v: number; bold?: boolean; sub?: boolean }) => (
+    <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
+      <div className={`px-2 py-1.5 ${sub ? "pl-6" : ""} ${bold ? "font-bold" : ""}`}>{k}</div>
+      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
+    </div>
+  );
+  return (
+    <div className="border rounded overflow-hidden text-xs">
+      {isFX && (
+        <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
+          <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(m.base_amount)}</div>
+        </div>
+      )}
+      <Row k="1. Base Amount" v={m.base_amount} />
+      {c.hike_enabled && <Row k="2. Hike Amount" v={m.hike} />}
+      {(c.pf_amount > 0 || c.pf_percent > 0) && (
+        <Row k={`2a. P&F${c.pf_percent ? ` (${c.pf_percent}%)` : ""}`} v={m.pf} sub />
+      )}
+      {c.freight_enabled && <Row k="2b. Freight" v={m.freight} sub />}
+      <Row k="3. Total Amount / Landed Price" v={m.total_amount} bold />
+      {c.sea_freight_enabled && <Row k="4a. Sea Freight" v={m.sea_freight} />}
+      {c.sea_insurance_enabled && <Row k="4b. Insurance" v={m.sea_insurance} />}
+      {c.custom_enabled && (
+        <Row k={`5. Custom Duty (${c.custom_percent ?? 8.25}%)`} v={m.custom} />
+      )}
+      {c.clearing_enabled && (
+        <Row k={`6. Clearing Charge / CHA & Port (${c.clearing_percent ?? 1.5}%)`} v={m.clearing} />
+      )}
+      {c.landed_gst_enabled && (
+        <Row k={`7. GST (${c.landed_gst_percent ?? 18}%)`} v={m.gst} />
+      )}
+      {c.landed_discount_enabled && m.discount > 0 && (
+        <Row k="8. One-time Discount" v={-m.discount} />
+      )}
+      <Row k="Net Payable" v={m.net_payable} bold />
+    </div>
   );
 }
 
