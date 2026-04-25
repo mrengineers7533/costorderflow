@@ -12,8 +12,8 @@ A cost sheet contains: a customer/company name, addresses, and one or more SECTI
 CRITICAL EXTRACTION RULES:
 1. DO NOT return section totals as line items. Open every detail page and return ONE line item per individual MACHINE / ITEM row from those detail tables.
    Example: if the index says "PRE-CLEANING SECTION 30TPH ... Rs. 45,00,000", you must scroll to the Pre-Cleaning detail page and return each machine separately:
-     - "Pre-Cleaner Separator -MRSP- SD-15 (F)" qty 1 amount 1662114.22
-     - "Drum Sieve MRDS-90" qty 1 amount 211003.36
+     - "Pre-Cleaner Separator -MRSP- SD-15 (F)" qty 1 amount 1662114.22 make MR
+     - "Drum Sieve MRDS-90" qty 1 amount 211003.36 make MR
      - ...etc for every row in that section's table.
 2. For the description, use the FIRST line of the "Machine / Description" cell (the model name like "Pre-Cleaner Separator -MRSP- SD-15 (F)"). Do NOT include the bullet-point characteristics that follow.
 3. Append the Make (e.g. "M.R.Engg (Fowler Westrup)") to the description in parentheses if present, e.g. "Pre-Cleaner Separator -MRSP- SD-15 (F) (M.R.Engg / Fowler Westrup)".
@@ -21,6 +21,12 @@ CRITICAL EXTRACTION RULES:
 5. If a row's price is blank/missing, still include the item with quantity from the table and amount = 0 (the user will fill it in manually).
 6. Process EVERY section (Pre-Cleaning, Cleaning, Milling/Grinding, Packing, GMS, Bagging, etc.) and EVERY machine in each section. Do not skip pages.
 7. Charges (P&F, insurance, freight, GST, discount) come from the summary/totals page — extract those into the charges object, NOT as line items.
+8. MAKE CLASSIFICATION (very important — drives which OA template is used):
+   - For EVERY line item, set "make" to one of: "MR", "GMS", or "OTHER".
+   - "MR"  → Make column contains MR / M.R. / M.R.Engg / MR Engineers / Fowler Westrup, OR description / model code starts with "MR" (e.g. MRSP, MRDS, MROA).
+   - "GMS" → Make column contains GMS, OR the section heading is a GMS section, OR the description / model code contains "GMS".
+   - "OTHER" → anything else (third-party bought-out items). Default unknowns to "OTHER".
+   The user will generate a separate OA per make (one MR OA, one GMS OA), so accuracy here matters more than the description text.
 
 Return your output by calling the extract_cost_sheet function. If a field is not present, omit it. Numbers must be plain numbers (no currency symbols, no commas).`;
 
@@ -144,6 +150,7 @@ Deno.serve(async (req) => {
                   quantity: { type: "number" },
                   unit_rate: { type: "number" },
                   amount: { type: "number" },
+                  make: { type: "string", enum: ["MR", "GMS", "OTHER"], description: "Which company makes this item: MR (M.R. Engineers / Fowler Westrup), GMS, or OTHER (third-party)." },
                 },
                 required: ["description", "quantity", "unit_rate"],
               },
