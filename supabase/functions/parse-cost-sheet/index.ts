@@ -11,11 +11,14 @@ A cost sheet contains: a customer/company name, addresses, and one or more SECTI
 
 CRITICAL EXTRACTION RULES:
 1. SECTION TOTAL vs DETAIL ITEMS — apply per section:
-   a. If the section HAS a detail page / sub-table listing individual machines (e.g. Pre-Cleaning, Cleaning, Milling, Packing, GMS Section, Bagging), DO NOT return the section total. Open the detail page and return ONE line item per machine row.
-      Example: "PRE-CLEANING SECTION 30TPH ... Rs. 45,00,000" → return each machine separately:
+   a. If the section HAS a detail page / sub-table listing individual machines (e.g. Pre-Cleaning, Cleaning, Milling, Refraction, Packing, GMS Section, Bagging, Material Handling, Magnets, Centrifugal Fans, Spouting / Aspiration Ducting), DO NOT return the section total. You MUST open the detail page later in the PDF and return ONE line item per machine / equipment row in that section's detail table.
+      Example: "PRE-CLEANING SECTION (CAP-30TPH) ... Rs. 20,03,914.99" appears on the Cost of Project summary page. The Pre-Cleaning detail page later in the PDF lists ~4 individual machines — you must return those 4 machines (each as its own line item with its own price), NOT the Rs. 20,03,914.99 summary row.
+      The same rule applies to every other summary row that has a corresponding detail page. Do this even when the description ends with words like "approx" or "approx*".
+      Other example:
         - "Pre-Cleaner Separator -MRSP- SD-15 (F)" qty 1 amount 1662114.22 make MR
         - "Drum Sieve MRDS-90" qty 1 amount 211003.36 make MR
         - …etc for every row in that section's table.
+      WARNING: Returning a Cost-of-Project summary row as a single line item (e.g. "PRE-CLEANING SECTION (CAP-30TPH)" with one big amount) is INCORRECT and forbidden whenever a detail table exists for that section. Always drill down.
    b. If the section has NO detail page / sub-table — it is just a single named line on the cost-of-project / other-charges page (e.g. Consultancy Charge, Pulley, Erection, Installation, Freight, Commissioning, Civil Work, Electrical Work, any one-line direct charge) — return ONE line item using the section name as the description and the section total as the amount (qty 1, unit_rate = amount). Tag make per the same MR/GMS/OTHER rules.
    c. CLIENT SCOPE items must be EXCLUDED entirely. Do not return any line item that appears under a "Client Scope" / "Customer Scope" / "By Client" / "In Client Scope" heading or column. The user will add them manually if needed.
 2. For the description, use the FIRST line of the "Machine / Description" cell (the model name like "Pre-Cleaner Separator -MRSP- SD-15 (F)"). Do NOT include the bullet-point characteristics that follow.
