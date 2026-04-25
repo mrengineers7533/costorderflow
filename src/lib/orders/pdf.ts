@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
+import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, MR_FOOTER_ADDRESS, type BankDetails } from "./defaults";
 
 const COMPANY_MR = {
   name: "MR ENGINEERS PVT. LTD.",
@@ -17,15 +18,7 @@ const COMPANY_GMS = {
   email: "info@gmsengg.com",
 };
 
-const BANK_MR = [
-  ["Bank", "HDFC Bank Ltd."],
-  ["A/c Name", "MR Engineers Pvt. Ltd."],
-  ["A/c No.", "XXXXXXXXXXXX"],
-  ["IFSC", "HDFC0000000"],
-  ["Branch", "Gurgaon"],
-];
-
-export function generateOrderPDF(order: OrderRecord): jsPDF {
+export function generateOrderPDF(order: OrderRecord, opts?: { terms?: string; bank?: BankDetails }): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
@@ -172,47 +165,64 @@ export function generateOrderPDF(order: OrderRecord): jsPDF {
   doc.text(doc.splitTextToSize(order.amount_in_words || "", W - M * 2 - 30), M + 30, y);
   y += 8;
 
-  // Bank + signature
-  if (y > 240) { doc.addPage(); y = M; }
-  doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(...accent);
-  doc.text("BANK DETAILS", M, y);
-  doc.setTextColor(0, 0, 0);
-  autoTable(doc, {
-    startY: y + 2,
-    body: BANK_MR,
-    theme: "grid",
-    styles: { fontSize: 8, cellPadding: 1.5 },
-    columnStyles: { 0: { cellWidth: 30, fontStyle: "bold" }, 1: { cellWidth: 60 } },
-    margin: { left: M },
-    tableWidth: 90,
-  });
+  // MR-format post-items section (single full-width table matching template)
+  if (order.format === "MR") {
+    const terms = opts?.terms ?? DEFAULT_MR_TERMS;
+    const bank = opts?.bank ?? DEFAULT_MR_BANK;
+    const tableW = W - M * 2;
 
-  // Signature block on right
-  const sigY = y + 2;
-  doc.rect(W - M - 60, sigY, 60, 30);
-  doc.setFontSize(8).setFont("helvetica", "normal");
-  doc.text(`For ${company.name}`, W - M - 58, sigY + 5);
-  doc.text("Authorized Signatory", W - M - 58, sigY + 27);
+    // Terms & Conditions row
+    autoTable(doc, {
+      startY: y,
+      body: [[{
+        content: `TERMS & CONDITIONS\n${terms}`,
+        styles: { fontStyle: "normal", fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
+      }]],
+      theme: "plain",
+      margin: { left: M, right: M },
+      tableWidth: tableW,
+      didParseCell: (data) => {
+        // Bold the first line only via overall bold + manual is hard; keep simple.
+        data.cell.styles.lineColor = [0, 0, 0];
+        data.cell.styles.lineWidth = 0.3;
+      },
+    });
+    // @ts-expect-error lastAutoTable runtime
+    y = doc.lastAutoTable.finalY;
 
-  // Terms on new page
-  doc.addPage();
-  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...accent);
-  doc.text("TERMS & CONDITIONS", M, M + 5);
-  doc.setTextColor(0, 0, 0).setFont("helvetica", "normal").setFontSize(9);
-  const terms = [
-    "1. Payment Terms: 30% advance with PO, 60% before dispatch, 10% after commissioning.",
-    "2. Delivery: Within 8-10 weeks from receipt of confirmed PO and advance.",
-    "3. Prices are EX-Works, exclusive of freight, insurance, and unloading at site.",
-    "4. GST as applicable will be charged extra at the time of invoicing.",
-    "5. Erection & Commissioning: To be quoted separately if required.",
-    "6. Warranty: 12 months from date of commissioning or 18 months from dispatch, whichever is earlier.",
-    "7. Force Majeure clause applicable.",
-    "8. Jurisdiction: Subject to Gurgaon jurisdiction only.",
-  ];
-  terms.forEach((t, i) => {
-    const lines = doc.splitTextToSize(t, W - M * 2);
-    doc.text(lines, M, M + 14 + i * 8);
-  });
+    // Bank + Signature row (two columns)
+    const bankBody =
+      `OUR BANK DETAILS :-\n${bank.bank_name}\nBRANCH: ${bank.branch}\nC/A A/C NO. ${bank.account_no}\nIFSC CODE: ${bank.ifsc}`;
+    const sigBody = `Yours faithfully\n\n\nM.R. ENGINEERS${order.prepared_by ? `\n${order.prepared_by}` : ""}`;
+    autoTable(doc, {
+      startY: y,
+      body: [[
+        { content: bankBody, styles: { fontSize: 8, cellPadding: 2, valign: "top" } },
+        { content: sigBody, styles: { fontSize: 8, cellPadding: 2, halign: "right", valign: "top", fontStyle: "bold" } },
+      ]],
+      theme: "grid",
+      margin: { left: M, right: M },
+      tableWidth: tableW,
+      columnStyles: { 0: { cellWidth: tableW / 2 }, 1: { cellWidth: tableW / 2 } },
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+    });
+    // @ts-expect-error lastAutoTable runtime
+    y = doc.lastAutoTable.finalY;
+
+    // Footer address band (yellow strip)
+    autoTable(doc, {
+      startY: y,
+      body: [[MR_FOOTER_ADDRESS]],
+      theme: "plain",
+      margin: { left: M, right: M },
+      tableWidth: tableW,
+      styles: {
+        fontSize: 8, fontStyle: "bold", halign: "center", cellPadding: 2,
+        fillColor: [255, 192, 0], textColor: [0, 0, 0],
+        lineColor: [0, 0, 0], lineWidth: 0.3,
+      },
+    });
+  }
 
   return doc;
 }
