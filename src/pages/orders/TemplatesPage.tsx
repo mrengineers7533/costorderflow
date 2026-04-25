@@ -166,10 +166,10 @@ function TemplateEditor({ format }: { format: OrderFormat }) {
     const pages = doc.numPages;
 
     const { data: u } = await supabase.auth.getUser();
-    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap, updated_by: u.user?.id };
+    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap as never, updated_by: u.user?.id };
     const { data, error } = await supabase
       .from("order_templates")
-      .upsert(payload, { onConflict: "format" })
+      .upsert(payload as never, { onConflict: "format" })
       .select()
       .single();
     if (error) return toast({ title: "Save failed", description: error.message, variant: "destructive" });
@@ -211,7 +211,7 @@ function TemplateEditor({ format }: { format: OrderFormat }) {
     if (!template) return;
     const { error } = await supabase
       .from("order_templates")
-      .update({ field_map: fieldMap })
+      .update({ field_map: fieldMap as never })
       .eq("id", template.id);
     if (error) return toast({ title: "Save failed", description: error.message, variant: "destructive" });
     toast({ title: "Field map saved" });
