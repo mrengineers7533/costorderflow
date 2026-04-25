@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, FilePlus2, LayoutTemplate, LogIn } from "lucide-react";
+import { QuickOrderPanel } from "@/components/orders/QuickOrderPanel";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -43,6 +44,16 @@ const Index = () => {
             <Button variant="outline" asChild><Link to="/orders"><FileText className="h-4 w-4 mr-1" />View orders</Link></Button>
           </div>
         </section>
+
+        {authed && (
+          <section className="mt-10">
+            <div className="mb-3">
+              <h2 className="text-xl font-semibold tracking-tight">Try it now</h2>
+              <p className="text-sm text-muted-foreground">Upload a cost sheet PDF and watch the order preview fill in as AI extracts the data.</p>
+            </div>
+            <QuickOrderPanel />
+          </section>
+        )}
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
           <FeatureCard icon={<FilePlus2 className="h-5 w-5" />} title="New order" desc="Start from a cost sheet — AI fills the form." to="/orders/new" />
