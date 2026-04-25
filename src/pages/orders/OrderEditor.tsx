@@ -173,7 +173,7 @@ export default function OrderEditor() {
       console.error("Template render failed, falling back:", err);
       toast({ title: "Template render failed", description: "Falling back to default layout.", variant: "destructive" });
     }
-    const doc = generateOrderPDF(record);
+    const doc = generateOrderPDF(record, { terms, bank });
     doc.save(filename);
   }
 
