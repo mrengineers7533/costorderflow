@@ -7,7 +7,21 @@ const corsHeaders = {
 };
 
 const SYSTEM_PROMPT = `You are an expert at extracting structured data from Indian engineering company "cost sheets".
-A cost sheet typically contains: a customer/company name, line items (description, HSN code, quantity, unit rate, amount), and charges such as P&F (packing & forwarding), insurance, freight, GST, and discounts.
+A cost sheet contains: a customer/company name, addresses, and one or more SECTIONS (e.g. "PRE-CLEANING SECTION 30TPH", "CLEANING SECTION", "MILLING SECTION", "PACKING SECTION", "GMS SECTION"). Each section has a summary line on a front/index page AND a DETAIL page later in the PDF that lists individual machines/items in a table with columns like S.No, Machine / Description, Qty, Make, Price.
+
+CRITICAL EXTRACTION RULES:
+1. DO NOT return section totals as line items. Open every detail page and return ONE line item per individual MACHINE / ITEM row from those detail tables.
+   Example: if the index says "PRE-CLEANING SECTION 30TPH ... Rs. 45,00,000", you must scroll to the Pre-Cleaning detail page and return each machine separately:
+     - "Pre-Cleaner Separator -MRSP- SD-15 (F)" qty 1 amount 1662114.22
+     - "Drum Sieve MRDS-90" qty 1 amount 211003.36
+     - ...etc for every row in that section's table.
+2. For the description, use the FIRST line of the "Machine / Description" cell (the model name like "Pre-Cleaner Separator -MRSP- SD-15 (F)"). Do NOT include the bullet-point characteristics that follow.
+3. Append the Make (e.g. "M.R.Engg (Fowler Westrup)") to the description in parentheses if present, e.g. "Pre-Cleaner Separator -MRSP- SD-15 (F) (M.R.Engg / Fowler Westrup)".
+4. Quantity = the Qty column. Amount = the Price column (strip "Rs.", commas). If unit_rate is not printed, set unit_rate = amount / quantity.
+5. If a row's price is blank/missing, still include the item with quantity from the table and amount = 0 (the user will fill it in manually).
+6. Process EVERY section (Pre-Cleaning, Cleaning, Milling/Grinding, Packing, GMS, Bagging, etc.) and EVERY machine in each section. Do not skip pages.
+7. Charges (P&F, insurance, freight, GST, discount) come from the summary/totals page — extract those into the charges object, NOT as line items.
+
 Return your output by calling the extract_cost_sheet function. If a field is not present, omit it. Numbers must be plain numbers (no currency symbols, no commas).`;
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
@@ -159,13 +173,13 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
             content: [
-              { type: "text", text: "Extract structured data from this cost sheet PDF." },
+              { type: "text", text: "Extract structured data from this cost sheet PDF. Remember: return individual machines from each section's detail page, NOT section totals." },
               { type: "file", file: { filename: sheet.original_filename, file_data: `data:application/pdf;base64,${base64}` } },
             ],
           },
