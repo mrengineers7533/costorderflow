@@ -14,16 +14,165 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      oa_counters: {
+        Row: {
+          financial_year: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          financial_year: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          financial_year?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          amount_in_words: string | null
+          bill_to: Json
+          charges: Json
+          company_name: string | null
+          cost_sheet_number: string | null
+          created_at: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          line_items: Json
+          notes: string | null
+          oa_number: string
+          order_date: string
+          prepared_by: string | null
+          reference: string | null
+          ship_to: Json
+          status: Database["public"]["Enums"]["order_status"]
+          totals: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_in_words?: string | null
+          bill_to?: Json
+          charges?: Json
+          company_name?: string | null
+          cost_sheet_number?: string | null
+          created_at?: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          notes?: string | null
+          oa_number: string
+          order_date?: string
+          prepared_by?: string | null
+          reference?: string | null
+          ship_to?: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          totals?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_in_words?: string | null
+          bill_to?: Json
+          charges?: Json
+          company_name?: string | null
+          cost_sheet_number?: string | null
+          created_at?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          notes?: string | null
+          oa_number?: string
+          order_date?: string
+          prepared_by?: string | null
+          reference?: string | null
+          ship_to?: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          totals?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          prepared_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+          prepared_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          prepared_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      next_oa_number: {
+        Args: {
+          _financial_year: string
+          _format: Database["public"]["Enums"]["order_format"]
+        }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      order_format: "MR" | "GMS"
+      order_status: "draft" | "finalized"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +299,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      order_format: ["MR", "GMS"],
+      order_status: ["draft", "finalized"],
+    },
   },
 } as const
