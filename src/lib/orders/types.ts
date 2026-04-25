@@ -16,6 +16,8 @@ export interface LineItem {
   description: string;
   hsn_code?: string;
   quantity: number;
+  /** Unit of measure (Nos, Set, Kg, Mtr, etc.). Defaults to "Nos". */
+  unit?: string;
   unit_rate: number;
   amount: number;
   /** Which company makes this item. Drives MR vs GMS OA split. */
