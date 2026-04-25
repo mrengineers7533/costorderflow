@@ -13,6 +13,7 @@ import {
   DEFAULT_GMS_EXCLUSIONS,
   CURRENCY_SYMBOLS,
   type BankDetails,
+  type GMSTerms,
 } from "@/lib/orders/defaults";
 
 interface Props {
@@ -37,6 +38,7 @@ interface Props {
   splitMode?: boolean;
   terms?: string;
   bank?: BankDetails;
+  gmsTerms?: GMSTerms;
 }
 
 const fmt = (n: number) =>
@@ -266,6 +268,10 @@ export function OrderPreview(p: Props) {
 
         {p.format === "GMS" && isFX && (
           <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
+        )}
+
+        {p.format === "GMS" && p.gmsTerms && (
+          <GMSTermsBlock t={p.gmsTerms} />
         )}
 
         {p.format !== "MR" && p.preparedBy && (
