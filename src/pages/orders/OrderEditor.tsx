@@ -15,6 +15,7 @@ import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYe
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
+import { OrderPreview } from "@/components/orders/OrderPreview";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -46,6 +47,7 @@ export default function OrderEditor() {
   const [items, setItems] = useState<LineItem[]>([newItem()]);
   const [charges, setCharges] = useState<Charges>(emptyCharges);
   const [notes, setNotes] = useState("");
+  const [parsing, setParsing] = useState(false);
 
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit_rate: 0, amount: 0 };
@@ -190,7 +192,7 @@ export default function OrderEditor() {
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
-      <div className="max-w-5xl mx-auto space-y-4">
+      <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/orders")}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
           <div className="flex gap-2">
@@ -200,7 +202,9 @@ export default function OrderEditor() {
           </div>
         </div>
 
-        {isNew && <CostSheetPicker onApply={applyCostSheet} />}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="space-y-4 min-w-0">
+            {isNew && <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />}
 
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
@@ -302,6 +306,29 @@ export default function OrderEditor() {
           <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
           <CardContent><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} /></CardContent>
         </Card>
+          </div>
+
+          <aside className="lg:sticky lg:top-4 lg:self-start">
+            <OrderPreview
+              oaNumber={oaNumber}
+              format={format}
+              companyName={companyName}
+              billTo={billTo}
+              shipTo={shipTo}
+              sameAsBill={sameAsBill}
+              reference={reference}
+              costSheetNumber={costSheetNumber}
+              orderDate={orderDate}
+              preparedBy={preparedBy}
+              items={itemsWithAmounts}
+              charges={charges}
+              totals={totals}
+              amountInWords={words}
+              notes={notes}
+              parsing={parsing}
+            />
+          </aside>
+        </div>
       </div>
     </div>
   );
