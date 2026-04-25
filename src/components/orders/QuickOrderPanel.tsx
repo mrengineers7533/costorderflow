@@ -9,9 +9,9 @@ import { amountInWords, calcLineAmount, calcTotals, detectFormat } from "@/lib/o
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
-  pf_percent: 2, pf_amount: 0, insurance: 0,
+  pf_percent: 1.5, pf_amount: 0, insurance: 0, insurance_percent: 0.071,
   freight_enabled: false, freight: 0,
-  gst_percent: 18, gst_amount: 0, discount: 0,
+  gst_percent: 18, gst_amount: 0, discount: 0, discount_percent: 0,
 };
 
 /**

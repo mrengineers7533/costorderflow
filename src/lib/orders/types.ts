@@ -23,11 +23,13 @@ export interface Charges {
   pf_percent: number;
   pf_amount: number;
   insurance: number;
+  insurance_percent: number;
   freight_enabled: boolean;
   freight: number;
   gst_percent: number;
   gst_amount: number;
   discount: number;
+  discount_percent: number;
 }
 
 export interface Totals {

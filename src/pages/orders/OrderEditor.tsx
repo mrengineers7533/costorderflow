@@ -19,9 +19,9 @@ import { OrderPreview } from "@/components/orders/OrderPreview";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
-  pf_percent: 2, pf_amount: 0, insurance: 0,
+  pf_percent: 1.5, pf_amount: 0, insurance: 0, insurance_percent: 0.071,
   freight_enabled: false, freight: 0,
-  gst_percent: 18, gst_amount: 0, discount: 0,
+  gst_percent: 18, gst_amount: 0, discount: 0, discount_percent: 0,
 };
 
 export default function OrderEditor() {
@@ -335,14 +335,16 @@ export default function OrderEditor() {
             <div className="space-y-3">
               <NumberField label="P&F %" value={charges.pf_percent} onChange={(v) => setCharges({ ...charges, pf_percent: v, pf_amount: 0 })} />
               <NumberField label="P&F Amount (override)" value={charges.pf_amount} onChange={(v) => setCharges({ ...charges, pf_amount: v, pf_percent: 0 })} />
-              <NumberField label="Insurance" value={charges.insurance} onChange={(v) => setCharges({ ...charges, insurance: v })} />
+              <NumberField label="Insurance %" value={charges.insurance_percent} onChange={(v) => setCharges({ ...charges, insurance_percent: v, insurance: 0 })} />
+              <NumberField label="Insurance Amount (override)" value={charges.insurance} onChange={(v) => setCharges({ ...charges, insurance: v, insurance_percent: 0 })} />
               <div className="flex items-center gap-3">
                 <Switch checked={charges.freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, freight_enabled: b })} />
                 <Label>Include Freight</Label>
               </div>
               {charges.freight_enabled && <NumberField label="Freight" value={charges.freight} onChange={(v) => setCharges({ ...charges, freight: v })} />}
               <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
-              <NumberField label="One-time Discount" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v })} />
+              <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
+              <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
             </div>
             <div className="rounded-lg border p-4 space-y-2 bg-card">
               <Row k="Basic Total" v={totals.basic_total} />

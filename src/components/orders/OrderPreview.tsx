@@ -36,6 +36,12 @@ export function OrderPreview(p: Props) {
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
     : (p.totals.basic_total * (p.charges.pf_percent || 0)) / 100;
+  const insuranceAmount = p.charges.insurance_percent > 0
+    ? (p.totals.basic_total * p.charges.insurance_percent) / 100
+    : (p.charges.insurance || 0);
+  const discountAmount = p.charges.discount_percent > 0
+    ? (p.totals.grand_total * p.charges.discount_percent) / 100
+    : (p.charges.discount || 0);
 
   return (
     <Card className="overflow-hidden order-preview-card">
@@ -142,12 +148,16 @@ export function OrderPreview(p: Props) {
           {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
             <Line k={`P&F${p.charges.pf_percent ? ` (${p.charges.pf_percent}%)` : ""}`} v={pfAmount} />
           )}
-          {p.charges.insurance > 0 && <Line k="Insurance" v={p.charges.insurance} />}
+          {insuranceAmount > 0 && (
+            <Line k={`Insurance${p.charges.insurance_percent ? ` (${p.charges.insurance_percent}%)` : ""}`} v={insuranceAmount} />
+          )}
           {p.charges.freight_enabled && p.charges.freight > 0 && <Line k="Freight" v={p.charges.freight} />}
           <Line k="Subtotal" v={p.totals.subtotal} />
           <Line k={`GST (${p.charges.gst_percent || 0}%)`} v={gstAmount} />
           <Line k="Grand Total" v={p.totals.grand_total} bold />
-          {p.charges.discount > 0 && <Line k="Discount" v={-p.charges.discount} />}
+          {discountAmount > 0 && (
+            <Line k={`Discount${p.charges.discount_percent ? ` (${p.charges.discount_percent}%)` : ""}`} v={-discountAmount} />
+          )}
           <div className="border-t pt-1">
             <Line k="Net Payable" v={p.totals.net_payable} bold />
           </div>
