@@ -103,3 +103,17 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body * { visibility: hidden !important; }
+  .order-preview-card,
+  .order-preview-card * { visibility: visible !important; }
+  .order-preview-card {
+    position: absolute !important;
+    left: 0; top: 0; right: 0;
+    width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  @page { margin: 12mm; }
+}
