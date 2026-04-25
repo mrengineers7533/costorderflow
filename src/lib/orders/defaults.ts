@@ -51,3 +51,21 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
   GBP: "£",
   JPY: "¥",
 };
+
+export interface GMSTerms {
+  taxation: string;
+  freight: string;
+  insurance: string;
+  delivery_time: string;
+  payment_terms: string;
+  general_conditions: string;
+}
+
+export const DEFAULT_GMS_TERMS: GMSTerms = {
+  taxation: "GST Not Applicable (Export Sale to Nepal)",
+  freight: "Extra",
+  insurance: "Extra",
+  delivery_time: "14-16 Weeks for Dispatch from Turkey after receipt of your Purchase Order & Advance.",
+  payment_terms: "40% Advance & balance against Proforma Invoice prior to dispatch.",
+  general_conditions: "Mechanical and electrical installation, commissioning and start-up excluded.",
+};
