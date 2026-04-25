@@ -33,10 +33,20 @@ export function getFinancialYear(d = new Date()): string {
   return `${start}-${String(end).padStart(2, "0")}`;
 }
 
-// Auto-detect format from company name keywords
-export function detectFormat(company: string): "MR" | "GMS" {
-  const c = (company || "").toUpperCase();
-  if (c.includes("GMS")) return "GMS";
+// Auto-detect format from company name and/or line items.
+// Rule: if "GMS" appears anywhere in the company name OR any line item
+// description / HSN, treat as GMS. Otherwise default to MR.
+export function detectFormat(
+  company: string,
+  items?: Array<{ description?: string; hsn_code?: string }>,
+): "MR" | "GMS" {
+  const haystack = [
+    company || "",
+    ...(items?.flatMap((i) => [i.description || "", i.hsn_code || ""]) ?? []),
+  ]
+    .join(" ")
+    .toUpperCase();
+  if (/\bGMS\b/.test(haystack) || haystack.includes("GMS")) return "GMS";
   return "MR"; // MR Engineers default
 }
 

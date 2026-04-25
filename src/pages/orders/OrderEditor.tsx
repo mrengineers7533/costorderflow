@@ -75,10 +75,11 @@ export default function OrderEditor() {
     });
   }, [id, isNew, navigate]);
 
-  // Auto format from company
+  // Auto format from company name AND line items (any "GMS" mention → GMS).
   useEffect(() => {
-    if (autoFormat && companyName) setFormat(detectFormat(companyName));
-  }, [companyName, autoFormat]);
+    if (!autoFormat) return;
+    setFormat(detectFormat(companyName, items));
+  }, [companyName, items, autoFormat]);
 
   // Recompute amounts
   const itemsWithAmounts = useMemo(
