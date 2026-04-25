@@ -33,6 +33,13 @@ export interface Charges {
   gst_amount: number;
   discount: number;
   discount_percent: number;
+  /** Ex-works foreign-currency fields (used by GMS Turkey-style orders).
+   *  When `currency` is set and not "INR", `unit_rate`/`amount` on line items
+   *  represent the foreign-currency value and `fx_rate` converts to INR. */
+  currency?: string;       // e.g. "USD", "EUR"; undefined or "INR" = domestic
+  currency_symbol?: string; // e.g. "$", "€"; defaults derived from currency
+  fx_rate?: number;        // 1 unit foreign = X INR (e.g. 81.85)
+  advance_percent?: number; // e.g. 40 for "Advance Required @ 40%"
 }
 
 export interface Totals {
