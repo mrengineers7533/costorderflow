@@ -66,15 +66,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Mark as parsing — stage: downloading
+    await admin.from("cost_sheets").update({
+      status: "parsing",
+      parse_error: null,
+      extracted: { _progress: { stage: "downloading", percent: 10, message: "Fetching PDF…" } },
+    }).eq("id", costSheetId);
+
     // Download the file
     const dl = await admin.storage.from("cost-sheets").download(sheet.file_path);
     if (dl.error || !dl.data) {
+      await admin.from("cost_sheets").update({ status: "failed", parse_error: `File not found: ${dl.error?.message}` }).eq("id", costSheetId);
       return new Response(JSON.stringify({ error: `File not found: ${dl.error?.message}` }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const ab = await dl.data.arrayBuffer();
     const base64 = arrayBufferToBase64(ab);
+
+    // Stage: sending to AI
+    await admin.from("cost_sheets").update({
+      extracted: { _progress: { stage: "uploading_ai", percent: 35, message: "Sending PDF to AI…" } },
+    }).eq("id", costSheetId);
 
     // Call Lovable AI Gateway with PDF + tool-calling schema
     const tool = {
@@ -160,6 +173,11 @@ Deno.serve(async (req) => {
         tool_choice: { type: "function", function: { name: "extract_cost_sheet" } },
       }),
     });
+
+    // Stage: AI is processing / response received
+    await admin.from("cost_sheets").update({
+      extracted: { _progress: { stage: "extracting", percent: 75, message: "AI is extracting fields…" } },
+    }).eq("id", costSheetId);
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
