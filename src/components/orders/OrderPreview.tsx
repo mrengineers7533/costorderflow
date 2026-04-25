@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 
 interface Props {
@@ -19,6 +21,9 @@ interface Props {
   amountInWords: string;
   notes: string;
   parsing?: boolean;
+  onFormatChange?: (f: OrderFormat) => void;
+  onDownloadPDF?: () => void;
+  splitMode?: boolean;
 }
 
 const fmt = (n: number) =>
@@ -32,20 +37,60 @@ export function OrderPreview(p: Props) {
     : (p.totals.basic_total * (p.charges.pf_percent || 0)) / 100;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="border-b bg-muted/40 px-4 py-2 flex items-center justify-between">
+    <Card className="overflow-hidden order-preview-card">
+      <div className="border-b bg-muted/40 px-4 py-2 flex items-center justify-between gap-2 print:hidden">
         <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Live Preview</div>
-        {p.parsing ? (
-          <Badge variant="default" className="gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground animate-pulse" />
-            Updating…
-          </Badge>
-        ) : (
-          <Badge variant="secondary">{p.format}</Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {p.parsing && (
+            <Badge variant="default" className="gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground animate-pulse" />
+              Updating…
+            </Badge>
+          )}
+          {p.onFormatChange ? (
+            <div className="inline-flex rounded-md border bg-background p-0.5">
+              {(["MR", "GMS"] as OrderFormat[]).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => p.onFormatChange?.(f)}
+                  className={`px-2.5 py-0.5 text-xs font-semibold rounded-sm transition-colors ${
+                    p.format === f
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-pressed={p.format === f}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Badge variant="secondary">{p.format}</Badge>
+          )}
+          {p.onDownloadPDF && (
+            <Button size="sm" variant="outline" className="h-7 px-2" onClick={p.onDownloadPDF} title="Download PDF">
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2"
+            onClick={() => window.print()}
+            title="Print"
+          >
+            <Printer className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
+      {p.splitMode && (
+        <div className="border-b bg-primary/5 px-4 py-1.5 text-[11px] text-muted-foreground print:hidden">
+          Split mode: showing only <span className="font-semibold text-foreground">{p.format}</span> items. Toggle above to view the {p.format === "MR" ? "GMS" : "MR"} OA.
+        </div>
+      )}
 
-      <div className="bg-background p-5 space-y-4 text-[13px] leading-snug">
+      <div className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body">
         {/* Header */}
         <div className="text-center space-y-0.5 border-b pb-3">
           <div className="font-bold text-base">
