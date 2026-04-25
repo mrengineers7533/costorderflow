@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake } from "@/lib/orders/calc";
