@@ -10,10 +10,16 @@ export function calcTotals(items: LineItem[], charges: Charges): Totals {
     ? (basic * charges.pf_percent) / 100
     : charges.pf_amount || 0;
   const freight = charges.freight_enabled ? charges.freight || 0 : 0;
-  const subtotal = basic + pf + (charges.insurance || 0) + freight;
+  const insurance = charges.insurance_percent
+    ? (basic * charges.insurance_percent) / 100
+    : charges.insurance || 0;
+  const subtotal = basic + pf + insurance + freight;
   const gst = charges.gst_amount ?? (subtotal * (charges.gst_percent || 0)) / 100;
   const grand = subtotal + gst;
-  const net = grand - (charges.discount || 0);
+  const discount = charges.discount_percent
+    ? (grand * charges.discount_percent) / 100
+    : charges.discount || 0;
+  const net = grand - discount;
   return {
     basic_total: round(basic),
     subtotal: round(subtotal),
