@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
-import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear } from "@/lib/orders/calc";
+import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
@@ -50,7 +51,7 @@ export default function OrderEditor() {
   const [parsing, setParsing] = useState(false);
 
   function newItem(): LineItem {
-    return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit_rate: 0, amount: 0 };
+    return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit_rate: 0, amount: 0, make: "MR" };
   }
 
   // Load existing
@@ -81,10 +82,28 @@ export default function OrderEditor() {
     setFormat(detectFormat(companyName, items));
   }, [companyName, items, autoFormat]);
 
-  // Recompute amounts
-  const itemsWithAmounts = useMemo(
-    () => items.map((it) => ({ ...it, amount: calcLineAmount(it.quantity, it.unit_rate) })),
+  // Recompute amounts (full set, all makes)
+  const allItemsWithAmounts = useMemo(
+    () => items.map((it) => ({
+      ...it,
+      make: it.make || inferItemMake(it),
+      amount: calcLineAmount(it.quantity, it.unit_rate),
+    })),
     [items]
+  );
+
+  // Items visible / printed for the currently selected OA format.
+  // If the cost sheet has both MR and GMS items, only items matching the
+  // current format render in this OA — switch the Format dropdown to see
+  // (and download) the other one.
+  const hasMR = allItemsWithAmounts.some((i) => i.make === "MR");
+  const hasGMS = allItemsWithAmounts.some((i) => i.make === "GMS");
+  const splitMode = hasMR && hasGMS;
+  const itemsWithAmounts = useMemo(
+    () => splitMode
+      ? allItemsWithAmounts.filter((i) => i.make === format)
+      : allItemsWithAmounts,
+    [allItemsWithAmounts, splitMode, format]
   );
   const totals = useMemo(() => calcTotals(itemsWithAmounts, charges), [itemsWithAmounts, charges]);
   const words = useMemo(() => amountInWords(totals.net_payable), [totals.net_payable]);
@@ -166,14 +185,22 @@ export default function OrderEditor() {
     if (data.reference) setReference(data.reference);
     if (data.line_items?.length) {
       setItems(
-        data.line_items.map((it) => ({
-          id: crypto.randomUUID(),
-          description: it.description || "",
-          hsn_code: it.hsn_code || "",
-          quantity: Number(it.quantity) || 0,
-          unit_rate: Number(it.unit_rate) || 0,
-          amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
-        }))
+        data.line_items.map((it) => {
+          const base = {
+            description: it.description || "",
+            hsn_code: it.hsn_code || "",
+          };
+          const make = (it as { make?: "MR" | "GMS" | "OTHER" }).make
+            || inferItemMake(base);
+          return {
+            id: crypto.randomUUID(),
+            ...base,
+            quantity: Number(it.quantity) || 0,
+            unit_rate: Number(it.unit_rate) || 0,
+            amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
+            make,
+          };
+        })
       );
     }
     if (data.charges) {
