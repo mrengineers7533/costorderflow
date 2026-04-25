@@ -127,13 +127,31 @@ export function OrderPreview(p: Props) {
         {p.format === "MR" ? (
           <>
             <MRHeader />
-            {/* Meta */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <Field label="OA No." value={p.oaNumber || <Placeholder text="auto on save" />} />
-              <Field label="Date" value={p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"} />
-              <Field label="Reference" value={p.reference || <Placeholder />} />
-              <Field label="Cost Sheet" value={p.costSheetNumber || <Placeholder />} />
-            </div>
+            {/* Meta — bordered table matching template */}
+            <table className="w-full border-collapse text-[11px] border border-foreground">
+              <tbody>
+                <tr>
+                  <td className="border border-foreground px-2 py-1 w-1/2">
+                    <span className="font-bold">OA No.: </span>
+                    {p.oaNumber || <Placeholder text="auto on save" />}
+                  </td>
+                  <td className="border border-foreground px-2 py-1 w-1/2">
+                    <span className="font-bold">Dated: </span>
+                    {p.orderDate ? new Date(p.orderDate).toLocaleDateString("en-IN") : "—"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-foreground px-2 py-1">
+                    <span className="font-bold">Ref. NO.: </span>
+                    {p.reference || p.costSheetNumber || <Placeholder />}
+                  </td>
+                  <td className="border border-foreground px-2 py-1">
+                    <span className="font-bold">Prepared By: </span>
+                    {p.preparedBy || <Placeholder />}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </>
         ) : (
           <GMSHeader
@@ -147,11 +165,23 @@ export function OrderPreview(p: Props) {
           />
         )}
 
-        {/* Addresses */}
-        <div className="grid grid-cols-2 gap-3">
-          <AddressBlock title="Bill To" addr={p.billTo} fallbackName={p.companyName} />
-          <AddressBlock title="Ship To" addr={ship} fallbackName={p.companyName} />
-        </div>
+        {/* Addresses — bordered table */}
+        <table className="w-full border-collapse text-[11px] border border-foreground">
+          <tbody>
+            <tr>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Bill To</td>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Ship To</td>
+            </tr>
+            <tr>
+              <td className="border border-foreground px-2 py-1 align-top">
+                <AddressCellContent addr={p.billTo} fallbackName={p.companyName} />
+              </td>
+              <td className="border border-foreground px-2 py-1 align-top">
+                <AddressCellContent addr={ship} fallbackName={p.companyName} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Items + Totals — unified bordered table matching reference template */}
         <table className="w-full border-collapse text-[11px] border border-foreground">
@@ -502,6 +532,22 @@ function Placeholder({ text = "—" }: { text?: string }) {
   return <span className="text-muted-foreground italic font-normal">{text}</span>;
 }
 
+function AddressCellContent({ addr, fallbackName }: { addr: Address; fallbackName: string }) {
+  const empty = !addr?.name && !addr?.address && !fallbackName;
+  if (empty) return <Placeholder text="not set" />;
+  return (
+    <div className="space-y-0.5">
+      <div className="font-semibold">{addr?.name || fallbackName}</div>
+      {addr?.address && <div className="whitespace-pre-wrap">{addr.address}</div>}
+      {addr?.gstin && <div>GSTIN: {addr.gstin}</div>}
+      {addr?.state && <div>State: {addr.state}</div>}
+      {addr?.contact_person && <div>Contact: {addr.contact_person}</div>}
+      {addr?.contact_number && <div>Phone: {addr.contact_number}</div>}
+      {addr?.email && <div>Email: {addr.email}</div>}
+    </div>
+  );
+}
+
 function MRHeader() {
   return (
     <div className="border-b pb-3">
@@ -567,22 +613,26 @@ function GMSHeader({
       <div className="bg-gradient-to-r from-muted via-background to-muted border-y border-foreground/40 py-1 text-center">
         <div className="text-sm font-bold tracking-[0.2em]">ORDER ACCEPTANCE</div>
       </div>
-      {/* Customer / OA meta two-column block */}
-      <div className="grid grid-cols-2 gap-4 pt-3 text-xs">
-        <div className="space-y-0.5">
-          <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
-          {addressLine && <div>{addressLine}</div>}
-          {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
-          {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
-          {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
-        </div>
-        <div className="space-y-0.5 text-right">
-          <div><span className="font-semibold">Date :</span> {dateStr}</div>
-          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
-          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
-          {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
-        </div>
-      </div>
+      {/* Customer / OA meta — bordered table */}
+      <table className="w-full border-collapse text-[11px] border border-foreground mt-3">
+        <tbody>
+          <tr>
+            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top">
+              <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
+              {addressLine && <div>{addressLine}</div>}
+              {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
+              {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
+              {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
+            </td>
+            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top text-right">
+              <div><span className="font-semibold">Date :</span> {dateStr}</div>
+              <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
+              <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+              {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
