@@ -613,22 +613,26 @@ function GMSHeader({
       <div className="bg-gradient-to-r from-muted via-background to-muted border-y border-foreground/40 py-1 text-center">
         <div className="text-sm font-bold tracking-[0.2em]">ORDER ACCEPTANCE</div>
       </div>
-      {/* Customer / OA meta two-column block */}
-      <div className="grid grid-cols-2 gap-4 pt-3 text-xs">
-        <div className="space-y-0.5">
-          <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
-          {addressLine && <div>{addressLine}</div>}
-          {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
-          {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
-          {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
-        </div>
-        <div className="space-y-0.5 text-right">
-          <div><span className="font-semibold">Date :</span> {dateStr}</div>
-          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
-          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
-          {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
-        </div>
-      </div>
+      {/* Customer / OA meta — bordered table */}
+      <table className="w-full border-collapse text-[11px] border border-foreground mt-3">
+        <tbody>
+          <tr>
+            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top">
+              <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
+              {addressLine && <div>{addressLine}</div>}
+              {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
+              {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
+              {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
+            </td>
+            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top text-right">
+              <div><span className="font-semibold">Date :</span> {dateStr}</div>
+              <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
+              <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+              {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
