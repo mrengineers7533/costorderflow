@@ -15,6 +15,8 @@ export interface LineItem {
   quantity: number;
   unit_rate: number;
   amount: number;
+  /** Which company makes this item. Drives MR vs GMS OA split. */
+  make?: "MR" | "GMS" | "OTHER";
 }
 
 export interface Charges {

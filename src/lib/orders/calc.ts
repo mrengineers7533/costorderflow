@@ -34,12 +34,15 @@ export function getFinancialYear(d = new Date()): string {
 }
 
 // Auto-detect format from company name and/or line items.
-// Rule: if "GMS" appears anywhere in the company name OR any line item
-// description / HSN, treat as GMS. Otherwise default to MR.
+// Rule: if any item is explicitly tagged make=GMS → GMS. Otherwise if any
+// item is tagged make=MR → MR. Otherwise fall back to substring scan
+// (company name, descriptions, HSN codes) for "GMS"; default MR.
 export function detectFormat(
   company: string,
-  items?: Array<{ description?: string; hsn_code?: string }>,
+  items?: Array<{ description?: string; hsn_code?: string; make?: "MR" | "GMS" | "OTHER" }>,
 ): "MR" | "GMS" {
+  if (items?.some((i) => i.make === "GMS")) return "GMS";
+  if (items?.some((i) => i.make === "MR")) return "MR";
   const haystack = [
     company || "",
     ...(items?.flatMap((i) => [i.description || "", i.hsn_code || ""]) ?? []),
@@ -48,6 +51,15 @@ export function detectFormat(
     .toUpperCase();
   if (/\bGMS\b/.test(haystack) || haystack.includes("GMS")) return "GMS";
   return "MR"; // MR Engineers default
+}
+
+/** Heuristic make tag for an item that the AI didn't classify. Looks at
+ * description + HSN for MR / MR-prefixed model codes vs GMS markers. */
+export function inferItemMake(it: { description?: string; hsn_code?: string }): "MR" | "GMS" | "OTHER" {
+  const s = `${it.description || ""} ${it.hsn_code || ""}`.toUpperCase();
+  if (/\bGMS\b/.test(s)) return "GMS";
+  if (/\bM\.?R\.?\b/.test(s) || /\bMR[A-Z]{2,}/.test(s) || s.includes("FOWLER WESTRUP")) return "MR";
+  return "OTHER";
 }
 
 // Number to Indian words (rupees)
