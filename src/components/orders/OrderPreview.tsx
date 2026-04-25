@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
+import mrLogo from "@/assets/mr-logo.png";
 
 interface Props {
   oaNumber: string;
@@ -92,12 +93,7 @@ export function OrderPreview(p: Props) {
 
       <div className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body">
         {/* Header */}
-        <div className="text-center space-y-0.5 border-b pb-3">
-          <div className="font-bold text-base">
-            {p.format === "MR" ? "MR Engineers" : "GMS"}
-          </div>
-          <div className="text-xs text-muted-foreground">Order Acceptance</div>
-        </div>
+        {p.format === "MR" ? <MRHeader /> : <GMSHeader />}
 
         {/* Meta */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -218,4 +214,49 @@ function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
 
 function Placeholder({ text = "—" }: { text?: string }) {
   return <span className="text-muted-foreground italic font-normal">{text}</span>;
+}
+
+function MRHeader() {
+  return (
+    <div className="border-b pb-3">
+      <div className="flex items-center gap-4">
+        <img
+          src={mrLogo}
+          alt="MR Engineers logo"
+          width={64}
+          height={64}
+          loading="lazy"
+          className="h-16 w-16 shrink-0 object-contain"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="text-xl font-extrabold tracking-tight text-primary leading-tight">
+            M.R. ENGINEERS PVT. LTD.
+          </div>
+          <div className="text-[11px] text-muted-foreground italic">
+            Manufacturers of Material Handling Equipment & EOT Cranes
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Plot No. 7, Sector-3, IMT Manesar, Gurgaon - 122051, Haryana, India
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-wide rounded-sm bg-primary/10 text-foreground px-2 py-1.5 border border-primary/20">
+        <div><span className="text-muted-foreground">GSTIN:</span> <span className="font-semibold">06AABCM3429K1ZP</span></div>
+        <div className="text-center"><span className="text-muted-foreground">Tel:</span> <span className="font-semibold">+91-124-4374444</span></div>
+        <div className="text-right"><span className="text-muted-foreground">Email:</span> <span className="font-semibold normal-case">info@mrengineers.com</span></div>
+      </div>
+      <div className="text-center mt-2">
+        <div className="text-sm font-bold tracking-[0.2em] text-foreground">ORDER ACCEPTANCE</div>
+      </div>
+    </div>
+  );
+}
+
+function GMSHeader() {
+  return (
+    <div className="text-center space-y-0.5 border-b pb-3">
+      <div className="font-bold text-base">GMS Engineering</div>
+      <div className="text-xs text-muted-foreground">Order Acceptance</div>
+    </div>
+  );
 }
