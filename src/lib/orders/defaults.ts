@@ -22,3 +22,32 @@ export const DEFAULT_MR_BANK: BankDetails = {
 
 export const MR_FOOTER_ADDRESS =
   "PLEASE DO ALL CORRESPONDENCE AND SEND PAYMENTS AT C-27, C-BLOCK, GROUND FLOOR, TRAPEZOID IT PARK, SECTOR-62, NOIDA, PIN-201309";
+
+export const DEFAULT_GMS_BANK: BankDetails = {
+  bank_name: "Citi Bank",
+  branch: "Noida",
+  account_no: "0005989288",
+  ifsc: "CITI0000017",
+};
+
+export const GMS_HEAD_OFFICE_LINES = [
+  "209A, 2nd Floor, K M Trade Tower,",
+  "Kaushambi, Sahibabad, Ghaziabad-201010,",
+  "Uttar Pradesh, INDIA",
+  "Tel : +91 0120-4567202/03",
+  "info@gmsdelhi.com",
+];
+
+export const DEFAULT_GMS_EXCLUSIONS = [
+  "Exclusion: Sea Freight/Local Freight",
+  "Exclusion: Custom duty, CHA, Port charges & GST",
+  "Exclusion: All Insurance.",
+];
+
+export const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: "₹",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+};

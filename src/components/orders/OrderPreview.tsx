@@ -5,7 +5,14 @@ import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
-import { MR_FOOTER_ADDRESS, type BankDetails } from "@/lib/orders/defaults";
+import {
+  MR_FOOTER_ADDRESS,
+  GMS_HEAD_OFFICE_LINES,
+  DEFAULT_GMS_BANK,
+  DEFAULT_GMS_EXCLUSIONS,
+  CURRENCY_SYMBOLS,
+  type BankDetails,
+} from "@/lib/orders/defaults";
 
 interface Props {
   oaNumber: string;
@@ -34,8 +41,17 @@ interface Props {
 const fmt = (n: number) =>
   `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const fmtFX = (n: number, symbol: string) =>
+  `${symbol} ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export function OrderPreview(p: Props) {
   const ship = p.sameAsBill ? p.billTo : p.shipTo;
+  const isFX = !!p.charges.currency && p.charges.currency !== "INR" && (p.charges.fx_rate || 0) > 0;
+  const fxSymbol = p.charges.currency_symbol || CURRENCY_SYMBOLS[p.charges.currency || "INR"] || p.charges.currency || "";
+  const fxRate = p.charges.fx_rate || 0;
+  const advancePct = p.charges.advance_percent ?? 40;
+  const inrAmount = isFX ? p.totals.basic_total * fxRate : p.totals.basic_total;
+  const advanceAmount = (inrAmount * advancePct) / 100;
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -138,8 +154,8 @@ export function OrderPreview(p: Props) {
             <div className="col-span-1">S.No.</div>
             <div className="col-span-5">Description</div>
             <div className="col-span-1 text-right">Qty</div>
-            <div className="col-span-2 text-right">Rate</div>
-            <div className="col-span-3 text-right">Amount</div>
+            <div className="col-span-2 text-right">Rate{isFX ? ` (${fxSymbol})` : ""}</div>
+            <div className="col-span-3 text-right">Amount{isFX ? ` (${fxSymbol})` : ""}</div>
           </div>
           {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
             <div className="px-2 py-3 text-xs text-muted-foreground italic text-center">No line items yet</div>
@@ -153,13 +169,40 @@ export function OrderPreview(p: Props) {
                 </div>
                 <div className="col-span-1 text-right tabular-nums">{it.quantity || 0}</div>
                 <div className="col-span-2 text-right tabular-nums">{(it.unit_rate || 0).toLocaleString("en-IN")}</div>
-                <div className="col-span-3 text-right tabular-nums font-medium">{fmt(it.amount || 0)}</div>
+                <div className="col-span-3 text-right tabular-nums font-medium">
+                  {isFX ? fmtFX(it.amount || 0, fxSymbol) : fmt(it.amount || 0)}
+                </div>
               </div>
             ))
           )}
         </div>
 
-        {/* Totals */}
+        {/* Totals — Ex-works foreign-currency layout */}
+        {isFX ? (
+          <div className="border rounded overflow-hidden text-xs">
+            <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
+              <div className="px-2 py-1.5 text-right font-bold">Price Ex-works {p.charges.currency}</div>
+              <div className="px-2 py-1.5 border-l text-right font-semibold w-12">{fxSymbol}</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
+                {(p.totals.basic_total || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
+              <div className="px-2 py-1.5 text-right font-bold">Amount in INR @{fxRate}</div>
+              <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
+                {inrAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_auto] items-center">
+              <div className="px-2 py-1.5 text-right font-bold">Advance Required @ {advancePct}%</div>
+              <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
+                {advanceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-1 text-xs">
           <Line k="Basic Total" v={p.totals.basic_total} />
           {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
@@ -182,6 +225,7 @@ export function OrderPreview(p: Props) {
             <div className="pt-1 text-[11px] italic text-muted-foreground">{p.amountInWords}</div>
           )}
         </div>
+        )}
 
         {p.notes && (
           <div className="text-xs">
@@ -192,6 +236,10 @@ export function OrderPreview(p: Props) {
 
         {p.format === "MR" && <MRPostItems terms={p.terms} bank={p.bank} preparedBy={p.preparedBy} />}
 
+        {p.format === "GMS" && isFX && (
+          <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
+        )}
+
         {p.format !== "MR" && p.preparedBy && (
           <div className="text-xs text-right pt-2 border-t">
             <div className="text-muted-foreground">Prepared by</div>
@@ -200,6 +248,38 @@ export function OrderPreview(p: Props) {
         )}
       </div>
     </Card>
+  );
+}
+
+function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
+  const bank = DEFAULT_GMS_BANK;
+  return (
+    <div className="border-t-2 border-foreground mt-3 pt-2 text-[11px] space-y-2">
+      <div className="space-y-0.5 font-semibold">
+        {DEFAULT_GMS_EXCLUSIONS.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
+        <div>
+          {currency} conversion rate - @Rs{fxRate}. Any variation in exchange rate will be borne by client.
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 pt-2">
+        <div>
+          <div className="font-bold">HEAD OFFICE</div>
+          {GMS_HEAD_OFFICE_LINES.map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+        </div>
+        <div>
+          <div className="font-bold">Our Bank Details :</div>
+          <div className="font-bold uppercase">GRAIIN MILLING SOLUTIONS</div>
+          <div><span className="font-semibold">Bank :</span> {bank.bank_name}</div>
+          <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
+          <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
+          <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
