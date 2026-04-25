@@ -371,6 +371,63 @@ export default function OrderEditor() {
                   <NumberField label="Advance %" value={charges.advance_percent ?? 40} onChange={(v) => setCharges({ ...charges, advance_percent: v })} />
                 </div>
               </div>
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Ex-works Murthal (Landed Cost)</Label>
+                    <p className="text-[11px] text-muted-foreground">GMS imports landing at Murthal — base, hike, freight, sea freight, customs, clearing & GST. Toggle each line.</p>
+                  </div>
+                  <Switch
+                    checked={!!charges.ex_murthal_enabled}
+                    onCheckedChange={(b) => setCharges({ ...charges, ex_murthal_enabled: b,
+                      // sensible defaults on first enable
+                      custom_percent: charges.custom_percent ?? 8.25,
+                      clearing_percent: charges.clearing_percent ?? 1.5,
+                      landed_gst_percent: charges.landed_gst_percent ?? 18,
+                    })}
+                  />
+                </div>
+                {charges.ex_murthal_enabled && (
+                  <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
+                    <ToggleNumberRow
+                      label="2. Hike Amount" enabled={!!charges.hike_enabled} value={charges.hike_amount || 0}
+                      onToggle={(b) => setCharges({ ...charges, hike_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, hike_amount: v })}
+                    />
+                    <ToggleNumberRow
+                      label="4a. Sea Freight (₹)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
+                      onToggle={(b) => setCharges({ ...charges, sea_freight_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, sea_freight: v })}
+                    />
+                    <ToggleNumberRow
+                      label="4b. Insurance (₹)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
+                      onToggle={(b) => setCharges({ ...charges, sea_insurance_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, sea_insurance: v })}
+                    />
+                    <ToggleNumberRow
+                      label="5. Custom Duty %" enabled={!!charges.custom_enabled} value={charges.custom_percent ?? 8.25}
+                      onToggle={(b) => setCharges({ ...charges, custom_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, custom_percent: v })}
+                    />
+                    <ToggleNumberRow
+                      label="6. Clearing (CHA & Port) %" enabled={!!charges.clearing_enabled} value={charges.clearing_percent ?? 1.5}
+                      onToggle={(b) => setCharges({ ...charges, clearing_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, clearing_percent: v })}
+                    />
+                    <ToggleNumberRow
+                      label="7. GST %" enabled={!!charges.landed_gst_enabled} value={charges.landed_gst_percent ?? 18}
+                      onToggle={(b) => setCharges({ ...charges, landed_gst_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, landed_gst_percent: v })}
+                    />
+                    <ToggleNumberRow
+                      label="8. One-time Discount (₹)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
+                      onToggle={(b) => setCharges({ ...charges, landed_discount_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, landed_discount: v })}
+                    />
+                    <p className="text-[10px] text-muted-foreground italic pt-1">P&F (2a) and Freight (2b) use the values set above.</p>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="rounded-lg border p-4 space-y-2 bg-card">
               <Row k="Basic Total" v={totals.basic_total} />
@@ -470,6 +527,17 @@ function AddressFields({ value, onChange }: { value: Address; onChange: (a: Addr
 }
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return <div><Label>{label}</Label><Input type="number" step="any" value={value} onChange={(e) => onChange(+e.target.value || 0)} /></div>;
+}
+function ToggleNumberRow({
+  label, enabled, value, onToggle, onValue,
+}: { label: string; enabled: boolean; value: number; onToggle: (b: boolean) => void; onValue: (v: number) => void; }) {
+  return (
+    <div className="grid grid-cols-[auto_1fr_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={onToggle} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>{label}</Label>
+      <Input type="number" step="any" disabled={!enabled} value={value} onChange={(e) => onValue(+e.target.value || 0)} />
+    </div>
+  );
 }
 function Row({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
   return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>₹ {v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>;

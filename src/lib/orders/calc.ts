@@ -30,6 +30,48 @@ export function calcTotals(items: LineItem[], charges: Charges): Totals {
 
 function round(n: number) { return Math.round(n * 100) / 100; }
 
+export interface ExMurthalBreakdown {
+  base_amount: number;     // basic_total in INR (FX-converted if applicable)
+  hike: number;
+  pf: number;
+  freight: number;
+  total_amount: number;    // 3. landed price (base + hike + pf + freight)
+  sea_freight: number;
+  sea_insurance: number;
+  custom: number;          // 5. (base + sea_freight + sea_insurance) * custom%
+  clearing: number;        // 6. (base + sea_freight + sea_insurance) * clearing%
+  gst: number;             // 7. (base + sea + ins + custom + clearing) * gst%
+  discount: number;        // 8. one-time
+  net_payable: number;
+}
+
+export function calcExMurthal(
+  basicInInr: number,
+  c: import("./types").Charges,
+): ExMurthalBreakdown {
+  const r = (n: number) => Math.round(n * 100) / 100;
+  const base = basicInInr;
+  const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
+  const pf = c.pf_amount > 0 ? c.pf_amount : (base * (c.pf_percent || 0)) / 100;
+  const freight = c.freight_enabled ? (c.freight || 0) : 0;
+  const total = base + hike + pf + freight;
+  const seaFreight = c.sea_freight_enabled ? (c.sea_freight || 0) : 0;
+  const seaInsurance = c.sea_insurance_enabled ? (c.sea_insurance || 0) : 0;
+  const customBase = base + seaFreight + seaInsurance;
+  const custom = c.custom_enabled ? (customBase * (c.custom_percent ?? 8.25)) / 100 : 0;
+  const clearing = c.clearing_enabled ? (customBase * (c.clearing_percent ?? 1.5)) / 100 : 0;
+  const gstBase = base + seaFreight + seaInsurance + custom + clearing;
+  const gst = c.landed_gst_enabled ? (gstBase * (c.landed_gst_percent ?? 18)) / 100 : 0;
+  const discount = c.landed_discount_enabled ? (c.landed_discount || 0) : 0;
+  const net = total + seaFreight + seaInsurance + custom + clearing + gst - discount;
+  return {
+    base_amount: r(base), hike: r(hike), pf: r(pf), freight: r(freight),
+    total_amount: r(total), sea_freight: r(seaFreight), sea_insurance: r(seaInsurance),
+    custom: r(custom), clearing: r(clearing), gst: r(gst), discount: r(discount),
+    net_payable: r(net),
+  };
+}
+
 export function getFinancialYear(d = new Date()): string {
   const y = d.getFullYear();
   const m = d.getMonth(); // 0=Jan
