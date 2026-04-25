@@ -16,7 +16,7 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
-import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, type BankDetails } from "@/lib/orders/defaults";
+import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -51,6 +51,7 @@ export default function OrderEditor() {
   const [parsing, setParsing] = useState(false);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
+  const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
 
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
@@ -474,6 +475,26 @@ export default function OrderEditor() {
             </Card>
           </>
         )}
+
+        {format === "GMS" && (
+          <Card>
+            <CardHeader><CardTitle>GMS Terms &amp; Conditions</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="text-xs uppercase tracking-wide font-semibold underline">Commercial Condition</div>
+              <div><Label>Taxation</Label><Input value={gmsTerms.taxation} onChange={(e) => setGmsTerms({ ...gmsTerms, taxation: e.target.value })} /></div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div><Label>Freight</Label><Input value={gmsTerms.freight} onChange={(e) => setGmsTerms({ ...gmsTerms, freight: e.target.value })} /></div>
+                <div><Label>Insurance</Label><Input value={gmsTerms.insurance} onChange={(e) => setGmsTerms({ ...gmsTerms, insurance: e.target.value })} /></div>
+              </div>
+              <div><Label>Delivery Time</Label><Textarea rows={2} value={gmsTerms.delivery_time} onChange={(e) => setGmsTerms({ ...gmsTerms, delivery_time: e.target.value })} /></div>
+              <div><Label>Payment Terms</Label><Textarea rows={2} value={gmsTerms.payment_terms} onChange={(e) => setGmsTerms({ ...gmsTerms, payment_terms: e.target.value })} /></div>
+              <div><Label>General Conditions</Label><Textarea rows={2} value={gmsTerms.general_conditions} onChange={(e) => setGmsTerms({ ...gmsTerms, general_conditions: e.target.value })} /></div>
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" onClick={() => setGmsTerms(DEFAULT_GMS_TERMS)}>Reset to default</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
           </div>
 
           <aside className="lg:sticky lg:top-4 lg:self-start">
@@ -499,6 +520,7 @@ export default function OrderEditor() {
               onDownloadPDF={downloadPDF}
               terms={terms}
               bank={bank}
+              gmsTerms={gmsTerms}
             />
           </aside>
         </div>
