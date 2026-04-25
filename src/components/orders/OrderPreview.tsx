@@ -532,6 +532,22 @@ function Placeholder({ text = "—" }: { text?: string }) {
   return <span className="text-muted-foreground italic font-normal">{text}</span>;
 }
 
+function AddressCellContent({ addr, fallbackName }: { addr: Address; fallbackName: string }) {
+  const empty = !addr?.name && !addr?.address && !fallbackName;
+  if (empty) return <Placeholder text="not set" />;
+  return (
+    <div className="space-y-0.5">
+      <div className="font-semibold">{addr?.name || fallbackName}</div>
+      {addr?.address && <div className="whitespace-pre-wrap">{addr.address}</div>}
+      {addr?.gstin && <div>GSTIN: {addr.gstin}</div>}
+      {addr?.state && <div>State: {addr.state}</div>}
+      {addr?.contact_person && <div>Contact: {addr.contact_person}</div>}
+      {addr?.contact_number && <div>Phone: {addr.contact_number}</div>}
+      {addr?.email && <div>Email: {addr.email}</div>}
+    </div>
+  );
+}
+
 function MRHeader() {
   return (
     <div className="border-b pb-3">
