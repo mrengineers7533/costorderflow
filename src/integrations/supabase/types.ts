@@ -38,6 +38,39 @@ export type Database = {
         }
         Relationships: []
       }
+      order_templates: {
+        Row: {
+          created_at: string
+          field_map: Json
+          file_path: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          page_count: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          field_map?: Json
+          file_path: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          page_count?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          field_map?: Json
+          file_path?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          page_count?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           amount_in_words: string | null

@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -123,7 +124,7 @@ export default function OrderEditor() {
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
 
-  function downloadPDF() {
+  async function downloadPDF() {
     const record: OrderRecord = {
       id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
       format, status: "draft", company_name: companyName, bill_to: billTo,
@@ -131,8 +132,21 @@ export default function OrderEditor() {
       order_date: orderDate, prepared_by: preparedBy, line_items: itemsWithAmounts,
       charges, totals, amount_in_words: words, notes, created_at: "", updated_at: "",
     };
+    const filename = `${(oaNumber || "OA").replace(/[/\\]/g, "_")}.pdf`;
+    try {
+      const tpl = await fetchTemplate(format);
+      if (tpl && Object.keys(tpl.field_map || {}).length > 0) {
+        const bytes = await generateOrderPDFFromTemplate(record, tpl);
+        downloadBytes(bytes, filename);
+        toast({ title: "PDF generated", description: `Using ${format} template` });
+        return;
+      }
+    } catch (err) {
+      console.error("Template render failed, falling back:", err);
+      toast({ title: "Template render failed", description: "Falling back to default layout.", variant: "destructive" });
+    }
     const doc = generateOrderPDF(record);
-    doc.save(`${(oaNumber || "OA").replace(/[/\\]/g, "_")}.pdf`);
+    doc.save(filename);
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;

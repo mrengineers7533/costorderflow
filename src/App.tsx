@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound.tsx";
 import AuthPage from "./pages/orders/AuthPage";
 import OrdersList from "./pages/orders/OrdersList";
 import OrderEditor from "./pages/orders/OrderEditor";
+import TemplatesPage from "./pages/orders/TemplatesPage";
 import { AuthGuard } from "./components/orders/AuthGuard";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/orders" element={<AuthGuard><OrdersList /></AuthGuard>} />
           <Route path="/orders/new" element={<AuthGuard><OrderEditor /></AuthGuard>} />
+          <Route path="/orders/templates" element={<AuthGuard><TemplatesPage /></AuthGuard>} />
           <Route path="/orders/:id" element={<AuthGuard><OrderEditor /></AuthGuard>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
