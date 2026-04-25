@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 import mrLogo from "@/assets/mr-logo.png";
+import { MR_FOOTER_ADDRESS, type BankDetails } from "@/lib/orders/defaults";
 
 interface Props {
   oaNumber: string;
@@ -25,6 +26,8 @@ interface Props {
   onFormatChange?: (f: OrderFormat) => void;
   onDownloadPDF?: () => void;
   splitMode?: boolean;
+  terms?: string;
+  bank?: BankDetails;
 }
 
 const fmt = (n: number) =>
@@ -173,7 +176,9 @@ export function OrderPreview(p: Props) {
           </div>
         )}
 
-        {p.preparedBy && (
+        {p.format === "MR" && <MRPostItems terms={p.terms} bank={p.bank} preparedBy={p.preparedBy} />}
+
+        {p.format !== "MR" && p.preparedBy && (
           <div className="text-xs text-right pt-2 border-t">
             <div className="text-muted-foreground">Prepared by</div>
             <div className="font-medium">{p.preparedBy}</div>
@@ -181,6 +186,46 @@ export function OrderPreview(p: Props) {
         )}
       </div>
     </Card>
+  );
+}
+
+function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankDetails; preparedBy?: string }) {
+  return (
+    <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2">
+      {/* Amount in words band */}
+      {/* Terms & Conditions */}
+      <div className="border border-foreground border-t-0 px-2 py-1.5">
+        <div className="font-bold uppercase italic mb-0.5">Terms &amp; Conditions</div>
+        <div className="whitespace-pre-wrap leading-relaxed">{terms || ""}</div>
+      </div>
+
+      {/* Bank + Signature row */}
+      <div className="grid grid-cols-2 border border-foreground border-t-0">
+        <div className="px-2 py-1.5 border-r border-foreground">
+          <div className="font-bold italic uppercase">Our Bank Details :-</div>
+          {bank && (
+            <div className="mt-0.5 space-y-0.5 font-semibold">
+              <div>{bank.bank_name}</div>
+              <div>BRANCH: {bank.branch}</div>
+              <div>C/A A/C NO. {bank.account_no}</div>
+              <div>IFSC CODE: {bank.ifsc}</div>
+            </div>
+          )}
+        </div>
+        <div className="px-2 py-1.5 flex flex-col items-end justify-between min-h-[90px]">
+          <div className="font-semibold italic">Yours faithfully</div>
+          <div className="text-right">
+            <div className="font-bold tracking-wide">M.R. ENGINEERS</div>
+            {preparedBy && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer address band */}
+      <div className="bg-primary/90 text-primary-foreground text-center font-semibold uppercase tracking-wide px-2 py-1.5 text-[10px]">
+        {MR_FOOTER_ADDRESS}
+      </div>
+    </div>
   );
 }
 
