@@ -380,6 +380,9 @@ export default function OrderEditor() {
               amountInWords={words}
               notes={notes}
               parsing={parsing}
+              splitMode={splitMode}
+              onFormatChange={(f) => { setAutoFormat(false); setFormat(f); }}
+              onDownloadPDF={downloadPDF}
             />
           </aside>
         </div>
