@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      cost_sheets: {
+        Row: {
+          created_at: string
+          extracted: Json
+          file_path: string
+          id: string
+          original_filename: string
+          parse_error: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extracted?: Json
+          file_path: string
+          id?: string
+          original_filename: string
+          parse_error?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extracted?: Json
+          file_path?: string
+          id?: string
+          original_filename?: string
+          parse_error?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       oa_counters: {
         Row: {
           financial_year: string

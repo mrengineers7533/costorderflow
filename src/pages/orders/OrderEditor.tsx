@@ -14,6 +14,7 @@ import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
+import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -151,6 +152,42 @@ export default function OrderEditor() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
+  function applyCostSheet(data: ExtractedCostSheet) {
+    if (data.company_name) setCompanyName(data.company_name);
+    if (data.bill_to) setBillTo({ ...emptyAddress, ...billTo, ...data.bill_to });
+    if (data.ship_to && (data.ship_to.name || data.ship_to.address)) {
+      setShipTo({ ...emptyAddress, ...shipTo, ...data.ship_to });
+      setSameAsBill(false);
+    }
+    if (data.cost_sheet_number) setCostSheetNumber(data.cost_sheet_number);
+    if (data.reference) setReference(data.reference);
+    if (data.line_items?.length) {
+      setItems(
+        data.line_items.map((it) => ({
+          id: crypto.randomUUID(),
+          description: it.description || "",
+          hsn_code: it.hsn_code || "",
+          quantity: Number(it.quantity) || 0,
+          unit_rate: Number(it.unit_rate) || 0,
+          amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
+        }))
+      );
+    }
+    if (data.charges) {
+      setCharges((c) => ({
+        ...c,
+        pf_percent: data.charges?.pf_percent ?? c.pf_percent,
+        pf_amount: data.charges?.pf_amount ?? c.pf_amount,
+        insurance: data.charges?.insurance ?? c.insurance,
+        freight: data.charges?.freight ?? c.freight,
+        freight_enabled: (data.charges?.freight ?? 0) > 0 ? true : c.freight_enabled,
+        gst_percent: data.charges?.gst_percent ?? c.gst_percent,
+        discount: data.charges?.discount ?? c.discount,
+      }));
+    }
+    if (data.notes) setNotes(data.notes);
+  }
+
   return (
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="max-w-5xl mx-auto space-y-4">
@@ -162,6 +199,8 @@ export default function OrderEditor() {
             <Button disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
+
+        {isNew && <CostSheetPicker onApply={applyCostSheet} />}
 
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
