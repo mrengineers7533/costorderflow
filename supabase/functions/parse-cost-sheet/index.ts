@@ -9,6 +9,10 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `You are an expert at extracting structured data from Indian engineering company "cost sheets".
 A cost sheet contains: a customer/company name, addresses, and one or more SECTIONS (e.g. "PRE-CLEANING SECTION 30TPH", "CLEANING SECTION", "MILLING SECTION", "PACKING SECTION", "GMS SECTION"). Each section has a summary line on a front/index page AND a DETAIL page later in the PDF that lists individual machines/items in a table with columns like S.No, Machine / Description, Qty, Make, Price.
 
+EXTRACTION BOUNDARY (read this first):
+The authoritative source of line items is the DETAIL PAGES of the PDF — i.e. everything that appears AFTER the "Terms & Conditions" page and BEFORE the "Client Scope" / "Customer Scope" page. Every machine / equipment row in that range (across Pre-Cleaning, Cleaning, Milling/Grinding, Refraction, Packing, GMS, Bagging, Material Handling, Magnets, Centrifugal Fans, Spouting / Aspiration Ducting, etc.) MUST be returned as its own line item. Do NOT stop at the "Cost of Project" summary table on the front pages — that table is only an index, never the source of items for sections that have detail pages.
+The "Client Scope" / "Customer Scope" section and anything after it is OUT OF SCOPE — never return those rows.
+
 CRITICAL EXTRACTION RULES:
 1. SECTION TOTAL vs DETAIL ITEMS — apply per section:
    a. If the section HAS a detail page / sub-table listing individual machines (e.g. Pre-Cleaning, Cleaning, Milling, Refraction, Packing, GMS Section, Bagging, Material Handling, Magnets, Centrifugal Fans, Spouting / Aspiration Ducting), DO NOT return the section total. You MUST open the detail page later in the PDF and return ONE line item per machine / equipment row in that section's detail table.
