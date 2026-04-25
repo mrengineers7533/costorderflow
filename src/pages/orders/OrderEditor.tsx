@@ -53,7 +53,7 @@ export default function OrderEditor() {
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
 
   function newItem(): LineItem {
-    return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit_rate: 0, amount: 0, make: "MR" };
+    return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
   }
 
   // Load existing
@@ -293,20 +293,22 @@ export default function OrderEditor() {
               </div>
             )}
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground px-1">
+              <div className="grid grid-cols-14 gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                 <div className="col-span-4">Description</div>
                 <div className="col-span-2">HSN</div>
                 <div className="col-span-1">Qty</div>
-                <div className="col-span-2">Unit Rate</div>
+                <div className="col-span-1">Unit</div>
+                <div className="col-span-2">Rate</div>
                 <div className="col-span-1">Make</div>
-                <div className="col-span-1 text-right">Amount</div>
+                <div className="col-span-2 text-right">Amount</div>
                 <div className="col-span-1" />
               </div>
               {itemsWithAmounts.map((it) => (
-                <div key={it.id} className="grid grid-cols-12 gap-2 items-center">
+                <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.hsn_code} onChange={(e) => updateItemById(it.id, { hsn_code: e.target.value })} placeholder="HSN" />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
+                  <Input className="col-span-1" value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
                   <Input className="col-span-2" type="number" step="any" value={it.unit_rate} onChange={(e) => updateItemById(it.id, { unit_rate: +e.target.value })} />
                   <Select value={it.make || "MR"} onValueChange={(v) => updateItemById(it.id, { make: v as "MR" | "GMS" | "OTHER" })}>
                     <SelectTrigger className="col-span-1 h-9 px-2"><SelectValue /></SelectTrigger>
@@ -316,7 +318,7 @@ export default function OrderEditor() {
                       <SelectItem value="OTHER">Other</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="col-span-1 text-right font-medium">{it.amount.toFixed(2)}</div>
+                  <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}

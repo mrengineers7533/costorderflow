@@ -94,66 +94,60 @@ export function generateOrderPDF(order: OrderRecord, opts?: { terms?: string; ba
   shipLines.forEach((l, i) => doc.text(doc.splitTextToSize(l, boxW - 4), M + boxW + 6, y + 10 + i * 4));
   y += 32;
 
-  // Items table
-  autoTable(doc, {
-    startY: y,
-    head: [["S.No.", "Item Description", "HSN", "Qty", "Unit Rate (INR)", "Amount (INR)"]],
-    body: order.line_items.map((it, i) => [
-      String(i + 1),
-      it.description,
-      it.hsn_code || "-",
-      String(it.quantity),
-      it.unit_rate.toFixed(2),
-      it.amount.toFixed(2),
-    ]),
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: accent, textColor: 255 },
-    columnStyles: {
-      0: { cellWidth: 12, halign: "center" },
-      2: { cellWidth: 18, halign: "center" },
-      3: { cellWidth: 14, halign: "right" },
-      4: { cellWidth: 28, halign: "right" },
-      5: { cellWidth: 28, halign: "right" },
-    },
-    margin: { left: M, right: M },
-  });
-
-  // @ts-expect-error lastAutoTable is added at runtime by autoTable
-  y = doc.lastAutoTable.finalY + 4;
-
-  // Totals box (right aligned)
-  const tBoxW = 80;
-  const tx = W - M - tBoxW;
+  // Unified Items + Totals table (matches reference template structure)
   const c = order.charges;
   const t = order.totals;
-  const rows: [string, string][] = [
-    ["Basic Total", t.basic_total.toFixed(2)],
-    ["P&F" + (c.pf_percent ? ` (${c.pf_percent}%)` : ""), ((c.pf_percent ? (t.basic_total * c.pf_percent) / 100 : c.pf_amount) || 0).toFixed(2)],
-    ["Insurance", (c.insurance || 0).toFixed(2)],
-  ];
-  if (c.freight_enabled) rows.push(["Freight", (c.freight || 0).toFixed(2)]);
-  rows.push(["Subtotal", t.subtotal.toFixed(2)]);
-  rows.push([`GST${c.gst_percent ? ` (${c.gst_percent}%)` : ""}`, (c.gst_amount ?? (t.subtotal * (c.gst_percent || 0)) / 100).toFixed(2)]);
-  rows.push(["Grand Total", t.grand_total.toFixed(2)]);
-  if (c.discount) rows.push(["Special Discount", `-${c.discount.toFixed(2)}`]);
-  rows.push(["Net Payable", t.net_payable.toFixed(2)]);
+  const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const itemRows = order.line_items.map((it, i) => [
+    String(i + 1),
+    it.description,
+    it.hsn_code || "",
+    String(it.quantity),
+    it.unit || "Nos",
+    fmt(it.unit_rate),
+    fmt(it.amount),
+  ]);
+
+  const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
+  totalsRows.push({ label: "Basic Total", value: t.basic_total });
+  if (c.pf_amount > 0 || c.pf_percent > 0) {
+    const pf = c.pf_amount > 0 ? c.pf_amount : (t.basic_total * c.pf_percent) / 100;
+    totalsRows.push({ label: `P&F${c.pf_percent ? ` @ ${c.pf_percent}%` : ""}`, value: pf });
+  }
+  const ins = c.insurance_percent > 0 ? (t.basic_total * c.insurance_percent) / 100 : (c.insurance || 0);
+  if (ins > 0) totalsRows.push({ label: `Insurance${c.insurance_percent ? ` @ ${c.insurance_percent}%` : ""}`, value: ins });
+  if (c.freight_enabled && c.freight > 0) totalsRows.push({ label: "Freight", value: c.freight });
+  totalsRows.push({ label: "Subtotal", value: t.subtotal });
+  const gst = c.gst_amount ?? (t.subtotal * (c.gst_percent || 0)) / 100;
+  totalsRows.push({ label: `GST @ ${c.gst_percent || 0}%`, value: gst });
+  if (c.discount > 0 || c.discount_percent > 0) {
+    const disc = c.discount_percent > 0 ? (t.grand_total * c.discount_percent) / 100 : c.discount;
+    if (disc > 0) totalsRows.push({ label: `Discount${c.discount_percent ? ` @ ${c.discount_percent}%` : ""}`, value: -disc });
+  }
+  totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+
+  const totalsAsBody = totalsRows.map((r) => [
+    { content: r.label, colSpan: 6, styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "bold") as "bold" } },
+    { content: fmt(r.value), styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal", fillColor: r.bold ? ([255, 235, 59] as [number, number, number]) : undefined } },
+  ]);
 
   autoTable(doc, {
     startY: y,
-    body: rows,
-    theme: "plain",
-    margin: { left: tx, right: M },
-    styles: { fontSize: 9, cellPadding: 1.5 },
+    head: [["S. No.", "Item Description", "HSN Code", "Qty.", "Unit", "Rate", "Amount"]],
+    body: [...itemRows, ...totalsAsBody as never[]],
+    theme: "grid",
+    styles: { fontSize: 8, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
+    headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles: {
-      0: { cellWidth: 45, fontStyle: "bold" },
-      1: { cellWidth: 35, halign: "right" },
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: "auto" },
+      2: { cellWidth: 18, halign: "center" },
+      3: { cellWidth: 12, halign: "center" },
+      4: { cellWidth: 12, halign: "center" },
+      5: { cellWidth: 24, halign: "right" },
+      6: { cellWidth: 28, halign: "right" },
     },
-    didParseCell: (data) => {
-      if (data.row.index === rows.length - 1 || rows[data.row.index][0] === "Grand Total") {
-        data.cell.styles.fillColor = [240, 240, 240];
-        data.cell.styles.fontStyle = "bold";
-      }
-    },
+    margin: { left: M, right: M },
   });
 
   // @ts-expect-error lastAutoTable runtime
