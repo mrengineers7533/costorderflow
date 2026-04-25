@@ -27,6 +27,9 @@ const fmt = (n: number) =>
 export function OrderPreview(p: Props) {
   const ship = p.sameAsBill ? p.billTo : p.shipTo;
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
+  const pfAmount = p.charges.pf_amount > 0
+    ? p.charges.pf_amount
+    : (p.totals.basic_total * (p.charges.pf_percent || 0)) / 100;
 
   return (
     <Card className="overflow-hidden">
@@ -93,9 +96,9 @@ export function OrderPreview(p: Props) {
         {/* Totals */}
         <div className="space-y-1 text-xs">
           <Line k="Basic Total" v={p.totals.basic_total} />
-          {p.charges.pf_amount > 0 || p.charges.pf_percent > 0 ? (
-            <Line k={`P&F${p.charges.pf_percent ? ` (${p.charges.pf_percent}%)` : ""}`} v={p.totals.pf} />
-          ) : null}
+          {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
+            <Line k={`P&F${p.charges.pf_percent ? ` (${p.charges.pf_percent}%)` : ""}`} v={pfAmount} />
+          )}
           {p.charges.insurance > 0 && <Line k="Insurance" v={p.charges.insurance} />}
           {p.charges.freight_enabled && p.charges.freight > 0 && <Line k="Freight" v={p.charges.freight} />}
           <Line k="Subtotal" v={p.totals.subtotal} />
