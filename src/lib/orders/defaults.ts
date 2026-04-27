@@ -31,10 +31,10 @@ export const DEFAULT_GMS_BANK: BankDetails = {
 };
 
 export const GMS_HEAD_OFFICE_LINES = [
-  "209A, 2nd Floor, K M Trade Tower,",
-  "Kaushambi, Sahibabad, Ghaziabad-201010,",
+  "C-27, C-Block, Ground Floor, Trapezoid IT Park",
+  "Sector-62, Noida",
+  "Pin- 201309",
   "Uttar Pradesh, INDIA",
-  "Tel : +91 0120-4567202/03",
   "info@gmsdelhi.com",
 ];
 
