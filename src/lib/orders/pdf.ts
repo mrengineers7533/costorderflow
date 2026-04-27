@@ -49,20 +49,29 @@ const COMPANY_GMS = {
   email: "info@gmsengg.com",
 };
 
-export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: string; bank?: BankDetails }): Promise<jsPDF> {
+export async function generateOrderPDF(
+  order: OrderRecord,
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms },
+): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   const M = 12;
-  const company = order.format === "MR" ? COMPANY_MR : COMPANY_GMS;
-  const accent: [number, number, number] = order.format === "MR" ? [234, 88, 12] : [22, 163, 74];
 
+  if (order.format === "GMS") {
+    await renderGmsPdf(doc, order, opts, { W, H, M });
+    return doc;
+  }
+
+  const company = COMPANY_MR;
+  const accent: [number, number, number] = [234, 88, 12];
   let y = M;
 
   // Header banner
   const headerH = 26;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, headerH, "F");
-  if (order.format === "MR") {
+  {
     const logo = await loadLogo(mrLogoUrl);
     if (logo) {
       try {
@@ -83,25 +92,6 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
     doc.setFont("helvetica", "bold").setFontSize(8);
     doc.text(`GSTIN-${COMPANY_MR.gstin}`, rightX, 22, { align: "right" });
     // Thin accent rule under header
-    doc.setDrawColor(...accent).setLineWidth(0.6);
-    doc.line(0, headerH, W, headerH);
-  } else {
-    // GMS: white header with logo + accent rule
-    const logo = await loadLogo(gmsLogoUrl);
-    if (logo) {
-      try {
-        doc.addImage(logo, "PNG", M, 3, 40, 20);
-      } catch (e) {
-        console.warn("addImage failed", e);
-      }
-    }
-    const textX = M + 44;
-    doc.setTextColor(30, 30, 30);
-    doc.setFont("helvetica", "bold").setFontSize(14);
-    doc.text(company.name, textX, 10);
-    doc.setFont("helvetica", "normal").setFontSize(8);
-    doc.text(company.address, textX, 15);
-    doc.text(`GSTIN: ${company.gstin}`, textX, 19);
     doc.setDrawColor(...accent).setLineWidth(0.6);
     doc.line(0, headerH, W, headerH);
   }
@@ -229,7 +219,7 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
   y += 8;
 
   // MR-format post-items section (single full-width table matching template)
-  if (order.format === "MR") {
+  {
     const terms = opts?.terms ?? DEFAULT_MR_TERMS;
     const bank = opts?.bank ?? DEFAULT_MR_BANK;
     const tableW = W - M * 2;
