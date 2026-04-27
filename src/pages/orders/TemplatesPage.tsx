@@ -18,6 +18,7 @@ import {
   type OrderTemplate,
 } from "@/lib/orders/types";
 import { publicTemplateUrl } from "@/lib/orders/templatePdf";
+import appLogo from "@/assets/app-logo.png";
 
 // Lazy-load pdfjs only on this page
 import * as pdfjsLib from "pdfjs-dist";
@@ -34,6 +35,9 @@ export default function TemplatesPage() {
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
+            <Link to="/" aria-label="Home" className="flex items-center mr-1">
+              <img src={appLogo} alt="GMS | MR Engineers" className="h-10 w-auto object-contain" />
+            </Link>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/"><Home className="mr-1 h-4 w-4" />Home</Link>
             </Button>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Home } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
+import appLogo from "@/assets/app-logo.png";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -28,6 +29,9 @@ export default function OrdersList() {
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Link to="/" aria-label="Home" className="flex items-center">
+              <img src={appLogo} alt="GMS | MR Engineers" className="h-10 w-auto object-contain" />
+            </Link>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/"><Home className="mr-1 h-4 w-4" />Home</Link>
             </Button>

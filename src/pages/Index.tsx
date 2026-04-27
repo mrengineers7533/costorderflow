@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord } from "@/lib/orders/types";
+import appLogo from "@/assets/app-logo.png";
 
 const Index = () => {
   const [recent, setRecent] = useState<OrderRecord[]>([]);
@@ -42,10 +43,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b sticky top-0 z-30 bg-background/80 backdrop-blur">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <Link to="/" className="font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Order Acceptance
+        <div className="container mx-auto flex h-20 items-center justify-between px-4">
+          <Link to="/" aria-label="GMS | MR Engineers — Home" className="flex items-center">
+            <img src={appLogo} alt="GMS | MR Engineers" className="h-14 w-auto object-contain" />
           </Link>
           <nav className="flex items-center gap-1">
             <Button variant="ghost" size="sm" asChild><Link to="/">Home</Link></Button>

@@ -17,6 +17,7 @@ import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/li
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
+import appLogo from "@/assets/app-logo.png";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -244,6 +245,9 @@ export default function OrderEditor() {
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
+            <button type="button" onClick={() => navigate("/")} aria-label="Home" className="flex items-center mr-1">
+              <img src={appLogo} alt="GMS | MR Engineers" className="h-10 w-auto object-contain" />
+            </button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}><Home className="mr-1 h-4 w-4" />Home</Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}><ArrowLeft className="mr-1 h-4 w-4" />Orders</Button>
           </div>
