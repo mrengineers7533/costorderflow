@@ -113,8 +113,7 @@ function TemplateEditor({ format }: { format: OrderFormat }) {
     const doc = await pdfjsLib.getDocument({ data: buf }).promise;
     const pages = doc.numPages;
 
-    const { data: u } = await supabase.auth.getUser();
-    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap as never, updated_by: u.user?.id };
+    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap as never };
     const { data, error } = await supabase
       .from("order_templates")
       .upsert(payload as never, { onConflict: "format" })
