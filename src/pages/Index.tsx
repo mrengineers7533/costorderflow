@@ -160,16 +160,6 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Try it now */}
-        <section>
-          <div className="mb-3">
-            <h2 className="text-xl font-semibold tracking-tight">Try it right here</h2>
-            <p className="text-sm text-muted-foreground">
-              Upload a cost sheet and watch the preview fill in. Continue to the full editor when ready.
-            </p>
-          </div>
-          <QuickOrderPanel />
-        </section>
       </main>
     </div>
   );
