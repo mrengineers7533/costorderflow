@@ -7,7 +7,6 @@ import {
   FileText, FilePlus2, LayoutTemplate, Upload, Sparkles,
   Eye, Download, ArrowRight, ListChecks, Clock,
 } from "lucide-react";
-import { QuickOrderPanel } from "@/components/orders/QuickOrderPanel";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord } from "@/lib/orders/types";
 
