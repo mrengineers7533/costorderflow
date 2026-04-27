@@ -26,11 +26,10 @@ async function loadLogo(url: string): Promise<string | null> {
 }
 
 const COMPANY_MR = {
-  name: "MR ENGINEERS PVT. LTD.",
-  address: "Plot No. 7, Sector-3, IMT Manesar, Gurgaon - 122051, Haryana, India",
-  gstin: "06AABCM3429K1ZP",
-  phone: "+91-124-4374444",
-  email: "info@mrengineers.com",
+  name: "M.R. Engineers",
+  tagline: "*  ENGINEERS    *  CONTRACTORS    *  SUPPLIERS",
+  address: "Shed No. 33, HSIIDC, Murthal, Sonepat.",
+  gstin: "06AARPM1849G1ZF",
 };
 const COMPANY_GMS = {
   name: "GMS ENGINEERING",
@@ -53,8 +52,6 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
   const headerH = 26;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, headerH, "F");
-  let textX = M;
-  let textColor: [number, number, number] = [255, 255, 255];
   if (order.format === "MR") {
     const logo = await loadLogo(mrLogoUrl);
     if (logo) {
@@ -64,9 +61,17 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
         console.warn("addImage failed", e);
       }
     }
-    // White header for MR with dark text alongside logo
-    textX = M + 64;
-    textColor = [30, 30, 30];
+    // Right-aligned company block matching the official MR template
+    const rightX = W - M;
+    doc.setTextColor(30, 30, 30);
+    doc.setFont("helvetica", "bold").setFontSize(18);
+    doc.text(COMPANY_MR.name, rightX, 9, { align: "right" });
+    doc.setFont("helvetica", "bold").setFontSize(8);
+    doc.text(COMPANY_MR.tagline, rightX, 14, { align: "right" });
+    doc.setFont("helvetica", "normal").setFontSize(8);
+    doc.text(COMPANY_MR.address, rightX, 18, { align: "right" });
+    doc.setFont("helvetica", "bold").setFontSize(8);
+    doc.text(`GSTIN-${COMPANY_MR.gstin}`, rightX, 22, { align: "right" });
     // Thin accent rule under header
     doc.setDrawColor(...accent).setLineWidth(0.6);
     doc.line(0, headerH, W, headerH);
@@ -80,17 +85,16 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
         console.warn("addImage failed", e);
       }
     }
-    textX = M + 44;
-    textColor = [30, 30, 30];
+    const textX = M + 44;
+    doc.setTextColor(30, 30, 30);
+    doc.setFont("helvetica", "bold").setFontSize(14);
+    doc.text(company.name, textX, 10);
+    doc.setFont("helvetica", "normal").setFontSize(8);
+    doc.text(company.address, textX, 15);
+    doc.text(`GSTIN: ${company.gstin}`, textX, 19);
     doc.setDrawColor(...accent).setLineWidth(0.6);
     doc.line(0, headerH, W, headerH);
   }
-  doc.setTextColor(...textColor);
-  doc.setFont("helvetica", "bold").setFontSize(14);
-  doc.text(company.name, textX, 10);
-  doc.setFont("helvetica", "normal").setFontSize(8);
-  doc.text(company.address, textX, 15);
-  doc.text(`GSTIN: ${company.gstin}  |  ${company.phone}  |  ${company.email}`, textX, 19);
 
   y = headerH + 6;
   doc.setTextColor(0, 0, 0);
