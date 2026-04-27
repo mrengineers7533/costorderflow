@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, FilePlus2, Upload, Sparkles,
+  FileText, FilePlus2, LayoutTemplate, Upload, Sparkles,
   Eye, Download, ArrowRight, ListChecks, Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +71,12 @@ const Index = () => {
               <Button size="lg" asChild>
                 <Link to="/orders/new"><Upload className="h-4 w-4 mr-1" />Upload cost sheet</Link>
               </Button>
+              <Button size="lg" variant="outline" asChild>
+                <Link to="/orders/new"><FilePlus2 className="h-4 w-4 mr-1" />Start blank order</Link>
+              </Button>
+              <Button size="lg" variant="ghost" asChild>
+                <Link to="/orders">View all orders<ArrowRight className="h-4 w-4 ml-1" /></Link>
+              </Button>
             </div>
           </div>
         </section>
@@ -80,6 +86,17 @@ const Index = () => {
           <StatCard icon={<ListChecks className="h-5 w-5 text-primary" />} label="Total orders" value={stats.total} />
             <StatCard icon={<Clock className="h-5 w-5 text-muted-foreground" />} label="Drafts" value={stats.drafts} />
             <StatCard icon={<FileText className="h-5 w-5 text-primary" />} label="Finalized" value={stats.finalized} />
+        </section>
+
+        {/* Quick actions */}
+        <section>
+          <h2 className="text-xl font-semibold tracking-tight mb-3">Quick actions</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard icon={<Upload className="h-5 w-5" />} title="Upload cost sheet" desc="AI auto-fills the order from PDF." to="/orders/new" accent />
+            <FeatureCard icon={<FilePlus2 className="h-5 w-5" />} title="New blank order" desc="Build an OA manually from scratch." to="/orders/new" />
+            <FeatureCard icon={<FileText className="h-5 w-5" />} title="All orders" desc="Browse drafts and finalized OAs." to="/orders" />
+            <FeatureCard icon={<LayoutTemplate className="h-5 w-5" />} title="Templates" desc="Manage MR / GMS PDF templates." to="/orders/templates" />
+          </div>
         </section>
 
         {/* Recent orders */}
@@ -159,6 +176,22 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FeatureCard({
+  icon, title, desc, to, accent,
+}: { icon: React.ReactNode; title: string; desc: string; to: string; accent?: boolean }) {
+  return (
+    <Link to={to}>
+      <Card className={`h-full transition-all hover:shadow-md hover:-translate-y-0.5 ${accent ? "border-primary/40 bg-primary/5" : ""}`}>
+        <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-2">
+          <div className={`rounded-md p-1.5 ${accent ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{icon}</div>
+          <CardTitle className="text-base">{title}</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">{desc}</CardContent>
+      </Card>
+    </Link>
   );
 }
 
