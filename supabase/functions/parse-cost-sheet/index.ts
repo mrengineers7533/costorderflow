@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
           {
             role: "user",
             content: [
-              { type: "text", text: "Extract structured data from this cost sheet PDF. Remember: return individual machines from each section's detail page, NOT section totals." },
+              { type: "text", text: "Extract structured data from this cost sheet PDF. Always fill bill_to and ship_to including GSTIN and State (infer state from the first 2 digits of GSTIN if needed). Return individual machines from each section's detail page, NOT section totals." },
               { type: "file", file: { filename: sheet.original_filename, file_data: `data:application/pdf;base64,${base64}` } },
             ],
           },
