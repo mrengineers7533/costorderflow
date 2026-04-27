@@ -1,21 +1,10 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, FilePlus2, LayoutTemplate, LogIn } from "lucide-react";
+import { FileText, FilePlus2, LayoutTemplate } from "lucide-react";
 import { QuickOrderPanel } from "@/components/orders/QuickOrderPanel";
 
 const Index = () => {
-  const navigate = useNavigate();
-  const [authed, setAuthed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setAuthed(!!s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -24,11 +13,6 @@ const Index = () => {
           <nav className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild><Link to="/orders">Orders</Link></Button>
             <Button variant="ghost" size="sm" asChild><Link to="/orders/templates">Templates</Link></Button>
-            {authed ? (
-              <Button size="sm" variant="outline" onClick={async () => { await supabase.auth.signOut(); navigate("/auth"); }}>Sign out</Button>
-            ) : (
-              <Button size="sm" asChild><Link to="/auth"><LogIn className="h-4 w-4 mr-1" />Sign in</Link></Button>
-            )}
           </nav>
         </div>
       </header>
@@ -45,15 +29,13 @@ const Index = () => {
           </div>
         </section>
 
-        {authed && (
-          <section className="mt-10">
-            <div className="mb-3">
-              <h2 className="text-xl font-semibold tracking-tight">Try it now</h2>
-              <p className="text-sm text-muted-foreground">Upload a cost sheet PDF and watch the order preview fill in as AI extracts the data.</p>
-            </div>
-            <QuickOrderPanel />
-          </section>
-        )}
+        <section className="mt-10">
+          <div className="mb-3">
+            <h2 className="text-xl font-semibold tracking-tight">Try it now</h2>
+            <p className="text-sm text-muted-foreground">Upload a cost sheet PDF and watch the order preview fill in as AI extracts the data.</p>
+          </div>
+          <QuickOrderPanel />
+        </section>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
           <FeatureCard icon={<FilePlus2 className="h-5 w-5" />} title="New order" desc="Start from a cost sheet — AI fills the form." to="/orders/new" />

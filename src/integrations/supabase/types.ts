@@ -24,7 +24,7 @@ export type Database = {
           parse_error: string | null
           status: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -35,7 +35,7 @@ export type Database = {
           parse_error?: string | null
           status?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -46,7 +46,7 @@ export type Database = {
           parse_error?: string | null
           status?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -127,7 +127,7 @@ export type Database = {
           status: Database["public"]["Enums"]["order_status"]
           totals: Json
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           amount_in_words?: string | null
@@ -148,7 +148,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           totals?: Json
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           amount_in_words?: string | null
@@ -169,7 +169,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           totals?: Json
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

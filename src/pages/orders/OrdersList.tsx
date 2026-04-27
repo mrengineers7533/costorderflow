@@ -22,11 +22,6 @@ export default function OrdersList() {
       });
   }, []);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    navigate("/auth", { replace: true });
-  }
-
   return (
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="max-w-6xl mx-auto space-y-4">
@@ -35,7 +30,6 @@ export default function OrdersList() {
           <div className="flex gap-2">
             <Button asChild><Link to="/orders/new">+ New Order</Link></Button>
             <Button variant="outline" asChild><Link to="/orders/templates">Templates</Link></Button>
-            <Button variant="outline" onClick={signOut}>Sign out</Button>
           </div>
         </div>
         <Card>

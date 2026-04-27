@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,25 +27,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 const FIELD_KEYS = Object.keys(FIELD_LABELS) as FieldMapKey[];
 
 export default function TemplatesPage() {
-  const navigate = useNavigate();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [tab, setTab] = useState<OrderFormat>("MR");
-
-  useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) { navigate("/auth"); return; }
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", u.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      setIsAdmin(!!data);
-    })();
-  }, [navigate]);
-
-  if (isAdmin === null) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
@@ -55,50 +37,16 @@ export default function TemplatesPage() {
           <h1 className="text-xl font-semibold">Order Templates</h1>
         </div>
 
-        {!isAdmin && <PromoteCard onDone={() => setIsAdmin(true)} />}
-
-        {isAdmin && (
-          <Tabs value={tab} onValueChange={(v) => setTab(v as OrderFormat)}>
-            <TabsList>
-              <TabsTrigger value="MR">MR Engineers</TabsTrigger>
-              <TabsTrigger value="GMS">GMS</TabsTrigger>
-            </TabsList>
-            <TabsContent value="MR"><TemplateEditor format="MR" /></TabsContent>
-            <TabsContent value="GMS"><TemplateEditor format="GMS" /></TabsContent>
-          </Tabs>
-        )}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as OrderFormat)}>
+          <TabsList>
+            <TabsTrigger value="MR">MR Engineers</TabsTrigger>
+            <TabsTrigger value="GMS">GMS</TabsTrigger>
+          </TabsList>
+          <TabsContent value="MR"><TemplateEditor format="MR" /></TabsContent>
+          <TabsContent value="GMS"><TemplateEditor format="GMS" /></TabsContent>
+        </Tabs>
       </div>
     </div>
-  );
-}
-
-function PromoteCard({ onDone }: { onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  async function promote() {
-    setBusy(true);
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return;
-    // Allow only if no admin exists yet
-    const { count } = await supabase.from("user_roles").select("*", { count: "exact", head: true }).eq("role", "admin");
-    if ((count ?? 0) > 0) {
-      toast({ title: "Admin already exists", description: "Ask an existing admin to grant you access.", variant: "destructive" });
-      setBusy(false);
-      return;
-    }
-    const { error } = await supabase.from("user_roles").insert({ user_id: u.user.id, role: "admin" });
-    setBusy(false);
-    if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
-    toast({ title: "You are now admin" });
-    onDone();
-  }
-  return (
-    <Card>
-      <CardHeader><CardTitle>Admin access required</CardTitle></CardHeader>
-      <CardContent className="space-y-2">
-        <p className="text-sm text-muted-foreground">Templates are managed by admins. If no admin exists yet, you can claim the role.</p>
-        <Button onClick={promote} disabled={busy}>Make me admin (first user only)</Button>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -165,8 +113,7 @@ function TemplateEditor({ format }: { format: OrderFormat }) {
     const doc = await pdfjsLib.getDocument({ data: buf }).promise;
     const pages = doc.numPages;
 
-    const { data: u } = await supabase.auth.getUser();
-    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap as never, updated_by: u.user?.id };
+    const payload = { format, file_path: path, page_count: pages, field_map: fieldMap as never };
     const { data, error } = await supabase
       .from("order_templates")
       .upsert(payload as never, { onConflict: "format" })
