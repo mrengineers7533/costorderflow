@@ -65,7 +65,7 @@ const Index = () => {
               Turn cost sheets into print-ready Order Acceptances in seconds.
             </h1>
             <p className="mt-3 text-muted-foreground md:text-lg">
-              Upload a PDF — AI extracts items, charges and addresses. Edit live, then export MR and GMS PDFs from a single order.
+              Upload a PDF AI extracts items, charges and addresses. Edit live, then export MR and GMS PDFs from a single order.
             </p>
           </div>
         </section>
