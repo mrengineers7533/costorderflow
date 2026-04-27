@@ -3,12 +3,13 @@ import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, MR_FOOTER_ADDRESS, type BankDetails } from "./defaults";
 import mrLogoUrl from "@/assets/mr-logo.png";
+import gmsLogoUrl from "@/assets/gms-logo.png";
 
-let mrLogoDataUrlCache: string | null = null;
-async function loadMrLogo(): Promise<string | null> {
-  if (mrLogoDataUrlCache) return mrLogoDataUrlCache;
+const logoCache: Record<string, string> = {};
+async function loadLogo(url: string): Promise<string | null> {
+  if (logoCache[url]) return logoCache[url];
   try {
-    const res = await fetch(mrLogoUrl);
+    const res = await fetch(url);
     const blob = await res.blob();
     const dataUrl: string = await new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -16,10 +17,10 @@ async function loadMrLogo(): Promise<string | null> {
       r.onerror = reject;
       r.readAsDataURL(blob);
     });
-    mrLogoDataUrlCache = dataUrl;
+    logoCache[url] = dataUrl;
     return dataUrl;
   } catch (e) {
-    console.warn("MR logo load failed", e);
+    console.warn("Logo load failed", url, e);
     return null;
   }
 }
@@ -55,7 +56,7 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
   let textX = M;
   let textColor: [number, number, number] = [255, 255, 255];
   if (order.format === "MR") {
-    const logo = await loadMrLogo();
+    const logo = await loadLogo(mrLogoUrl);
     if (logo) {
       try {
         doc.addImage(logo, "PNG", M, 3, 60, 20);
@@ -70,8 +71,19 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
     doc.setDrawColor(...accent).setLineWidth(0.6);
     doc.line(0, headerH, W, headerH);
   } else {
-    doc.setFillColor(...accent);
-    doc.rect(0, 0, W, headerH, "F");
+    // GMS: white header with logo + accent rule
+    const logo = await loadLogo(gmsLogoUrl);
+    if (logo) {
+      try {
+        doc.addImage(logo, "PNG", M, 3, 40, 20);
+      } catch (e) {
+        console.warn("addImage failed", e);
+      }
+    }
+    textX = M + 44;
+    textColor = [30, 30, 30];
+    doc.setDrawColor(...accent).setLineWidth(0.6);
+    doc.line(0, headerH, W, headerH);
   }
   doc.setTextColor(...textColor);
   doc.setFont("helvetica", "bold").setFontSize(14);
