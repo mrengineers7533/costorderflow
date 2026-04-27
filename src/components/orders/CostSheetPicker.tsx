@@ -137,8 +137,34 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <p className="text-xs text-muted-foreground">Upload a cost sheet PDF or pick one you uploaded earlier. AI will auto-fill the order fields below — you can still edit anything.</p>
+      <CardContent
+        className="space-y-2"
+        onDragOver={(e) => { e.preventDefault(); if (!isDragging) setIsDragging(true); }}
+        onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) handleUpload(file);
+        }}
+      >
+        <div
+          onClick={() => fileInput.current?.click()}
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
+            isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/30"
+          }`}
+        >
+          <Upload className={`h-6 w-6 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+          <p className="text-sm font-medium">
+            {isDragging ? "Drop PDF to upload" : "Drag & drop a cost sheet PDF here"}
+          </p>
+          <p className="text-xs text-muted-foreground">or click to browse — AI will auto-fill the order fields below</p>
+        </div>
         {loading ? <p className="text-sm text-muted-foreground">Loading…</p> :
          sheets.length === 0 ? <p className="text-sm text-muted-foreground italic">No cost sheets yet.</p> :
          <div className="divide-y rounded border">
