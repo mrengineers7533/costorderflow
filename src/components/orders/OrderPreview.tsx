@@ -6,6 +6,7 @@ import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orde
 import { calcExMurthal } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
+import ugurLogo from "@/assets/ugur-logo.png";
 import {
   MR_FOOTER_ADDRESS,
   GMS_HEAD_OFFICE_LINES,
