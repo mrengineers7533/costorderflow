@@ -50,7 +50,7 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
   let y = M;
 
   // Header banner
-  const headerH = order.format === "MR" ? 26 : 22;
+  const headerH = 26;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, headerH, "F");
   let textX = M;
