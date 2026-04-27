@@ -410,8 +410,29 @@ function ExMurthalBlock({
   );
 }
 
-function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
+function GMSHeadOfficeBank() {
   const bank = DEFAULT_GMS_BANK;
+  return (
+    <div className="grid grid-cols-2 gap-4 pt-2 text-[11px]">
+      <div>
+        <div className="font-bold">HEAD OFFICE</div>
+        {GMS_HEAD_OFFICE_LINES.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
+      </div>
+      <div>
+        <div className="font-bold">Our Bank Details :</div>
+        <div className="font-bold">GRAIN MILLING SOLUTIONS PVT. LTD.</div>
+        <div><span className="font-bold">Bank :</span> {bank.bank_name}</div>
+        <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
+        <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
+        <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
+      </div>
+    </div>
+  );
+}
+
+function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
   return (
     <div className="border-t-2 border-foreground mt-3 pt-2 text-[11px] space-y-2">
       <div className="space-y-0.5 font-semibold">
@@ -422,28 +443,12 @@ function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
           {currency} conversion rate - @Rs{fxRate}. Any variation in exchange rate will be borne by client.
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4 pt-2">
-        <div>
-          <div className="font-bold">HEAD OFFICE</div>
-          {GMS_HEAD_OFFICE_LINES.map((line) => (
-            <div key={line}>{line}</div>
-          ))}
-        </div>
-        <div>
-          <div className="font-bold">Our Bank Details :</div>
-          <div className="font-bold uppercase">GRAIIN MILLING SOLUTIONS</div>
-          <div><span className="font-semibold">Bank :</span> {bank.bank_name}</div>
-          <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
-          <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
-          <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
-        </div>
-      </div>
+      <GMSHeadOfficeBank />
     </div>
   );
 }
 
 function GMSTermsBlock({ t }: { t: GMSTerms }) {
-  const bank = DEFAULT_GMS_BANK;
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="space-y-0.5">
       <div className="font-bold">{label}</div>
@@ -456,24 +461,11 @@ function GMSTermsBlock({ t }: { t: GMSTerms }) {
       <div className="font-bold underline uppercase">Commercial Condition :</div>
       <Row label="Taxation :" value={t.taxation} />
       <Row label="Freight :" value={t.freight} />
-      <Row label="Insurance :" value={t.insurance} />
-      <Row label="DELIVERY TIME:" value={t.delivery_time} />
-      <Row label="PAYMENT TERMS:" value={t.payment_terms} />
-      <Row label="GENERAL CONDITIONS:" value={t.general_conditions} />
-      <div className="grid grid-cols-2 gap-4 pt-3">
-        <div>
-          <div className="font-bold">HEAD OFFICE</div>
-          {GMS_HEAD_OFFICE_LINES.map((l) => <div key={l}>{l}</div>)}
-        </div>
-        <div>
-          <div className="font-bold">Our Bank Details :</div>
-          <div className="font-bold uppercase">GRAIIN MILLING SOLUTIONS</div>
-          <div><span className="font-semibold">Bank :</span> {bank.bank_name}</div>
-          <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
-          <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
-          <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
-        </div>
-      </div>
+      <Row label="INSURANCE :" value={t.insurance} />
+      <Row label="Delivery Time :" value={t.delivery_time} />
+      <Row label="Payment Terms :" value={t.payment_terms} />
+      <Row label="General Conditions :" value={t.general_conditions} />
+      <GMSHeadOfficeBank />
     </div>
   );
 }
