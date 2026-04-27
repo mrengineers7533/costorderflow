@@ -1,60 +1,84 @@
-# Make Uploaded PDF the Default MR Header & Footer
+# Make Uploaded PDF the Default GMS Header & Footer
 
-The uploaded `MROA/2026-27/0001` PDF will become the canonical reference for MR Engineers PDF generation. The current MR header and footer in `src/lib/orders/pdf.ts` (and supporting constants) will be updated to match it exactly.
+The uploaded `26-27/GMS/UGUR-002` PDF will become the canonical template for GMS Order Acceptance PDFs. All GMS-format PDFs will adopt its dual-logo header (GMS + Uğur), the customer/meta block layout, the unified items+totals table, and the head-office / bank-details footer block. The header will repeat on every page.
 
 ## What will change
 
-### 1. MR Header (top of every MR PDF)
+### 1. New asset: Uğur logo
 
-Currently the header shows:
-- "MR ENGINEERS PVT. LTD." 
-- "Plot No. 7, Sector-3, IMT Manesar, Gurgaon..."
-- "GSTIN: 06AABCM3429K1ZP | +91-124-4374444 | info@mrengineers.com"
+Save the uploaded `Picture1.jpg` into the project as `src/assets/ugur-logo.png` so it can be imported and embedded in GMS PDFs.
 
-It will be replaced with the exact template branding:
-- Left side: existing MR logo (kept, sized to match reference ~60mm wide)
-- Right side, right-aligned, bold large: **"M.R. Engineers"**
-- Below it (smaller): `* ENGINEERS    * CONTRACTORS    * SUPPLIERS`
-- Below that: `Shed No. 33, HSIIDC, Murthal, Sonepat.`
-- Below that: `GSTIN-06AARPM1849G1ZF`
-- Thin orange accent rule beneath the header band (kept)
+### 2. GMS Header (top of every GMS page)
 
-No phone/email line in the header (the reference template doesn't have one — corresponding info moves to the footer band).
+Replace the current single-logo GMS header with the template's dual-logo banner:
 
-### 2. MR Footer (bottom band on MR PDFs)
+- **Left block**: existing GMS logo + bold caption `GRAIN MILLING SOLUTIONS PRIVATE LIMITED` underneath
+- **Right block**: new Uğur logo + bold caption `UGUR MACHINE, TURKEY` underneath, with a small italic line `Quality Standard is an Assurance of UGUR at all parts`
+- A grey title bar `ORDER ACCEPTANCE` (centered, bold, light-grey fill) immediately under the header — matching the reference
 
-The yellow "PLEASE DO ALL CORRESPONDENCE..." strip will be updated to:
-- A small right-aligned **"M.R. ENGINEERS"** label sitting just above the yellow strip (matches reference)
-- The yellow strip text becomes:
-  `PLEASE DO ALL CORRESPONDENCE AND SEND PAYMENTS AT C-27, C-BLOCK, GROUND FLOOR, TRAPEZOID IT PARK, SECTOR-62, NOIDA, PIN- 201309`
-  (Already matches — confirmed correct in `defaults.ts`.)
+This header (logos + captions + grey ORDER ACCEPTANCE bar) will be drawn on **every page** of the GMS PDF, not just page 1, by hooking into jsPDF-autotable's `didDrawPage` callback.
 
-### 3. Constant updates in `src/lib/orders/defaults.ts`
+### 3. GMS Customer/Meta block (first page only)
 
-No changes needed to `MR_FOOTER_ADDRESS` (already matches).
-No bank changes needed (`DEFAULT_MR_BANK` already matches: AXIS BANK / NOIDA / 0001568288 / UTIB0005147).
+Below the header, render a two-column block:
 
-### 4. Constant updates in `src/lib/orders/pdf.ts`
+- **Left**: Bill-To name, address, contact person, mobile, email, GSTIN + state code
+- **Right** (right-aligned): Date, OA No., Ref., Contact (Mr. Bhavesh Makin), Mob, Prepared By
 
-The `COMPANY_MR` constant will be replaced with:
+This replaces the current generic "Bill To / Ship To" boxes for GMS only. (MR layout stays as-is.)
+
+### 4. GMS Items + Totals table
+
+Rebuild to match the reference columns exactly:
+
+`ITEM NO | MODEL NUMBER | DESCRIPTION | HSN CODE | QTY | UNIT | UNIT PRICE (INR) | AMOUNT (INR)`
+
+Header style: light-grey fill, black text, bold, centered, black borders. Body: black borders, left-aligned description, right-aligned numerics.
+
+Totals rows are appended inside the same table (right-aligned label spanning the first 7 columns, value in the Amount column), in order: Ex-works Murthal Price, Discount (if any), After Discount, P&F (if any), Insurance (if any), Freight (if any), GST @ x%, **Grand Total** (bold).
+
+### 5. GMS Footer block (last page)
+
+Two-column block matching the template:
+
+- **Left — HEAD OFFICE**: bold heading, then the `GMS_HEAD_OFFICE_LINES` from `defaults.ts` (already correct).
+- **Right — Our Bank Details**: bold heading, then `GRAIN MILLING SOLUTIONS PVT. LTD.`, Bank, Branch, A/C No, IFSC CODE — populated from the new default GMS bank.
+
+### 6. Default GMS bank update (`src/lib/orders/defaults.ts`)
+
+Replace the current `DEFAULT_GMS_BANK` (Citi Bank) with the bank shown in the template:
+
 ```ts
-const COMPANY_MR = {
-  name: "M.R. Engineers",
-  tagline: "* ENGINEERS    * CONTRACTORS    * SUPPLIERS",
-  address: "Shed No. 33, HSIIDC, Murthal, Sonepat.",
-  gstin: "06AARPM1849G1ZF",
+export const DEFAULT_GMS_BANK: BankDetails = {
+  bank_name: "HDFC Bank",
+  branch: "Kaushambi",
+  account_no: "50200078882730",
+  ifsc: "HDFC0002653",
 };
 ```
-The header rendering block for MR will be rewritten to draw these four lines right-aligned next to the logo, matching the reference layout.
 
-A small "M.R. ENGINEERS" label will be added directly above the yellow footer band on the right side.
+(If the user wants to keep Citi as a per-order override later, the order-level bank picker continues to work — only the default changes.)
 
-## Out of scope
+### 7. Terms & Conditions page (GMS)
 
-- GMS header/footer (untouched).
-- Template-PDF overlay system (`src/lib/orders/templatePdf.ts` and Templates page) — that uses a different uploaded-PDF approach and isn't affected.
-- The data inside the uploaded PDF (Geofast order itself) is not being imported as an order — only the header/footer styling is being adopted.
+After the items/totals + footer, append a **dedicated Terms & Conditions page** styled like page 2 of the reference:
+
+- Same repeated dual-logo header at top
+- Centered bold title `TERMS & CONDITIONS`
+- Underlined section header `COMMERCIAL CONDITION :`
+- Bold labels with values below: Taxation, Freight, INSURANCE, Delivery Time, Payment Terms, General Conditions — pulled from the existing `DEFAULT_GMS_TERMS` object (already in `defaults.ts`)
+- Same HEAD OFFICE / Bank Details footer block at the bottom
 
 ## Files to edit
 
-- `src/lib/orders/pdf.ts` — replace `COMPANY_MR` and rewrite the MR header drawing block; add small "M.R. ENGINEERS" label above the footer strip.
+- `src/assets/ugur-logo.png` — **new**, copied from the uploaded `Picture1.jpg`.
+- `src/lib/orders/pdf.ts` — add Uğur logo import; introduce a `drawGmsHeader(doc)` helper used as `didDrawPage` for every GMS page; rewrite the GMS branch to use the new meta block, new items/totals table styling, dual-column footer, and append a terms-and-conditions page using `DEFAULT_GMS_TERMS`.
+- `src/lib/orders/defaults.ts` — update `DEFAULT_GMS_BANK` to HDFC / Kaushambi as above.
+
+## Out of scope
+
+- MR header/footer (untouched — already matches its own reference template).
+- The Templates page / `templatePdf.ts` overlay system (separate uploaded-PDF flow).
+- Importing the data from the uploaded PDF as an actual order — only the styling/branding is being adopted as the default.
+- Per-order customization UI for the GMS header logos or captions.
+
