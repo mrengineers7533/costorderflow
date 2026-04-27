@@ -551,33 +551,26 @@ function AddressCellContent({ addr, fallbackName }: { addr: Address; fallbackNam
 
 function MRHeader() {
   return (
-    <div className="border-b pb-3">
-      <div className="flex items-center gap-4">
+    <div>
+      <div className="flex items-start justify-between gap-4 pb-2">
         <img
           src={mrLogo}
           alt="MR Engineers logo"
-          width={64}
-          height={64}
+          width={120}
+          height={48}
           loading="lazy"
-          className="h-16 w-16 shrink-0 object-contain"
+          className="h-12 w-auto object-contain shrink-0"
         />
-        <div className="flex-1 min-w-0">
-          <div className="text-xl font-extrabold tracking-tight text-primary leading-tight">
-            M.R. ENGINEERS PVT. LTD.
+        <div className="text-right">
+          <div className="text-xl font-extrabold tracking-tight leading-none">M.R. Engineers</div>
+          <div className="text-[10px] font-bold mt-1 tracking-wide">
+            *&nbsp;&nbsp;ENGINEERS&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;CONTRACTORS&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;SUPPLIERS
           </div>
-          <div className="text-[11px] text-muted-foreground italic">
-            Manufacturers of Material Handling Equipment & EOT Cranes
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Plot No. 7, Sector-3, IMT Manesar, Gurgaon - 122051, Haryana, India
-          </div>
+          <div className="text-[10px] mt-0.5">Shed No. 33, HSIIDC, Murthal, Sonepat.</div>
+          <div className="text-[10px] font-bold">GSTIN-06AARPM1849G1ZF</div>
         </div>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-wide rounded-sm bg-primary/10 text-foreground px-2 py-1.5 border border-primary/20">
-        <div><span className="text-muted-foreground">GSTIN:</span> <span className="font-semibold">06AABCM3429K1ZP</span></div>
-        <div className="text-center"><span className="text-muted-foreground">Tel:</span> <span className="font-semibold">+91-124-4374444</span></div>
-        <div className="text-right"><span className="text-muted-foreground">Email:</span> <span className="font-semibold normal-case">info@mrengineers.com</span></div>
-      </div>
+      <div className="border-t-[1.5px] border-primary" />
       <div className="text-center mt-2">
         <div className="text-sm font-bold tracking-[0.2em] text-foreground">ORDER ACCEPTANCE</div>
       </div>
