@@ -33,6 +33,7 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
   const [sheets, setSheets] = useState<CostSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
