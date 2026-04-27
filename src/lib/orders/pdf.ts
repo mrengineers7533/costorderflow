@@ -15,8 +15,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 
-const logoCache: Record<string, string> = {};
-async function loadLogo(url: string): Promise<string | null> {
+interface LoadedLogo { dataUrl: string; w: number; h: number }
+const logoCache: Record<string, LoadedLogo> = {};
+async function loadLogo(url: string): Promise<LoadedLogo | null> {
   if (logoCache[url]) return logoCache[url];
   try {
     const res = await fetch(url);
@@ -27,12 +28,25 @@ async function loadLogo(url: string): Promise<string | null> {
       r.onerror = reject;
       r.readAsDataURL(blob);
     });
-    logoCache[url] = dataUrl;
-    return dataUrl;
+    const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+      img.onerror = () => resolve({ w: 1, h: 1 });
+      img.src = dataUrl;
+    });
+    const entry = { dataUrl, w: dims.w, h: dims.h };
+    logoCache[url] = entry;
+    return entry;
   } catch (e) {
     console.warn("Logo load failed", url, e);
     return null;
   }
+}
+
+/** Contain-fit: largest w×h preserving aspect ratio that fits inside maxW×maxH. */
+function fitInBox(natW: number, natH: number, maxW: number, maxH: number) {
+  const r = Math.min(maxW / natW, maxH / natH);
+  return { w: natW * r, h: natH * r };
 }
 
 const COMPANY_MR = {
