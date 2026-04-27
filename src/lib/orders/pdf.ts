@@ -296,3 +296,253 @@ export async function generateOrderPDF(
 
   return doc;
 }
+
+/* ---------------------------------------------------------------------------
+ * GMS PDF rendering (matches uploaded Union Agrotech / UGUR template)
+ * -------------------------------------------------------------------------*/
+
+interface GmsLayout { W: number; H: number; M: number }
+
+const GMS_HEADER_H = 32; // mm — reserved space for the dual-logo banner
+const GMS_TITLE_BAR_H = 7; // mm — grey "ORDER ACCEPTANCE" bar
+const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
+
+async function renderGmsPdf(
+  doc: jsPDF,
+  order: OrderRecord,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms } | undefined,
+  layout: GmsLayout,
+) {
+  const { W, H, M } = layout;
+  const bank = opts?.bank ?? DEFAULT_GMS_BANK;
+  const terms = opts?.gmsTerms ?? DEFAULT_GMS_TERMS;
+
+  const gmsLogo = await loadLogo(gmsLogoUrl);
+  const ugurLogo = await loadLogo(ugurLogoUrl);
+
+  const drawHeader = () => {
+    // White background banner
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, W, GMS_HEADER_H, "F");
+
+    // Left: GMS logo + caption
+    if (gmsLogo) {
+      try { doc.addImage(gmsLogo, "PNG", M, 3, 55, 18); } catch (e) { console.warn("gms logo", e); }
+    }
+    doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(10);
+    doc.text("GRAIN MILLING SOLUTIONS PRIVATE LIMITED", M, 25);
+
+    // Right: Uğur logo + caption + tagline
+    const rightX = W - M;
+    if (ugurLogo) {
+      try { doc.addImage(ugurLogo, "PNG", rightX - 45, 3, 45, 18); } catch (e) { console.warn("ugur logo", e); }
+    }
+    doc.setFont("helvetica", "bold").setFontSize(11);
+    doc.text("UGUR MACHINE, TURKEY", rightX, 25, { align: "right" });
+    doc.setFont("helvetica", "italic").setFontSize(7);
+    doc.text("Quality Standard is an Assurance of UGUR at all parts", rightX, 29, { align: "right" });
+
+    // Grey "ORDER ACCEPTANCE" title bar directly under the header
+    doc.setFillColor(200, 200, 200);
+    doc.rect(M, GMS_HEADER_H, W - M * 2, GMS_TITLE_BAR_H, "F");
+    doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(13);
+    doc.text("ORDER ACCEPTANCE", W / 2, GMS_HEADER_H + 5, { align: "center" });
+  };
+
+  const drawFooterBlock = (startY: number) => {
+    const colW = (W - M * 2) / 2;
+    let yL = startY;
+    let yR = startY;
+    // Left: HEAD OFFICE
+    doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(10);
+    doc.text("HEAD OFFICE", M, yL); yL += 4;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    GMS_HEAD_OFFICE_LINES.forEach((line) => { doc.text(line, M, yL); yL += 4; });
+
+    // Right: Our Bank Details
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Our Bank Details :", M + colW, yR); yR += 4;
+    doc.setFont("helvetica", "bold").setFontSize(9);
+    doc.text("GRAIN MILLING SOLUTIONS PVT. LTD.", M + colW, yR); yR += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text(`Bank : ${bank.bank_name}`, M + colW, yR); yR += 4;
+    doc.setFont("helvetica", "normal");
+    doc.text(`Branch : ${bank.branch}`, M + colW, yR); yR += 4;
+    doc.text(`A/C No : ${bank.account_no}`, M + colW, yR); yR += 4;
+    doc.text(`IFSC CODE : ${bank.ifsc}`, M + colW, yR); yR += 4;
+  };
+
+  // -------- Page 1: header (drawHeader called inline + via didDrawPage) --------
+  drawHeader();
+
+  // Customer / Meta block
+  let y = GMS_HEADER_H + GMS_TITLE_BAR_H + 5;
+  const colW = (W - M * 2) / 2;
+  doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(9);
+  // Left column lines
+  const leftLines: string[] = [];
+  leftLines.push(`M/s ${order.bill_to.name || order.company_name || ""}`.trim());
+  if (order.bill_to.address) leftLines.push(order.bill_to.address);
+  if (order.bill_to.contact_person) leftLines.push(`Contact Person Name : ${order.bill_to.contact_person}`);
+  if (order.bill_to.contact_number) leftLines.push(`Mobile No.: ${order.bill_to.contact_number}`);
+  if (order.bill_to.email) leftLines.push(`Email:- ${order.bill_to.email}`);
+  if (order.bill_to.gstin) {
+    const sc = order.bill_to.state_code ? `, State Code - ${order.bill_to.state_code}` : "";
+    leftLines.push(`GSTIN No.-${order.bill_to.gstin}${sc}`);
+  }
+  let yL = y;
+  doc.setFont("helvetica", "bold").setFontSize(9);
+  leftLines.forEach((line, i) => {
+    doc.setFont("helvetica", i === 0 ? "bold" : "normal");
+    const wrapped = doc.splitTextToSize(line, colW - 4);
+    wrapped.forEach((w: string) => { doc.text(w, M, yL); yL += 4; });
+  });
+
+  // Right column lines (right-aligned)
+  const rightX = W - M;
+  let yR = y;
+  const rightLines: string[] = [
+    `Date : ${new Date(order.order_date).toLocaleDateString("en-GB").replace(/\//g, "-")}`,
+    `OA No.: ${order.oa_number}`,
+    `Ref. : ${order.reference || order.cost_sheet_number || "-"}`,
+    `Contact :- Mr. Bhavesh Makin`,
+    `Mob : - +91-9910066823`,
+  ];
+  if (order.prepared_by) rightLines.push(`Prepared By:- ${order.prepared_by}`);
+  doc.setFont("helvetica", "bold").setFontSize(9);
+  rightLines.forEach((line) => { doc.text(line, rightX, yR, { align: "right" }); yR += 4; });
+
+  y = Math.max(yL, yR) + 3;
+
+  // Items + Totals table
+  const c = order.charges;
+  const t = order.totals;
+  const fmt = (n: number) =>
+    n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const itemRows = order.line_items.map((it, i) => [
+    String(i + 1),
+    "", // model number — not stored separately; left blank
+    it.description,
+    it.hsn_code || "",
+    String(it.quantity),
+    it.unit || "Nos",
+    fmt(it.unit_rate),
+    fmt(it.amount),
+  ]);
+
+  const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
+  totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
+  if (c.discount > 0 || c.discount_percent > 0) {
+    const disc = c.discount_percent > 0 ? (t.basic_total * c.discount_percent) / 100 : c.discount;
+    if (disc > 0) {
+      totalsRows.push({ label: "One time very special Discount", value: disc });
+      totalsRows.push({ label: "After Discount", value: Math.max(0, t.basic_total - disc) });
+    }
+  }
+  if (c.pf_amount > 0 || c.pf_percent > 0) {
+    const pf = c.pf_amount > 0 ? c.pf_amount : (t.basic_total * c.pf_percent) / 100;
+    if (pf > 0) totalsRows.push({ label: "Packaging & Forwarding", value: pf });
+  }
+  const ins = c.insurance_percent > 0 ? (t.basic_total * c.insurance_percent) / 100 : (c.insurance || 0);
+  if (ins > 0) totalsRows.push({ label: "Insurance", value: ins });
+  if (c.freight_enabled && c.freight > 0) totalsRows.push({ label: "Freight", value: c.freight });
+  const gst = c.gst_amount ?? (t.subtotal * (c.gst_percent || 0)) / 100;
+  if (gst > 0) totalsRows.push({ label: `GST @${c.gst_percent || 0}%`, value: gst });
+  totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+
+  const totalsAsBody = totalsRows.map((r) => [
+    {
+      content: r.label,
+      colSpan: 7,
+      styles: { halign: "right" as const, fontStyle: "bold" as const },
+    },
+    {
+      content: fmt(r.value),
+      styles: {
+        halign: "right" as const,
+        fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal",
+      },
+    },
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [[
+      "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "HSN CODE",
+      "QTY", "UNIT", "UNIT PRICE\n(INR)", "AMOUNT\n(INR)",
+    ]],
+    body: [...itemRows, ...totalsAsBody as never[]],
+    theme: "grid",
+    styles: {
+      fontSize: 8, cellPadding: 2,
+      lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle",
+      textColor: [0, 0, 0],
+    },
+    headStyles: {
+      fillColor: [220, 220, 220], textColor: [0, 0, 0],
+      halign: "center", fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.3,
+    },
+    columnStyles: {
+      0: { cellWidth: 14, halign: "center" },
+      1: { cellWidth: 24, halign: "left" },
+      2: { cellWidth: "auto", halign: "left" },
+      3: { cellWidth: 18, halign: "center" },
+      4: { cellWidth: 12, halign: "center" },
+      5: { cellWidth: 12, halign: "center" },
+      6: { cellWidth: 24, halign: "right" },
+      7: { cellWidth: 26, halign: "right" },
+    },
+    margin: { left: M, right: M, top: GMS_HEADER_H + GMS_TITLE_BAR_H + 4, bottom: GMS_FOOTER_RESERVED },
+    didDrawPage: () => { drawHeader(); },
+  });
+
+  // @ts-expect-error lastAutoTable runtime
+  let yEnd = doc.lastAutoTable.finalY + 6;
+
+  // If footer block won't fit on the current page, push to a new one
+  if (yEnd + GMS_FOOTER_RESERVED > H - M) {
+    doc.addPage();
+    drawHeader();
+    yEnd = GMS_HEADER_H + GMS_TITLE_BAR_H + 8;
+  }
+  drawFooterBlock(yEnd);
+
+  // -------- Terms & Conditions page --------
+  doc.addPage();
+  drawHeader();
+  let yT = GMS_HEADER_H + GMS_TITLE_BAR_H + 8;
+
+  doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(18);
+  doc.text("TERMS & CONDITIONS", W / 2, yT, { align: "center" });
+  yT += 10;
+
+  doc.setFont("helvetica", "bold").setFontSize(11);
+  doc.text("COMMERCIAL CONDITION :", M, yT);
+  // underline
+  const tw = doc.getTextWidth("COMMERCIAL CONDITION :");
+  doc.setDrawColor(0, 0, 0).setLineWidth(0.3);
+  doc.line(M, yT + 0.8, M + tw, yT + 0.8);
+  yT += 8;
+
+  const sections: Array<[string, string]> = [
+    ["Taxation :", terms.taxation],
+    ["Freight :", terms.freight],
+    ["INSURANCE :", terms.insurance],
+    ["Delivery Time :", terms.delivery_time],
+    ["Payment Terms :", terms.payment_terms],
+    ["General Conditions :", terms.general_conditions],
+  ];
+  sections.forEach(([label, value]) => {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text(label, M, yT); yT += 5;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    const wrapped = doc.splitTextToSize(value || "-", W - M * 2);
+    wrapped.forEach((w: string) => { doc.text(w, M, yT); yT += 4.5; });
+    yT += 3;
+  });
+
+  // Footer block on T&C page (anchored near bottom)
+  const footerStart = Math.max(yT + 4, H - GMS_FOOTER_RESERVED);
+  drawFooterBlock(footerStart);
+}
