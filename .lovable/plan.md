@@ -1,42 +1,40 @@
 ## Goal
-When a cost sheet (uploaded or manually filled) contains items from **both makes** (MR Engg + GMS / Ugur), the system should:
-1. Auto-tag each item's `make` (already partially in place via AI extractor + `inferItemMake`).
-2. Keep a **single OA record** holding all items.
-3. At download time, generate **two separate PDFs** — one with only MR items (using MR template) and one with only GMS items (using GMS template) — and trigger both downloads automatically.
-4. Manual entry: keep the inline `make` dropdown per row (current UX) — but make sure changing it instantly re-triggers split detection.
+Restructure the OrderEditor so the **Live Preview appears at the bottom** (after all form sections are filled), followed by the **Export PDF** button. This enforces a "fill → review preview → export" flow instead of the current always-visible side panel + top-right PDF button.
 
-## Files to change
+## Current behavior
+- `OrderEditor.tsx` uses a 2-column grid: form on the left, **sticky preview on the right** (`aside` at lines 523–548).
+- A "PDF" / "Download both PDFs" button sits in the **top-right header** (lines 247–254), available even when the form is empty.
 
-### 1. `src/lib/orders/calc.ts`
-- Add helper `splitItemsByMake(items)` returning `{ mr: LineItem[], gms: LineItem[], other: LineItem[] }`. "OTHER" items stick with the dominant/selected format (default MR) so nothing is lost.
+## Proposed changes (single file: `src/pages/orders/OrderEditor.tsx`)
 
-### 2. `src/pages/orders/OrderEditor.tsx`
-- Replace `downloadPDF()` so it:
-  - Detects splitMode (`hasMR && hasGMS`).
-  - **Single-make case**: behave as today.
-  - **Split case**: build **two `OrderRecord`s** — one filtered to MR items + MR template + MR terms/bank, one filtered to GMS items + GMS template + GMS terms. Recompute `totals` and `amount_in_words` per subset. Generate both PDFs sequentially and download both with filenames like `{OA}-MR.pdf` and `{OA}-GMS.pdf`.
-  - Show a single toast: "Generated 2 PDFs (MR + GMS)".
-- Update the existing **Format dropdown** label/help text to clarify it now only controls *which subset you're previewing on screen* — both PDFs are always produced on download when split is detected.
-- Add a small **"Download both PDFs"** primary button next to the existing Download button when `splitMode` is true (the regular Download still produces both; this is just clearer signaling).
-- Keep the `make` per-row dropdown unchanged (user's choice).
+### 1. Remove the side preview
+- Drop the `lg:grid-cols-[minmax(0,1fr)_380px]` 2-column layout.
+- Render the entire form as a single full-width column.
+- Delete the right `<aside>` block (lines 523–548).
 
-### 3. `src/components/orders/OrderPreview.tsx`
-- Add a small banner inside the preview when `splitMode` is true: "This OA contains MR + GMS items — preview shows {format} only. Both PDFs will be downloaded together." (Replaces / supplements the current message in the editor so it's also visible in the preview area.)
+### 2. Move preview to the end
+- After the last form Card (Terms / Bank / GMS Terms), render a new section:
+  - **Heading**: "Review & Export" with helper text "Scroll through the preview below. When everything looks correct, export the PDF."
+  - The full `<OrderPreview>` component, rendered inline (not sticky), full width.
+  - A clear primary **Export PDF** button directly **below** the preview (large, full-width on mobile, right-aligned on desktop), label switching to "Download both PDFs (MR + GMS)" in split mode.
 
-### 4. `src/components/orders/CostSheetPicker.tsx` *(no change needed)* — extractor already returns `make` per item; `applyCostSheet` in `OrderEditor` already maps it.
+### 3. Header cleanup
+- Remove the small "PDF" button from the top-right header (keep Back / Save Draft / Finalize).
+- Optionally keep a secondary "Jump to Preview" anchor link in the header that scrolls to the preview section (smooth scroll via `#preview` id).
 
-## What stays the same
-- DB schema (`orders` table) — single record per OA, unchanged.
-- OA numbering — still one number per saved order.
-- Templates table & per-format `field_map` — used as-is, one PDF picks MR template, the other GMS.
-- Existing `splitMode` filtering for on-screen preview & charges totals.
+### 4. Gating (light-touch)
+- The Export PDF button stays enabled but shows a subtle inline warning above it if **no items have a description** OR **company name is empty**, e.g. "Add at least one item and a customer name before exporting." It does not hard-block — matches the user's existing flexible workflow.
 
-## Out of scope
-- Creating two separate `orders` rows (rejected by user).
-- Changing the per-row Make UX to badges (rejected by user).
+### 5. No changes to
+- `OrderPreview.tsx` internals
+- PDF generation logic (`downloadPDF`, templates)
+- Split-mode behavior (still produces 2 PDFs)
+- Save / Finalize flow
+- Database schema
 
-## Acceptance
-- Upload a cost sheet with mixed MR + GMS items → preview shows current format's items, banner notes the split.
-- Click Download → browser downloads two files: `{OA}-MR.pdf` (MR items only, MR template + terms/bank) and `{OA}-GMS.pdf` (GMS items only, GMS template + GMS terms).
-- Single-make cost sheet → only one PDF downloads (current behavior preserved).
-- Manually flipping a row's Make from MR→GMS instantly toggles the editor into split mode and a second PDF will be produced on next download.
+## Acceptance criteria
+- Opening `/orders/new` shows only the form (no side preview).
+- Scrolling to the bottom reveals the full preview, followed by a prominent Export PDF button.
+- Header no longer has a PDF button; Save Draft and Finalize remain.
+- In split mode, the bottom button reads "Download both PDFs (MR + GMS)" and produces both files.
+- Empty-form warning appears above the export button when description/company are missing, but does not block clicking.
