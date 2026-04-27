@@ -1,40 +1,30 @@
-## Goal
-Restructure the OrderEditor so the **Live Preview appears at the bottom** (after all form sections are filled), followed by the **Export PDF** button. This enforces a "fill → review preview → export" flow instead of the current always-visible side panel + top-right PDF button.
+# Add MR Engineers Logo to Template
 
-## Current behavior
-- `OrderEditor.tsx` uses a 2-column grid: form on the left, **sticky preview on the right** (`aside` at lines 523–548).
-- A "PDF" / "Download both PDFs" button sits in the **top-right header** (lines 247–254), available even when the form is empty.
+## Context
+- The MR preview header (`MRHeader` in `src/components/orders/OrderPreview.tsx`) already imports `@/assets/mr-logo.png`.
+- The exported PDF (`src/lib/orders/pdf.ts`) currently renders only a plain orange/blue band with the company name — no logo image.
+- User uploaded `MR_Engineers_Fin1_Logo.png` to be used as the official MR logo.
 
-## Proposed changes (single file: `src/pages/orders/OrderEditor.tsx`)
+## Changes
 
-### 1. Remove the side preview
-- Drop the `lg:grid-cols-[minmax(0,1fr)_380px]` 2-column layout.
-- Render the entire form as a single full-width column.
-- Delete the right `<aside>` block (lines 523–548).
+### 1. Replace the logo asset
+- Copy `user-uploads://MR_Engineers_Fin1_Logo.png` → `src/assets/mr-logo.png` (overwrite).
+- This automatically updates the on-screen MR preview header, since `OrderPreview.tsx` already imports that path. No code change needed there.
 
-### 2. Move preview to the end
-- After the last form Card (Terms / Bank / GMS Terms), render a new section:
-  - **Heading**: "Review & Export" with helper text "Scroll through the preview below. When everything looks correct, export the PDF."
-  - The full `<OrderPreview>` component, rendered inline (not sticky), full width.
-  - A clear primary **Export PDF** button directly **below** the preview (large, full-width on mobile, right-aligned on desktop), label switching to "Download both PDFs (MR + GMS)" in split mode.
+### 2. Embed the logo in the exported MR PDF (`src/lib/orders/pdf.ts`)
+- Import the logo: `import mrLogoUrl from "@/assets/mr-logo.png";`
+- Add a small async helper `loadImageDataUrl(url)` that fetches the asset and converts it to a base64 data URL (so jsPDF's `addImage` can embed it).
+- Make `generateOrderPDF` async (or pre-load the image before constructing the doc) and, when `order.format === "MR"`:
+  - Increase header band height slightly (e.g. 22 → 26 mm) to accommodate the logo.
+  - Call `doc.addImage(dataUrl, "PNG", M, 3, 20, 20)` to place the logo on the left of the orange header band.
+  - Shift the company name / address / GSTIN text to the right of the logo (e.g. start text at `M + 24` instead of `M`).
+- Update callers of `generateOrderPDF` (in `src/pages/orders/OrderEditor.tsx`) to `await` the new async signature.
+- GMS format remains unchanged (no logo).
 
-### 3. Header cleanup
-- Remove the small "PDF" button from the top-right header (keep Back / Save Draft / Finalize).
-- Optionally keep a secondary "Jump to Preview" anchor link in the header that scrolls to the preview section (smooth scroll via `#preview` id).
+### 3. No DB / template-PDF changes
+- The uploaded background-template flow (`templatePdf.ts`) already lets users place fields on a user-supplied PDF, so it does not need the logo embedded.
 
-### 4. Gating (light-touch)
-- The Export PDF button stays enabled but shows a subtle inline warning above it if **no items have a description** OR **company name is empty**, e.g. "Add at least one item and a customer name before exporting." It does not hard-block — matches the user's existing flexible workflow.
-
-### 5. No changes to
-- `OrderPreview.tsx` internals
-- PDF generation logic (`downloadPDF`, templates)
-- Split-mode behavior (still produces 2 PDFs)
-- Save / Finalize flow
-- Database schema
-
-## Acceptance criteria
-- Opening `/orders/new` shows only the form (no side preview).
-- Scrolling to the bottom reveals the full preview, followed by a prominent Export PDF button.
-- Header no longer has a PDF button; Save Draft and Finalize remain.
-- In split mode, the bottom button reads "Download both PDFs (MR + GMS)" and produces both files.
-- Empty-form warning appears above the export button when description/company are missing, but does not block clicking.
+## Acceptance
+- The MR preview at `/orders/new` shows the new gear+circuit logo in the header.
+- Exporting an MR PDF includes the same logo in the top-left of the orange header band, with company text properly aligned next to it.
+- GMS preview/PDF are visually unchanged.
