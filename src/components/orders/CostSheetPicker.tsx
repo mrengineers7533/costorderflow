@@ -163,7 +163,7 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
           <p className="text-sm font-medium">
             {isDragging ? "Drop PDF to upload" : "Drag & drop a cost sheet PDF here"}
           </p>
-          <p className="text-xs text-muted-foreground">or click to browse — AI will auto-fill the order fields below</p>
+          <p className="text-xs text-muted-foreground">or click to browse  AI will auto-fill the order fields below</p>
         </div>
         {loading ? <p className="text-sm text-muted-foreground">Loading…</p> :
          sheets.length === 0 ? <p className="text-sm text-muted-foreground italic">No cost sheets yet.</p> :
