@@ -1,1 +1,4 @@
 project_id = "cpskacavawoupsisfwvz"
+
+[functions.parse-cost-sheet]
+verify_jwt = false
