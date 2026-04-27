@@ -202,10 +202,12 @@ export default function OrderEditor() {
     };
 
     if (splitMode) {
+      // Mixed makes detected — only download the format the user has selected,
+      // using that format's items only.
       const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
-      await renderOne("MR", mr, "-MR");
-      await renderOne("GMS", gms, "-GMS");
-      toast({ title: "Generated 2 PDFs", description: "MR + GMS downloaded separately" });
+      const subset = format === "MR" ? mr : gms;
+      await renderOne(format, subset, `-${format}`);
+      toast({ title: "PDF generated", description: `${format} PDF downloaded` });
       return;
     }
 
@@ -306,7 +308,7 @@ export default function OrderEditor() {
               </div>
               {splitMode && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Mixed makes detected — this dropdown only switches the on-screen preview. Download produces both MR and GMS PDFs automatically.
+                  Mixed makes detected — this dropdown switches both the on-screen preview and the downloaded PDF. Switch to GMS to download the GMS PDF, or MR for the MR PDF.
                 </p>
               )}
             </div>
@@ -356,7 +358,7 @@ export default function OrderEditor() {
             {splitMode && (
               <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
                 <div className="font-medium">This cost sheet has both MR and GMS items.</div>
-                <div className="text-muted-foreground">Use the <span className="font-semibold">MR / GMS / All</span> toggle to filter the table below. The OA preview &amp; PDF still follow the Format dropdown above (currently <span className="font-semibold">{format}</span>) — download will produce both MR and GMS PDFs automatically.</div>
+                <div className="text-muted-foreground">Use the <span className="font-semibold">MR / GMS / All</span> toggle to filter the table below. The OA preview &amp; PDF still follow the Format dropdown above (currently <span className="font-semibold">{format}</span>) — download will produce only the selected format’s PDF.</div>
               </div>
             )}
             <div className="space-y-2">
@@ -602,7 +604,7 @@ export default function OrderEditor() {
             <div className="flex justify-end pt-2">
               <Button size="lg" onClick={downloadPDF} className="w-full sm:w-auto">
                 <Download className="mr-2 h-4 w-4" />
-                {splitMode ? "Export both PDFs (MR + GMS)" : "Export PDF"}
+                {splitMode ? `Export ${format} PDF` : "Export PDF"}
               </Button>
             </div>
           </section>
