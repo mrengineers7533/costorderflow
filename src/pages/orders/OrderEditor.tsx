@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Trash2, Plus, Download, ArrowLeft, Home } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
@@ -53,6 +54,9 @@ export default function OrderEditor() {
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  // Editor-only filter for the Line Items table. Does NOT affect the OA
+  // format / preview / PDF — those still follow the Format dropdown above.
+  const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
 
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
@@ -109,6 +113,21 @@ export default function OrderEditor() {
       : allItemsWithAmounts,
     [allItemsWithAmounts, splitMode, format]
   );
+  // List used by the editor table — filtered by the in-section toggle.
+  const editorItems = useMemo(
+    () => lineItemsView === "ALL"
+      ? allItemsWithAmounts
+      : allItemsWithAmounts.filter((i) => i.make === lineItemsView),
+    [allItemsWithAmounts, lineItemsView]
+  );
+  // Keep the editor view in sync with the OA format when the order has both
+  // makes — first time we detect a split, default the toggle to the current
+  // format so behavior matches what users saw before.
+  useEffect(() => {
+    if (splitMode && lineItemsView === "ALL") setLineItemsView(format);
+    if (!splitMode && lineItemsView !== "ALL") setLineItemsView("ALL");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitMode]);
   const totals = useMemo(() => calcTotals(itemsWithAmounts, charges), [itemsWithAmounts, charges]);
   const words = useMemo(() => amountInWords(totals.net_payable), [totals.net_payable]);
 
@@ -315,14 +334,29 @@ export default function OrderEditor() {
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Line Items</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setItems([...items, { ...newItem(), make: format }])}><Plus className="h-4 w-4 mr-1" />Add</Button>
+          <CardHeader className="flex flex-row items-center justify-between gap-2"><CardTitle>Line Items</CardTitle>
+            <div className="flex items-center gap-2">
+              {(hasMR || hasGMS) && (
+                <ToggleGroup
+                  type="single"
+                  size="sm"
+                  value={lineItemsView}
+                  onValueChange={(v) => v && setLineItemsView(v as "MR" | "GMS" | "ALL")}
+                  className="border rounded-md"
+                >
+                  <ToggleGroupItem value="MR" aria-label="Show MR items" disabled={!hasMR}>MR</ToggleGroupItem>
+                  <ToggleGroupItem value="GMS" aria-label="Show GMS items" disabled={!hasGMS}>GMS</ToggleGroupItem>
+                  <ToggleGroupItem value="ALL" aria-label="Show all items">All</ToggleGroupItem>
+                </ToggleGroup>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setItems([...items, { ...newItem(), make: lineItemsView === "ALL" ? format : lineItemsView }])}><Plus className="h-4 w-4 mr-1" />Add</Button>
+            </div>
           </CardHeader>
           <CardContent>
             {splitMode && (
               <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
                 <div className="font-medium">This cost sheet has both MR and GMS items.</div>
-                <div className="text-muted-foreground">Showing only <span className="font-semibold">{format}</span> items in this OA. Switch the Format dropdown above to view, edit, and download the {format === "MR" ? "GMS" : "MR"} OA.</div>
+                <div className="text-muted-foreground">Use the <span className="font-semibold">MR / GMS / All</span> toggle to filter the table below. The OA preview &amp; PDF still follow the Format dropdown above (currently <span className="font-semibold">{format}</span>) — download will produce both MR and GMS PDFs automatically.</div>
               </div>
             )}
             <div className="space-y-2">
@@ -336,7 +370,7 @@ export default function OrderEditor() {
                 <div className="col-span-2 text-right">Amount</div>
                 <div className="col-span-1" />
               </div>
-              {itemsWithAmounts.map((it) => (
+              {editorItems.map((it) => (
                 <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.hsn_code} onChange={(e) => updateItemById(it.id, { hsn_code: e.target.value })} placeholder="HSN" />
@@ -355,12 +389,12 @@ export default function OrderEditor() {
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}
-              {itemsWithAmounts.length === 0 && (
-                <div className="text-sm text-muted-foreground italic px-1 py-4">No {format} items. Switch format or add one.</div>
+              {editorItems.length === 0 && (
+                <div className="text-sm text-muted-foreground italic px-1 py-4">No {lineItemsView === "ALL" ? "" : lineItemsView + " "}items. {lineItemsView !== "ALL" ? "Switch view or add one." : "Add one to get started."}</div>
               )}
-              {splitMode && (
+              {splitMode && lineItemsView !== "ALL" && (
                 <div className="pt-2 text-xs text-muted-foreground">
-                  Hidden from this OA: {allItemsWithAmounts.length - itemsWithAmounts.length} item(s) with make = {format === "MR" ? "GMS" : "MR"}.
+                  Hidden from this view: {allItemsWithAmounts.length - editorItems.length} item(s) with make ≠ {lineItemsView}.
                 </div>
               )}
             </div>
