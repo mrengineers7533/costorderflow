@@ -143,7 +143,7 @@ const Index = () => {
           <h2 className="text-xl font-semibold tracking-tight mb-3">How it works</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StepCard step="1" icon={<Upload className="h-4 w-4" />} title="Upload" desc="Drop a cost sheet PDF. AI parses items, HSN, rates and charges." />
-            <StepCard step="2" icon={<Sparkles className="h-4 w-4" />} title="Auto-detect" desc="GMS items move to GMS template, MR items to MR — automatically." />
+            <StepCard step="2" icon={<Sparkles className="h-4 w-4" />} title="Auto-detect" desc="GMS items move to GMS template, MR items to MR automatically." />
             <StepCard step="3" icon={<Eye className="h-4 w-4" />} title="Review" desc="Edit fields, add items, tweak P&F / freight / GST in live preview." />
             <StepCard step="4" icon={<Download className="h-4 w-4" />} title="Export" desc="Download MR + GMS PDFs separately, ready to print or email." />
           </div>
