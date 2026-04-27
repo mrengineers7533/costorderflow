@@ -1,33 +1,33 @@
-## Goal
-Replace the small Sparkles icon + "Order Acceptance" text in the app's header with the uploaded merged **GMS | MR Engineers** logo, and increase the header height so the logo fits comfortably.
+## Problem
 
-### 1. Add the logo asset
-- Copy `user-uploads://MR_GMS_Merge_Logo.pptx_1.png` → `src/assets/app-logo.png`.
+The homepage repeats the same actions in multiple places, making it feel cluttered:
 
-### 2. Update the home page header (`src/pages/Index.tsx`)
-- Import: `import appLogo from "@/assets/app-logo.png";`
-- Increase header height: `h-14` → `h-20` so the logo has breathing room.
-- Replace the current brand block (Sparkles icon + "Order Acceptance" text) with:
-  ```tsx
-  <Link to="/" className="flex items-center">
-    <img src={appLogo} alt="GMS | MR Engineers" className="h-14 w-auto object-contain" />
-  </Link>
-  ```
-- Remove the now-unused `Sparkles` import.
-- Keep right-side nav (`Home`, `Orders`, `Templates`, `New OA`) unchanged.
+- "Upload cost sheet" — appears in hero AND in Quick actions grid (both link to `/orders/new`)
+- "Start blank order" / "New blank order" — appears in hero AND in Quick actions grid (both link to `/orders/new`, and both are actually the same destination as "Upload cost sheet")
+- "View all orders" — appears in hero, in Quick actions grid, in the Recent orders header link, AND in the top nav
+- "Templates" — appears in top nav AND in Quick actions grid
 
-### 3. Add the same logo to other pages' top bars (for consistency)
-On `OrdersList.tsx`, `TemplatesPage.tsx`, and `OrderEditor.tsx`:
-- Add a small clickable logo (`h-10 w-auto`) to the left of the existing "Home" button, linked to `/`.
-- Keep existing titles and back buttons intact.
+The hero and the Quick actions grid are essentially showing the same four buttons twice.
 
-### 4. Out of scope
-- PDF logos (MR / GMS templates) remain untouched — this is purely the app UI.
-- No theme, routing, or data changes.
+## Fix
 
-### Files to edit
-- `src/assets/app-logo.png` *(new — copied from upload)*
-- `src/pages/Index.tsx`
-- `src/pages/orders/OrdersList.tsx`
-- `src/pages/orders/TemplatesPage.tsx`
-- `src/pages/orders/OrderEditor.tsx`
+Keep the hero as the single primary call-to-action area, and remove the redundant Quick actions grid entirely. The top nav already covers Orders / Templates / New OA, and the hero covers the primary upload flow.
+
+### Changes to `src/pages/Index.tsx`
+
+1. **Simplify the hero buttons** to one clear primary CTA:
+   - Keep: `Upload cost sheet` (primary, → `/orders/new`)
+   - Remove: `Start blank order` (same route, redundant)
+   - Remove: `View all orders` (already in nav and in Recent-orders section header)
+
+2. **Remove the entire "Quick actions" section** (the 4-card grid). Every destination it offers is already reachable from the top nav or the hero:
+   - Upload cost sheet → hero
+   - New blank order → hero / nav "New OA"
+   - All orders → nav "Orders" + Recent orders section
+   - Templates → nav "Templates"
+
+3. **Clean up unused imports** in `Index.tsx` (`LayoutTemplate`, `FilePlus2` if no longer used in body, and the `FeatureCard` helper component).
+
+### Result
+
+Homepage flow becomes: Header nav → Hero (one CTA) → Stats → Recent orders → How it works. No button or link is repeated across sections.
