@@ -110,6 +110,25 @@ export function inferItemMake(it: { description?: string; hsn_code?: string }): 
   return "OTHER";
 }
 
+/** Split a flat item list into the two OA buckets (MR vs GMS).
+ *  "OTHER" items are attached to whichever bucket the caller treats as
+ *  primary; default is MR so nothing silently disappears. Returns empty
+ *  arrays for buckets with no items. */
+export function splitItemsByMake(
+  items: LineItem[],
+  otherGoesTo: "MR" | "GMS" = "MR",
+): { mr: LineItem[]; gms: LineItem[] } {
+  const mr: LineItem[] = [];
+  const gms: LineItem[] = [];
+  for (const it of items) {
+    const make = it.make || inferItemMake(it);
+    if (make === "GMS") gms.push(it);
+    else if (make === "MR") mr.push(it);
+    else (otherGoesTo === "GMS" ? gms : mr).push(it);
+  }
+  return { mr, gms };
+}
+
 // Number to Indian words (rupees)
 const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
   "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
