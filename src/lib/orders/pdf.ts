@@ -15,8 +15,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 
-const logoCache: Record<string, string> = {};
-async function loadLogo(url: string): Promise<string | null> {
+interface LoadedLogo { dataUrl: string; w: number; h: number }
+const logoCache: Record<string, LoadedLogo> = {};
+async function loadLogo(url: string): Promise<LoadedLogo | null> {
   if (logoCache[url]) return logoCache[url];
   try {
     const res = await fetch(url);
@@ -27,12 +28,25 @@ async function loadLogo(url: string): Promise<string | null> {
       r.onerror = reject;
       r.readAsDataURL(blob);
     });
-    logoCache[url] = dataUrl;
-    return dataUrl;
+    const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+      img.onerror = () => resolve({ w: 1, h: 1 });
+      img.src = dataUrl;
+    });
+    const entry = { dataUrl, w: dims.w, h: dims.h };
+    logoCache[url] = entry;
+    return entry;
   } catch (e) {
     console.warn("Logo load failed", url, e);
     return null;
   }
+}
+
+/** Contain-fit: largest w×h preserving aspect ratio that fits inside maxW×maxH. */
+function fitInBox(natW: number, natH: number, maxW: number, maxH: number) {
+  const r = Math.min(maxW / natW, maxH / natH);
+  return { w: natW * r, h: natH * r };
 }
 
 const COMPANY_MR = {
@@ -75,7 +89,8 @@ export async function generateOrderPDF(
     const logo = await loadLogo(mrLogoUrl);
     if (logo) {
       try {
-        doc.addImage(logo, "PNG", M, 3, 60, 20);
+        const fit = fitInBox(logo.w, logo.h, 60, 20);
+        doc.addImage(logo.dataUrl, "PNG", M, 3, fit.w, fit.h);
       } catch (e) {
         console.warn("addImage failed", e);
       }
@@ -303,7 +318,7 @@ export async function generateOrderPDF(
 
 interface GmsLayout { W: number; H: number; M: number }
 
-const GMS_HEADER_H = 32; // mm — reserved space for the dual-logo banner
+const GMS_HEADER_H = 34; // mm — reserved space for the dual-logo banner
 const GMS_TITLE_BAR_H = 7; // mm — grey "ORDER ACCEPTANCE" bar
 const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 
@@ -325,22 +340,35 @@ async function renderGmsPdf(
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, W, GMS_HEADER_H, "F");
 
-    // Left: GMS logo + caption
+    // Left: GMS logo + caption (aspect-preserved fit)
+    const logoTop = 3;
+    const logoMaxH = 22;
+    let leftLogoH = 0;
     if (gmsLogo) {
-      try { doc.addImage(gmsLogo, "PNG", M, 3, 55, 18); } catch (e) { console.warn("gms logo", e); }
+      try {
+        const fit = fitInBox(gmsLogo.w, gmsLogo.h, 50, logoMaxH);
+        doc.addImage(gmsLogo.dataUrl, "PNG", M, logoTop, fit.w, fit.h);
+        leftLogoH = fit.h;
+      } catch (e) { console.warn("gms logo", e); }
     }
-    doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(10);
-    doc.text("GRAIN MILLING SOLUTIONS PRIVATE LIMITED", M, 25);
+    doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(9);
+    doc.text("GRAIN MILLING SOLUTIONS PRIVATE LIMITED", M, logoTop + leftLogoH + 4);
 
-    // Right: Uğur logo + caption + tagline
+    // Right: Uğur logo + caption + tagline (aspect-preserved fit)
     const rightX = W - M;
+    let rightLogoH = 0;
     if (ugurLogo) {
-      try { doc.addImage(ugurLogo, "PNG", rightX - 45, 3, 45, 18); } catch (e) { console.warn("ugur logo", e); }
+      try {
+        const fit = fitInBox(ugurLogo.w, ugurLogo.h, 45, logoMaxH);
+        doc.addImage(ugurLogo.dataUrl, "PNG", rightX - fit.w, logoTop, fit.w, fit.h);
+        rightLogoH = fit.h;
+      } catch (e) { console.warn("ugur logo", e); }
     }
-    doc.setFont("helvetica", "bold").setFontSize(11);
-    doc.text("UGUR MACHINE, TURKEY", rightX, 25, { align: "right" });
+    const rightCaptionY = logoTop + Math.max(rightLogoH, leftLogoH) + 4;
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("UGUR MACHINE, TURKEY", rightX, rightCaptionY, { align: "right" });
     doc.setFont("helvetica", "italic").setFontSize(7);
-    doc.text("Quality Standard is an Assurance of UGUR at all parts", rightX, 29, { align: "right" });
+    doc.text("Quality Standard is an Assurance of UGUR at all parts", rightX, rightCaptionY + 3.5, { align: "right" });
 
     // Grey "ORDER ACCEPTANCE" title bar directly under the header
     doc.setFillColor(200, 200, 200);
