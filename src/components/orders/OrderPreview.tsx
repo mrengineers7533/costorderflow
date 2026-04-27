@@ -339,6 +339,9 @@ export function OrderPreview(p: Props) {
         {p.format === "GMS" && isFX && (
           <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
         )}
+        {p.format === "GMS" && !isFX && (
+          <GMSHeadOfficeBank />
+        )}
 
         {p.format === "GMS" && p.gmsTerms && (
           <GMSTermsBlock t={p.gmsTerms} />
