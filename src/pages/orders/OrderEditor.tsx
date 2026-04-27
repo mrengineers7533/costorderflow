@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
-import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake } from "@/lib/orders/calc";
+import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
@@ -154,28 +154,47 @@ export default function OrderEditor() {
   }
 
   async function downloadPDF() {
-    const record: OrderRecord = {
-      id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
-      format, status: "draft", company_name: companyName, bill_to: billTo,
-      ship_to: sameAsBill ? billTo : shipTo, reference, cost_sheet_number: costSheetNumber,
-      order_date: orderDate, prepared_by: preparedBy, line_items: itemsWithAmounts,
-      charges, totals, amount_in_words: words, notes, created_at: "", updated_at: "",
-    };
-    const filename = `${(oaNumber || "OA").replace(/[/\\]/g, "_")}.pdf`;
-    try {
-      const tpl = await fetchTemplate(format);
-      if (tpl && Object.keys(tpl.field_map || {}).length > 0) {
-        const bytes = await generateOrderPDFFromTemplate(record, tpl);
-        downloadBytes(bytes, filename);
-        toast({ title: "PDF generated", description: `Using ${format} template` });
-        return;
+    const baseName = (oaNumber || "OA").replace(/[/\\]/g, "_");
+    const ship = sameAsBill ? billTo : shipTo;
+
+    // Render one PDF for a given format + item subset.
+    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string) => {
+      const subTotals = calcTotals(subsetItems, charges);
+      const subWords = amountInWords(subTotals.net_payable);
+      const record: OrderRecord = {
+        id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
+        format: fmt, status: "draft", company_name: companyName, bill_to: billTo,
+        ship_to: ship, reference, cost_sheet_number: costSheetNumber,
+        order_date: orderDate, prepared_by: preparedBy, line_items: subsetItems,
+        charges, totals: subTotals, amount_in_words: subWords, notes,
+        created_at: "", updated_at: "",
+      };
+      const filename = `${baseName}${suffix}.pdf`;
+      try {
+        const tpl = await fetchTemplate(fmt);
+        if (tpl && Object.keys(tpl.field_map || {}).length > 0) {
+          const bytes = await generateOrderPDFFromTemplate(record, tpl);
+          downloadBytes(bytes, filename);
+          return { used: "template" as const };
+        }
+      } catch (err) {
+        console.error(`Template render failed for ${fmt}, falling back:`, err);
       }
-    } catch (err) {
-      console.error("Template render failed, falling back:", err);
-      toast({ title: "Template render failed", description: "Falling back to default layout.", variant: "destructive" });
+      const doc = generateOrderPDF(record, { terms, bank });
+      doc.save(filename);
+      return { used: "default" as const };
+    };
+
+    if (splitMode) {
+      const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
+      await renderOne("MR", mr, "-MR");
+      await renderOne("GMS", gms, "-GMS");
+      toast({ title: "Generated 2 PDFs", description: "MR + GMS downloaded separately" });
+      return;
     }
-    const doc = generateOrderPDF(record, { terms, bank });
-    doc.save(filename);
+
+    await renderOne(format, itemsWithAmounts, "");
+    toast({ title: "PDF generated", description: `Using ${format} template` });
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
