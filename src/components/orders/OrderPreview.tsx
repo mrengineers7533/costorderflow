@@ -468,6 +468,11 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
         </div>
       </div>
 
+      {/* Small "M.R. ENGINEERS" label row above the yellow strip (matches PDF) */}
+      <div className="border border-foreground border-t-0 px-2 py-1 text-right text-[10px] font-bold">
+        M.R. ENGINEERS
+      </div>
+
       {/* Footer address band */}
       <div className="bg-primary/90 text-primary-foreground text-center font-semibold uppercase tracking-wide px-2 py-1.5 text-[10px]">
         {MR_FOOTER_ADDRESS}
