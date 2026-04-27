@@ -176,7 +176,7 @@ export default function OrderEditor() {
       } catch (err) {
         console.error(`Template render failed for ${fmt}, falling back:`, err);
       }
-      const doc = generateOrderPDF(record, { terms, bank });
+      const doc = await generateOrderPDF(record, { terms, bank });
       doc.save(filename);
       return { used: "default" as const };
     };

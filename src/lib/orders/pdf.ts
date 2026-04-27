@@ -2,6 +2,27 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, MR_FOOTER_ADDRESS, type BankDetails } from "./defaults";
+import mrLogoUrl from "@/assets/mr-logo.png";
+
+let mrLogoDataUrlCache: string | null = null;
+async function loadMrLogo(): Promise<string | null> {
+  if (mrLogoDataUrlCache) return mrLogoDataUrlCache;
+  try {
+    const res = await fetch(mrLogoUrl);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    mrLogoDataUrlCache = dataUrl;
+    return dataUrl;
+  } catch (e) {
+    console.warn("MR logo load failed", e);
+    return null;
+  }
+}
 
 const COMPANY_MR = {
   name: "MR ENGINEERS PVT. LTD.",
@@ -18,26 +39,48 @@ const COMPANY_GMS = {
   email: "info@gmsengg.com",
 };
 
-export function generateOrderPDF(order: OrderRecord, opts?: { terms?: string; bank?: BankDetails }): jsPDF {
+export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: string; bank?: BankDetails }): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
   const company = order.format === "MR" ? COMPANY_MR : COMPANY_GMS;
-  const accent: [number, number, number] = order.format === "MR" ? [37, 99, 235] : [22, 163, 74];
+  const accent: [number, number, number] = order.format === "MR" ? [234, 88, 12] : [22, 163, 74];
 
   let y = M;
 
   // Header banner
-  doc.setFillColor(...accent);
-  doc.rect(0, 0, W, 22, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold").setFontSize(16);
-  doc.text(company.name, M, 10);
+  const headerH = order.format === "MR" ? 26 : 22;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, W, headerH, "F");
+  let textX = M;
+  let textColor: [number, number, number] = [255, 255, 255];
+  if (order.format === "MR") {
+    const logo = await loadMrLogo();
+    if (logo) {
+      try {
+        doc.addImage(logo, "PNG", M, 3, 60, 20);
+      } catch (e) {
+        console.warn("addImage failed", e);
+      }
+    }
+    // White header for MR with dark text alongside logo
+    textX = M + 64;
+    textColor = [30, 30, 30];
+    // Thin accent rule under header
+    doc.setDrawColor(...accent).setLineWidth(0.6);
+    doc.line(0, headerH, W, headerH);
+  } else {
+    doc.setFillColor(...accent);
+    doc.rect(0, 0, W, headerH, "F");
+  }
+  doc.setTextColor(...textColor);
+  doc.setFont("helvetica", "bold").setFontSize(14);
+  doc.text(company.name, textX, 10);
   doc.setFont("helvetica", "normal").setFontSize(8);
-  doc.text(company.address, M, 15);
-  doc.text(`GSTIN: ${company.gstin}  |  ${company.phone}  |  ${company.email}`, M, 19);
+  doc.text(company.address, textX, 15);
+  doc.text(`GSTIN: ${company.gstin}  |  ${company.phone}  |  ${company.email}`, textX, 19);
 
-  y = 28;
+  y = headerH + 6;
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold").setFontSize(13);
   doc.text("ORDER ACCEPTANCE", W / 2, y, { align: "center" });
