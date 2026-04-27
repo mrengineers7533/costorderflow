@@ -132,11 +132,7 @@ export default function OrderEditor() {
       oa = data as string;
       setOaNumber(oa);
     }
-    const userRes = await supabase.auth.getUser();
-    if (!userRes.data.user) { setSaving(false); return toast({ title: "Not signed in", variant: "destructive" }); }
-
     const payload = {
-      user_id: userRes.data.user.id,
       oa_number: oa, format, status: finalize ? "finalized" as const : "draft" as const,
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate, prepared_by: preparedBy,
