@@ -263,6 +263,23 @@ export async function generateOrderPDF(order: OrderRecord, opts?: { terms?: stri
     y = doc.lastAutoTable.finalY;
 
     // Footer address band (yellow strip)
+    // Small right-aligned "M.R. ENGINEERS" label sitting just above the yellow strip
+    autoTable(doc, {
+      startY: y,
+      body: [[{
+        content: "M.R. ENGINEERS",
+        styles: {
+          fontSize: 8, fontStyle: "bold", halign: "right", cellPadding: 1.2,
+          textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.3,
+        },
+      }]],
+      theme: "plain",
+      margin: { left: M, right: M },
+      tableWidth: tableW,
+    });
+    // @ts-expect-error lastAutoTable runtime
+    y = doc.lastAutoTable.finalY;
+
     autoTable(doc, {
       startY: y,
       body: [[MR_FOOTER_ADDRESS]],
