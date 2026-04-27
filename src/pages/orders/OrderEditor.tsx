@@ -245,16 +245,18 @@ export default function OrderEditor() {
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/orders")}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={downloadPDF}>
-              <Download className="mr-2 h-4 w-4" />
-              {splitMode ? "Download both PDFs (MR + GMS)" : "PDF"}
+            <Button
+              variant="ghost"
+              onClick={() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              Jump to Preview
             </Button>
             <Button variant="secondary" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
             <Button disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="space-y-4">
           <div className="space-y-4 min-w-0">
             {isNew && <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />}
 
@@ -520,7 +522,13 @@ export default function OrderEditor() {
         )}
           </div>
 
-          <aside className="lg:sticky lg:top-4 lg:self-start">
+          <section id="preview" className="space-y-3 pt-6 border-t">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight">Review &amp; Export</h2>
+              <p className="text-sm text-muted-foreground">
+                Scroll through the preview below. When everything looks correct, export the PDF.
+              </p>
+            </div>
             <OrderPreview
               oaNumber={oaNumber}
               format={format}
@@ -545,7 +553,18 @@ export default function OrderEditor() {
               bank={bank}
               gmsTerms={gmsTerms}
             />
-          </aside>
+            {(!companyName.trim() || !itemsWithAmounts.some((i) => i.description.trim())) && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Add at least one item description and a customer name before exporting.
+              </p>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button size="lg" onClick={downloadPDF} className="w-full sm:w-auto">
+                <Download className="mr-2 h-4 w-4" />
+                {splitMode ? "Export both PDFs (MR + GMS)" : "Export PDF"}
+              </Button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
