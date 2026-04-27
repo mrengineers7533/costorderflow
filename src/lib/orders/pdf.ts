@@ -1,9 +1,19 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
-import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, MR_FOOTER_ADDRESS, type BankDetails } from "./defaults";
+import {
+  DEFAULT_MR_BANK,
+  DEFAULT_MR_TERMS,
+  MR_FOOTER_ADDRESS,
+  DEFAULT_GMS_BANK,
+  DEFAULT_GMS_TERMS,
+  GMS_HEAD_OFFICE_LINES,
+  type BankDetails,
+  type GMSTerms,
+} from "./defaults";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
+import ugurLogoUrl from "@/assets/ugur-logo.png";
 
 const logoCache: Record<string, string> = {};
 async function loadLogo(url: string): Promise<string | null> {
