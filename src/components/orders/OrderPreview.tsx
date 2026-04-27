@@ -6,6 +6,7 @@ import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orde
 import { calcExMurthal } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
+import ugurLogo from "@/assets/ugur-logo.png";
 import {
   MR_FOOTER_ADDRESS,
   GMS_HEAD_OFFICE_LINES,
@@ -183,66 +184,105 @@ export function OrderPreview(p: Props) {
           </tbody>
         </table>
 
-        {/* Items + Totals — unified bordered table matching reference template */}
-        <table className="w-full border-collapse text-[11px] border border-foreground">
-          <thead>
-            <tr className="bg-muted/60">
-              <th className="border border-foreground px-1.5 py-1 w-10 text-center">S. No.</th>
-              <th className="border border-foreground px-1.5 py-1 text-left">Item Description</th>
-              <th className="border border-foreground px-1.5 py-1 w-20 text-center">HSN Code</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">Qty.</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">Unit</th>
-              <th className="border border-foreground px-1.5 py-1 w-24 text-right">Rate{isFX ? ` (${fxSymbol})` : ""}</th>
-              <th className="border border-foreground px-1.5 py-1 w-28 text-right">Amount{isFX ? ` (${fxSymbol})` : ""}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
-              <tr>
-                <td colSpan={7} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No line items yet</td>
-              </tr>
-            ) : (
-              p.items.map((it, idx) => (
-                <tr key={it.id || idx} className="align-top">
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
-                  <td className="border border-foreground px-1.5 py-1">
-                    {it.description || <Placeholder text="(blank)" />}
-                  </td>
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.hsn_code || ""}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                    {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                    {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
+        {/* Items + Totals — unified bordered table; column set differs MR vs GMS */}
+        {(() => {
+          const isGMS = p.format === "GMS";
+          const totalsColSpan = isGMS ? 7 : 6;
+          const emptyColSpan = isGMS ? 8 : 7;
+          const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
+          return (
+            <table className="w-full border-collapse text-[11px] border border-foreground">
+              <thead>
+                <tr className={isGMS ? "" : "bg-muted/60"} style={isGMS ? { backgroundColor: "rgb(220,220,220)" } : undefined}>
+                  <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
+                  {isGMS && <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>}
+                  <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-20 text-center">{isGMS ? "HSN CODE" : "HSN Code"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-24 text-right">
+                    {isGMS ? "UNIT PRICE (INR)" : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                  </th>
+                  <th className="border border-foreground px-1.5 py-1 w-28 text-right">
+                    {isGMS ? "AMOUNT (INR)" : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                  </th>
                 </tr>
-              ))
-            )}
-            {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
-            {!isFX && !isMurthal && (
-              <>
-                <TotalsRow label="Basic Total" value={p.totals.basic_total} />
-                {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
-                  <TotalsRow label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfAmount} />
+              </thead>
+              <tbody>
+                {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
+                  <tr>
+                    <td colSpan={emptyColSpan} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No line items yet</td>
+                  </tr>
+                ) : (
+                  p.items.map((it, idx) => (
+                    <tr key={it.id || idx} className="align-top">
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
+                      {isGMS && <td className="border border-foreground px-1.5 py-1"></td>}
+                      <td className="border border-foreground px-1.5 py-1">
+                        {it.description || <Placeholder text="(blank)" />}
+                      </td>
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.hsn_code || ""}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
                 )}
-                {insuranceAmount > 0 && (
-                  <TotalsRow label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insuranceAmount} />
+                {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
+                {!isFX && !isMurthal && (
+                  isGMS ? (
+                    <>
+                      <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
+                      {discountAmount > 0 && (
+                        <>
+                          <TotalsRow colSpan={totalsColSpan} label="One time very special Discount" value={discountAmount} />
+                          <TotalsRow colSpan={totalsColSpan} label="After Discount" value={afterDiscount} />
+                        </>
+                      )}
+                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
+                        <TotalsRow colSpan={totalsColSpan} label="Packaging & Forwarding" value={pfAmount} />
+                      )}
+                      {insuranceAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Insurance" value={insuranceAmount} />
+                      )}
+                      {p.charges.freight_enabled && p.charges.freight > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
+                      )}
+                      {gstAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`GST @${p.charges.gst_percent || 0}%`} value={gstAmount} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                    </>
+                  ) : (
+                    <>
+                      <TotalsRow colSpan={totalsColSpan} label="Basic Total" value={p.totals.basic_total} />
+                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
+                        <TotalsRow colSpan={totalsColSpan} label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfAmount} />
+                      )}
+                      {insuranceAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insuranceAmount} />
+                      )}
+                      {p.charges.freight_enabled && p.charges.freight > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Subtotal" value={p.totals.subtotal} />
+                      <TotalsRow colSpan={totalsColSpan} label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstAmount} />
+                      {discountAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                    </>
+                  )
                 )}
-                {p.charges.freight_enabled && p.charges.freight > 0 && (
-                  <TotalsRow label="Freight" value={p.charges.freight} />
-                )}
-                <TotalsRow label="Subtotal" value={p.totals.subtotal} />
-                <TotalsRow label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstAmount} />
-                {discountAmount > 0 && (
-                  <TotalsRow label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
-                )}
-                <TotalsRow label="Grand Total" value={p.totals.net_payable} highlight />
-              </>
-            )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          );
+        })()}
 
         {/* Amount in words — sits between table and post sections (matches template) */}
         {!isFX && !isMurthal && p.amountInWords && p.totals.net_payable > 0 && (
@@ -298,6 +338,9 @@ export function OrderPreview(p: Props) {
 
         {p.format === "GMS" && isFX && (
           <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
+        )}
+        {p.format === "GMS" && !isFX && (
+          <GMSHeadOfficeBank />
         )}
 
         {p.format === "GMS" && p.gmsTerms && (
@@ -367,8 +410,29 @@ function ExMurthalBlock({
   );
 }
 
-function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
+function GMSHeadOfficeBank() {
   const bank = DEFAULT_GMS_BANK;
+  return (
+    <div className="grid grid-cols-2 gap-4 pt-2 text-[11px]">
+      <div>
+        <div className="font-bold">HEAD OFFICE</div>
+        {GMS_HEAD_OFFICE_LINES.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
+      </div>
+      <div>
+        <div className="font-bold">Our Bank Details :</div>
+        <div className="font-bold">GRAIN MILLING SOLUTIONS PVT. LTD.</div>
+        <div><span className="font-bold">Bank :</span> {bank.bank_name}</div>
+        <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
+        <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
+        <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
+      </div>
+    </div>
+  );
+}
+
+function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
   return (
     <div className="border-t-2 border-foreground mt-3 pt-2 text-[11px] space-y-2">
       <div className="space-y-0.5 font-semibold">
@@ -379,28 +443,12 @@ function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
           {currency} conversion rate - @Rs{fxRate}. Any variation in exchange rate will be borne by client.
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4 pt-2">
-        <div>
-          <div className="font-bold">HEAD OFFICE</div>
-          {GMS_HEAD_OFFICE_LINES.map((line) => (
-            <div key={line}>{line}</div>
-          ))}
-        </div>
-        <div>
-          <div className="font-bold">Our Bank Details :</div>
-          <div className="font-bold uppercase">GRAIIN MILLING SOLUTIONS</div>
-          <div><span className="font-semibold">Bank :</span> {bank.bank_name}</div>
-          <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
-          <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
-          <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
-        </div>
-      </div>
+      <GMSHeadOfficeBank />
     </div>
   );
 }
 
 function GMSTermsBlock({ t }: { t: GMSTerms }) {
-  const bank = DEFAULT_GMS_BANK;
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="space-y-0.5">
       <div className="font-bold">{label}</div>
@@ -413,24 +461,11 @@ function GMSTermsBlock({ t }: { t: GMSTerms }) {
       <div className="font-bold underline uppercase">Commercial Condition :</div>
       <Row label="Taxation :" value={t.taxation} />
       <Row label="Freight :" value={t.freight} />
-      <Row label="Insurance :" value={t.insurance} />
-      <Row label="DELIVERY TIME:" value={t.delivery_time} />
-      <Row label="PAYMENT TERMS:" value={t.payment_terms} />
-      <Row label="GENERAL CONDITIONS:" value={t.general_conditions} />
-      <div className="grid grid-cols-2 gap-4 pt-3">
-        <div>
-          <div className="font-bold">HEAD OFFICE</div>
-          {GMS_HEAD_OFFICE_LINES.map((l) => <div key={l}>{l}</div>)}
-        </div>
-        <div>
-          <div className="font-bold">Our Bank Details :</div>
-          <div className="font-bold uppercase">GRAIIN MILLING SOLUTIONS</div>
-          <div><span className="font-semibold">Bank :</span> {bank.bank_name}</div>
-          <div><span className="font-semibold">Branch :</span> {bank.branch}</div>
-          <div><span className="font-semibold">A/C No :</span> {bank.account_no}</div>
-          <div><span className="font-semibold">IFSC CODE :</span> {bank.ifsc}</div>
-        </div>
-      </div>
+      <Row label="INSURANCE :" value={t.insurance} />
+      <Row label="Delivery Time :" value={t.delivery_time} />
+      <Row label="Payment Terms :" value={t.payment_terms} />
+      <Row label="General Conditions :" value={t.general_conditions} />
+      <GMSHeadOfficeBank />
     </div>
   );
 }
@@ -465,6 +500,11 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
             {preparedBy && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
           </div>
         </div>
+      </div>
+
+      {/* Small "M.R. ENGINEERS" label row above the yellow strip (matches PDF) */}
+      <div className="border border-foreground border-t-0 px-2 py-1 text-right text-[10px] font-bold">
+        M.R. ENGINEERS
       </div>
 
       {/* Footer address band */}
@@ -515,10 +555,10 @@ function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
   );
 }
 
-function TotalsRow({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function TotalsRow({ label, value, highlight, colSpan = 6 }: { label: string; value: number; highlight?: boolean; colSpan?: number }) {
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
-      <td colSpan={6} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
+      <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
         {label}
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right tabular-nums ${highlight ? "font-bold" : ""}`}>
@@ -550,33 +590,26 @@ function AddressCellContent({ addr, fallbackName }: { addr: Address; fallbackNam
 
 function MRHeader() {
   return (
-    <div className="border-b pb-3">
-      <div className="flex items-center gap-4">
+    <div>
+      <div className="flex items-start justify-between gap-4 pb-2">
         <img
           src={mrLogo}
           alt="MR Engineers logo"
-          width={64}
-          height={64}
+          width={120}
+          height={48}
           loading="lazy"
-          className="h-16 w-16 shrink-0 object-contain"
+          className="h-12 w-auto object-contain shrink-0"
         />
-        <div className="flex-1 min-w-0">
-          <div className="text-xl font-extrabold tracking-tight text-primary leading-tight">
-            M.R. ENGINEERS PVT. LTD.
+        <div className="text-right">
+          <div className="text-xl font-extrabold tracking-tight leading-none">M.R. Engineers</div>
+          <div className="text-[10px] font-bold mt-1 tracking-wide">
+            *&nbsp;&nbsp;ENGINEERS&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;CONTRACTORS&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;SUPPLIERS
           </div>
-          <div className="text-[11px] text-muted-foreground italic">
-            Manufacturers of Material Handling Equipment & EOT Cranes
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Plot No. 7, Sector-3, IMT Manesar, Gurgaon - 122051, Haryana, India
-          </div>
+          <div className="text-[10px] mt-0.5">Shed No. 33, HSIIDC, Murthal, Sonepat.</div>
+          <div className="text-[10px] font-bold">GSTIN-06AARPM1849G1ZF</div>
         </div>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-wide rounded-sm bg-primary/10 text-foreground px-2 py-1.5 border border-primary/20">
-        <div><span className="text-muted-foreground">GSTIN:</span> <span className="font-semibold">06AABCM3429K1ZP</span></div>
-        <div className="text-center"><span className="text-muted-foreground">Tel:</span> <span className="font-semibold">+91-124-4374444</span></div>
-        <div className="text-right"><span className="text-muted-foreground">Email:</span> <span className="font-semibold normal-case">info@mrengineers.com</span></div>
-      </div>
+      <div className="border-t-[1.5px] border-primary" />
       <div className="text-center mt-2">
         <div className="text-sm font-bold tracking-[0.2em] text-foreground">ORDER ACCEPTANCE</div>
       </div>
@@ -591,48 +624,67 @@ function GMSHeader({
   reference: string; costSheetNumber: string; preparedBy: string;
 }) {
   const customerName = billTo?.name || companyName;
-  const addressLine = billTo?.address?.split("\n")[0] || "";
   const dateStr = orderDate ? new Date(orderDate).toLocaleDateString("en-IN") : "—";
   return (
     <div className="space-y-0">
-      {/* Logo + company name */}
-      <div className="flex flex-col items-center pb-2">
-        <img
-          src={gmsLogo}
-          alt="GMS Grain Milling Solutions logo"
-          width={120}
-          height={120}
-          loading="lazy"
-          className="h-20 w-auto object-contain"
-        />
-        <div className="text-base font-extrabold tracking-tight mt-1">
-          GRAIN MILLING SOLUTIONS PVT. LTD.
+      {/* Dual-logo banner */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col items-start">
+          <img
+            src={gmsLogo}
+            alt="GMS Grain Milling Solutions logo"
+            width={160}
+            height={64}
+            loading="lazy"
+            className="h-14 w-auto object-contain"
+          />
+          <div className="text-[10px] font-bold mt-1 tracking-tight">
+            GRAIN MILLING SOLUTIONS PRIVATE LIMITED
+          </div>
+        </div>
+        <div className="flex flex-col items-end">
+          <img
+            src={ugurLogo}
+            alt="Uğur Machine Turkey logo"
+            width={140}
+            height={56}
+            loading="lazy"
+            className="h-14 w-auto object-contain"
+          />
+          <div className="text-[11px] font-bold mt-1">UGUR MACHINE, TURKEY</div>
+          <div className="text-[9px] italic text-muted-foreground">
+            Quality Standard is an Assurance of UGUR at all parts
+          </div>
         </div>
       </div>
-      {/* ORDER ACCEPTANCE band */}
-      <div className="bg-gradient-to-r from-muted via-background to-muted border-y border-foreground/40 py-1 text-center">
-        <div className="text-sm font-bold tracking-[0.2em]">ORDER ACCEPTANCE</div>
+      {/* Grey ORDER ACCEPTANCE bar */}
+      <div className="mt-2 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
+        <div className="text-sm font-bold tracking-[0.2em] text-black">ORDER ACCEPTANCE</div>
       </div>
-      {/* Customer / OA meta — bordered table */}
-      <table className="w-full border-collapse text-[11px] border border-foreground mt-3">
-        <tbody>
-          <tr>
-            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top">
-              <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
-              {addressLine && <div>{addressLine}</div>}
-              {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
-              {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
-              {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
-            </td>
-            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top text-right">
-              <div><span className="font-semibold">Date :</span> {dateStr}</div>
-              <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
-              <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
-              {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Customer / OA meta — borderless two-column block */}
+      <div className="grid grid-cols-2 gap-4 mt-3 text-[11px]">
+        <div className="space-y-0.5">
+          <div className="font-bold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
+          {billTo?.address && <div className="whitespace-pre-wrap">{billTo.address}</div>}
+          {billTo?.contact_person && <div><span className="font-semibold">Contact Person Name :</span> {billTo.contact_person}</div>}
+          {billTo?.contact_number && <div><span className="font-semibold">Mobile No.:</span> {billTo.contact_number}</div>}
+          {billTo?.email && <div><span className="font-semibold">Email:-</span> {billTo.email}</div>}
+          {billTo?.gstin && (
+            <div className="font-semibold">
+              GSTIN No.-{billTo.gstin}
+              {billTo?.state_code && `, State Code - ${billTo.state_code}`}
+            </div>
+          )}
+        </div>
+        <div className="text-right space-y-0.5">
+          <div><span className="font-semibold">Date :</span> {dateStr}</div>
+          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
+          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+          <div><span className="font-semibold">Contact :-</span> Mr. Bhavesh Makin</div>
+          <div><span className="font-semibold">Mob :-</span> +91-9910066823</div>
+          {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
+        </div>
+      </div>
     </div>
   );
 }
