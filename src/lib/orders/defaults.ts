@@ -24,10 +24,10 @@ export const MR_FOOTER_ADDRESS =
   "PLEASE DO ALL CORRESPONDENCE AND SEND PAYMENTS AT C-27, C-BLOCK, GROUND FLOOR, TRAPEZOID IT PARK, SECTOR-62, NOIDA, PIN-201309";
 
 export const DEFAULT_GMS_BANK: BankDetails = {
-  bank_name: "Citi Bank",
-  branch: "Noida",
-  account_no: "0005989288",
-  ifsc: "CITI0000017",
+  bank_name: "HDFC Bank",
+  branch: "Kaushambi",
+  account_no: "50200078882730",
+  ifsc: "HDFC0002653",
 };
 
 export const GMS_HEAD_OFFICE_LINES = [
