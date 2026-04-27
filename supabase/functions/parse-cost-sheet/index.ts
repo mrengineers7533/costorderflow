@@ -9,6 +9,14 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `You are an expert at extracting structured data from Indian engineering company "cost sheets".
 A cost sheet contains: a customer/company name, addresses, and one or more SECTIONS (e.g. "PRE-CLEANING SECTION 30TPH", "CLEANING SECTION", "MILLING SECTION", "PACKING SECTION", "GMS SECTION"). Each section has a summary line on a front/index page AND a DETAIL page later in the PDF that lists individual machines/items in a table with columns like S.No, Machine / Description, Qty, Make, Price.
 
+CUSTOMER / ADDRESS EXTRACTION (do this every time):
+- ALWAYS populate bill_to.name, bill_to.address, bill_to.gstin, bill_to.state, AND ship_to.name, ship_to.address, ship_to.gstin, ship_to.state whenever those values appear anywhere in the PDF (cover page, header block, "Buyer", "Bill To", "Ship To", "Consignee", "Customer Details", footer, etc.).
+- GSTIN is a 15-character alphanumeric code (2 digits + 5 letters + 4 digits + 1 letter + 1 digit + Z + 1 alphanumeric). It may be labelled GSTIN, GST No., GST No, GST Number, GST IN, GST #, GST Reg. No., or simply "GST". Strip all whitespace and return the raw 15-char code in the gstin field.
+- State may be labelled "State", "State Name", "State :", or appear as "State Name : Uttar Pradesh, Code : 09". Return the full state name (e.g. "Uttar Pradesh"), NOT the 2-digit code.
+- If only ONE address block is printed on the cost sheet, copy the same name, address, gstin and state into BOTH bill_to and ship_to.
+- If a GSTIN is present but the state name is missing, INFER the state from the first 2 digits of the GSTIN using the standard Indian GST state-code map: 01 Jammu and Kashmir, 02 Himachal Pradesh, 03 Punjab, 04 Chandigarh, 05 Uttarakhand, 06 Haryana, 07 Delhi, 08 Rajasthan, 09 Uttar Pradesh, 10 Bihar, 11 Sikkim, 12 Arunachal Pradesh, 13 Nagaland, 14 Manipur, 15 Mizoram, 16 Tripura, 17 Meghalaya, 18 Assam, 19 West Bengal, 20 Jharkhand, 21 Odisha, 22 Chhattisgarh, 23 Madhya Pradesh, 24 Gujarat, 25 Daman and Diu, 26 Dadra and Nagar Haveli, 27 Maharashtra, 28 Andhra Pradesh (Old), 29 Karnataka, 30 Goa, 31 Lakshadweep, 32 Kerala, 33 Tamil Nadu, 34 Puducherry, 35 Andaman and Nicobar, 36 Telangana, 37 Andhra Pradesh, 38 Ladakh.
+- Never leave gstin or state blank if the information is anywhere on the PDF or can be inferred from the GSTIN prefix.
+
 EXTRACTION BOUNDARY (read this first):
 The authoritative source of line items is the DETAIL PAGES of the PDF — i.e. everything that appears AFTER the "Terms & Conditions" page and BEFORE the "Client Scope" / "Customer Scope" page. Every machine / equipment row in that range (across Pre-Cleaning, Cleaning, Milling/Grinding, Refraction, Packing, GMS, Bagging, Material Handling, Magnets, Centrifugal Fans, Spouting / Aspiration Ducting, etc.) MUST be returned as its own line item. Do NOT stop at the "Cost of Project" summary table on the front pages — that table is only an index, never the source of items for sections that have detail pages.
 The "Client Scope" / "Customer Scope" section and anything after it is OUT OF SCOPE — never return those rows.
@@ -197,7 +205,7 @@ Deno.serve(async (req) => {
           {
             role: "user",
             content: [
-              { type: "text", text: "Extract structured data from this cost sheet PDF. Remember: return individual machines from each section's detail page, NOT section totals." },
+              { type: "text", text: "Extract structured data from this cost sheet PDF. Always fill bill_to and ship_to including GSTIN and State (infer state from the first 2 digits of GSTIN if needed). Return individual machines from each section's detail page, NOT section totals." },
               { type: "file", file: { filename: sheet.original_filename, file_data: `data:application/pdf;base64,${base64}` } },
             ],
           },

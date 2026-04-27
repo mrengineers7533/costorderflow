@@ -1,33 +1,30 @@
-## Goal
-Replace the small Sparkles icon + "Order Acceptance" text in the app's header with the uploaded merged **GMS | MR Engineers** logo, and increase the header height so the logo fits comfortably.
+## Problem
 
-### 1. Add the logo asset
-- Copy `user-uploads://MR_GMS_Merge_Logo.pptx_1.png` → `src/assets/app-logo.png`.
+After parsing a cost sheet PDF, the **GSTIN** and **State** fields under "Bill To" and "Ship To" stay empty in the order form, even though the rest of the customer data (name, address) and line items extract fine.
 
-### 2. Update the home page header (`src/pages/Index.tsx`)
-- Import: `import appLogo from "@/assets/app-logo.png";`
-- Increase header height: `h-14` → `h-20` so the logo has breathing room.
-- Replace the current brand block (Sparkles icon + "Order Acceptance" text) with:
-  ```tsx
-  <Link to="/" className="flex items-center">
-    <img src={appLogo} alt="GMS | MR Engineers" className="h-14 w-auto object-contain" />
-  </Link>
-  ```
-- Remove the now-unused `Sparkles` import.
-- Keep right-side nav (`Home`, `Orders`, `Templates`, `New OA`) unchanged.
+## Root cause
 
-### 3. Add the same logo to other pages' top bars (for consistency)
-On `OrdersList.tsx`, `TemplatesPage.tsx`, and `OrderEditor.tsx`:
-- Add a small clickable logo (`h-10 w-auto`) to the left of the existing "Home" button, linked to `/`.
-- Keep existing titles and back buttons intact.
+The edge function `parse-cost-sheet` already declares `gstin` and `state` in its tool-call schema (for both `bill_to` and `ship_to`), and the frontend (`OrderEditor.tsx`) correctly merges those values into the form state. The problem is the **AI system prompt**: it spends ~40 lines describing how to extract line items / sections / charges, but says **nothing** about how to find GSTIN and State on the cost sheet header. As a result Gemini omits those two fields from its tool call, leaving them blank.
 
-### 4. Out of scope
-- PDF logos (MR / GMS templates) remain untouched — this is purely the app UI.
-- No theme, routing, or data changes.
+Indian cost sheets typically print these as `GST No. / GSTIN: 09AAACI1234L1ZP` and `State Name: Uttar Pradesh, Code: 09` somewhere in the customer / billing block. We need to tell the model exactly that.
 
-### Files to edit
-- `src/assets/app-logo.png` *(new — copied from upload)*
-- `src/pages/Index.tsx`
-- `src/pages/orders/OrdersList.tsx`
-- `src/pages/orders/TemplatesPage.tsx`
-- `src/pages/orders/OrderEditor.tsx`
+## Fix
+
+Update **only** `supabase/functions/parse-cost-sheet/index.ts`:
+
+1. Add a new explicit section to `SYSTEM_PROMPT` titled "CUSTOMER / ADDRESS EXTRACTION" that instructs the model to:
+   - Always populate `bill_to.name`, `bill_to.address`, `bill_to.gstin`, `bill_to.state` and the same four fields for `ship_to`.
+   - Recognise GSTIN under any of these labels: `GSTIN`, `GST No.`, `GST No`, `GST Number`, `GST IN`. Strip whitespace; it's a 15-character alphanumeric code.
+   - Recognise State under labels: `State`, `State Name`, `State :`. If a state code (2 digits) is present alongside, still return the state name in `state`.
+   - If only one address block is present on the cost sheet, copy its values into both `bill_to` and `ship_to`.
+   - If GSTIN is present but state is missing, infer the state from the **first 2 digits** of the GSTIN using the standard Indian GST state-code mapping (e.g. `09` → Uttar Pradesh, `27` → Maharashtra, `07` → Delhi, `24` → Gujarat, `29` → Karnataka, etc.).
+2. Tighten the tool-call user message to also say: "Extract bill_to and ship_to including GSTIN and State."
+3. No schema change, no DB change, no frontend change needed — the plumbing already supports these fields.
+
+## Verification
+
+After deploying the updated edge function, re-upload the same cost sheet PDF on `/orders/new`. The GSTIN and State inputs under both "Bill To" and "Ship To" should auto-fill. If a sheet truly has no GSTIN printed, the fields will remain blank (expected) and the user can fill them manually.
+
+## Files touched
+
+- `supabase/functions/parse-cost-sheet/index.ts` — prompt-only change (auto-redeploys).
