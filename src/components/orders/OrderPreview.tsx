@@ -590,48 +590,67 @@ function GMSHeader({
   reference: string; costSheetNumber: string; preparedBy: string;
 }) {
   const customerName = billTo?.name || companyName;
-  const addressLine = billTo?.address?.split("\n")[0] || "";
   const dateStr = orderDate ? new Date(orderDate).toLocaleDateString("en-IN") : "—";
   return (
     <div className="space-y-0">
-      {/* Logo + company name */}
-      <div className="flex flex-col items-center pb-2">
-        <img
-          src={gmsLogo}
-          alt="GMS Grain Milling Solutions logo"
-          width={120}
-          height={120}
-          loading="lazy"
-          className="h-20 w-auto object-contain"
-        />
-        <div className="text-base font-extrabold tracking-tight mt-1">
-          GRAIN MILLING SOLUTIONS PVT. LTD.
+      {/* Dual-logo banner */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col items-start">
+          <img
+            src={gmsLogo}
+            alt="GMS Grain Milling Solutions logo"
+            width={160}
+            height={64}
+            loading="lazy"
+            className="h-14 w-auto object-contain"
+          />
+          <div className="text-[10px] font-bold mt-1 tracking-tight">
+            GRAIN MILLING SOLUTIONS PRIVATE LIMITED
+          </div>
+        </div>
+        <div className="flex flex-col items-end">
+          <img
+            src={ugurLogo}
+            alt="Uğur Machine Turkey logo"
+            width={140}
+            height={56}
+            loading="lazy"
+            className="h-14 w-auto object-contain"
+          />
+          <div className="text-[11px] font-bold mt-1">UGUR MACHINE, TURKEY</div>
+          <div className="text-[9px] italic text-muted-foreground">
+            Quality Standard is an Assurance of UGUR at all parts
+          </div>
         </div>
       </div>
-      {/* ORDER ACCEPTANCE band */}
-      <div className="bg-gradient-to-r from-muted via-background to-muted border-y border-foreground/40 py-1 text-center">
-        <div className="text-sm font-bold tracking-[0.2em]">ORDER ACCEPTANCE</div>
+      {/* Grey ORDER ACCEPTANCE bar */}
+      <div className="mt-2 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
+        <div className="text-sm font-bold tracking-[0.2em] text-black">ORDER ACCEPTANCE</div>
       </div>
-      {/* Customer / OA meta — bordered table */}
-      <table className="w-full border-collapse text-[11px] border border-foreground mt-3">
-        <tbody>
-          <tr>
-            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top">
-              <div className="font-semibold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
-              {addressLine && <div>{addressLine}</div>}
-              {billTo?.contact_person && <div><span className="font-semibold">Contact Person:-</span> {billTo.contact_person}</div>}
-              {billTo?.contact_number && <div><span className="font-semibold">Contact No:-</span> {billTo.contact_number}</div>}
-              {billTo?.email && <div><span className="font-semibold">Email :-</span> {billTo.email}</div>}
-            </td>
-            <td className="border border-foreground px-2 py-1.5 w-1/2 align-top text-right">
-              <div><span className="font-semibold">Date :</span> {dateStr}</div>
-              <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
-              <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
-              {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Customer / OA meta — borderless two-column block */}
+      <div className="grid grid-cols-2 gap-4 mt-3 text-[11px]">
+        <div className="space-y-0.5">
+          <div className="font-bold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
+          {billTo?.address && <div className="whitespace-pre-wrap">{billTo.address}</div>}
+          {billTo?.contact_person && <div><span className="font-semibold">Contact Person Name :</span> {billTo.contact_person}</div>}
+          {billTo?.contact_number && <div><span className="font-semibold">Mobile No.:</span> {billTo.contact_number}</div>}
+          {billTo?.email && <div><span className="font-semibold">Email:-</span> {billTo.email}</div>}
+          {billTo?.gstin && (
+            <div className="font-semibold">
+              GSTIN No.-{billTo.gstin}
+              {billTo?.state_code && `, State Code - ${billTo.state_code}`}
+            </div>
+          )}
+        </div>
+        <div className="text-right space-y-0.5">
+          <div><span className="font-semibold">Date :</span> {dateStr}</div>
+          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
+          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+          <div><span className="font-semibold">Contact :-</span> Mr. Bhavesh Makin</div>
+          <div><span className="font-semibold">Mob :-</span> +91-9910066823</div>
+          {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}
+        </div>
+      </div>
     </div>
   );
 }
