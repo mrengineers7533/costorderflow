@@ -1,30 +1,33 @@
-# Add MR Engineers Logo to Template
+## Goal
+Replace the small Sparkles icon + "Order Acceptance" text in the app's header with the uploaded merged **GMS | MR Engineers** logo, and increase the header height so the logo fits comfortably.
 
-## Context
-- The MR preview header (`MRHeader` in `src/components/orders/OrderPreview.tsx`) already imports `@/assets/mr-logo.png`.
-- The exported PDF (`src/lib/orders/pdf.ts`) currently renders only a plain orange/blue band with the company name — no logo image.
-- User uploaded `MR_Engineers_Fin1_Logo.png` to be used as the official MR logo.
+### 1. Add the logo asset
+- Copy `user-uploads://MR_GMS_Merge_Logo.pptx_1.png` → `src/assets/app-logo.png`.
 
-## Changes
+### 2. Update the home page header (`src/pages/Index.tsx`)
+- Import: `import appLogo from "@/assets/app-logo.png";`
+- Increase header height: `h-14` → `h-20` so the logo has breathing room.
+- Replace the current brand block (Sparkles icon + "Order Acceptance" text) with:
+  ```tsx
+  <Link to="/" className="flex items-center">
+    <img src={appLogo} alt="GMS | MR Engineers" className="h-14 w-auto object-contain" />
+  </Link>
+  ```
+- Remove the now-unused `Sparkles` import.
+- Keep right-side nav (`Home`, `Orders`, `Templates`, `New OA`) unchanged.
 
-### 1. Replace the logo asset
-- Copy `user-uploads://MR_Engineers_Fin1_Logo.png` → `src/assets/mr-logo.png` (overwrite).
-- This automatically updates the on-screen MR preview header, since `OrderPreview.tsx` already imports that path. No code change needed there.
+### 3. Add the same logo to other pages' top bars (for consistency)
+On `OrdersList.tsx`, `TemplatesPage.tsx`, and `OrderEditor.tsx`:
+- Add a small clickable logo (`h-10 w-auto`) to the left of the existing "Home" button, linked to `/`.
+- Keep existing titles and back buttons intact.
 
-### 2. Embed the logo in the exported MR PDF (`src/lib/orders/pdf.ts`)
-- Import the logo: `import mrLogoUrl from "@/assets/mr-logo.png";`
-- Add a small async helper `loadImageDataUrl(url)` that fetches the asset and converts it to a base64 data URL (so jsPDF's `addImage` can embed it).
-- Make `generateOrderPDF` async (or pre-load the image before constructing the doc) and, when `order.format === "MR"`:
-  - Increase header band height slightly (e.g. 22 → 26 mm) to accommodate the logo.
-  - Call `doc.addImage(dataUrl, "PNG", M, 3, 20, 20)` to place the logo on the left of the orange header band.
-  - Shift the company name / address / GSTIN text to the right of the logo (e.g. start text at `M + 24` instead of `M`).
-- Update callers of `generateOrderPDF` (in `src/pages/orders/OrderEditor.tsx`) to `await` the new async signature.
-- GMS format remains unchanged (no logo).
+### 4. Out of scope
+- PDF logos (MR / GMS templates) remain untouched — this is purely the app UI.
+- No theme, routing, or data changes.
 
-### 3. No DB / template-PDF changes
-- The uploaded background-template flow (`templatePdf.ts`) already lets users place fields on a user-supplied PDF, so it does not need the logo embedded.
-
-## Acceptance
-- The MR preview at `/orders/new` shows the new gear+circuit logo in the header.
-- Exporting an MR PDF includes the same logo in the top-left of the orange header band, with company text properly aligned next to it.
-- GMS preview/PDF are visually unchanged.
+### Files to edit
+- `src/assets/app-logo.png` *(new — copied from upload)*
+- `src/pages/Index.tsx`
+- `src/pages/orders/OrdersList.tsx`
+- `src/pages/orders/TemplatesPage.tsx`
+- `src/pages/orders/OrderEditor.tsx`
