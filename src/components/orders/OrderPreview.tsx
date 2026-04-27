@@ -560,10 +560,10 @@ function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
   );
 }
 
-function TotalsRow({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function TotalsRow({ label, value, highlight, colSpan = 6 }: { label: string; value: number; highlight?: boolean; colSpan?: number }) {
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
-      <td colSpan={6} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
+      <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
         {label}
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right tabular-nums ${highlight ? "font-bold" : ""}`}>
