@@ -202,10 +202,12 @@ export default function OrderEditor() {
     };
 
     if (splitMode) {
+      // Mixed makes detected — only download the format the user has selected,
+      // using that format's items only.
       const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
-      await renderOne("MR", mr, "-MR");
-      await renderOne("GMS", gms, "-GMS");
-      toast({ title: "Generated 2 PDFs", description: "MR + GMS downloaded separately" });
+      const subset = format === "MR" ? mr : gms;
+      await renderOne(format, subset, `-${format}`);
+      toast({ title: "PDF generated", description: `${format} PDF downloaded` });
       return;
     }
 
