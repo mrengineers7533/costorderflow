@@ -57,19 +57,6 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-10">
-        {/* Hero */}
-        <section className="rounded-2xl border bg-gradient-to-br from-primary/5 via-background to-accent/30 p-8 md:p-10">
-          <div className="max-w-3xl">
-            <Badge variant="secondary" className="mb-3">MR Engineers · GMS (Ugur)</Badge>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-              Turn cost sheets into print-ready Order Acceptances in seconds.
-            </h1>
-            <p className="mt-3 text-muted-foreground md:text-lg">
-              Upload a PDF AI extracts items, charges and addresses. Edit live, then export MR and GMS PDFs from a single order.
-            </p>
-          </div>
-        </section>
-
         {/* Stats */}
         <section className="grid gap-3 sm:grid-cols-3">
           <StatCard icon={<ListChecks className="h-5 w-5 text-primary" />} label="Total orders" value={stats.total} />
