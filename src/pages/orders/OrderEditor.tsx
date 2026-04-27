@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft, Home } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -243,7 +243,10 @@ export default function OrderEditor() {
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate("/orders")}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}><Home className="mr-1 h-4 w-4" />Home</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}><ArrowLeft className="mr-1 h-4 w-4" />Orders</Button>
+          </div>
           <div className="flex gap-2">
             <Button
               variant="ghost"

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { Home } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
 
 export default function OrdersList() {
@@ -26,7 +27,12 @@ export default function OrdersList() {
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Order Acceptances</h1>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/"><Home className="mr-1 h-4 w-4" />Home</Link>
+            </Button>
+            <h1 className="text-2xl font-bold">Order Acceptances</h1>
+          </div>
           <div className="flex gap-2">
             <Button asChild><Link to="/orders/new">+ New Order</Link></Button>
             <Button variant="outline" asChild><Link to="/orders/templates">Templates</Link></Button>

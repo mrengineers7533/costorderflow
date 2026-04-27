@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Upload, Trash2 } from "lucide-react";
+import { ArrowLeft, Home, Upload, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   FIELD_LABELS,
@@ -33,7 +33,14 @@ export default function TemplatesPage() {
     <div className="min-h-screen bg-muted/30 p-6">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" asChild><Link to="/orders"><ArrowLeft className="mr-2 h-4 w-4" />Back to Orders</Link></Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/"><Home className="mr-1 h-4 w-4" />Home</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/orders"><ArrowLeft className="mr-1 h-4 w-4" />Orders</Link>
+            </Button>
+          </div>
           <h1 className="text-xl font-semibold">Order Templates</h1>
         </div>
 
