@@ -184,66 +184,105 @@ export function OrderPreview(p: Props) {
           </tbody>
         </table>
 
-        {/* Items + Totals — unified bordered table matching reference template */}
-        <table className="w-full border-collapse text-[11px] border border-foreground">
-          <thead>
-            <tr className="bg-muted/60">
-              <th className="border border-foreground px-1.5 py-1 w-10 text-center">S. No.</th>
-              <th className="border border-foreground px-1.5 py-1 text-left">Item Description</th>
-              <th className="border border-foreground px-1.5 py-1 w-20 text-center">HSN Code</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">Qty.</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">Unit</th>
-              <th className="border border-foreground px-1.5 py-1 w-24 text-right">Rate{isFX ? ` (${fxSymbol})` : ""}</th>
-              <th className="border border-foreground px-1.5 py-1 w-28 text-right">Amount{isFX ? ` (${fxSymbol})` : ""}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
-              <tr>
-                <td colSpan={7} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No line items yet</td>
-              </tr>
-            ) : (
-              p.items.map((it, idx) => (
-                <tr key={it.id || idx} className="align-top">
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
-                  <td className="border border-foreground px-1.5 py-1">
-                    {it.description || <Placeholder text="(blank)" />}
-                  </td>
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.hsn_code || ""}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
-                  <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                    {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                    {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
+        {/* Items + Totals — unified bordered table; column set differs MR vs GMS */}
+        {(() => {
+          const isGMS = p.format === "GMS";
+          const totalsColSpan = isGMS ? 7 : 6;
+          const emptyColSpan = isGMS ? 8 : 7;
+          const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
+          return (
+            <table className="w-full border-collapse text-[11px] border border-foreground">
+              <thead>
+                <tr className={isGMS ? "" : "bg-muted/60"} style={isGMS ? { backgroundColor: "rgb(220,220,220)" } : undefined}>
+                  <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
+                  {isGMS && <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>}
+                  <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-20 text-center">{isGMS ? "HSN CODE" : "HSN Code"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-24 text-right">
+                    {isGMS ? "UNIT PRICE (INR)" : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                  </th>
+                  <th className="border border-foreground px-1.5 py-1 w-28 text-right">
+                    {isGMS ? "AMOUNT (INR)" : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                  </th>
                 </tr>
-              ))
-            )}
-            {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
-            {!isFX && !isMurthal && (
-              <>
-                <TotalsRow label="Basic Total" value={p.totals.basic_total} />
-                {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
-                  <TotalsRow label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfAmount} />
+              </thead>
+              <tbody>
+                {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
+                  <tr>
+                    <td colSpan={emptyColSpan} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No line items yet</td>
+                  </tr>
+                ) : (
+                  p.items.map((it, idx) => (
+                    <tr key={it.id || idx} className="align-top">
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
+                      {isGMS && <td className="border border-foreground px-1.5 py-1"></td>}
+                      <td className="border border-foreground px-1.5 py-1">
+                        {it.description || <Placeholder text="(blank)" />}
+                      </td>
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.hsn_code || ""}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
                 )}
-                {insuranceAmount > 0 && (
-                  <TotalsRow label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insuranceAmount} />
+                {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
+                {!isFX && !isMurthal && (
+                  isGMS ? (
+                    <>
+                      <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
+                      {discountAmount > 0 && (
+                        <>
+                          <TotalsRow colSpan={totalsColSpan} label="One time very special Discount" value={discountAmount} />
+                          <TotalsRow colSpan={totalsColSpan} label="After Discount" value={afterDiscount} />
+                        </>
+                      )}
+                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
+                        <TotalsRow colSpan={totalsColSpan} label="Packaging & Forwarding" value={pfAmount} />
+                      )}
+                      {insuranceAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Insurance" value={insuranceAmount} />
+                      )}
+                      {p.charges.freight_enabled && p.charges.freight > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
+                      )}
+                      {gstAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`GST @${p.charges.gst_percent || 0}%`} value={gstAmount} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                    </>
+                  ) : (
+                    <>
+                      <TotalsRow colSpan={totalsColSpan} label="Basic Total" value={p.totals.basic_total} />
+                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
+                        <TotalsRow colSpan={totalsColSpan} label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfAmount} />
+                      )}
+                      {insuranceAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insuranceAmount} />
+                      )}
+                      {p.charges.freight_enabled && p.charges.freight > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Subtotal" value={p.totals.subtotal} />
+                      <TotalsRow colSpan={totalsColSpan} label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstAmount} />
+                      {discountAmount > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                    </>
+                  )
                 )}
-                {p.charges.freight_enabled && p.charges.freight > 0 && (
-                  <TotalsRow label="Freight" value={p.charges.freight} />
-                )}
-                <TotalsRow label="Subtotal" value={p.totals.subtotal} />
-                <TotalsRow label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstAmount} />
-                {discountAmount > 0 && (
-                  <TotalsRow label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
-                )}
-                <TotalsRow label="Grand Total" value={p.totals.net_payable} highlight />
-              </>
-            )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          );
+        })()}
 
         {/* Amount in words — sits between table and post sections (matches template) */}
         {!isFX && !isMurthal && p.amountInWords && p.totals.net_payable > 0 && (
