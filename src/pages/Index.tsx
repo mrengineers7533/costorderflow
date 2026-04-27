@@ -67,17 +67,6 @@ const Index = () => {
             <p className="mt-3 text-muted-foreground md:text-lg">
               Upload a PDF — AI extracts items, charges and addresses. Edit live, then export MR and GMS PDFs from a single order.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              <Button size="lg" asChild>
-                <Link to="/orders/new"><Upload className="h-4 w-4 mr-1" />Upload cost sheet</Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link to="/orders/new"><FilePlus2 className="h-4 w-4 mr-1" />Start blank order</Link>
-              </Button>
-              <Button size="lg" variant="ghost" asChild>
-                <Link to="/orders">View all orders<ArrowRight className="h-4 w-4 ml-1" /></Link>
-              </Button>
-            </div>
           </div>
         </section>
 
