@@ -60,19 +60,17 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Validate user
+    // Optional auth — app currently runs without sign-in, so allow anonymous calls.
     const auth = req.headers.get("Authorization") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: auth } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ error: "Not authenticated" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let userId: string | null = null;
+    if (auth && auth !== `Bearer ${ANON_KEY}`) {
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+        global: { headers: { Authorization: auth } },
       });
+      const { data: userData } = await userClient.auth.getUser();
+      userId = userData.user?.id ?? null;
     }
-    const userId = userData.user.id;
 
     const body = await req.json().catch(() => ({}));
     const costSheetId = body.cost_sheet_id;
@@ -92,7 +90,9 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (sheet.user_id !== userId) {
+    // If the sheet is owned by a user, only that user may parse it.
+    // Anonymous-uploaded sheets (user_id null) are open.
+    if (sheet.user_id && sheet.user_id !== userId) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
