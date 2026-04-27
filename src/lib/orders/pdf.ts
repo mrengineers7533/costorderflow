@@ -89,7 +89,8 @@ export async function generateOrderPDF(
     const logo = await loadLogo(mrLogoUrl);
     if (logo) {
       try {
-        doc.addImage(logo, "PNG", M, 3, 60, 20);
+        const fit = fitInBox(logo.w, logo.h, 60, 20);
+        doc.addImage(logo.dataUrl, "PNG", M, 3, fit.w, fit.h);
       } catch (e) {
         console.warn("addImage failed", e);
       }
