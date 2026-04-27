@@ -162,22 +162,6 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function FeatureCard({
-  icon, title, desc, to, accent,
-}: { icon: React.ReactNode; title: string; desc: string; to: string; accent?: boolean }) {
-  return (
-    <Link to={to}>
-      <Card className={`h-full transition-all hover:shadow-md hover:-translate-y-0.5 ${accent ? "border-primary/40 bg-primary/5" : ""}`}>
-        <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-2">
-          <div className={`rounded-md p-1.5 ${accent ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{icon}</div>
-          <CardTitle className="text-base">{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">{desc}</CardContent>
-      </Card>
-    </Link>
-  );
-}
-
 function StepCard({
   step, icon, title, desc,
 }: { step: string; icon: React.ReactNode; title: string; desc: string }) {
