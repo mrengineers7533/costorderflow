@@ -85,8 +85,8 @@ const Index = () => {
         {/* Stats */}
         <section className="grid gap-3 sm:grid-cols-3">
           <StatCard icon={<ListChecks className="h-5 w-5 text-primary" />} label="Total orders" value={stats.total} />
-          <StatCard icon={<Clock className="h-5 w-5 text-amber-500" />} label="Drafts" value={stats.drafts} />
-          <StatCard icon={<FileText className="h-5 w-5 text-emerald-600" />} label="Finalized" value={stats.finalized} />
+            <StatCard icon={<Clock className="h-5 w-5 text-muted-foreground" />} label="Drafts" value={stats.drafts} />
+            <StatCard icon={<FileText className="h-5 w-5 text-primary" />} label="Finalized" value={stats.finalized} />
         </section>
 
         {/* Quick actions */}
