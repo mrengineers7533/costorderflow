@@ -1,84 +1,30 @@
-# Make Uploaded PDF the Default GMS Header & Footer
+## Problem
 
-The uploaded `26-27/GMS/UGUR-002` PDF will become the canonical template for GMS Order Acceptance PDFs. All GMS-format PDFs will adopt its dual-logo header (GMS + Uğur), the customer/meta block layout, the unified items+totals table, and the head-office / bank-details footer block. The header will repeat on every page.
+The GMS logo (and Uğur logo) in the PDF header look distorted/squished because they're drawn into fixed mm boxes whose aspect ratio doesn't match the source images:
 
-## What will change
+- `gms-logo.png` is **589×343 px** (aspect ≈ 1.72) but is drawn at **55×18 mm** (aspect ≈ 3.05) → stretched wide / squashed vertically.
+- `ugur-logo.png` is similarly forced into **45×18 mm** without preserving aspect ratio.
 
-### 1. New asset: Uğur logo
+The redundant bold caption `GRAIN MILLING SOLUTIONS PRIVATE LIMITED` rendered directly under the GMS logo also clashes visually because the logo wordmark already says "GMS" — the uploaded screenshot shows them stacked awkwardly.
 
-Save the uploaded `Picture1.jpg` into the project as `src/assets/ugur-logo.png` so it can be imported and embedded in GMS PDFs.
+## Fix
 
-### 2. GMS Header (top of every GMS page)
+Edit only `src/lib/orders/pdf.ts` — `drawHeader` inside `renderGmsPdf`:
 
-Replace the current single-logo GMS header with the template's dual-logo banner:
+1. **Preserve aspect ratio for both logos.** Instead of hardcoded width × height, fit each logo into a bounding box and compute the drawn `w × h` from the image's natural dimensions so it never stretches.
+   - Add a small helper `fitInBox(natW, natH, maxW, maxH) → { w, h }` (contain-style fit).
+   - Read natural dimensions from the cached image (create an `Image` once during `loadLogo` and store `width`/`height` alongside the data URL, or load via `new Image()` inside `drawHeader`).
+   - Target box for GMS logo: **max 50 mm wide × 22 mm tall**, vertically centered in the header band.
+   - Target box for Uğur logo: **max 45 mm wide × 22 mm tall**, right-aligned, vertically centered.
 
-- **Left block**: existing GMS logo + bold caption `GRAIN MILLING SOLUTIONS PRIVATE LIMITED` underneath
-- **Right block**: new Uğur logo + bold caption `UGUR MACHINE, TURKEY` underneath, with a small italic line `Quality Standard is an Assurance of UGUR at all parts`
-- A grey title bar `ORDER ACCEPTANCE` (centered, bold, light-grey fill) immediately under the header — matching the reference
+2. **Tighten the captions** so the header reads cleanly:
+   - Keep `GRAIN MILLING SOLUTIONS PRIVATE LIMITED` but render it slightly smaller (9pt) and position it just below the actual drawn logo height (using the computed `h`), not at a fixed `y = 25`.
+   - Same treatment for `UGUR MACHINE, TURKEY` + the italic tagline on the right — anchor them under the actual drawn Uğur logo height.
 
-This header (logos + captions + grey ORDER ACCEPTANCE bar) will be drawn on **every page** of the GMS PDF, not just page 1, by hooking into jsPDF-autotable's `didDrawPage` callback.
+3. **Bump `GMS_HEADER_H` from 32 → 34 mm** so the taller (correctly-proportioned) logos plus their captions fit without colliding with the grey `ORDER ACCEPTANCE` bar below.
 
-### 3. GMS Customer/Meta block (first page only)
-
-Below the header, render a two-column block:
-
-- **Left**: Bill-To name, address, contact person, mobile, email, GSTIN + state code
-- **Right** (right-aligned): Date, OA No., Ref., Contact (Mr. Bhavesh Makin), Mob, Prepared By
-
-This replaces the current generic "Bill To / Ship To" boxes for GMS only. (MR layout stays as-is.)
-
-### 4. GMS Items + Totals table
-
-Rebuild to match the reference columns exactly:
-
-`ITEM NO | MODEL NUMBER | DESCRIPTION | HSN CODE | QTY | UNIT | UNIT PRICE (INR) | AMOUNT (INR)`
-
-Header style: light-grey fill, black text, bold, centered, black borders. Body: black borders, left-aligned description, right-aligned numerics.
-
-Totals rows are appended inside the same table (right-aligned label spanning the first 7 columns, value in the Amount column), in order: Ex-works Murthal Price, Discount (if any), After Discount, P&F (if any), Insurance (if any), Freight (if any), GST @ x%, **Grand Total** (bold).
-
-### 5. GMS Footer block (last page)
-
-Two-column block matching the template:
-
-- **Left — HEAD OFFICE**: bold heading, then the `GMS_HEAD_OFFICE_LINES` from `defaults.ts` (already correct).
-- **Right — Our Bank Details**: bold heading, then `GRAIN MILLING SOLUTIONS PVT. LTD.`, Bank, Branch, A/C No, IFSC CODE — populated from the new default GMS bank.
-
-### 6. Default GMS bank update (`src/lib/orders/defaults.ts`)
-
-Replace the current `DEFAULT_GMS_BANK` (Citi Bank) with the bank shown in the template:
-
-```ts
-export const DEFAULT_GMS_BANK: BankDetails = {
-  bank_name: "HDFC Bank",
-  branch: "Kaushambi",
-  account_no: "50200078882730",
-  ifsc: "HDFC0002653",
-};
-```
-
-(If the user wants to keep Citi as a per-order override later, the order-level bank picker continues to work — only the default changes.)
-
-### 7. Terms & Conditions page (GMS)
-
-After the items/totals + footer, append a **dedicated Terms & Conditions page** styled like page 2 of the reference:
-
-- Same repeated dual-logo header at top
-- Centered bold title `TERMS & CONDITIONS`
-- Underlined section header `COMMERCIAL CONDITION :`
-- Bold labels with values below: Taxation, Freight, INSURANCE, Delivery Time, Payment Terms, General Conditions — pulled from the existing `DEFAULT_GMS_TERMS` object (already in `defaults.ts`)
-- Same HEAD OFFICE / Bank Details footer block at the bottom
+No changes to MR header, table layout, footer, T&C page, defaults, or any other file.
 
 ## Files to edit
 
-- `src/assets/ugur-logo.png` — **new**, copied from the uploaded `Picture1.jpg`.
-- `src/lib/orders/pdf.ts` — add Uğur logo import; introduce a `drawGmsHeader(doc)` helper used as `didDrawPage` for every GMS page; rewrite the GMS branch to use the new meta block, new items/totals table styling, dual-column footer, and append a terms-and-conditions page using `DEFAULT_GMS_TERMS`.
-- `src/lib/orders/defaults.ts` — update `DEFAULT_GMS_BANK` to HDFC / Kaushambi as above.
-
-## Out of scope
-
-- MR header/footer (untouched — already matches its own reference template).
-- The Templates page / `templatePdf.ts` overlay system (separate uploaded-PDF flow).
-- Importing the data from the uploaded PDF as an actual order — only the styling/branding is being adopted as the default.
-- Per-order customization UI for the GMS header logos or captions.
-
+- `src/lib/orders/pdf.ts` — adjust `loadLogo` to also expose natural dimensions, add `fitInBox`, rewrite the two `addImage` calls in `drawHeader` and re-anchor the caption text.
