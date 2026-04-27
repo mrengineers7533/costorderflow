@@ -249,7 +249,10 @@ export default function OrderEditor() {
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/orders")}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={downloadPDF}><Download className="mr-2 h-4 w-4" />PDF</Button>
+            <Button variant="outline" onClick={downloadPDF}>
+              <Download className="mr-2 h-4 w-4" />
+              {splitMode ? "Download both PDFs (MR + GMS)" : "PDF"}
+            </Button>
             <Button variant="secondary" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
             <Button disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
@@ -277,6 +280,11 @@ export default function OrderEditor() {
                   <Switch checked={autoFormat} onCheckedChange={setAutoFormat} /> Auto
                 </div>
               </div>
+              {splitMode && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Mixed makes detected — this dropdown only switches the on-screen preview. Download produces both MR and GMS PDFs automatically.
+                </p>
+              )}
             </div>
             <div><Label>Company / Customer Name</Label><Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></div>
             <div><Label>Reference</Label><Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. customer enquiry no." /></div>
