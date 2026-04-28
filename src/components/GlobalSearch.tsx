@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Fuse from "fuse.js";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput,
   CommandItem, CommandList, CommandSeparator,
@@ -38,7 +39,7 @@ export function GlobalSearch() {
     setLoading(true);
     supabase
       .from("orders")
-      .select("id, oa_number, format, status, company_name, bill_to, reference, cost_sheet_number, order_date, totals")
+      .select("id, oa_number, format, status, company_name, bill_to, reference, cost_sheet_number, order_date, totals, line_items")
       .order("created_at", { ascending: false })
       .limit(200)
       .then(({ data }) => {
@@ -47,15 +48,50 @@ export function GlobalSearch() {
       });
   }, [open]);
 
-  const q = query.trim().toLowerCase();
+  // Build a flattened, searchable shape so Fuse can weight & match across
+  // OA numbers, companies, references, AND line-item descriptions/HSN codes.
+  const indexed = useMemo(
+    () =>
+      orders.map((o) => ({
+        order: o,
+        oa_number: o.oa_number || "",
+        company_name: o.company_name || "",
+        bill_to_name: o.bill_to?.name || "",
+        reference: o.reference || "",
+        cost_sheet_number: o.cost_sheet_number || "",
+        format: o.format || "",
+        status: o.status || "",
+        item_descriptions: (o.line_items || []).map((it) => it?.description || "").join(" • "),
+        item_hsn: (o.line_items || []).map((it) => it?.hsn_code || "").filter(Boolean).join(" "),
+      })),
+    [orders],
+  );
+
+  const fuse = useMemo(
+    () =>
+      new Fuse(indexed, {
+        includeScore: true,
+        ignoreLocation: true,   // match anywhere in the field
+        threshold: 0.4,         // 0 = exact, 1 = match anything; 0.4 = forgiving fuzzy
+        minMatchCharLength: 2,
+        keys: [
+          { name: "oa_number", weight: 0.30 },
+          { name: "company_name", weight: 0.22 },
+          { name: "bill_to_name", weight: 0.14 },
+          { name: "reference", weight: 0.10 },
+          { name: "cost_sheet_number", weight: 0.08 },
+          { name: "item_descriptions", weight: 0.10 },
+          { name: "item_hsn", weight: 0.03 },
+          { name: "format", weight: 0.015 },
+          { name: "status", weight: 0.015 },
+        ],
+      }),
+    [indexed],
+  );
+
+  const q = query.trim();
   const matches = q
-    ? orders.filter((o) => {
-        const hay = [
-          o.oa_number, o.company_name, o.bill_to?.name,
-          o.reference, o.cost_sheet_number, o.format, o.status,
-        ].filter(Boolean).join(" ").toLowerCase();
-        return hay.includes(q);
-      }).slice(0, 12)
+    ? fuse.search(q, { limit: 12 }).map((r) => r.item.order)
     : orders.slice(0, 6);
 
   const go = (path: string) => {
@@ -119,7 +155,9 @@ export function GlobalSearch() {
             {matches.map((o) => (
               <CommandItem
                 key={o.id}
-                value={`${o.oa_number} ${o.company_name || ""} ${o.bill_to?.name || ""} ${o.reference || ""} ${o.format} ${o.status}`}
+                // We do our own fuzzy filtering above — give cmdk a unique
+                // value so it doesn't re-filter and hide our results.
+                value={o.id}
                 onSelect={() => go(`/orders/${o.id}`)}
                 className="flex items-center gap-2"
               >
