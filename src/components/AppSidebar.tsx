@@ -14,9 +14,9 @@ import {
 import appLogo from "@/assets/app-logo.png";
 
 const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "New OA", url: "/orders/new", icon: FilePlus2 },
-  { title: "Orders", url: "/orders", icon: FileText },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-sky-500" },
+  { title: "New OA", url: "/orders/new", icon: FilePlus2, color: "text-emerald-500" },
+  { title: "Orders", url: "/orders", icon: FileText, color: "text-violet-500" },
 ];
 
 export function AppSidebar() {
@@ -59,7 +59,7 @@ export function AppSidebar() {
                             : "text-sidebar-foreground/80 hover:bg-muted/60 hover:text-sidebar-foreground"
                         }
                       >
-                        <item.icon className={`h-[18px] w-[18px] ${active ? "text-primary" : "text-muted-foreground"}`} />
+                        <item.icon className={`h-[18px] w-[18px] ${active ? "text-primary" : item.color}`} />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
