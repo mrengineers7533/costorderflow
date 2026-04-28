@@ -1,4 +1,4 @@
-import { Home, FileText, FilePlus2 } from "lucide-react";
+import { LayoutDashboard, FileText, FilePlus2 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -14,9 +14,9 @@ import {
 import appLogo from "@/assets/app-logo.png";
 
 const items = [
-  { title: "Home", url: "/", icon: Home },
-  { title: "Orders", url: "/orders", icon: FileText },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "New OA", url: "/orders/new", icon: FilePlus2 },
+  { title: "Orders", url: "/orders", icon: FileText },
 ];
 
 export function AppSidebar() {
