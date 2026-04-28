@@ -732,6 +732,41 @@ function ToggleNumberRow({
     </div>
   );
 }
+function ModeToggleRow({
+  label, enabled, mode, amount, percent, onToggle, onMode, onAmount, onPercent,
+}: {
+  label: string; enabled: boolean; mode: "amount" | "percent";
+  amount: number; percent: number;
+  onToggle: (b: boolean) => void;
+  onMode: (m: "amount" | "percent") => void;
+  onAmount: (v: number) => void;
+  onPercent: (v: number) => void;
+}) {
+  const isPercent = mode === "percent";
+  return (
+    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={onToggle} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>
+        {label} {isPercent ? "(%)" : "(₹)"}
+      </Label>
+      <Select value={mode} onValueChange={(v) => onMode(v as "amount" | "percent")} disabled={!enabled}>
+        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="amount">Flat ₹</SelectItem>
+          <SelectItem value="percent">% of Basic</SelectItem>
+        </SelectContent>
+      </Select>
+      <Input
+        type="number" step="any" disabled={!enabled}
+        value={isPercent ? percent : amount}
+        onChange={(e) => {
+          const v = +e.target.value || 0;
+          if (isPercent) onPercent(v); else onAmount(v);
+        }}
+      />
+    </div>
+  );
+}
 function Row({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
   return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>₹ {v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>;
 }
