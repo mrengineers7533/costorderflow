@@ -240,25 +240,7 @@ export function OrderPreview(p: Props) {
                   isGMS ? (
                     <>
                       <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
-                      {discountAmount > 0 && (
-                        <>
-                          <TotalsRow colSpan={totalsColSpan} label="One time very special Discount" value={discountAmount} />
-                          <TotalsRow colSpan={totalsColSpan} label="After Discount" value={afterDiscount} />
-                        </>
-                      )}
-                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
-                        <TotalsRow colSpan={totalsColSpan} label="Packaging & Forwarding" value={pfAmount} />
-                      )}
-                      {insuranceAmount > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label="Insurance" value={insuranceAmount} />
-                      )}
-                      {p.charges.freight_enabled && p.charges.freight > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
-                      )}
-                      {gstAmount > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label={`GST @${p.charges.gst_percent || 0}%`} value={gstAmount} />
-                      )}
-                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight />
                     </>
                   ) : (
                     <>
