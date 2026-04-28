@@ -432,6 +432,8 @@ function ExTurkeyBlock({
     </div>
   );
   const lfPct = (c.turkey_local_freight_mode || "amount") === "percent" ? ` (${c.turkey_local_freight_percent || 0}% of Basic)` : "";
+  const sfPct = (c.turkey_sea_freight_mode || "amount") === "percent" ? ` (${c.turkey_sea_freight_percent || 0}% of Basic)` : "";
+  const insPct = (c.turkey_insurance_mode || "amount") === "percent" ? ` (${c.turkey_insurance_percent || 0}% of Basic)` : "";
   return (
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
@@ -442,8 +444,8 @@ function ExTurkeyBlock({
       )}
       <Row k="Base Amount (EXW Turkey)" v={t.base_amount} />
       <Row k="Total Amount / Landed Price" v={t.total_amount} bold />
-      {c.turkey_sea_freight_enabled && <Row k="Sea Freight" v={t.sea_freight} />}
-      {c.turkey_insurance_enabled && <Row k="Insurance" v={t.insurance} />}
+      {c.turkey_sea_freight_enabled && <Row k={`Sea Freight${sfPct}`} v={t.sea_freight} />}
+      {c.turkey_insurance_enabled && <Row k={`Insurance${insPct}`} v={t.insurance} />}
       {c.turkey_custom_enabled && (
         <Row k={`Custom Duty (${c.turkey_custom_percent ?? 10}% on Basic + Sea Freight)`} v={t.custom} />
       )}

@@ -465,8 +465,18 @@ async function renderGmsPdf(
     const tk = calcExTurkey(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
     totalsRows.push({ label: "Total Amount / Landed Price", value: tk.total_amount, bold: true });
-    if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
-    if (c.turkey_insurance_enabled) totalsRows.push({ label: "Insurance", value: tk.insurance });
+    if (c.turkey_sea_freight_enabled) {
+      const sfLabel = (c.turkey_sea_freight_mode || "amount") === "percent"
+        ? `Sea Freight (${c.turkey_sea_freight_percent || 0}% of Basic)`
+        : "Sea Freight";
+      totalsRows.push({ label: sfLabel, value: tk.sea_freight });
+    }
+    if (c.turkey_insurance_enabled) {
+      const insLabel = (c.turkey_insurance_mode || "amount") === "percent"
+        ? `Insurance (${c.turkey_insurance_percent || 0}% of Basic)`
+        : "Insurance";
+      totalsRows.push({ label: insLabel, value: tk.insurance });
+    }
     if (c.turkey_custom_enabled) {
       totalsRows.push({ label: `Custom Duty (${c.turkey_custom_percent ?? 10}%)`, value: tk.custom });
     }
