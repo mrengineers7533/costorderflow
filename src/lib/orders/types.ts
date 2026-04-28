@@ -73,8 +73,12 @@ export interface Charges {
    *  One-time discount is subtracted from the Grand Total (after GST). */
   turkey_sea_freight_enabled?: boolean;
   turkey_sea_freight?: number;          // INR
+  turkey_sea_freight_mode?: "amount" | "percent"; // default "amount"
+  turkey_sea_freight_percent?: number;  // % of basic (if percent)
   turkey_insurance_enabled?: boolean;
   turkey_insurance?: number;            // INR
+  turkey_insurance_mode?: "amount" | "percent"; // default "amount"
+  turkey_insurance_percent?: number;    // % of basic (if percent)
   turkey_custom_enabled?: boolean;
   turkey_custom_percent?: number;       // default 10
   turkey_local_freight_enabled?: boolean;

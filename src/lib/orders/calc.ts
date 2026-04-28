@@ -94,8 +94,22 @@ export function calcExTurkey(
   const base = basicInInr;
   const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
   const total = base + hike;
-  const seaFreight = c.turkey_sea_freight_enabled ? (c.turkey_sea_freight || 0) : 0;
-  const insurance = c.turkey_insurance_enabled ? (c.turkey_insurance || 0) : 0;
+  let seaFreight = 0;
+  if (c.turkey_sea_freight_enabled) {
+    if ((c.turkey_sea_freight_mode || "amount") === "percent") {
+      seaFreight = (base * (c.turkey_sea_freight_percent || 0)) / 100;
+    } else {
+      seaFreight = c.turkey_sea_freight || 0;
+    }
+  }
+  let insurance = 0;
+  if (c.turkey_insurance_enabled) {
+    if ((c.turkey_insurance_mode || "amount") === "percent") {
+      insurance = (base * (c.turkey_insurance_percent || 0)) / 100;
+    } else {
+      insurance = c.turkey_insurance || 0;
+    }
+  }
   const customBase = base + seaFreight;
   const custom = c.turkey_custom_enabled ? (customBase * (c.turkey_custom_percent ?? 10)) / 100 : 0;
   let localFreight = 0;
