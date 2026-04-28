@@ -75,16 +75,20 @@ export interface Charges {
   turkey_sea_freight?: number;          // INR
   turkey_sea_freight_mode?: "amount" | "percent"; // default "amount"
   turkey_sea_freight_percent?: number;  // % of basic (if percent)
+  turkey_sea_freight_base?: "basic" | "landed"; // default "basic"
   turkey_insurance_enabled?: boolean;
   turkey_insurance?: number;            // INR
   turkey_insurance_mode?: "amount" | "percent"; // default "amount"
   turkey_insurance_percent?: number;    // % of basic (if percent)
+  turkey_insurance_base?: "basic" | "landed"; // default "basic"
   turkey_custom_enabled?: boolean;
   turkey_custom_percent?: number;       // default 10
+  turkey_custom_base?: "basic" | "landed"; // default "basic" (was: basic + sea_freight)
   turkey_local_freight_enabled?: boolean;
   turkey_local_freight_mode?: "amount" | "percent"; // default "amount"
   turkey_local_freight?: number;        // INR (if amount)
   turkey_local_freight_percent?: number;// % of basic (if percent)
+  turkey_local_freight_base?: "basic" | "landed"; // default "basic"
   turkey_gst_enabled?: boolean;
   turkey_gst_percent?: number;          // default 18
   turkey_discount_enabled?: boolean;
