@@ -443,11 +443,6 @@ export default function OrderEditor() {
                 <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
                   <ToggleNumberRow
-                    label="Hike Amount (₹)" enabled={!!charges.hike_enabled} value={charges.hike_amount || 0}
-                    onToggle={(b) => setCharges({ ...charges, hike_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, hike_amount: v })}
-                  />
-                  <ToggleNumberRow
                     label="Sea Freight (₹)" enabled={!!charges.turkey_sea_freight_enabled} value={charges.turkey_sea_freight || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_sea_freight_enabled: b })}
                     onValue={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
@@ -543,41 +538,36 @@ export default function OrderEditor() {
                 {charges.ex_murthal_enabled && (
                   <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                     <ToggleNumberRow
-                      label="2. Hike Amount" enabled={!!charges.hike_enabled} value={charges.hike_amount || 0}
-                      onToggle={(b) => setCharges({ ...charges, hike_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, hike_amount: v })}
-                    />
-                    <ToggleNumberRow
-                      label="4a. Sea Freight (₹)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
+                      label="Sea Freight (₹)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
                       onToggle={(b) => setCharges({ ...charges, sea_freight_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, sea_freight: v })}
                     />
                     <ToggleNumberRow
-                      label="4b. Insurance (₹)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
+                      label="Insurance (₹)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
                       onToggle={(b) => setCharges({ ...charges, sea_insurance_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, sea_insurance: v })}
                     />
                     <ToggleNumberRow
-                      label="5. Custom Duty %" enabled={!!charges.custom_enabled} value={charges.custom_percent ?? 8.25}
+                      label="Custom Duty %" enabled={!!charges.custom_enabled} value={charges.custom_percent ?? 8.25}
                       onToggle={(b) => setCharges({ ...charges, custom_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, custom_percent: v })}
                     />
                     <ToggleNumberRow
-                      label="6. Clearing (CHA & Port) %" enabled={!!charges.clearing_enabled} value={charges.clearing_percent ?? 1.5}
+                      label="Clearing (CHA & Port) %" enabled={!!charges.clearing_enabled} value={charges.clearing_percent ?? 1.5}
                       onToggle={(b) => setCharges({ ...charges, clearing_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, clearing_percent: v })}
                     />
                     <ToggleNumberRow
-                      label="7. GST %" enabled={!!charges.landed_gst_enabled} value={charges.landed_gst_percent ?? 18}
+                      label="GST %" enabled={!!charges.landed_gst_enabled} value={charges.landed_gst_percent ?? 18}
                       onToggle={(b) => setCharges({ ...charges, landed_gst_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, landed_gst_percent: v })}
                     />
                     <ToggleNumberRow
-                      label="8. One-time Discount (₹)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
+                      label="One-time Discount (₹)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
                       onToggle={(b) => setCharges({ ...charges, landed_discount_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, landed_discount: v })}
                     />
-                    <p className="text-[10px] text-muted-foreground italic pt-1">P&F (2a) and Freight (2b) use the values set above.</p>
+                    <p className="text-[10px] text-muted-foreground italic pt-1">P&F and Freight use the values set above.</p>
                   </div>
                 )}
               </div>
