@@ -396,15 +396,9 @@ function ExMurthalBlock({
       <Row k="Total Amount / Landed Price" v={m.total_amount} bold />
       {c.sea_freight_enabled && <Row k="Sea Freight" v={m.sea_freight} />}
       {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
-      {c.custom_enabled && (
-        <Row k={`Custom Duty (${c.custom_percent ?? 8.25}%)`} v={m.custom} />
-      )}
-      {c.clearing_enabled && (
-        <Row k={`Clearing Charge / CHA & Port (${c.clearing_percent ?? 1.5}%)`} v={m.clearing} />
-      )}
-      {c.landed_gst_enabled && (
-        <Row k={`GST (${c.landed_gst_percent ?? 18}%)`} v={m.gst} />
-      )}
+      {c.custom_enabled && <Row k="Custom Duty" v={m.custom} />}
+      {c.clearing_enabled && <Row k="Clearing Charge / CHA & Port" v={m.clearing} />}
+      {c.landed_gst_enabled && <Row k="GST" v={m.gst} />}
       {c.landed_discount_enabled && m.discount > 0 && (
         <Row k="One-time Discount" v={-m.discount} />
       )}
