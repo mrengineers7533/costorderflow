@@ -6,9 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Home } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
-import appLogo from "@/assets/app-logo.png";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -25,47 +24,51 @@ export default function OrdersList() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-muted/30 p-6">
-      <div className="max-w-6xl mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" aria-label="Home" className="flex items-center">
-              <img src={appLogo} alt="GMS | MR Engineers" className="h-10 w-auto object-contain" />
-            </Link>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/"><Home className="mr-1 h-4 w-4" />Home</Link>
-            </Button>
-            <h1 className="text-2xl font-bold">Order Acceptances</h1>
+    <div className="min-h-screen p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Order Acceptances</h1>
+            <p className="text-sm text-muted-foreground mt-1">Browse and manage all your OAs.</p>
           </div>
-          <div className="flex gap-2">
-            <Button asChild><Link to="/orders/new">+ New Order</Link></Button>
-          </div>
+          <Button asChild className="rounded-lg">
+            <Link to="/orders/new"><Plus className="mr-1 h-4 w-4" />New Order</Link>
+          </Button>
         </div>
-        <Card>
-          <CardHeader><CardTitle>All Orders</CardTitle></CardHeader>
+        <Card className="rounded-xl border-border/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">All Orders</CardTitle>
+          </CardHeader>
           <CardContent>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
               orders.length === 0 ? <p className="text-muted-foreground">No orders yet. Click “New Order” to create one.</p> :
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>OA Number</TableHead>
-                    <TableHead>Format</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Net Payable</TableHead>
-                    <TableHead>Status</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">OA Number</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Format</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Company</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
+                    <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {orders.map((o) => (
-                    <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/orders/${o.id}`)}>
-                      <TableCell className="font-mono">{o.oa_number}</TableCell>
-                      <TableCell><Badge variant={o.format === "MR" ? "default" : "secondary"}>{o.format}</Badge></TableCell>
+                    <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
+                      <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
+                      <TableCell>
+                        <Badge variant={o.format === "MR" ? "default" : "secondary"} className="rounded-full px-2.5 py-0.5 text-[11px]">{o.format}</Badge>
+                      </TableCell>
                       <TableCell>{o.company_name || o.bill_to?.name || "-"}</TableCell>
-                      <TableCell>{new Date(o.order_date).toLocaleDateString("en-IN")}</TableCell>
-                      <TableCell className="text-right font-medium">₹ {(o.totals?.net_payable || 0).toLocaleString("en-IN")}</TableCell>
-                      <TableCell><Badge variant="outline">{o.status}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{new Date(o.order_date).toLocaleDateString("en-IN")}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">₹ {(o.totals?.net_payable || 0).toLocaleString("en-IN")}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                          <span className={`h-1.5 w-1.5 rounded-full ${o.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
+                          {o.status}
+                        </span>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
