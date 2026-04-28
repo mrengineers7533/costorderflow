@@ -494,23 +494,7 @@ async function renderGmsPdf(
     totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true });
   } else {
   totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
-  if (c.discount > 0 || c.discount_percent > 0) {
-    const disc = c.discount_percent > 0 ? (t.basic_total * c.discount_percent) / 100 : c.discount;
-    if (disc > 0) {
-      totalsRows.push({ label: "One time very special Discount", value: disc });
-      totalsRows.push({ label: "After Discount", value: Math.max(0, t.basic_total - disc) });
-    }
-  }
-  if (c.pf_amount > 0 || c.pf_percent > 0) {
-    const pf = c.pf_amount > 0 ? c.pf_amount : (t.basic_total * c.pf_percent) / 100;
-    if (pf > 0) totalsRows.push({ label: "Packaging & Forwarding", value: pf });
-  }
-  const ins = c.insurance_percent > 0 ? (t.basic_total * c.insurance_percent) / 100 : (c.insurance || 0);
-  if (ins > 0) totalsRows.push({ label: "Insurance", value: ins });
-  if (c.freight_enabled && c.freight > 0) totalsRows.push({ label: "Freight", value: c.freight });
-  const gst = c.gst_amount ?? (t.subtotal * (c.gst_percent || 0)) / 100;
-  if (gst > 0) totalsRows.push({ label: `GST @${c.gst_percent || 0}%`, value: gst });
-  totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+  totalsRows.push({ label: "Grand Total", value: t.basic_total, bold: true });
   }
 
   const totalsAsBody = totalsRows.map((r) => [
