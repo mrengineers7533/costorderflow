@@ -769,18 +769,20 @@ function ToggleNumberRow({
   );
 }
 function ModeToggleRow({
-  label, enabled, mode, amount, percent, onToggle, onMode, onAmount, onPercent,
+  label, enabled, mode, amount, percent, base, onToggle, onMode, onAmount, onPercent, onBase,
 }: {
   label: string; enabled: boolean; mode: "amount" | "percent";
   amount: number; percent: number;
+  base?: "basic" | "landed";
   onToggle: (b: boolean) => void;
   onMode: (m: "amount" | "percent") => void;
   onAmount: (v: number) => void;
   onPercent: (v: number) => void;
+  onBase?: (b: "basic" | "landed") => void;
 }) {
   const isPercent = mode === "percent";
   return (
-    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+    <div className="grid grid-cols-[auto_1fr_120px_120px_140px] items-center gap-3">
       <Switch checked={enabled} onCheckedChange={onToggle} />
       <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>
         {label} {isPercent ? "(%)" : "(₹)"}
@@ -789,9 +791,20 @@ function ModeToggleRow({
         <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="amount">Flat ₹</SelectItem>
-          <SelectItem value="percent">% of Basic</SelectItem>
+          <SelectItem value="percent">%</SelectItem>
         </SelectContent>
       </Select>
+      {isPercent && onBase ? (
+        <Select value={base || "basic"} onValueChange={(v) => onBase(v as "basic" | "landed")} disabled={!enabled}>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="basic">on Basic</SelectItem>
+            <SelectItem value="landed">on Landed</SelectItem>
+          </SelectContent>
+        </Select>
+      ) : (
+        <div />
+      )}
       <Input
         type="number" step="any" disabled={!enabled}
         value={isPercent ? percent : amount}
