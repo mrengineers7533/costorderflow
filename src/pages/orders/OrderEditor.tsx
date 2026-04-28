@@ -89,6 +89,17 @@ export default function OrderEditor() {
     setFormat(detectFormat(companyName, items));
   }, [companyName, items, autoFormat]);
 
+  // Pre-fill from extracted cost sheet passed via router state (from chooser page).
+  useEffect(() => {
+    if (!isNew) return;
+    const extracted = (location.state as { extracted?: ExtractedCostSheet } | null)?.extracted;
+    if (!extracted) return;
+    applyCostSheet(extracted);
+    // Clear router state so refresh / back doesn't re-apply.
+    navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Recompute amounts (full set, all makes)
   const allItemsWithAmounts = useMemo(
     () => items.map((it) => ({
