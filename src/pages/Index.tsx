@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, FilePlus2, LayoutTemplate, Upload, Sparkles,
+  FileText, FilePlus2, Upload, Sparkles,
   Eye, Download, ArrowRight, ListChecks, Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,11 +61,10 @@ const Index = () => {
         {/* Quick actions */}
         <section>
           <h2 className="text-xl font-semibold tracking-tight mb-3">Quick actions</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <FeatureCard icon={<Upload className="h-5 w-5" />} title="Upload cost sheet" desc="AI auto-fills the order from PDF." to="/orders/new" accent />
             <FeatureCard icon={<FilePlus2 className="h-5 w-5" />} title="New blank order" desc="Build an OA manually from scratch." to="/orders/new" />
             <FeatureCard icon={<FileText className="h-5 w-5" />} title="All orders" desc="Browse drafts and finalized OAs." to="/orders" />
-            <FeatureCard icon={<LayoutTemplate className="h-5 w-5" />} title="Templates" desc="Manage MR / GMS PDF templates." to="/orders/templates" />
           </div>
         </section>
 

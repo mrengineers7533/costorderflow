@@ -14,7 +14,6 @@ import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
-import { fetchTemplate, generateOrderPDFFromTemplate, downloadBytes } from "@/lib/orders/templatePdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
@@ -186,16 +185,6 @@ export default function OrderEditor() {
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      try {
-        const tpl = await fetchTemplate(fmt);
-        if (tpl && Object.keys(tpl.field_map || {}).length > 0) {
-          const bytes = await generateOrderPDFFromTemplate(record, tpl);
-          downloadBytes(bytes, filename);
-          return { used: "template" as const };
-        }
-      } catch (err) {
-        console.error(`Template render failed for ${fmt}, falling back:`, err);
-      }
       const doc = await generateOrderPDF(record, { terms, bank });
       doc.save(filename);
       return { used: "default" as const };
@@ -212,7 +201,7 @@ export default function OrderEditor() {
     }
 
     await renderOne(format, itemsWithAmounts, "");
-    toast({ title: "PDF generated", description: `Using ${format} template` });
+    toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;

@@ -39,7 +39,6 @@ export default function OrdersList() {
           </div>
           <div className="flex gap-2">
             <Button asChild><Link to="/orders/new">+ New Order</Link></Button>
-            <Button variant="outline" asChild><Link to="/orders/templates">Templates</Link></Button>
           </div>
         </div>
         <Card>
