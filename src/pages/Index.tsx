@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord } from "@/lib/orders/types";
-import appLogo from "@/assets/app-logo.png";
 
 const Index = () => {
   const [recent, setRecent] = useState<OrderRecord[]>([]);
@@ -41,26 +40,23 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b sticky top-0 z-30 bg-background/80 backdrop-blur">
-        <div className="container mx-auto flex h-20 items-center px-4">
-          <Link to="/" aria-label="GMS | MR Engineers — Home" className="flex items-center">
-            <img src={appLogo} alt="GMS | MR Engineers" className="h-14 w-auto object-contain" />
-          </Link>
+    <div className="min-h-screen">
+      <main className="container mx-auto px-4 lg:px-8 py-8 space-y-10">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Overview of your order acceptances at a glance.</p>
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8 space-y-10">
         {/* Stats */}
-        <section className="grid gap-3 sm:grid-cols-3">
-          <StatCard icon={<ListChecks className="h-5 w-5 text-primary" />} label="Total orders" value={stats.total} />
-            <StatCard icon={<Clock className="h-5 w-5 text-muted-foreground" />} label="Drafts" value={stats.drafts} />
-            <StatCard icon={<FileText className="h-5 w-5 text-primary" />} label="Finalized" value={stats.finalized} />
+        <section className="grid gap-4 sm:grid-cols-3">
+          <StatCard icon={<ListChecks className="h-5 w-5" />} label="Total orders" value={stats.total} accent />
+          <StatCard icon={<Clock className="h-5 w-5" />} label="Drafts" value={stats.drafts} />
+          <StatCard icon={<FileText className="h-5 w-5" />} label="Finalized" value={stats.finalized} />
         </section>
 
         {/* Quick actions */}
         <section>
-          <h2 className="text-xl font-semibold tracking-tight mb-3">Quick actions</h2>
+          <h2 className="text-lg font-semibold tracking-tight mb-4">Quick actions</h2>
           <div className="grid gap-4 sm:grid-cols-3">
             <FeatureCard icon={<Upload className="h-5 w-5" />} title="Upload cost sheet" desc="AI auto-fills the order from PDF." to="/orders/new" accent />
             <FeatureCard icon={<FilePlus2 className="h-5 w-5" />} title="New blank order" desc="Build an OA manually from scratch." to="/orders/new" />
@@ -70,13 +66,13 @@ const Index = () => {
 
         {/* Recent orders */}
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-semibold tracking-tight">Recent orders</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold tracking-tight">Recent orders</h2>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/orders">View all<ArrowRight className="h-4 w-4 ml-1" /></Link>
             </Button>
           </div>
-          <Card>
+          <Card className="rounded-xl border-border/70 shadow-sm">
             <CardContent className="p-0">
               {loading ? (
                 <p className="p-6 text-sm text-muted-foreground">Loading…</p>
@@ -86,27 +82,35 @@ const Index = () => {
                   <Button className="mt-3" asChild><Link to="/orders/new">Create your first OA</Link></Button>
                 </div>
               ) : (
-                <ul className="divide-y">
+                <ul className="divide-y divide-border/70">
                   {recent.map((o) => (
                     <li key={o.id}>
                       <Link
                         to={`/orders/${o.id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent/40 transition-colors"
+                        className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-accent/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <Badge variant={o.format === "MR" ? "default" : "secondary"}>{o.format}</Badge>
+                          <Badge
+                            variant={o.format === "MR" ? "default" : "secondary"}
+                            className="rounded-full px-2.5 py-0.5 text-[11px]"
+                          >
+                            {o.format}
+                          </Badge>
                           <div className="min-w-0">
-                            <div className="font-mono text-sm truncate">{o.oa_number}</div>
+                            <div className="font-mono text-sm truncate font-medium">{o.oa_number}</div>
                             <div className="text-xs text-muted-foreground truncate">
                               {o.company_name || o.bill_to?.name || "—"}
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-sm font-medium">
+                          <span className="text-sm font-semibold tabular-nums">
                             ₹ {(o.totals?.net_payable || 0).toLocaleString("en-IN")}
                           </span>
-                          <Badge variant="outline" className="capitalize">{o.status}</Badge>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                            <span className={`h-1.5 w-1.5 rounded-full ${o.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
+                            {o.status}
+                          </span>
                           <ArrowRight className="h-4 w-4 text-muted-foreground" />
                         </div>
                       </Link>
@@ -120,7 +124,7 @@ const Index = () => {
 
         {/* How it works */}
         <section>
-          <h2 className="text-xl font-semibold tracking-tight mb-3">How it works</h2>
+          <h2 className="text-lg font-semibold tracking-tight mb-4">How it works</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StepCard step="1" icon={<Upload className="h-4 w-4" />} title="Upload" desc="Drop a cost sheet PDF. AI parses items, HSN, rates and charges." />
             <StepCard step="2" icon={<Sparkles className="h-4 w-4" />} title="Auto-detect" desc="GMS items move to GMS template, MR items to MR automatically." />
@@ -134,14 +138,16 @@ const Index = () => {
   );
 };
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: number; accent?: boolean }) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="rounded-md bg-muted p-2">{icon}</div>
+    <Card className="rounded-xl border-border/70 shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="flex items-center gap-4 p-5">
+        <div className={`rounded-xl p-3 ${accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+          {icon}
+        </div>
         <div>
-          <div className="text-2xl font-semibold leading-none">{value}</div>
-          <div className="text-xs text-muted-foreground mt-1">{label}</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+          <div className="text-3xl font-semibold leading-tight tabular-nums mt-0.5">{value}</div>
         </div>
       </CardContent>
     </Card>
@@ -152,13 +158,13 @@ function FeatureCard({
   icon, title, desc, to, accent,
 }: { icon: React.ReactNode; title: string; desc: string; to: string; accent?: boolean }) {
   return (
-    <Link to={to}>
-      <Card className={`h-full transition-all hover:shadow-md hover:-translate-y-0.5 ${accent ? "border-primary/40 bg-primary/5" : ""}`}>
-        <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-2">
-          <div className={`rounded-md p-1.5 ${accent ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{icon}</div>
-          <CardTitle className="text-base">{title}</CardTitle>
+    <Link to={to} className="group">
+      <Card className={`h-full rounded-xl border-border/70 shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-0.5 ${accent ? "border-primary/30 bg-gradient-to-br from-primary/5 to-transparent" : ""}`}>
+        <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
+          <div className={`rounded-xl p-2.5 ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{icon}</div>
+          <CardTitle className="text-base font-semibold">{title}</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">{desc}</CardContent>
+        <CardContent className="text-sm text-muted-foreground pt-0">{desc}</CardContent>
       </Card>
     </Link>
   );
@@ -168,15 +174,15 @@ function StepCard({
   step, icon, title, desc,
 }: { step: string; icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full rounded-xl border-border/70 shadow-sm">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
             {step}
           </span>
           <span className="text-muted-foreground">{icon}</span>
         </div>
-        <div className="font-medium">{title}</div>
+        <div className="font-semibold">{title}</div>
         <p className="text-sm text-muted-foreground mt-1">{desc}</p>
       </CardContent>
     </Card>
