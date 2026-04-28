@@ -442,15 +442,27 @@ export default function OrderEditor() {
               {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
                 <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
-                  <ToggleNumberRow
-                    label="Sea Freight (₹)" enabled={!!charges.turkey_sea_freight_enabled} value={charges.turkey_sea_freight || 0}
+                  <ModeToggleRow
+                    label="Sea Freight"
+                    enabled={!!charges.turkey_sea_freight_enabled}
+                    mode={charges.turkey_sea_freight_mode || "amount"}
+                    amount={charges.turkey_sea_freight || 0}
+                    percent={charges.turkey_sea_freight_percent || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_sea_freight_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
+                    onMode={(m) => setCharges({ ...charges, turkey_sea_freight_mode: m })}
+                    onAmount={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
+                    onPercent={(v) => setCharges({ ...charges, turkey_sea_freight_percent: v })}
                   />
-                  <ToggleNumberRow
-                    label="Insurance (₹)" enabled={!!charges.turkey_insurance_enabled} value={charges.turkey_insurance || 0}
+                  <ModeToggleRow
+                    label="Insurance"
+                    enabled={!!charges.turkey_insurance_enabled}
+                    mode={charges.turkey_insurance_mode || "amount"}
+                    amount={charges.turkey_insurance || 0}
+                    percent={charges.turkey_insurance_percent || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_insurance_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, turkey_insurance: v })}
+                    onMode={(m) => setCharges({ ...charges, turkey_insurance_mode: m })}
+                    onAmount={(v) => setCharges({ ...charges, turkey_insurance: v })}
+                    onPercent={(v) => setCharges({ ...charges, turkey_insurance_percent: v })}
                   />
                   <ToggleNumberRow
                     label="Custom Duty % (on Basic + Sea Freight)" enabled={!!charges.turkey_custom_enabled} value={charges.turkey_custom_percent ?? 10}
