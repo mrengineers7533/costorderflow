@@ -586,12 +586,12 @@ export default function OrderEditor() {
                 {charges.ex_murthal_enabled && (
                   <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                     <ToggleNumberRow
-                      label="Sea Freight (₹)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
+                      label="Sea Freight % (of Basic)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
                       onToggle={(b) => setCharges({ ...charges, sea_freight_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, sea_freight: v })}
                     />
                     <ToggleNumberRow
-                      label="Insurance (₹)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
+                      label="Insurance % (of Basic)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
                       onToggle={(b) => setCharges({ ...charges, sea_insurance_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, sea_insurance: v })}
                     />
@@ -611,11 +611,11 @@ export default function OrderEditor() {
                       onValue={(v) => setCharges({ ...charges, landed_gst_percent: v })}
                     />
                     <ToggleNumberRow
-                      label="One-time Discount (₹)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
+                      label="One-time Discount % (of Grand Total)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
                       onToggle={(b) => setCharges({ ...charges, landed_discount_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, landed_discount: v })}
                     />
-                    <p className="text-[10px] text-muted-foreground italic pt-1">P&F and Freight use the values set above.</p>
+                    <p className="text-[10px] text-muted-foreground italic pt-1">All values are percentages — calculated amount appears in the preview &amp; PDF (no % shown there). Freight % uses the value set above.</p>
                   </div>
                 )}
               </div>

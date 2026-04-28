@@ -53,16 +53,20 @@ export function calcExMurthal(
   const base = basicInInr;
   const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
   const pf = c.pf_amount > 0 ? c.pf_amount : (base * (c.pf_percent || 0)) / 100;
-  const freight = c.freight_enabled ? (c.freight || 0) : 0;
+  // Freight is treated as % of Basic Total (input value = percentage)
+  const freight = c.freight_enabled ? (base * (c.freight || 0)) / 100 : 0;
   const total = base + hike + pf + freight;
-  const seaFreight = c.sea_freight_enabled ? (c.sea_freight || 0) : 0;
-  const seaInsurance = c.sea_insurance_enabled ? (c.sea_insurance || 0) : 0;
+  // Sea Freight & Insurance are % of Basic Total
+  const seaFreight = c.sea_freight_enabled ? (base * (c.sea_freight || 0)) / 100 : 0;
+  const seaInsurance = c.sea_insurance_enabled ? (base * (c.sea_insurance || 0)) / 100 : 0;
   const customBase = base + seaFreight + seaInsurance;
   const custom = c.custom_enabled ? (customBase * (c.custom_percent ?? 8.25)) / 100 : 0;
   const clearing = c.clearing_enabled ? (customBase * (c.clearing_percent ?? 1.5)) / 100 : 0;
   const gstBase = base + seaFreight + seaInsurance + custom + clearing;
   const gst = c.landed_gst_enabled ? (gstBase * (c.landed_gst_percent ?? 18)) / 100 : 0;
-  const discount = c.landed_discount_enabled ? (c.landed_discount || 0) : 0;
+  // One-time Discount is % of Grand Total (after GST)
+  const grandBeforeDiscount = total + seaFreight + seaInsurance + custom + clearing + gst;
+  const discount = c.landed_discount_enabled ? (grandBeforeDiscount * (c.landed_discount || 0)) / 100 : 0;
   const net = total + seaFreight + seaInsurance + custom + clearing + gst - discount;
   return {
     base_amount: r(base), hike: r(hike), pf: r(pf), freight: r(freight),
