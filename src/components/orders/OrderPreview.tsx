@@ -396,15 +396,9 @@ function ExMurthalBlock({
       <Row k="Total Amount / Landed Price" v={m.total_amount} bold />
       {c.sea_freight_enabled && <Row k="Sea Freight" v={m.sea_freight} />}
       {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
-      {c.custom_enabled && (
-        <Row k={`Custom Duty (${c.custom_percent ?? 8.25}%)`} v={m.custom} />
-      )}
-      {c.clearing_enabled && (
-        <Row k={`Clearing Charge / CHA & Port (${c.clearing_percent ?? 1.5}%)`} v={m.clearing} />
-      )}
-      {c.landed_gst_enabled && (
-        <Row k={`GST (${c.landed_gst_percent ?? 18}%)`} v={m.gst} />
-      )}
+      {c.custom_enabled && <Row k="Custom Duty" v={m.custom} />}
+      {c.clearing_enabled && <Row k="Clearing Charge / CHA & Port" v={m.clearing} />}
+      {c.landed_gst_enabled && <Row k="GST" v={m.gst} />}
       {c.landed_discount_enabled && m.discount > 0 && (
         <Row k="One-time Discount" v={-m.discount} />
       )}
@@ -431,9 +425,10 @@ function ExTurkeyBlock({
       <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
     </div>
   );
-  const lfPct = (c.turkey_local_freight_mode || "amount") === "percent" ? ` (${c.turkey_local_freight_percent || 0}% of Basic)` : "";
-  const sfPct = (c.turkey_sea_freight_mode || "amount") === "percent" ? ` (${c.turkey_sea_freight_percent || 0}% of Basic)` : "";
-  const insPct = (c.turkey_insurance_mode || "amount") === "percent" ? ` (${c.turkey_insurance_percent || 0}% of Basic)` : "";
+  // Percentage details intentionally hidden from output – only clean labels shown.
+  const lfPct = "";
+  const sfPct = "";
+  const insPct = "";
   return (
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
@@ -447,13 +442,13 @@ function ExTurkeyBlock({
       {c.turkey_sea_freight_enabled && <Row k={`Sea Freight${sfPct}`} v={t.sea_freight} />}
       {c.turkey_insurance_enabled && <Row k={`Insurance${insPct}`} v={t.insurance} />}
       {c.turkey_custom_enabled && (
-        <Row k={`Custom Duty (${c.turkey_custom_percent ?? 10}% on Basic + Sea Freight)`} v={t.custom} />
+        <Row k="Custom Duty" v={t.custom} />
       )}
       {c.turkey_local_freight_enabled && (
         <Row k={`Local Freight${lfPct}`} v={t.local_freight} />
       )}
       {c.turkey_gst_enabled && (
-        <Row k={`GST (${c.turkey_gst_percent ?? 18}% on Basic + Sea + Ins + Custom + Local)`} v={t.gst} />
+        <Row k="GST" v={t.gst} />
       )}
       <Row k="Grand Total" v={t.grand_total} bold />
       {c.turkey_discount_enabled && t.discount > 0 && (
