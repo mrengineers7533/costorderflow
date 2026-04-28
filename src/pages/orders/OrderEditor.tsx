@@ -442,15 +442,27 @@ export default function OrderEditor() {
               {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
                 <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
-                  <ToggleNumberRow
-                    label="Sea Freight (₹)" enabled={!!charges.turkey_sea_freight_enabled} value={charges.turkey_sea_freight || 0}
+                  <ModeToggleRow
+                    label="Sea Freight"
+                    enabled={!!charges.turkey_sea_freight_enabled}
+                    mode={charges.turkey_sea_freight_mode || "amount"}
+                    amount={charges.turkey_sea_freight || 0}
+                    percent={charges.turkey_sea_freight_percent || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_sea_freight_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
+                    onMode={(m) => setCharges({ ...charges, turkey_sea_freight_mode: m })}
+                    onAmount={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
+                    onPercent={(v) => setCharges({ ...charges, turkey_sea_freight_percent: v })}
                   />
-                  <ToggleNumberRow
-                    label="Insurance (₹)" enabled={!!charges.turkey_insurance_enabled} value={charges.turkey_insurance || 0}
+                  <ModeToggleRow
+                    label="Insurance"
+                    enabled={!!charges.turkey_insurance_enabled}
+                    mode={charges.turkey_insurance_mode || "amount"}
+                    amount={charges.turkey_insurance || 0}
+                    percent={charges.turkey_insurance_percent || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_insurance_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, turkey_insurance: v })}
+                    onMode={(m) => setCharges({ ...charges, turkey_insurance_mode: m })}
+                    onAmount={(v) => setCharges({ ...charges, turkey_insurance: v })}
+                    onPercent={(v) => setCharges({ ...charges, turkey_insurance_percent: v })}
                   />
                   <ToggleNumberRow
                     label="Custom Duty % (on Basic + Sea Freight)" enabled={!!charges.turkey_custom_enabled} value={charges.turkey_custom_percent ?? 10}
@@ -717,6 +729,41 @@ function ToggleNumberRow({
       <Switch checked={enabled} onCheckedChange={onToggle} />
       <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>{label}</Label>
       <Input type="number" step="any" disabled={!enabled} value={value} onChange={(e) => onValue(+e.target.value || 0)} />
+    </div>
+  );
+}
+function ModeToggleRow({
+  label, enabled, mode, amount, percent, onToggle, onMode, onAmount, onPercent,
+}: {
+  label: string; enabled: boolean; mode: "amount" | "percent";
+  amount: number; percent: number;
+  onToggle: (b: boolean) => void;
+  onMode: (m: "amount" | "percent") => void;
+  onAmount: (v: number) => void;
+  onPercent: (v: number) => void;
+}) {
+  const isPercent = mode === "percent";
+  return (
+    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={onToggle} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>
+        {label} {isPercent ? "(%)" : "(₹)"}
+      </Label>
+      <Select value={mode} onValueChange={(v) => onMode(v as "amount" | "percent")} disabled={!enabled}>
+        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="amount">Flat ₹</SelectItem>
+          <SelectItem value="percent">% of Basic</SelectItem>
+        </SelectContent>
+      </Select>
+      <Input
+        type="number" step="any" disabled={!enabled}
+        value={isPercent ? percent : amount}
+        onChange={(e) => {
+          const v = +e.target.value || 0;
+          if (isPercent) onPercent(v); else onAmount(v);
+        }}
+      />
     </div>
   );
 }
