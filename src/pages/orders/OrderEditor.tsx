@@ -408,6 +408,99 @@ export default function OrderEditor() {
               <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
               <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
               <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+              {format === "GMS" && (
+                <div className="pt-2 border-t">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">GMS Pricing Mode</Label>
+                  <p className="text-[11px] text-muted-foreground mb-2">
+                    EXW Turkey: base + Sea Freight, Custom, Local Freight, Insurance, GST as extras.
+                    EXW Murthal: full landed-cost breakdown (uses the section below).
+                  </p>
+                  <Select
+                    value={charges.gms_mode || "NONE"}
+                    onValueChange={(v) => {
+                      const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL");
+                      setCharges({
+                        ...charges,
+                        gms_mode: mode,
+                        ex_murthal_enabled: mode === "EXW_MURTHAL" ? true : (mode === "EXW_TURKEY" ? false : charges.ex_murthal_enabled),
+                        // sensible defaults on first enable of EXW Turkey
+                        turkey_custom_percent: charges.turkey_custom_percent ?? 10,
+                        turkey_gst_percent: charges.turkey_gst_percent ?? 18,
+                        turkey_local_freight_mode: charges.turkey_local_freight_mode ?? "amount",
+                      });
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Legacy (current behavior)</SelectItem>
+                      <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
+                      <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
+                <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
+                  <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
+                  <ToggleNumberRow
+                    label="Hike Amount (₹)" enabled={!!charges.hike_enabled} value={charges.hike_amount || 0}
+                    onToggle={(b) => setCharges({ ...charges, hike_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, hike_amount: v })}
+                  />
+                  <ToggleNumberRow
+                    label="Sea Freight (₹)" enabled={!!charges.turkey_sea_freight_enabled} value={charges.turkey_sea_freight || 0}
+                    onToggle={(b) => setCharges({ ...charges, turkey_sea_freight_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
+                  />
+                  <ToggleNumberRow
+                    label="Insurance (₹)" enabled={!!charges.turkey_insurance_enabled} value={charges.turkey_insurance || 0}
+                    onToggle={(b) => setCharges({ ...charges, turkey_insurance_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_insurance: v })}
+                  />
+                  <ToggleNumberRow
+                    label="Custom Duty % (on Basic + Sea Freight)" enabled={!!charges.turkey_custom_enabled} value={charges.turkey_custom_percent ?? 10}
+                    onToggle={(b) => setCharges({ ...charges, turkey_custom_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_custom_percent: v })}
+                  />
+                  <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                    <Switch checked={!!charges.turkey_local_freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_local_freight_enabled: b })} />
+                    <Label className={`text-sm ${charges.turkey_local_freight_enabled ? "" : "text-muted-foreground line-through"}`}>Local Freight</Label>
+                    <Select
+                      value={charges.turkey_local_freight_mode || "amount"}
+                      onValueChange={(v) => setCharges({ ...charges, turkey_local_freight_mode: v as "amount" | "percent" })}
+                      disabled={!charges.turkey_local_freight_enabled}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="amount">Flat ₹</SelectItem>
+                        <SelectItem value="percent">% of Basic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="any" disabled={!charges.turkey_local_freight_enabled}
+                      value={(charges.turkey_local_freight_mode || "amount") === "percent" ? (charges.turkey_local_freight_percent || 0) : (charges.turkey_local_freight || 0)}
+                      onChange={(e) => {
+                        const v = +e.target.value || 0;
+                        if ((charges.turkey_local_freight_mode || "amount") === "percent") {
+                          setCharges({ ...charges, turkey_local_freight_percent: v });
+                        } else {
+                          setCharges({ ...charges, turkey_local_freight: v });
+                        }
+                      }}
+                    />
+                  </div>
+                  <ToggleNumberRow
+                    label="GST % (on Basic + Sea + Ins + Custom + Local Freight)" enabled={!!charges.turkey_gst_enabled} value={charges.turkey_gst_percent ?? 18}
+                    onToggle={(b) => setCharges({ ...charges, turkey_gst_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_gst_percent: v })}
+                  />
+                  <ToggleNumberRow
+                    label="One-time Discount (₹) — after GST" enabled={!!charges.turkey_discount_enabled} value={charges.turkey_discount || 0}
+                    onToggle={(b) => setCharges({ ...charges, turkey_discount_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_discount: v })}
+                  />
+                </div>
+              )}
               <div className="pt-2 border-t">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Foreign Currency (Ex-works)</Label>
                 <p className="text-[11px] text-muted-foreground mb-2">For GMS imports (e.g. Ex-works Turkey in USD). Leave currency blank or "INR" for domestic orders.</p>
