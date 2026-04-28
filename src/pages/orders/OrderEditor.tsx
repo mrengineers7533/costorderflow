@@ -295,7 +295,9 @@ export default function OrderEditor() {
 
         <div className="space-y-4">
           <div className="space-y-4 min-w-0">
-            {isNew && <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />}
+            {isNew && location.pathname !== "/orders/new/edit" && (
+              <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />
+            )}
 
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
