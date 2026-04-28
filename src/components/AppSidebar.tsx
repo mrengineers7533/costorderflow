@@ -1,4 +1,4 @@
-import { Home, FileText, LayoutTemplate, FilePlus2 } from "lucide-react";
+import { Home, FileText, FilePlus2 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -15,7 +15,6 @@ import {
 const items = [
   { title: "Home", url: "/", icon: Home },
   { title: "Orders", url: "/orders", icon: FileText },
-  { title: "Templates", url: "/orders/templates", icon: LayoutTemplate },
   { title: "New OA", url: "/orders/new", icon: FilePlus2 },
 ];
 
