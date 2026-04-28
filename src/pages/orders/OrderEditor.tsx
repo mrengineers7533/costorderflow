@@ -448,10 +448,12 @@ export default function OrderEditor() {
                     mode={charges.turkey_sea_freight_mode || "amount"}
                     amount={charges.turkey_sea_freight || 0}
                     percent={charges.turkey_sea_freight_percent || 0}
+                    base={charges.turkey_sea_freight_base || "basic"}
                     onToggle={(b) => setCharges({ ...charges, turkey_sea_freight_enabled: b })}
                     onMode={(m) => setCharges({ ...charges, turkey_sea_freight_mode: m })}
                     onAmount={(v) => setCharges({ ...charges, turkey_sea_freight: v })}
                     onPercent={(v) => setCharges({ ...charges, turkey_sea_freight_percent: v })}
+                    onBase={(b) => setCharges({ ...charges, turkey_sea_freight_base: b })}
                   />
                   <ModeToggleRow
                     label="Insurance"
@@ -459,16 +461,33 @@ export default function OrderEditor() {
                     mode={charges.turkey_insurance_mode || "amount"}
                     amount={charges.turkey_insurance || 0}
                     percent={charges.turkey_insurance_percent || 0}
+                    base={charges.turkey_insurance_base || "basic"}
                     onToggle={(b) => setCharges({ ...charges, turkey_insurance_enabled: b })}
                     onMode={(m) => setCharges({ ...charges, turkey_insurance_mode: m })}
                     onAmount={(v) => setCharges({ ...charges, turkey_insurance: v })}
                     onPercent={(v) => setCharges({ ...charges, turkey_insurance_percent: v })}
+                    onBase={(b) => setCharges({ ...charges, turkey_insurance_base: b })}
                   />
-                  <ToggleNumberRow
-                    label="Custom Duty % (on Basic + Sea Freight)" enabled={!!charges.turkey_custom_enabled} value={charges.turkey_custom_percent ?? 10}
-                    onToggle={(b) => setCharges({ ...charges, turkey_custom_enabled: b })}
-                    onValue={(v) => setCharges({ ...charges, turkey_custom_percent: v })}
-                  />
+                  <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                    <Switch checked={!!charges.turkey_custom_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_custom_enabled: b })} />
+                    <Label className={`text-sm ${charges.turkey_custom_enabled ? "" : "text-muted-foreground line-through"}`}>Custom Duty (%)</Label>
+                    <Select
+                      value={charges.turkey_custom_base || "basic"}
+                      onValueChange={(v) => setCharges({ ...charges, turkey_custom_base: v as "basic" | "landed" })}
+                      disabled={!charges.turkey_custom_enabled}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="basic">on Basic + Sea</SelectItem>
+                        <SelectItem value="landed">on Landed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="any" disabled={!charges.turkey_custom_enabled}
+                      value={charges.turkey_custom_percent ?? 10}
+                      onChange={(e) => setCharges({ ...charges, turkey_custom_percent: +e.target.value || 0 })}
+                    />
+                  </div>
                   <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
                     <Switch checked={!!charges.turkey_local_freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_local_freight_enabled: b })} />
                     <Label className={`text-sm ${charges.turkey_local_freight_enabled ? "" : "text-muted-foreground line-through"}`}>Local Freight</Label>
@@ -480,7 +499,7 @@ export default function OrderEditor() {
                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="amount">Flat ₹</SelectItem>
-                        <SelectItem value="percent">% of Basic</SelectItem>
+                        <SelectItem value="percent">%</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input
@@ -496,6 +515,23 @@ export default function OrderEditor() {
                       }}
                     />
                   </div>
+                  {(charges.turkey_local_freight_mode || "amount") === "percent" && charges.turkey_local_freight_enabled && (
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <div />
+                      <Label className="text-xs text-muted-foreground">Local Freight % base</Label>
+                      <Select
+                        value={charges.turkey_local_freight_base || "basic"}
+                        onValueChange={(v) => setCharges({ ...charges, turkey_local_freight_base: v as "basic" | "landed" })}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="basic">on Basic</SelectItem>
+                          <SelectItem value="landed">on Landed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div />
+                    </div>
+                  )}
                   <ToggleNumberRow
                     label="GST % (on Basic + Sea + Ins + Custom + Local Freight)" enabled={!!charges.turkey_gst_enabled} value={charges.turkey_gst_percent ?? 18}
                     onToggle={(b) => setCharges({ ...charges, turkey_gst_enabled: b })}
