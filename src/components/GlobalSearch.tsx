@@ -39,7 +39,7 @@ export function GlobalSearch() {
     setLoading(true);
     supabase
       .from("orders")
-      .select("id, oa_number, format, status, company_name, bill_to, reference, cost_sheet_number, order_date, totals, items")
+      .select("id, oa_number, format, status, company_name, bill_to, reference, cost_sheet_number, order_date, totals, line_items")
       .order("created_at", { ascending: false })
       .limit(200)
       .then(({ data }) => {
@@ -61,8 +61,8 @@ export function GlobalSearch() {
         cost_sheet_number: o.cost_sheet_number || "",
         format: o.format || "",
         status: o.status || "",
-        item_descriptions: (o.items || []).map((it) => it?.description || "").join(" • "),
-        item_hsn: (o.items || []).map((it) => it?.hsn_code || "").filter(Boolean).join(" "),
+        item_descriptions: (o.line_items || []).map((it) => it?.description || "").join(" • "),
+        item_hsn: (o.line_items || []).map((it) => it?.hsn_code || "").filter(Boolean).join(" "),
       })),
     [orders],
   );
