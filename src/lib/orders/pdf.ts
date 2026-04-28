@@ -463,44 +463,42 @@ async function renderGmsPdf(
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
   if (c.gms_mode === "EXW_TURKEY") {
     const tk = calcExTurkey(t.basic_total, c);
-    totalsRows.push({ label: "1. Base Amount (EXW Turkey)", value: tk.base_amount });
-    if (c.hike_enabled) totalsRows.push({ label: "2. Hike Amount", value: tk.hike });
-    totalsRows.push({ label: "3. Total Amount / Landed Price", value: tk.total_amount, bold: true });
-    if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "4a. Sea Freight", value: tk.sea_freight });
-    if (c.turkey_insurance_enabled) totalsRows.push({ label: "4b. Insurance", value: tk.insurance });
+    totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
+    totalsRows.push({ label: "Total Amount / Landed Price", value: tk.total_amount, bold: true });
+    if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
+    if (c.turkey_insurance_enabled) totalsRows.push({ label: "Insurance", value: tk.insurance });
     if (c.turkey_custom_enabled) {
-      totalsRows.push({ label: `5. Custom Duty (${c.turkey_custom_percent ?? 10}%)`, value: tk.custom });
+      totalsRows.push({ label: `Custom Duty (${c.turkey_custom_percent ?? 10}%)`, value: tk.custom });
     }
     if (c.turkey_local_freight_enabled) {
       const lfLabel = (c.turkey_local_freight_mode || "amount") === "percent"
-        ? `5b. Local Freight (${c.turkey_local_freight_percent || 0}% of Basic)`
-        : "5b. Local Freight";
+        ? `Local Freight (${c.turkey_local_freight_percent || 0}% of Basic)`
+        : "Local Freight";
       totalsRows.push({ label: lfLabel, value: tk.local_freight });
     }
     if (c.turkey_gst_enabled) {
-      totalsRows.push({ label: `6. GST @${c.turkey_gst_percent ?? 18}%`, value: tk.gst });
+      totalsRows.push({ label: `GST @${c.turkey_gst_percent ?? 18}%`, value: tk.gst });
     }
     totalsRows.push({ label: "Grand Total", value: tk.grand_total, bold: true });
     if (c.turkey_discount_enabled && tk.discount > 0) {
-      totalsRows.push({ label: "7. One-time Discount", value: -tk.discount });
+      totalsRows.push({ label: "One-time Discount", value: -tk.discount });
       totalsRows.push({ label: "Net Payable", value: tk.net_payable, bold: true });
     }
   } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
     const m = calcExMurthal(t.basic_total, c);
-    totalsRows.push({ label: "1. Base Amount (EXW Murthal)", value: m.base_amount });
-    if (c.hike_enabled) totalsRows.push({ label: "2. Hike Amount", value: m.hike });
+    totalsRows.push({ label: "Base Amount (EXW Murthal)", value: m.base_amount });
     if (c.pf_amount > 0 || c.pf_percent > 0) {
-      totalsRows.push({ label: `2a. P&F${c.pf_percent ? ` @${c.pf_percent}%` : ""}`, value: m.pf });
+      totalsRows.push({ label: `P&F${c.pf_percent ? ` @${c.pf_percent}%` : ""}`, value: m.pf });
     }
-    if (c.freight_enabled) totalsRows.push({ label: "2b. Freight", value: m.freight });
-    totalsRows.push({ label: "3. Total Amount / Landed Price", value: m.total_amount, bold: true });
-    if (c.sea_freight_enabled) totalsRows.push({ label: "4a. Sea Freight", value: m.sea_freight });
-    if (c.sea_insurance_enabled) totalsRows.push({ label: "4b. Insurance", value: m.sea_insurance });
-    if (c.custom_enabled) totalsRows.push({ label: `5. Custom Duty (${c.custom_percent ?? 8.25}%)`, value: m.custom });
-    if (c.clearing_enabled) totalsRows.push({ label: `6. Clearing (${c.clearing_percent ?? 1.5}%)`, value: m.clearing });
-    if (c.landed_gst_enabled) totalsRows.push({ label: `7. GST @${c.landed_gst_percent ?? 18}%`, value: m.gst });
+    if (c.freight_enabled) totalsRows.push({ label: "Freight", value: m.freight });
+    totalsRows.push({ label: "Total Amount / Landed Price", value: m.total_amount, bold: true });
+    if (c.sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: m.sea_freight });
+    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
+    if (c.custom_enabled) totalsRows.push({ label: `Custom Duty (${c.custom_percent ?? 8.25}%)`, value: m.custom });
+    if (c.clearing_enabled) totalsRows.push({ label: `Clearing (${c.clearing_percent ?? 1.5}%)`, value: m.clearing });
+    if (c.landed_gst_enabled) totalsRows.push({ label: `GST @${c.landed_gst_percent ?? 18}%`, value: m.gst });
     if (c.landed_discount_enabled && m.discount > 0) {
-      totalsRows.push({ label: "8. One-time Discount", value: -m.discount });
+      totalsRows.push({ label: "One-time Discount", value: -m.discount });
     }
     totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true });
   } else {
