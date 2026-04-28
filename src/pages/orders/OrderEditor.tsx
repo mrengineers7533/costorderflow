@@ -396,18 +396,22 @@ export default function OrderEditor() {
           <CardHeader><CardTitle>Charges & Totals</CardTitle></CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
             <div className="space-y-3">
-              <NumberField label="P&F %" value={charges.pf_percent} onChange={(v) => setCharges({ ...charges, pf_percent: v, pf_amount: 0 })} />
-              <NumberField label="P&F Amount (override)" value={charges.pf_amount} onChange={(v) => setCharges({ ...charges, pf_amount: v, pf_percent: 0 })} />
-              <NumberField label="Insurance %" value={charges.insurance_percent} onChange={(v) => setCharges({ ...charges, insurance_percent: v, insurance: 0 })} />
-              <NumberField label="Insurance Amount (override)" value={charges.insurance} onChange={(v) => setCharges({ ...charges, insurance: v, insurance_percent: 0 })} />
-              <div className="flex items-center gap-3">
-                <Switch checked={charges.freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, freight_enabled: b })} />
-                <Label>Include Freight</Label>
-              </div>
-              {charges.freight_enabled && <NumberField label="Freight" value={charges.freight} onChange={(v) => setCharges({ ...charges, freight: v })} />}
-              <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
-              <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
-              <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+              {format === "MR" && (
+                <>
+                  <NumberField label="P&F %" value={charges.pf_percent} onChange={(v) => setCharges({ ...charges, pf_percent: v, pf_amount: 0 })} />
+                  <NumberField label="P&F Amount (override)" value={charges.pf_amount} onChange={(v) => setCharges({ ...charges, pf_amount: v, pf_percent: 0 })} />
+                  <NumberField label="Insurance %" value={charges.insurance_percent} onChange={(v) => setCharges({ ...charges, insurance_percent: v, insurance: 0 })} />
+                  <NumberField label="Insurance Amount (override)" value={charges.insurance} onChange={(v) => setCharges({ ...charges, insurance: v, insurance_percent: 0 })} />
+                  <div className="flex items-center gap-3">
+                    <Switch checked={charges.freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, freight_enabled: b })} />
+                    <Label>Include Freight</Label>
+                  </div>
+                  {charges.freight_enabled && <NumberField label="Freight" value={charges.freight} onChange={(v) => setCharges({ ...charges, freight: v })} />}
+                  <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
+                  <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
+                  <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+                </>
+              )}
               {format === "GMS" && (
                 <div className="pt-2 border-t">
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">GMS Pricing Mode</Label>
