@@ -72,6 +72,54 @@ export function calcExMurthal(
   };
 }
 
+export interface ExTurkeyBreakdown {
+  base_amount: number;       // 1. basic_total in INR (FX-converted if applicable)
+  hike: number;              // 2. optional hike
+  total_amount: number;      // 3. base + hike (landed price in INR)
+  sea_freight: number;       // 4a
+  insurance: number;         // 4b
+  custom: number;            // 5. (base + sea_freight) * custom%
+  local_freight: number;     // 5b
+  gst: number;               // 6. (base + sea + ins + custom + local_freight) * gst%
+  discount: number;          // 7. one-time, subtracted from grand total
+  grand_total: number;       // total + sea + ins + custom + local + gst
+  net_payable: number;       // grand_total - discount
+}
+
+export function calcExTurkey(
+  basicInInr: number,
+  c: import("./types").Charges,
+): ExTurkeyBreakdown {
+  const r = (n: number) => Math.round(n * 100) / 100;
+  const base = basicInInr;
+  const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
+  const total = base + hike;
+  const seaFreight = c.turkey_sea_freight_enabled ? (c.turkey_sea_freight || 0) : 0;
+  const insurance = c.turkey_insurance_enabled ? (c.turkey_insurance || 0) : 0;
+  const customBase = base + seaFreight;
+  const custom = c.turkey_custom_enabled ? (customBase * (c.turkey_custom_percent ?? 10)) / 100 : 0;
+  let localFreight = 0;
+  if (c.turkey_local_freight_enabled) {
+    if ((c.turkey_local_freight_mode || "amount") === "percent") {
+      localFreight = (base * (c.turkey_local_freight_percent || 0)) / 100;
+    } else {
+      localFreight = c.turkey_local_freight || 0;
+    }
+  }
+  const gstBase = base + seaFreight + insurance + custom + localFreight;
+  const gst = c.turkey_gst_enabled ? (gstBase * (c.turkey_gst_percent ?? 18)) / 100 : 0;
+  const discount = c.turkey_discount_enabled ? (c.turkey_discount || 0) : 0;
+  const grand = total + seaFreight + insurance + custom + localFreight + gst;
+  const net = grand - discount;
+  return {
+    base_amount: r(base), hike: r(hike), total_amount: r(total),
+    sea_freight: r(seaFreight), insurance: r(insurance),
+    custom: r(custom), local_freight: r(localFreight),
+    gst: r(gst), discount: r(discount),
+    grand_total: r(grand), net_payable: r(net),
+  };
+}
+
 export function getFinancialYear(d = new Date()): string {
   const y = d.getFullYear();
   const m = d.getMonth(); // 0=Jan

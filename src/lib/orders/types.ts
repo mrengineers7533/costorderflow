@@ -60,6 +60,31 @@ export interface Charges {
   landed_gst_percent?: number; // default 18
   landed_discount_enabled?: boolean;
   landed_discount?: number;    // one-time INR
+
+  /** GMS pricing mode. When set, the GMS preview/PDF uses the
+   *  EXW-Turkey or EXW-Murthal landed-cost layout. Leave undefined
+   *  to keep the legacy GMS totals (Ex-works Murthal Price + P&F + GST). */
+  gms_mode?: "EXW_TURKEY" | "EXW_MURTHAL";
+
+  /** EXW-Turkey landed-cost rows (each toggle hides the line).
+   *  Sea Freight & Insurance are flat INR. Custom is a % applied to
+   *  (basic + sea_freight). Local Freight can be flat ₹ or % of basic.
+   *  Landed GST applies to (basic + sea_freight + insurance + custom + local_freight).
+   *  One-time discount is subtracted from the Grand Total (after GST). */
+  turkey_sea_freight_enabled?: boolean;
+  turkey_sea_freight?: number;          // INR
+  turkey_insurance_enabled?: boolean;
+  turkey_insurance?: number;            // INR
+  turkey_custom_enabled?: boolean;
+  turkey_custom_percent?: number;       // default 10
+  turkey_local_freight_enabled?: boolean;
+  turkey_local_freight_mode?: "amount" | "percent"; // default "amount"
+  turkey_local_freight?: number;        // INR (if amount)
+  turkey_local_freight_percent?: number;// % of basic (if percent)
+  turkey_gst_enabled?: boolean;
+  turkey_gst_percent?: number;          // default 18
+  turkey_discount_enabled?: boolean;
+  turkey_discount?: number;             // one-time INR
 }
 
 export interface Totals {

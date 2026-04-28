@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
-import { calcExMurthal } from "@/lib/orders/calc";
+import { calcExMurthal, calcExTurkey } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
@@ -58,6 +58,8 @@ export function OrderPreview(p: Props) {
   const advanceAmount = (inrAmount * advancePct) / 100;
   const isMurthal = !!p.charges.ex_murthal_enabled;
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
+  const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
+  const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -234,7 +236,7 @@ export function OrderPreview(p: Props) {
                   ))
                 )}
                 {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
-                {!isFX && !isMurthal && (
+                {!isFX && !isMurthal && !isTurkey && (
                   isGMS ? (
                     <>
                       <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
@@ -285,14 +287,16 @@ export function OrderPreview(p: Props) {
         })()}
 
         {/* Amount in words — sits between table and post sections (matches template) */}
-        {!isFX && !isMurthal && p.amountInWords && p.totals.net_payable > 0 && (
+        {!isFX && !isMurthal && !isTurkey && p.amountInWords && p.totals.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
 
         {/* Specialised totals layouts (Ex-works Murthal & Ex-works FX) */}
-        {isMurthal && murthal ? (
+        {isTurkey && turkey ? (
+          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} />
+        ) : isMurthal && murthal ? (
           <ExMurthalBlock
             m={murthal}
             c={p.charges}
@@ -406,6 +410,58 @@ function ExMurthalBlock({
         <Row k="8. One-time Discount" v={-m.discount} />
       )}
       <Row k="Net Payable" v={m.net_payable} bold />
+    </div>
+  );
+}
+
+function ExTurkeyBlock({
+  t, c, fxSymbol, fxRate, isFX, basicFX,
+}: {
+  t: ReturnType<typeof calcExTurkey>;
+  c: Charges;
+  fxSymbol: string;
+  fxRate: number;
+  isFX: boolean;
+  basicFX: number;
+}) {
+  const inr = (n: number) =>
+    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const Row = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
+    <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
+      <div className={`px-2 py-1.5 ${bold ? "font-bold" : ""}`}>{k}</div>
+      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
+    </div>
+  );
+  const lfPct = (c.turkey_local_freight_mode || "amount") === "percent" ? ` (${c.turkey_local_freight_percent || 0}% of Basic)` : "";
+  return (
+    <div className="border rounded overflow-hidden text-xs">
+      {isFX && (
+        <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
+          <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(t.base_amount)}</div>
+        </div>
+      )}
+      <Row k="1. Base Amount (EXW Turkey)" v={t.base_amount} />
+      {c.hike_enabled && <Row k="2. Hike Amount" v={t.hike} />}
+      <Row k="3. Total Amount / Landed Price" v={t.total_amount} bold />
+      {c.turkey_sea_freight_enabled && <Row k="4a. Sea Freight" v={t.sea_freight} />}
+      {c.turkey_insurance_enabled && <Row k="4b. Insurance" v={t.insurance} />}
+      {c.turkey_custom_enabled && (
+        <Row k={`5. Custom Duty (${c.turkey_custom_percent ?? 10}% on Basic + Sea Freight)`} v={t.custom} />
+      )}
+      {c.turkey_local_freight_enabled && (
+        <Row k={`5b. Local Freight${lfPct}`} v={t.local_freight} />
+      )}
+      {c.turkey_gst_enabled && (
+        <Row k={`6. GST (${c.turkey_gst_percent ?? 18}% on Basic + Sea + Ins + Custom + Local)`} v={t.gst} />
+      )}
+      <Row k="Grand Total" v={t.grand_total} bold />
+      {c.turkey_discount_enabled && t.discount > 0 && (
+        <Row k="7. One-time Discount" v={-t.discount} />
+      )}
+      {c.turkey_discount_enabled && t.discount > 0 && (
+        <Row k="Net Payable" v={t.net_payable} bold />
+      )}
     </div>
   );
 }
