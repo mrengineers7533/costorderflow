@@ -388,26 +388,25 @@ function ExMurthalBlock({
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(m.base_amount)}</div>
         </div>
       )}
-      <Row k="1. Base Amount" v={m.base_amount} />
-      {c.hike_enabled && <Row k="2. Hike Amount" v={m.hike} />}
+      <Row k="Base Amount" v={m.base_amount} />
       {(c.pf_amount > 0 || c.pf_percent > 0) && (
-        <Row k={`2a. P&F${c.pf_percent ? ` (${c.pf_percent}%)` : ""}`} v={m.pf} sub />
+        <Row k={`P&F${c.pf_percent ? ` (${c.pf_percent}%)` : ""}`} v={m.pf} sub />
       )}
-      {c.freight_enabled && <Row k="2b. Freight" v={m.freight} sub />}
-      <Row k="3. Total Amount / Landed Price" v={m.total_amount} bold />
-      {c.sea_freight_enabled && <Row k="4a. Sea Freight" v={m.sea_freight} />}
-      {c.sea_insurance_enabled && <Row k="4b. Insurance" v={m.sea_insurance} />}
+      {c.freight_enabled && <Row k="Freight" v={m.freight} sub />}
+      <Row k="Total Amount / Landed Price" v={m.total_amount} bold />
+      {c.sea_freight_enabled && <Row k="Sea Freight" v={m.sea_freight} />}
+      {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
       {c.custom_enabled && (
-        <Row k={`5. Custom Duty (${c.custom_percent ?? 8.25}%)`} v={m.custom} />
+        <Row k={`Custom Duty (${c.custom_percent ?? 8.25}%)`} v={m.custom} />
       )}
       {c.clearing_enabled && (
-        <Row k={`6. Clearing Charge / CHA & Port (${c.clearing_percent ?? 1.5}%)`} v={m.clearing} />
+        <Row k={`Clearing Charge / CHA & Port (${c.clearing_percent ?? 1.5}%)`} v={m.clearing} />
       )}
       {c.landed_gst_enabled && (
-        <Row k={`7. GST (${c.landed_gst_percent ?? 18}%)`} v={m.gst} />
+        <Row k={`GST (${c.landed_gst_percent ?? 18}%)`} v={m.gst} />
       )}
       {c.landed_discount_enabled && m.discount > 0 && (
-        <Row k="8. One-time Discount" v={-m.discount} />
+        <Row k="One-time Discount" v={-m.discount} />
       )}
       <Row k="Net Payable" v={m.net_payable} bold />
     </div>
@@ -441,23 +440,22 @@ function ExTurkeyBlock({
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(t.base_amount)}</div>
         </div>
       )}
-      <Row k="1. Base Amount (EXW Turkey)" v={t.base_amount} />
-      {c.hike_enabled && <Row k="2. Hike Amount" v={t.hike} />}
-      <Row k="3. Total Amount / Landed Price" v={t.total_amount} bold />
-      {c.turkey_sea_freight_enabled && <Row k="4a. Sea Freight" v={t.sea_freight} />}
-      {c.turkey_insurance_enabled && <Row k="4b. Insurance" v={t.insurance} />}
+      <Row k="Base Amount (EXW Turkey)" v={t.base_amount} />
+      <Row k="Total Amount / Landed Price" v={t.total_amount} bold />
+      {c.turkey_sea_freight_enabled && <Row k="Sea Freight" v={t.sea_freight} />}
+      {c.turkey_insurance_enabled && <Row k="Insurance" v={t.insurance} />}
       {c.turkey_custom_enabled && (
-        <Row k={`5. Custom Duty (${c.turkey_custom_percent ?? 10}% on Basic + Sea Freight)`} v={t.custom} />
+        <Row k={`Custom Duty (${c.turkey_custom_percent ?? 10}% on Basic + Sea Freight)`} v={t.custom} />
       )}
       {c.turkey_local_freight_enabled && (
-        <Row k={`5b. Local Freight${lfPct}`} v={t.local_freight} />
+        <Row k={`Local Freight${lfPct}`} v={t.local_freight} />
       )}
       {c.turkey_gst_enabled && (
-        <Row k={`6. GST (${c.turkey_gst_percent ?? 18}% on Basic + Sea + Ins + Custom + Local)`} v={t.gst} />
+        <Row k={`GST (${c.turkey_gst_percent ?? 18}% on Basic + Sea + Ins + Custom + Local)`} v={t.gst} />
       )}
       <Row k="Grand Total" v={t.grand_total} bold />
       {c.turkey_discount_enabled && t.discount > 0 && (
-        <Row k="7. One-time Discount" v={-t.discount} />
+        <Row k="One-time Discount" v={-t.discount} />
       )}
       {c.turkey_discount_enabled && t.discount > 0 && (
         <Row k="Net Payable" v={t.net_payable} bold />
