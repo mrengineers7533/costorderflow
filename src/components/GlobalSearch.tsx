@@ -72,27 +72,51 @@ export function GlobalSearch() {
       new Fuse(indexed, {
         includeScore: true,
         ignoreLocation: true,   // match anywhere in the field
-        threshold: 0.4,         // 0 = exact, 1 = match anything; 0.4 = forgiving fuzzy
+        // Tuned via /src/test/searchExamples.ts harness against partial OA
+        // numbers, ambiguous company names, and item descriptions.
+        // 0.35 keeps typo tolerance (e.g. "mahindr") while reducing noise.
+        threshold: 0.35,
         minMatchCharLength: 2,
         keys: [
-          { name: "oa_number", weight: 0.30 },
-          { name: "company_name", weight: 0.22 },
-          { name: "bill_to_name", weight: 0.14 },
-          { name: "reference", weight: 0.10 },
+          { name: "oa_number",         weight: 0.30 },
+          { name: "company_name",      weight: 0.22 },
+          { name: "bill_to_name",      weight: 0.14 },
+          { name: "reference",         weight: 0.10 },
           { name: "cost_sheet_number", weight: 0.08 },
           { name: "item_descriptions", weight: 0.10 },
-          { name: "item_hsn", weight: 0.03 },
-          { name: "format", weight: 0.015 },
-          { name: "status", weight: 0.015 },
+          { name: "item_hsn",          weight: 0.03 },
+          { name: "format",            weight: 0.015 },
+          { name: "status",            weight: 0.015 },
         ],
       }),
     [indexed],
   );
 
   const q = query.trim();
-  const matches = q
-    ? fuse.search(q, { limit: 12 }).map((r) => r.item.order)
-    : orders.slice(0, 6);
+  const matches = useMemo(() => {
+    if (!q) return orders.slice(0, 6);
+    const ql = q.toLowerCase();
+    const fuseHits = fuse.search(q, { limit: 20 });
+    // Boost: if query is a direct substring of oa_number / cost_sheet_number,
+    // those rows should outrank fuzzy company/description matches. Also
+    // tiebreak by financial-year segment so the newest OA wins.
+    const fyOf = (oa: string) => {
+      const m = oa.match(/\/(\d{4})\//);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    const scored = fuseHits.map((r) => {
+      const it = r.item;
+      let score = r.score ?? 1;
+      if (it.oa_number.toLowerCase().includes(ql)) score -= 0.6;
+      if (it.cost_sheet_number.toLowerCase().includes(ql)) score -= 0.4;
+      if (it.reference.toLowerCase().includes(ql)) score -= 0.3;
+      // Stable secondary sort: newer financial year ranks higher
+      score -= fyOf(it.oa_number) * 0.0001;
+      return { order: it.order, score };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    return scored.slice(0, 12).map((r) => r.order);
+  }, [q, fuse, orders]);
 
   const go = (path: string) => {
     setOpen(false);
