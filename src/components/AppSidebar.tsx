@@ -27,11 +27,11 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarContent className="bg-sidebar">
-        <div className={`flex items-center ${collapsed ? "justify-center px-2" : "justify-center px-4"} h-24 border-b border-sidebar-border`}>
+        <div className={`flex items-center ${collapsed ? "justify-center px-2" : "px-4"} h-16 border-b border-sidebar-border`}>
           <img
             src={appLogo}
             alt="GMS | MR Engineers"
-            className={collapsed ? "h-12 w-12 object-contain" : "h-20 w-auto object-contain"}
+            className={collapsed ? "h-8 w-8 object-contain" : "h-10 w-auto object-contain"}
           />
         </div>
         <SidebarGroup>
