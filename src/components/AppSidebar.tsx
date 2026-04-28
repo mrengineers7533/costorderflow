@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import appLogo from "@/assets/app-logo.png";
 
 const items = [
   { title: "Home", url: "/", icon: Home },
@@ -24,10 +25,21 @@ export function AppSidebar() {
   const { pathname } = useLocation();
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarContent>
+    <Sidebar collapsible="icon" className="border-r">
+      <SidebarContent className="bg-sidebar">
+        <div className={`flex items-center ${collapsed ? "justify-center px-2" : "px-4"} h-16 border-b border-sidebar-border`}>
+          <img
+            src={appLogo}
+            alt="GMS | MR Engineers"
+            className={collapsed ? "h-8 w-8 object-contain" : "h-10 w-auto object-contain"}
+          />
+        </div>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          {!collapsed && (
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/70 px-3 pt-3">
+              Main
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
@@ -37,18 +49,18 @@ export function AppSidebar() {
                     : pathname === item.url || pathname.startsWith(item.url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild isActive={active} className="h-10 rounded-lg">
                       <NavLink
                         to={item.url}
                         end={item.url === "/"}
                         className={
                           active
-                            ? "bg-muted text-primary font-medium"
-                            : "hover:bg-muted/50"
+                            ? "relative bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                            : "text-sidebar-foreground/80 hover:bg-muted/60 hover:text-sidebar-foreground"
                         }
                       >
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
+                        <item.icon className={`h-[18px] w-[18px] ${active ? "text-primary" : "text-muted-foreground"}`} />
+                        {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

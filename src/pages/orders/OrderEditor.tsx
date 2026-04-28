@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trash2, Plus, Download, ArrowLeft, Home } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -17,7 +17,6 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
-import appLogo from "@/assets/app-logo.png";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -251,25 +250,34 @@ export default function OrderEditor() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => navigate("/")} aria-label="Home" className="flex items-center mr-1">
-              <img src={appLogo} alt="GMS | MR Engineers" className="h-10 w-auto object-contain" />
-            </button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}><Home className="mr-1 h-4 w-4" />Home</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}><ArrowLeft className="mr-1 h-4 w-4" />Orders</Button>
+    <div className="min-h-screen p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/orders")} className="rounded-lg">
+              <ArrowLeft className="mr-1 h-4 w-4" />Orders
+            </Button>
+            <div className="h-6 w-px bg-border" />
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Order Acceptance</div>
+              <div className="flex items-center gap-2">
+                <div className="font-mono font-semibold truncate">{oaNumber || "New Order"}</div>
+                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[11px] font-medium px-2 py-0.5">
+                  {format}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="ghost"
+              className="rounded-lg"
               onClick={() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" })}
             >
               Jump to Preview
             </Button>
-            <Button variant="secondary" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
-            <Button disabled={saving} onClick={() => save(true)}>Finalize</Button>
+            <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
+            <Button className="rounded-lg" disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
 
