@@ -4,6 +4,10 @@ export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
+  safelist: [
+    { pattern: /^(bg|text|border|from|to|via)-brand-(sky|emerald|violet|amber|rose|cyan)(\/(10|15|20|25|30|40|50))?$/ },
+    { pattern: /^bg-gradient-(sky|emerald|violet|amber|rose|hero)$/ },
+  ],
   theme: {
     container: {
       center: true,
