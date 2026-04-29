@@ -57,6 +57,22 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        brand: {
+          sky: "hsl(var(--c-sky))",
+          emerald: "hsl(var(--c-emerald))",
+          violet: "hsl(var(--c-violet))",
+          amber: "hsl(var(--c-amber))",
+          rose: "hsl(var(--c-rose))",
+          cyan: "hsl(var(--c-cyan))",
+        },
+      },
+      backgroundImage: {
+        "gradient-hero": "var(--gradient-hero)",
+        "gradient-sky": "var(--gradient-sky)",
+        "gradient-emerald": "var(--gradient-emerald)",
+        "gradient-violet": "var(--gradient-violet)",
+        "gradient-amber": "var(--gradient-amber)",
+        "gradient-rose": "var(--gradient-rose)",
       },
       borderRadius: {
         lg: "var(--radius)",
