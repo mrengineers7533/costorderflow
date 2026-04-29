@@ -55,10 +55,11 @@ export function AppSidebar() {
                         end={item.url === "/"}
                         className={
                           active
-                            ? `relative ${item.activeBg} ${item.color} font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:${item.bar}`
+                            ? `relative ${item.activeBg} ${item.color} font-semibold`
                             : "text-sidebar-foreground/80 hover:bg-muted/60 hover:text-sidebar-foreground"
                         }
                       >
+                        {active && <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full ${item.bar}`} />}
                         <item.icon className={`h-[18px] w-[18px] ${item.color}`} />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
