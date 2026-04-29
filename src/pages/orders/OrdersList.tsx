@@ -54,30 +54,23 @@ export default function OrdersList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((o, idx) => {
-                    const tones = ["sky", "emerald", "violet", "amber", "rose"] as const;
-                    const tone = tones[idx % tones.length];
-                    return (
+                  {orders.map((o) => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
-                      <TableCell className="font-mono font-medium">
-                        <span className={`inline-block h-2 w-2 rounded-full mr-2 align-middle bg-brand-${tone}`} />
-                        {o.oa_number}
-                      </TableCell>
+                      <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
                       <TableCell>
-                        <Badge className={`rounded-full px-2.5 py-0.5 text-[11px] border-0 text-white ${o.format === "MR" ? "bg-brand-sky" : "bg-brand-violet"}`}>{o.format}</Badge>
+                        <Badge variant={o.format === "MR" ? "default" : "secondary"} className="rounded-full px-2.5 py-0.5 text-[11px]">{o.format}</Badge>
                       </TableCell>
                       <TableCell>{o.company_name || o.bill_to?.name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{new Date(o.order_date).toLocaleDateString("en-IN")}</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">₹ {(o.totals?.net_payable || 0).toLocaleString("en-IN")}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] capitalize border ${o.status === "finalized" ? "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/30" : "bg-brand-amber/15 text-brand-amber border-brand-amber/30"}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${o.status === "finalized" ? "bg-brand-emerald" : "bg-brand-amber"}`} />
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                          <span className={`h-1.5 w-1.5 rounded-full ${o.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
                           {o.status}
                         </span>
                       </TableCell>
                     </TableRow>
-                    );
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             }

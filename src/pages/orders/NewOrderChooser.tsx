@@ -34,12 +34,11 @@ export default function NewOrderChooser() {
           <div className="grid gap-5 md:grid-cols-2">
             <ChoiceCard
               icon={<Upload className="h-6 w-6" />}
-              badge={<span className="inline-flex items-center gap-1 rounded-full bg-brand-violet/15 text-brand-violet px-2 py-0.5 text-[11px] font-medium"><Sparkles className="h-3 w-3" />AI Powered</span>}
+              badge={<span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium"><Sparkles className="h-3 w-3" />AI Powered</span>}
               title="Upload Cost Sheet"
               description="Drop a cost sheet PDF — we'll extract company, items, charges and pre-fill the OA for you."
               ctaLabel="Upload PDF"
               onClick={() => setShowUpload(true)}
-              tone="violet"
             />
             <ChoiceCard
               icon={<FilePlus2 className="h-6 w-6" />}
@@ -47,7 +46,6 @@ export default function NewOrderChooser() {
               description="Start with an empty form and enter all order details by hand."
               ctaLabel="Start blank"
               to="/orders/new/edit"
-              tone="emerald"
             />
           </div>
         ) : (
@@ -79,7 +77,7 @@ export default function NewOrderChooser() {
 }
 
 function ChoiceCard({
-  icon, title, description, ctaLabel, to, onClick, badge, tone = "sky",
+  icon, title, description, ctaLabel, to, onClick, badge,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -88,16 +86,12 @@ function ChoiceCard({
   to?: string;
   onClick?: () => void;
   badge?: React.ReactNode;
-  tone?: "sky" | "emerald" | "violet" | "amber" | "rose";
 }) {
-  const bgMap = { sky: "bg-gradient-sky border-brand-sky/30", emerald: "bg-gradient-emerald border-brand-emerald/30", violet: "bg-gradient-violet border-brand-violet/30", amber: "bg-gradient-amber border-brand-amber/40", rose: "bg-gradient-rose border-brand-rose/30" } as const;
-  const iconMap = { sky: "bg-brand-sky", emerald: "bg-brand-emerald", violet: "bg-brand-violet", amber: "bg-brand-amber", rose: "bg-brand-rose" } as const;
-  const textMap = { sky: "text-brand-sky", emerald: "text-brand-emerald", violet: "text-brand-violet", amber: "text-brand-amber", rose: "text-brand-rose" } as const;
   const inner = (
-    <Card className={`group h-full rounded-xl shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer ${bgMap[tone]}`}>
+    <Card className="group h-full rounded-xl border-border/70 shadow-sm transition-all hover:border-primary/40 hover:shadow-md cursor-pointer">
       <CardContent className="p-6 space-y-4">
         <div className="flex items-start justify-between">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-md ${iconMap[tone]}`}>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             {icon}
           </div>
           {badge}
@@ -107,7 +101,7 @@ function ChoiceCard({
           <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
         <div className="pt-2">
-          <span className={`inline-flex items-center text-sm font-medium group-hover:gap-2 transition-all gap-1 ${textMap[tone]}`}>
+          <span className="inline-flex items-center text-sm font-medium text-primary group-hover:gap-2 transition-all gap-1">
             {ctaLabel}<ArrowRight className="h-4 w-4" />
           </span>
         </div>

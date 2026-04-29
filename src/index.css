@@ -46,21 +46,6 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 24 60% 25%;
     --sidebar-border: 24 30% 90%;
     --sidebar-ring: 24 95% 53%;
-
-    /* Multi-color accents (light) */
-    --c-sky: 199 89% 48%;
-    --c-emerald: 158 75% 40%;
-    --c-violet: 262 83% 62%;
-    --c-amber: 38 95% 55%;
-    --c-rose: 340 82% 60%;
-    --c-cyan: 187 85% 43%;
-
-    --gradient-hero: linear-gradient(135deg, hsl(var(--c-violet) / 0.18), hsl(var(--c-sky) / 0.18) 45%, hsl(var(--primary) / 0.18));
-    --gradient-sky: linear-gradient(135deg, hsl(var(--c-sky) / 0.18), hsl(var(--c-cyan) / 0.10));
-    --gradient-emerald: linear-gradient(135deg, hsl(var(--c-emerald) / 0.18), hsl(var(--c-cyan) / 0.10));
-    --gradient-violet: linear-gradient(135deg, hsl(var(--c-violet) / 0.20), hsl(var(--c-rose) / 0.10));
-    --gradient-amber: linear-gradient(135deg, hsl(var(--c-amber) / 0.22), hsl(var(--primary) / 0.12));
-    --gradient-rose: linear-gradient(135deg, hsl(var(--c-rose) / 0.20), hsl(var(--c-violet) / 0.10));
   }
 
   .dark {
@@ -99,20 +84,6 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 30 30% 96%;
     --sidebar-border: 24 15% 22%;
     --sidebar-ring: 24 95% 58%;
-
-    --c-sky: 199 89% 60%;
-    --c-emerald: 158 70% 50%;
-    --c-violet: 262 83% 70%;
-    --c-amber: 38 95% 62%;
-    --c-rose: 340 82% 66%;
-    --c-cyan: 187 85% 55%;
-
-    --gradient-hero: linear-gradient(135deg, hsl(var(--c-violet) / 0.22), hsl(var(--c-sky) / 0.22) 45%, hsl(var(--primary) / 0.22));
-    --gradient-sky: linear-gradient(135deg, hsl(var(--c-sky) / 0.22), hsl(var(--c-cyan) / 0.12));
-    --gradient-emerald: linear-gradient(135deg, hsl(var(--c-emerald) / 0.22), hsl(var(--c-cyan) / 0.12));
-    --gradient-violet: linear-gradient(135deg, hsl(var(--c-violet) / 0.24), hsl(var(--c-rose) / 0.12));
-    --gradient-amber: linear-gradient(135deg, hsl(var(--c-amber) / 0.26), hsl(var(--primary) / 0.14));
-    --gradient-rose: linear-gradient(135deg, hsl(var(--c-rose) / 0.24), hsl(var(--c-violet) / 0.12));
   }
 }
 

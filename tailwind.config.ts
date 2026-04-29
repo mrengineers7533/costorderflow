@@ -4,10 +4,6 @@ export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
-  safelist: [
-    { pattern: /^(bg|text|border|from|to|via)-brand-(sky|emerald|violet|amber|rose|cyan)(\/(10|15|20|25|30|40|50))?$/ },
-    { pattern: /^bg-gradient-(sky|emerald|violet|amber|rose|hero)$/ },
-  ],
   theme: {
     container: {
       center: true,
@@ -61,22 +57,6 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        brand: {
-          sky: "hsl(var(--c-sky))",
-          emerald: "hsl(var(--c-emerald))",
-          violet: "hsl(var(--c-violet))",
-          amber: "hsl(var(--c-amber))",
-          rose: "hsl(var(--c-rose))",
-          cyan: "hsl(var(--c-cyan))",
-        },
-      },
-      backgroundImage: {
-        "gradient-hero": "var(--gradient-hero)",
-        "gradient-sky": "var(--gradient-sky)",
-        "gradient-emerald": "var(--gradient-emerald)",
-        "gradient-violet": "var(--gradient-violet)",
-        "gradient-amber": "var(--gradient-amber)",
-        "gradient-rose": "var(--gradient-rose)",
       },
       borderRadius: {
         lg: "var(--radius)",
