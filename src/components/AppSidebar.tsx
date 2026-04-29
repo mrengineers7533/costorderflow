@@ -14,9 +14,9 @@ import {
 import appLogo from "@/assets/app-logo.png";
 
 const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-sky-500" },
-  { title: "New OA", url: "/orders/new", icon: FilePlus2, color: "text-emerald-500" },
-  { title: "Orders", url: "/orders", icon: FileText, color: "text-violet-500" },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-brand-sky",     activeBg: "bg-brand-sky/15",     bar: "bg-brand-sky" },
+  { title: "New OA",    url: "/orders/new", icon: FilePlus2, color: "text-brand-emerald", activeBg: "bg-brand-emerald/15", bar: "bg-brand-emerald" },
+  { title: "Orders",    url: "/orders", icon: FileText, color: "text-brand-violet",  activeBg: "bg-brand-violet/15",  bar: "bg-brand-violet" },
 ];
 
 export function AppSidebar() {
@@ -55,11 +55,12 @@ export function AppSidebar() {
                         end={item.url === "/"}
                         className={
                           active
-                            ? "relative bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                            ? `relative ${item.activeBg} ${item.color} font-semibold`
                             : "text-sidebar-foreground/80 hover:bg-muted/60 hover:text-sidebar-foreground"
                         }
                       >
-                        <item.icon className={`h-[18px] w-[18px] ${active ? "text-primary" : item.color}`} />
+                        {active && <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full ${item.bar}`} />}
+                        <item.icon className={`h-[18px] w-[18px] ${item.color}`} />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
