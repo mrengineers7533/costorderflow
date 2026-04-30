@@ -59,7 +59,6 @@ export default function BoqList() {
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Rev</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Format</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Reference OA</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Client</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
                     </TableRow>
@@ -78,7 +77,6 @@ export default function BoqList() {
                         </TableCell>
                         <TableCell><Badge variant={b.format === "MR" ? "default" : "secondary"} className="rounded-full px-2.5 py-0.5 text-[11px]">{b.format}</Badge></TableCell>
                         <TableCell className="font-mono text-xs">{b.reference_oa_number || "-"}</TableCell>
-                        <TableCell>{b.client_name || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(b.boq_date).toLocaleDateString("en-IN")}</TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">

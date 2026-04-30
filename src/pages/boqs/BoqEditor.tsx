@@ -193,7 +193,6 @@ export default function BoqEditor() {
                 <div><Label>Reference OA Number</Label><Input value={referenceOa} onChange={(e) => setReferenceOa(e.target.value)} /></div>
                 <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} onChange={(e) => setProjectNumber(e.target.value)} /></div>
                 <div><Label>Prepared By</Label><Input value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} /></div>
-                <div><Label>Client Name</Label><Input value={clientName} onChange={(e) => setClientName(e.target.value)} /></div>
               </CardContent>
             </Card>
 
@@ -298,7 +297,6 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
           <div><span className="font-bold">Date:</span> {new Date(rec.boq_date).toLocaleDateString("en-GB").replace(/\//g, "-")}</div>
           <div><span className="font-bold">Order Acceptance No.:</span> {rec.reference_oa_number || "-"}</div>
           <div><span className="font-bold">Prepared By:</span> {rec.prepared_by || "-"}</div>
-          <div><span className="font-bold">Client Name:</span> {rec.client_name || "-"}</div>
           <div><span className="font-bold">Project / Cost Sheet No.:</span> {rec.project_number || "-"}</div>
         </div>
 
