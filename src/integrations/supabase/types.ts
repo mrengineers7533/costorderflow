@@ -22,12 +22,16 @@ export type Database = {
           created_at: string
           format: Database["public"]["Enums"]["order_format"]
           id: string
+          is_current: boolean
           line_items: Json
           notes: string | null
           order_id: string
           prepared_by: string | null
           project_number: string | null
           reference_oa_number: string | null
+          revised_from_id: string | null
+          revision: number
+          source_order_id: string | null
           status: Database["public"]["Enums"]["order_status"]
           terms: string | null
           updated_at: string
@@ -41,12 +45,16 @@ export type Database = {
           created_at?: string
           format: Database["public"]["Enums"]["order_format"]
           id?: string
+          is_current?: boolean
           line_items?: Json
           notes?: string | null
           order_id: string
           prepared_by?: string | null
           project_number?: string | null
           reference_oa_number?: string | null
+          revised_from_id?: string | null
+          revision?: number
+          source_order_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           terms?: string | null
           updated_at?: string
@@ -60,12 +68,16 @@ export type Database = {
           created_at?: string
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
+          is_current?: boolean
           line_items?: Json
           notes?: string | null
           order_id?: string
           prepared_by?: string | null
           project_number?: string | null
           reference_oa_number?: string | null
+          revised_from_id?: string | null
+          revision?: number
+          source_order_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           terms?: string | null
           updated_at?: string
@@ -76,6 +88,20 @@ export type Database = {
           {
             foreignKeyName: "boqs_order_id_fkey"
             columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boqs_revised_from_id_fkey"
+            columns: ["revised_from_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boqs_source_order_id_fkey"
+            columns: ["source_order_id"]
             isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
@@ -185,12 +211,16 @@ export type Database = {
           created_at: string
           format: Database["public"]["Enums"]["order_format"]
           id: string
+          is_current: boolean
           line_items: Json
           notes: string | null
           oa_number: string
           order_date: string
+          parent_order_id: string | null
           prepared_by: string | null
           reference: string | null
+          revised_from_id: string | null
+          revision: number
           ship_to: Json
           status: Database["public"]["Enums"]["order_status"]
           totals: Json
@@ -206,12 +236,16 @@ export type Database = {
           created_at?: string
           format: Database["public"]["Enums"]["order_format"]
           id?: string
+          is_current?: boolean
           line_items?: Json
           notes?: string | null
           oa_number: string
           order_date?: string
+          parent_order_id?: string | null
           prepared_by?: string | null
           reference?: string | null
+          revised_from_id?: string | null
+          revision?: number
           ship_to?: Json
           status?: Database["public"]["Enums"]["order_status"]
           totals?: Json
@@ -227,19 +261,38 @@ export type Database = {
           created_at?: string
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
+          is_current?: boolean
           line_items?: Json
           notes?: string | null
           oa_number?: string
           order_date?: string
+          parent_order_id?: string | null
           prepared_by?: string | null
           reference?: string | null
+          revised_from_id?: string | null
+          revision?: number
           ship_to?: Json
           status?: Database["public"]["Enums"]["order_status"]
           totals?: Json
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_parent_fk"
+            columns: ["parent_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_revised_from_id_fkey"
+            columns: ["revised_from_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
