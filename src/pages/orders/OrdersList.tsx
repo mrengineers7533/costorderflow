@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Plus } from "lucide-react";
+import { Upload, FilePlus2, Sparkles, ArrowRight } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
 
 export default function OrdersList() {
@@ -31,15 +31,33 @@ export default function OrdersList() {
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Order Acceptances</h1>
-            <p className="text-sm text-muted-foreground mt-1">Browse and manage all your OAs.</p>
-          </div>
-          <Button asChild className="rounded-lg">
-            <Link to="/orders/new"><Plus className="mr-1 h-4 w-4" />New Order</Link>
-          </Button>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Order Acceptances</h1>
+          <p className="text-sm text-muted-foreground mt-1">Browse and manage all your OAs.</p>
         </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <NewOaCard
+            to="/orders/new"
+            icon={<Upload className="h-5 w-5" />}
+            title="Upload Cost Sheet"
+            description="Drop a cost sheet PDF — we'll extract company, items and charges to pre-fill the OA."
+            cta="Upload PDF"
+            badge={
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium">
+                <Sparkles className="h-3 w-3" />AI Powered
+              </span>
+            }
+          />
+          <NewOaCard
+            to="/orders/new/edit"
+            icon={<FilePlus2 className="h-5 w-5" />}
+            title="Create Blank Manually"
+            description="Start with an empty form and enter all order details by hand."
+            cta="Start blank"
+          />
+        </div>
+
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">All Orders</CardTitle>
