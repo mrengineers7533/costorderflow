@@ -31,9 +31,9 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       {/* Card-like sidebar inspired by reference: white surface, soft shadow,
           hamburger + brand header, big rounded pill for active item. */}
-      <SidebarContent className="bg-sidebar p-3 gap-0">
-        {/* Brand header */}
-        <div className={`flex items-center gap-3 h-14 ${collapsed ? "justify-center" : "px-2"}`}>
+      <SidebarContent className="bg-sidebar gap-0">
+        {/* Brand header — aligned with top app header */}
+        <div className={`flex items-center gap-3 h-14 border-b border-sidebar-border/60 ${collapsed ? "justify-center px-3" : "px-5"}`}>
           <button
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
@@ -49,7 +49,7 @@ export function AppSidebar() {
         </div>
 
         {/* Main nav */}
-        <SidebarGroup className="px-0 pt-4">
+        <SidebarGroup className="px-3 pt-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
               {items.map((item) => {
