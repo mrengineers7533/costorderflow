@@ -14,6 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
+      boqs: {
+        Row: {
+          boq_date: string
+          boq_number: string
+          client_name: string | null
+          created_at: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          line_items: Json
+          notes: string | null
+          order_id: string
+          prepared_by: string | null
+          project_number: string | null
+          reference_oa_number: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          terms: string | null
+          updated_at: string
+          user_id: string | null
+          version: number
+        }
+        Insert: {
+          boq_date?: string
+          boq_number: string
+          client_name?: string | null
+          created_at?: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          notes?: string | null
+          order_id: string
+          prepared_by?: string | null
+          project_number?: string | null
+          reference_oa_number?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          terms?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: number
+        }
+        Update: {
+          boq_date?: string
+          boq_number?: string
+          client_name?: string | null
+          created_at?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          notes?: string | null
+          order_id?: string
+          prepared_by?: string | null
+          project_number?: string | null
+          reference_oa_number?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          terms?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boqs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_sheets: {
         Row: {
           created_at: string
