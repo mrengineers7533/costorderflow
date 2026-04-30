@@ -10,20 +10,12 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Upload, FilePlus2, Sparkles, ArrowRight } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 
 export default function OrdersList() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuperseded, setShowSuperseded] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
-
-  function handleExtracted(data: ExtractedCostSheet) {
-    setUploadOpen(false);
-    navigate("/orders/new/edit", { state: { extracted: data } });
-  }
 
   useEffect(() => {
     setLoading(true);
@@ -46,7 +38,7 @@ export default function OrdersList() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <NewOaCard
-            onClick={() => setUploadOpen(true)}
+            to="/orders/new"
             icon={<Upload className="h-5 w-5" />}
             title="Upload Cost Sheet"
             description="Drop a cost sheet PDF — we'll extract company, items and charges to pre-fill the OA."
@@ -65,18 +57,6 @@ export default function OrdersList() {
             cta="Start blank"
           />
         </div>
-
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Upload Cost Sheet</DialogTitle>
-              <DialogDescription>
-                We'll parse the PDF and open the editor with everything pre-filled.
-              </DialogDescription>
-            </DialogHeader>
-            <CostSheetPicker onApply={handleExtracted} />
-          </DialogContent>
-        </Dialog>
 
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
