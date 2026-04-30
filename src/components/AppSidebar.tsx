@@ -1,47 +1,57 @@
-import { LayoutDashboard, FileText, FilePlus2 } from "lucide-react";
+import { LayoutDashboard, FileText, FilePlus2, Settings, Menu } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import appLogo from "@/assets/app-logo.png";
 
 const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-sky-500" },
-  { title: "New OA", url: "/orders/new", icon: FilePlus2, color: "text-emerald-500" },
-  { title: "Orders", url: "/orders", icon: FileText, color: "text-violet-500" },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "New OA",    url: "/orders/new", icon: FilePlus2 },
+  { title: "Orders",    url: "/orders",     icon: FileText },
+];
+
+const footerItems = [
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarContent className="bg-sidebar">
-        <div className={`flex items-center ${collapsed ? "justify-center px-2" : "px-3"} h-14 border-b border-sidebar-border`}>
-          <img
-            src={appLogo}
-            alt="GMS | MR Engineers"
-            className={collapsed ? "h-7 w-7 object-contain" : "h-8 w-auto object-contain"}
-          />
-        </div>
-        <SidebarGroup>
+    <Sidebar collapsible="icon" className="border-r-0">
+      {/* Card-like sidebar inspired by reference: white surface, soft shadow,
+          hamburger + brand header, big rounded pill for active item. */}
+      <SidebarContent className="bg-sidebar p-3 gap-0">
+        {/* Brand header */}
+        <div className={`flex items-center gap-3 h-14 ${collapsed ? "justify-center" : "px-2"}`}>
+          <button
+            onClick={toggleSidebar}
+            aria-label="Toggle sidebar"
+            className="text-sidebar-foreground/80 hover:text-sidebar-foreground transition-colors"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           {!collapsed && (
-            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/70 px-3 pt-3">
-              Main
-            </SidebarGroupLabel>
+            <span className="text-base font-bold tracking-tight text-sidebar-foreground">
+              MR&nbsp;Engineers
+            </span>
           )}
+        </div>
+
+        {/* Main nav */}
+        <SidebarGroup className="px-0 pt-4">
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1.5">
               {items.map((item) => {
                 const active =
                   item.url === "/"
@@ -49,17 +59,21 @@ export function AppSidebar() {
                     : pathname === item.url || pathname.startsWith(item.url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active} className="h-10 rounded-lg">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      className="h-11 rounded-xl px-3 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
+                    >
                       <NavLink
                         to={item.url}
                         end={item.url === "/"}
                         className={
                           active
-                            ? "relative bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
-                            : "text-sidebar-foreground/80 hover:bg-muted/60 hover:text-sidebar-foreground"
+                            ? "font-semibold"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                         }
                       >
-                        <item.icon className={`h-[18px] w-[18px] ${active ? "text-primary" : item.color}`} />
+                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
@@ -70,6 +84,36 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Footer group, separated by a thin divider — matches reference */}
+      <SidebarFooter className="bg-sidebar p-3 pt-2 border-t border-sidebar-border/60">
+        <SidebarMenu className="gap-1.5">
+          {footerItems.map((item) => {
+            const active = pathname === item.url || pathname.startsWith(item.url + "/");
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={active}
+                  className="h-11 rounded-xl px-3 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+                >
+                  <NavLink
+                    to={item.url}
+                    className={
+                      active
+                        ? "font-semibold"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    }
+                  >
+                    <item.icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                    {!collapsed && <span className="text-sm">{item.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
