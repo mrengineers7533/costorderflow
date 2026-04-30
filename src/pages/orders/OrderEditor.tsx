@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trash2, Plus, Download, ArrowLeft } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft, ClipboardList } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -304,6 +304,16 @@ export default function OrderEditor() {
             >
               Jump to Preview
             </Button>
+            {!isNew && (
+              <Button
+                variant="outline"
+                className="rounded-lg"
+                onClick={() => navigate(`/boqs/new?orderId=${orderId}`)}
+                title="Generate a BOQ from this order"
+              >
+                <ClipboardList className="mr-1 h-4 w-4" />Generate BOQ
+              </Button>
+            )}
             <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
             <Button className="rounded-lg" disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
