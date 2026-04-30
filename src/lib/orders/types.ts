@@ -122,6 +122,14 @@ export interface OrderRecord {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Family root — same value across every revision of an OA. */
+  parent_order_id?: string;
+  /** 0 = original; 1, 2, … = revision number. */
+  revision?: number;
+  /** Only one row per family is true. */
+  is_current?: boolean;
+  /** The id of the immediately previous revision (null for rev 0). */
+  revised_from_id?: string | null;
 }
 
 /** A single placement on a template page. Coordinates are normalized 0..1

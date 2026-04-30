@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trash2, Plus, Download, ArrowLeft, ClipboardList } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -17,6 +18,13 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
+import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
+import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
+import type { BoqRecord } from "@/lib/boq/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -36,6 +44,16 @@ export default function OrderEditor() {
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [oaNumber, setOaNumber] = useState<string>("");
+  // Revision metadata for the loaded order
+  const [parentOrderId, setParentOrderId] = useState<string | null>(null);
+  const [revision, setRevision] = useState<number>(0);
+  const [isCurrent, setIsCurrent] = useState<boolean>(true);
+  const [revisionsKey, setRevisionsKey] = useState(0);
+  // Tracks the BOQ that's current for this OA family (for View / Revise / Download BOQ buttons).
+  const [currentBoq, setCurrentBoq] = useState<BoqRecord | null>(null);
+  // Confirmation dialogs
+  const [confirmReviseOa, setConfirmReviseOa] = useState(false);
+  const [confirmReviseBoq, setConfirmReviseBoq] = useState(false);
   const [format, setFormat] = useState<OrderFormat>("MR");
   const [autoFormat, setAutoFormat] = useState(true);
   const [companyName, setCompanyName] = useState("");
@@ -79,9 +97,24 @@ export default function OrderEditor() {
       setItems(o.line_items?.length ? o.line_items : [newItem()]);
       setCharges({ ...emptyCharges, ...o.charges });
       setNotes(o.notes || "");
+      setParentOrderId(o.parent_order_id || o.id);
+      setRevision(o.revision ?? 0);
+      setIsCurrent(o.is_current ?? true);
       setLoading(false);
     });
   }, [id, isNew, navigate]);
+
+  // Look up the current BOQ in this OA family (so we can render View/Revise/Download BOQ buttons).
+  useEffect(() => {
+    if (!parentOrderId) { setCurrentBoq(null); return; }
+    (async () => {
+      const { data: family } = await supabase.from("orders").select("id").eq("parent_order_id", parentOrderId);
+      const ids = (family || []).map((r) => (r as { id: string }).id);
+      if (!ids.length) { setCurrentBoq(null); return; }
+      const { data } = await supabase.from("boqs").select("*").in("order_id", ids).eq("is_current", true).maybeSingle();
+      setCurrentBoq((data as unknown as BoqRecord) || null);
+    })();
+  }, [parentOrderId, revisionsKey]);
 
   // Auto format from company name AND line items (any "GMS" mention → GMS).
   useEffect(() => {
@@ -231,6 +264,71 @@ export default function OrderEditor() {
     toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
+  /** Build an in-memory snapshot of the currently-loaded order (with whatever
+   *  unsaved edits exist) — used for revising. */
+  function snapshotOrder(): OrderRecord {
+    const ship = sameAsBill ? billTo : shipTo;
+    return {
+      id: orderId || "",
+      user_id: "",
+      oa_number: oaNumber, format, status: "finalized",
+      company_name: companyName, bill_to: billTo, ship_to: ship,
+      reference, cost_sheet_number: costSheetNumber, order_date: orderDate,
+      prepared_by: preparedBy, line_items: itemsWithAmounts, charges,
+      totals, amount_in_words: words, notes,
+      created_at: "", updated_at: "",
+      parent_order_id: parentOrderId || orderId || "",
+      revision, is_current: isCurrent,
+    };
+  }
+
+  async function handleReviseOa() {
+    if (!orderId) return;
+    setSaving(true);
+    try {
+      const { order: newOrder, boq: newBoq } = await reviseOrder(snapshotOrder(), { autoReviseBoq: true });
+      toast({
+        title: `OA Rev ${newOrder.revision} created`,
+        description: newBoq ? `Linked BOQ Rev ${newBoq.revision} also created.` : "No existing BOQ to revise.",
+      });
+      navigate(`/orders/${newOrder.id}`);
+    } catch (e) {
+      toast({ title: "Revise failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+      setConfirmReviseOa(false);
+    }
+  }
+
+  async function handleCreateOrReviseBoq() {
+    if (!orderId) return;
+    // If no BOQ exists at all in this family, just open the editor in "new" mode
+    // pointing at this OA — same flow as the existing "Generate BOQ" button.
+    if (!currentBoq) {
+      navigate(`/boqs/new?orderId=${orderId}`);
+      return;
+    }
+    // Already has a current BOQ — create a new BOQ revision pulling fresh OA data.
+    setSaving(true);
+    try {
+      const newBoq = await reviseBoqFromOrder(snapshotOrder(), currentBoq);
+      toast({ title: `BOQ Rev ${newBoq.revision} created` });
+      navigate(`/boqs/${newBoq.id}`);
+    } catch (e) {
+      toast({ title: "Revise BOQ failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+      setConfirmReviseBoq(false);
+    }
+  }
+
+  async function downloadCurrentBoqPdf() {
+    if (!currentBoq) return;
+    const { generateBoqPDF } = await import("@/lib/boq/pdf");
+    const doc = await generateBoqPDF(currentBoq);
+    doc.save(`${(currentBoq.boq_number || "BOQ").replace(/[/\\]/g, "_")}-Rev${currentBoq.revision ?? 0}.pdf`);
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   function applyCostSheet(data: ExtractedCostSheet) {
@@ -305,19 +403,116 @@ export default function OrderEditor() {
               Jump to Preview
             </Button>
             {!isNew && (
-              <Button
-                variant="outline"
-                className="rounded-lg"
-                onClick={() => navigate(`/boqs/new?orderId=${orderId}`)}
-                title="Generate a BOQ from this order"
-              >
-                <ClipboardList className="mr-1 h-4 w-4" />Generate BOQ
-              </Button>
+              <>
+                {!currentBoq ? (
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => navigate(`/boqs/new?orderId=${orderId}`)}
+                    title="Generate a BOQ from this OA — auto-fills items, header, T&C"
+                  >
+                    <ClipboardList className="mr-1 h-4 w-4" />Create BOQ from this OA
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="rounded-lg"
+                      onClick={() => navigate(`/boqs/${currentBoq.id}`)}
+                      title="Open the current BOQ for this OA"
+                    >
+                      <Eye className="mr-1 h-4 w-4" />View BOQ
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-lg"
+                      onClick={() => setConfirmReviseBoq(true)}
+                      title="Create a new BOQ revision from the latest OA data"
+                    >
+                      <GitBranch className="mr-1 h-4 w-4" />Revise BOQ
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="rounded-lg"
+                      onClick={downloadCurrentBoqPdf}
+                      title="Download current BOQ PDF"
+                    >
+                      <Download className="mr-1 h-4 w-4" />BOQ PDF
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="outline"
+                  className="rounded-lg"
+                  onClick={() => setConfirmReviseOa(true)}
+                  title="Create a new OA revision (and matching BOQ revision)"
+                >
+                  <GitBranch className="mr-1 h-4 w-4" />Revise OA
+                </Button>
+                <Button variant="ghost" className="rounded-lg" onClick={downloadPDF}>
+                  <Download className="mr-1 h-4 w-4" />OA PDF
+                </Button>
+              </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
             <Button className="rounded-lg" disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
+
+        {/* Revision badge banner when viewing a non-current revision */}
+        {!isNew && !isCurrent && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2 text-sm flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] uppercase">Superseded</Badge>
+              <span>You are viewing OA <span className="font-mono">{oaNumber}</span> — Rev {revision}. A newer revision exists.</span>
+            </div>
+          </div>
+        )}
+        {!isNew && isCurrent && revision > 0 && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm flex items-center gap-2">
+            <Badge variant="default" className="text-[10px] uppercase">Current</Badge>
+            <span>Revision {revision} — latest revision of <span className="font-mono">{oaNumber}</span>.</span>
+          </div>
+        )}
+
+        {/* Revisions section (OA + linked BOQ history) */}
+        {!isNew && parentOrderId && (
+          <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+        )}
+
+        {/* Confirmation prompts */}
+        <AlertDialog open={confirmReviseOa} onOpenChange={setConfirmReviseOa}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create new OA revision?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will create a new revision copy and keep the previous revision saved.
+                {currentBoq ? " A matching BOQ revision will also be created automatically." : ""}
+                {" "}Do you want to continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleReviseOa}>Create revision</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={confirmReviseBoq} onOpenChange={setConfirmReviseBoq}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create new BOQ revision?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will create a new BOQ revision copy and keep the previous revision saved.
+                The new BOQ will pull the latest item data from this OA, while keeping your earlier Remarks and Terms where possible. Do you want to continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCreateOrReviseBoq}>Create revision</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="space-y-4">
           <div className="space-y-4 min-w-0">
