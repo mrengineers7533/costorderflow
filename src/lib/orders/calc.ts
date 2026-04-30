@@ -14,7 +14,9 @@ export function calcTotals(items: LineItem[], charges: Charges): Totals {
     ? (basic * charges.insurance_percent) / 100
     : charges.insurance || 0;
   const subtotal = basic + pf + insurance + freight;
-  const gst = charges.gst_amount ?? (subtotal * (charges.gst_percent || 0)) / 100;
+  const gst = charges.gst_percent
+    ? (subtotal * charges.gst_percent) / 100
+    : (charges.gst_amount || 0);
   const grand = subtotal + gst;
   const discount = charges.discount_percent
     ? (grand * charges.discount_percent) / 100

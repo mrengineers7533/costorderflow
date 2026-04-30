@@ -1,27 +1,47 @@
-## Goal
+# Fix: Grand Total = Subtotal + GST
 
-Inline the two "New OA" creation options (Upload Cost Sheet + Create Blank Manually) directly into the Orders page, above the orders table. Remove the standalone "New OA" entry from the sidebar so the workflow is consolidated and the layout stays clean.
+## The Bug
 
-## Changes
+In the live preview, totals show:
+- Subtotal: ₹1,35,25,238.99
+- GST (18%): ₹24,34,543.02
+- **Grand Total: ₹1,35,25,238.99**  ← wrong, GST not added
+- Net Payable: ₹1,35,25,238.99
 
-### 1. `src/components/AppSidebar.tsx`
-- Remove the `{ title: "New OA", url: "/orders/new", icon: FilePlus2 }` item from the `items` array.
-- Remove the now-unused `FilePlus2` import.
-- Sidebar will show: Dashboard, Orders, BOQs (+ Settings in footer).
+Expected Grand Total: **₹1,59,59,782.01** (Subtotal + GST).
 
-### 2. `src/pages/orders/OrdersList.tsx`
-- Remove the top-right "New Order" button (since the choices now live in the page itself).
-- Add a new compact section between the page title and the "All Orders" card: a 2-column grid (stacks on mobile) with two minimal choice cards:
-  - **Upload Cost Sheet** — icon (Upload), "AI Powered" badge, short description, links to `/orders/new` (the existing chooser, where upload flow lives).
-  - **Create Blank Manually** — icon (FilePlus2), short description, links to `/orders/new/edit`.
-- Style: reuse the existing card aesthetic from `NewOrderChooser` (rounded-xl, border-border/70, soft hover), but more compact (smaller padding, smaller icon tile) so they read as header actions, not a full landing screen. Keep arrow CTA text in primary color.
-- Keep everything else (superseded toggle, table) unchanged below.
+## Root Cause
 
-### 3. Routes & `NewOrderChooser`
-- No route changes. `/orders/new` (the full chooser page) remains in place and is still reachable from the "Upload Cost Sheet" card (which is the upload entry point) and from anywhere else that links to it. This avoids breaking deep links and keeps the upload UI logic untouched.
+In `src/lib/orders/calc.ts` (line 17), `calcTotals` computes GST as:
 
-## Result
+```ts
+const gst = charges.gst_amount ?? (subtotal * (charges.gst_percent || 0)) / 100;
+```
 
-- Sidebar: cleaner — Dashboard / Orders / BOQs.
-- Orders page header now surfaces both creation paths inline, so users land on `/orders` and can immediately upload a cost sheet or start blank, without an extra click into a chooser screen.
-- Visual style mirrors the screenshot the user shared, but at a smaller, header-appropriate scale sitting above the orders table.
+`charges.gst_amount` defaults to `0` (not `undefined`), and the nullish-coalescing `??` only falls back when the value is `null`/`undefined`. So `gst` becomes `0`, which makes `grand_total` and `net_payable` equal to `subtotal` — even though `gst_percent` is 18.
+
+The `OrderPreview` component independently recomputes a display-only `gstAmount` from `gst_percent`, which is why the GST row shows the correct ₹24,34,543 — but the Grand Total / Net Payable values come from `calcTotals` and stay wrong.
+
+## Fix
+
+Change the GST resolution in `calcTotals` so a stored amount is only used when `gst_percent` is not provided (or both are zero, gracefully fall back). Concretely: prefer the percentage when present, otherwise use `gst_amount`.
+
+```ts
+const gstFromPercent = (subtotal * (charges.gst_percent || 0)) / 100;
+const gst = charges.gst_percent
+  ? gstFromPercent
+  : (charges.gst_amount || 0);
+```
+
+This makes:
+- `subtotal` = basic + P&F + insurance + freight
+- `grand_total` = subtotal + gst
+- `net_payable` = grand_total − discount
+
+Result with the screenshot's data: Grand Total and Net Payable both become ₹1,59,59,782.01 (minus any discount).
+
+## Files to Edit
+
+- `src/lib/orders/calc.ts` — fix the `gst` line in `calcTotals`
+
+No UI changes needed; `OrderPreview` already renders `p.totals.net_payable` for the Grand Total row, so it will reflect the corrected number automatically. The same fix also corrects the generated PDF totals (which use the same `calcTotals`).
