@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
@@ -13,15 +15,18 @@ export default function OrdersList() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSuperseded, setShowSuperseded] = useState(false);
 
   useEffect(() => {
-    supabase.from("orders").select("*").order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) toast({ title: "Failed to load", description: error.message, variant: "destructive" });
-        else setOrders((data as unknown as OrderRecord[]) || []);
-        setLoading(false);
-      });
-  }, []);
+    setLoading(true);
+    let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
+    if (!showSuperseded) q = q.eq("is_current", true);
+    q.then(({ data, error }) => {
+      if (error) toast({ title: "Failed to load", description: error.message, variant: "destructive" });
+      else setOrders((data as unknown as OrderRecord[]) || []);
+      setLoading(false);
+    });
+  }, [showSuperseded]);
 
   return (
     <div className="min-h-screen p-6 lg:p-8">
@@ -36,8 +41,12 @@ export default function OrdersList() {
           </Button>
         </div>
         <Card className="rounded-xl border-border/70 shadow-sm">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">All Orders</CardTitle>
+            <div className="flex items-center gap-2 text-xs">
+              <Switch id="show-superseded" checked={showSuperseded} onCheckedChange={setShowSuperseded} />
+              <Label htmlFor="show-superseded" className="cursor-pointer">Show superseded revisions</Label>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
@@ -46,6 +55,7 @@ export default function OrdersList() {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">OA Number</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Rev</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Format</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Company</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
@@ -57,6 +67,14 @@ export default function OrdersList() {
                   {orders.map((o) => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
                       <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                          <span className="px-1.5 py-0.5 rounded bg-muted">R{o.revision ?? 0}</span>
+                          {o.is_current
+                            ? <Badge variant="default" className="text-[9px] uppercase">Current</Badge>
+                            : <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={o.format === "MR" ? "default" : "secondary"} className="rounded-full px-2.5 py-0.5 text-[11px]">{o.format}</Badge>
                       </TableCell>
