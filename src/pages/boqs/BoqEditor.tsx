@@ -182,7 +182,7 @@ export default function BoqEditor() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-5">
+        <div className="space-y-5">
           {/* ---------- Editor ---------- */}
           <div className="space-y-4 print:hidden">
             <Card>
@@ -238,8 +238,8 @@ export default function BoqEditor() {
             </Card>
           </div>
 
-          {/* ---------- Live document preview ---------- */}
-          <div className="lg:sticky lg:top-4 lg:self-start" id="boq-preview">
+          {/* ---------- Live document preview (below editor) ---------- */}
+          <div id="boq-preview">
             <BoqDocPreview rec={buildRecord()} />
           </div>
         </div>
