@@ -10,12 +10,20 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Upload, FilePlus2, Sparkles, ArrowRight } from "lucide-react";
 import type { OrderRecord } from "@/lib/orders/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 
 export default function OrdersList() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuperseded, setShowSuperseded] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  function handleExtracted(data: ExtractedCostSheet) {
+    setUploadOpen(false);
+    navigate("/orders/new/edit", { state: { extracted: data } });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -38,7 +46,7 @@ export default function OrdersList() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <NewOaCard
-            to="/orders/new"
+            onClick={() => setUploadOpen(true)}
             icon={<Upload className="h-5 w-5" />}
             title="Upload Cost Sheet"
             description="Drop a cost sheet PDF — we'll extract company, items and charges to pre-fill the OA."
@@ -57,6 +65,18 @@ export default function OrdersList() {
             cta="Start blank"
           />
         </div>
+
+        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Upload Cost Sheet</DialogTitle>
+              <DialogDescription>
+                We'll parse the PDF and open the editor with everything pre-filled.
+              </DialogDescription>
+            </DialogHeader>
+            <CostSheetPicker onApply={handleExtracted} />
+          </DialogContent>
+        </Dialog>
 
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -118,34 +138,35 @@ export default function OrdersList() {
 }
 
 function NewOaCard({
-  to, icon, title, description, cta, badge,
+  to, onClick, icon, title, description, cta, badge,
 }: {
-  to: string;
+  to?: string;
+  onClick?: () => void;
   icon: React.ReactNode;
   title: string;
   description: string;
   cta: string;
   badge?: React.ReactNode;
 }) {
-  return (
-    <Link to={to} className="block h-full group">
-      <Card className="h-full rounded-xl border-border/70 shadow-sm transition-all hover:border-primary/40 hover:shadow-md">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-start justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              {icon}
-            </div>
-            {badge}
+  const inner = (
+    <Card className="h-full rounded-xl border-border/70 shadow-sm transition-all hover:border-primary/40 hover:shadow-md cursor-pointer">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {icon}
           </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-          </div>
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:gap-2 transition-all">
-            {cta}<ArrowRight className="h-3.5 w-3.5" />
-          </span>
-        </CardContent>
-      </Card>
-    </Link>
+          {badge}
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        </div>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:gap-2 transition-all">
+          {cta}<ArrowRight className="h-3.5 w-3.5" />
+        </span>
+      </CardContent>
+    </Card>
   );
+  if (to) return <Link to={to} className="block h-full group">{inner}</Link>;
+  return <button type="button" onClick={onClick} className="block h-full text-left w-full group">{inner}</button>;
 }
