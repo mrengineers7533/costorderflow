@@ -116,3 +116,36 @@ export default function OrdersList() {
     </div>
   );
 }
+
+function NewOaCard({
+  to, icon, title, description, cta, badge,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  cta: string;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <Link to={to} className="block h-full group">
+      <Card className="h-full rounded-xl border-border/70 shadow-sm transition-all hover:border-primary/40 hover:shadow-md">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              {icon}
+            </div>
+            {badge}
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+          </div>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:gap-2 transition-all">
+            {cta}<ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
