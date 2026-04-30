@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, FilePlus2, Settings, Menu } from "lucide-react";
+import { LayoutDashboard, FileText, FilePlus2, Settings, Menu, ClipboardList } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -16,6 +16,7 @@ const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "New OA",    url: "/orders/new", icon: FilePlus2 },
   { title: "Orders",    url: "/orders",     icon: FileText },
+  { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
 ];
 
 const footerItems = [
