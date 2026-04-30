@@ -100,6 +100,22 @@ export default function OrderEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Honor ?action=download from the global search command palette.
+  // Triggers the existing downloadPDF flow once the order has loaded,
+  // then strips the query so refresh won't re-trigger it.
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("action") === "download") {
+      // Defer to next tick so all state (items/charges) is settled.
+      setTimeout(() => { downloadPDF(); }, 50);
+      params.delete("action");
+      const next = params.toString();
+      navigate(`${location.pathname}${next ? `?${next}` : ""}`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, location.search]);
+
   // Recompute amounts (full set, all makes)
   const allItemsWithAmounts = useMemo(
     () => items.map((it) => ({

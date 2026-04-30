@@ -1,47 +1,64 @@
 ## Goal
 
-Make "New OA" open a chooser screen first — pick between **Upload a Cost Sheet** or **Create Blank Manually** — then proceed into the existing editor. The current editor jumps straight into a blank form, which hides the upload flow.
+Turn the global search (⌘K) into an "everything" search. Right now it only finds OAs and a couple of hard-coded pages. Make it also search app features, settings, actions, and contextual jumps inside an OA — so typing things like "GST", "freight", "preview", "Turkey", "draft", "MR", "logout", "bank details" all surface useful results.
 
-## Changes
+## What gets searchable
 
-### 1. New chooser page — `src/pages/orders/NewOrderChooser.tsx`
+Three groups, all matched via Fuse.js with the existing fuzzy ranking:
 
-A clean, on-brand landing page shown at `/orders/new`. Two large option cards:
+1. **Orders** (existing) — OA number, company, reference, cost sheet no., line-item descriptions, HSN.
+2. **Pages & navigation**
+   - Dashboard, All Orders, New OA, Manual OA, Upload Cost Sheet (AI), Drafts, Finalized.
+   - Filters: "MR orders", "GMS orders", "Recent orders".
+3. **App features / actions** — a static catalog with rich keywords so fuzzy search hits them:
+   - New OA (manual) — keywords: blank, manual, create, new
+   - New OA from cost sheet — keywords: AI, PDF, upload, parse, extract
+   - Download PDF (when on an order) — keywords: export, pdf, print
+   - Toggle GST / P&F / Freight / Insurance / Discount
+   - Switch format MR ↔ GMS
+   - GMS modes: EXW Turkey, EXW Murthal — keywords: import, sea freight, custom, landed cost
+   - Bank details, Terms & conditions
+   - Add line item, Split by make
+   - Theme/sidebar collapse (if present)
+   - Sign out (if auth present)
 
-- **Upload Cost Sheet** — embeds the existing `CostSheetPicker`. After AI extraction completes, automatically forwards the extracted data into the editor via router state (`navigate("/orders/new/edit", { state: { extracted } })`).
-- **Create Blank Manually** — links to `/orders/new/edit` with no state, opening the empty editor.
+Each entry has: `title`, `subtitle`, `keywords[]`, `icon`, `group`, and either a `path` to navigate to or an `action` callback (e.g. open new-from-AI flow). Order-context actions (Download PDF, toggle GST) only appear when the user is on an order route.
 
-Layout: centered max-w-3xl, page title "Create New Order Acceptance", subtitle, then a 2-column grid of option cards (icon tile, title, description, primary CTA). Matches the orange/white theme already in use (`rounded-xl`, `border-border/70`, primary-tinted icon backgrounds).
+## UX
 
-### 2. Route changes — `src/App.tsx`
+Single ⌘K dialog, grouped results in this order:
+- **Suggested** (top 3 mixed best matches across all groups)
+- **Pages**
+- **Actions**
+- **Orders** (top 8)
 
-```text
-/orders/new        → NewOrderChooser  (new)
-/orders/new/edit   → OrderEditor      (blank or pre-filled via state)
-/orders/:id        → OrderEditor      (existing — unchanged)
-```
+Empty query shows: Pages + top Actions + 5 recent orders.
+Each result shows icon, title, subtitle, and a small group badge on the right ("Page", "Action", "Order").
 
-### 3. Editor accepts pre-filled data — `src/pages/orders/OrderEditor.tsx`
+Keyboard: arrow keys, Enter to run, Esc to close. ⌘K toggles. Recent picks (last 5) persisted in `localStorage` and shown above Suggested when query is empty.
 
-- Read `useLocation().state?.extracted` on mount. If present, run the same population logic that `CostSheetPicker.onApply` already triggers inside the editor today (set company name, format, addresses, items, charges, notes). The existing `applyCostSheet`-style block is reused.
-- The in-editor `CostSheetPicker` panel remains, so users can still re-upload from inside the editor if they want.
-- `isNew` detection updated: treat both `id === undefined` and the `/orders/new/edit` path as "new".
+## Technical plan
 
-### 4. Sidebar — `src/components/AppSidebar.tsx`
+Files to change/create:
 
-"New OA" item keeps pointing to `/orders/new` (now the chooser). Active-state matching already uses `startsWith`, so `/orders/new/edit` will also highlight it correctly.
+- **`src/lib/search/catalog.ts`** (new) — exports `getStaticEntries(ctx)` returning the Pages + Actions array. `ctx` includes `currentOrderId` so order-only actions can be conditionally included. Each entry: `{ id, kind: "page"|"action", title, subtitle, keywords, icon, run: (nav) => void }`.
 
-### 5. Dashboard quick actions — `src/pages/Index.tsx`
+- **`src/components/GlobalSearch.tsx`** (edit) — 
+  - Build a unified Fuse index combining static entries + indexed orders. Use a discriminator field `kind` so we can render groups.
+  - Tweak Fuse keys: add `title` (0.35), `subtitle` (0.10), `keywords` (0.25) for static entries; keep existing keys for orders.
+  - Reuse current substring-boost logic only for order rows.
+  - Add `useLocation()` to detect current order id (`/orders/:id`) and pass into the catalog.
+  - Add `recentIds` localStorage helper (read on open, write on select).
+  - Render four `CommandGroup`s as listed above. Use `value={entry.id}` to bypass cmdk filtering (we already filter via Fuse).
 
-The "New OA" quick-action card already links to `/orders/new` — no change needed; it now naturally lands on the chooser.
+- **No DB or schema changes.** Order-context actions like "Download PDF" navigate to the order route with a query flag (e.g. `?action=download`); `OrderEditor` reads it on mount and triggers the existing `generateOrderPDF` flow, then strips the param. Toggles like "Enable GST" do the same with `?toggle=gst`.
+
+- **`src/pages/orders/OrderEditor.tsx`** (edit) — small `useEffect` that reads `?action=` / `?toggle=` from `useLocation`, dispatches the matching handler (download PDF, flip a charges switch), then `navigate(pathname, { replace: true })` to clean the URL.
+
+- **`src/test/searchExamples.test.ts`** (edit) — add cases: "gst" → Toggle GST action ranks #1; "turkey" → EXW Turkey action ranks above any order; "new oa" → Manual OA page #1; "upload" → Upload Cost Sheet (AI) #1; existing OA cases still pass.
 
 ## Out of scope
 
-- No changes to calculation logic (`src/lib/orders/calc.ts`), PDF generation, Supabase schema, or `OrderPreview`.
-- No styling changes outside the new chooser page and minimal editor wiring.
-
-## Technical notes
-
-- Pass extracted data through `react-router` location state to avoid a global store.
-- The chooser's "Upload" card auto-navigates as soon as `CostSheetPicker.onApply` fires (current behaviour in `QuickOrderPanel` already shows a manual "Continue" button — we'll auto-forward instead so the user lands directly in the editable form with fields populated).
-- All existing functionality (manual OA entry, GMS/MR detection, charges-as-percent toggles, PDF export) remains intact.
+- Server-side search across all users.
+- Search history sync across devices.
+- Searching inside PDF cost sheets.

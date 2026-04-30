@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useMatch } from "react-router-dom";
 import Fuse from "fuse.js";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput,
@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord } from "@/lib/orders/types";
 import {
-  Search, LayoutDashboard, FileText, FilePlus2, Upload,
-  FileDigit, Building2,
+  Search, FileDigit, Building2,
 } from "lucide-react";
+import { getStaticEntries, indexEntry, type CatalogEntry } from "@/lib/search/catalog";
 
 export function GlobalSearch() {
   const [open, setOpen] = useState(false);
@@ -20,6 +20,11 @@ export function GlobalSearch() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const orderMatch = useMatch("/orders/:id");
+  const currentOrderId =
+    orderMatch?.params.id && orderMatch.params.id !== "new"
+      ? orderMatch.params.id
+      : undefined;
 
   // Keyboard shortcut: ⌘K / Ctrl+K
   useEffect(() => {
@@ -53,6 +58,7 @@ export function GlobalSearch() {
   const indexed = useMemo(
     () =>
       orders.map((o) => ({
+        kind: "order" as const,
         order: o,
         oa_number: o.oa_number || "",
         company_name: o.company_name || "",
@@ -67,6 +73,19 @@ export function GlobalSearch() {
     [orders],
   );
 
+  // Static catalog of pages + app feature actions. Re-evaluated when the
+  // current order context changes so order-only actions appear/disappear.
+  const staticEntries = useMemo(
+    () => getStaticEntries({ currentOrderId }),
+    [currentOrderId],
+  );
+  const staticIndexed = useMemo(
+    () => staticEntries.map(indexEntry),
+    [staticEntries],
+  );
+
+  // Two Fuse instances — one tuned for OAs (existing weights), one for the
+  // static catalog (title/keywords carry the weight).
   const fuse = useMemo(
     () =>
       new Fuse(indexed, {
@@ -90,6 +109,22 @@ export function GlobalSearch() {
         ],
       }),
     [indexed],
+  );
+
+  const fuseStatic = useMemo(
+    () =>
+      new Fuse(staticIndexed, {
+        includeScore: true,
+        ignoreLocation: true,
+        threshold: 0.4,
+        minMatchCharLength: 1,
+        keys: [
+          { name: "title",    weight: 0.55 },
+          { name: "keywords", weight: 0.35 },
+          { name: "subtitle", weight: 0.10 },
+        ],
+      }),
+    [staticIndexed],
   );
 
   const q = query.trim();
@@ -118,10 +153,35 @@ export function GlobalSearch() {
     return scored.slice(0, 12).map((r) => r.order);
   }, [q, fuse, orders]);
 
+  const staticMatches = useMemo<CatalogEntry[]>(() => {
+    if (!q) return [];
+    const ql = q.toLowerCase();
+    const hits = fuseStatic.search(q, { limit: 12 });
+    const scored = hits.map((r) => {
+      let s = r.score ?? 1;
+      if (r.item.title.toLowerCase().includes(ql)) s -= 0.4;
+      if (r.item.keywords.toLowerCase().includes(ql)) s -= 0.2;
+      return { entry: r.item.entry, s };
+    });
+    scored.sort((a, b) => a.s - b.s);
+    return scored.map((r) => r.entry);
+  }, [q, fuseStatic]);
+
+  const pageMatches = staticMatches.filter((e) => e.kind === "page");
+  const actionMatches = staticMatches.filter((e) => e.kind === "action");
+  const defaultPages = staticEntries.filter((e) => e.kind === "page");
+  const defaultActions = staticEntries.filter((e) => e.kind === "action").slice(0, 6);
+
   const go = (path: string) => {
     setOpen(false);
     setQuery("");
     navigate(path);
+  };
+
+  const runEntry = (e: CatalogEntry) => {
+    setOpen(false);
+    setQuery("");
+    e.run(navigate);
   };
 
   return (
@@ -133,7 +193,7 @@ export function GlobalSearch() {
         className="h-9 gap-2 rounded-lg text-muted-foreground font-normal hover:text-foreground w-full sm:w-72 justify-start px-3"
       >
         <Search className="h-4 w-4" />
-        <span className="flex-1 text-left text-sm">Search OAs, pages…</span>
+        <span className="flex-1 text-left text-sm">Search anything…</span>
         <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
           <span className="text-xs">⌘</span>K
         </kbd>
@@ -141,7 +201,7 @@ export function GlobalSearch() {
 
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search OAs by number, company, reference… or jump to a page"
+          placeholder="Search OAs, pages, actions… (try ‘gst’, ‘turkey’, ‘upload’)"
           value={query}
           onValueChange={setQuery}
         />
@@ -150,28 +210,38 @@ export function GlobalSearch() {
             {loading ? "Loading…" : "No results found."}
           </CommandEmpty>
 
-          <CommandGroup heading="Pages">
-            <CommandItem onSelect={() => go("/")}>
-              <LayoutDashboard className="mr-2 h-4 w-4" />Dashboard
-            </CommandItem>
-            <CommandItem onSelect={() => go("/orders")}>
-              <FileText className="mr-2 h-4 w-4" />All Orders
-            </CommandItem>
-            <CommandItem onSelect={() => go("/orders/new")}>
-              <FilePlus2 className="mr-2 h-4 w-4" />New OA
-            </CommandItem>
-          </CommandGroup>
+          {(q ? pageMatches : defaultPages).length > 0 && (
+            <CommandGroup heading="Pages">
+              {(q ? pageMatches : defaultPages).map((e) => (
+                <CommandItem key={e.id} value={e.id} onSelect={() => runEntry(e)}>
+                  <e.icon className="mr-2 h-4 w-4 text-sky-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm">{e.title}</div>
+                    <div className="text-xs text-muted-foreground truncate">{e.subtitle}</div>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-[10px]">Page</Badge>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
 
-          <CommandSeparator />
-
-          <CommandGroup heading="Quick actions">
-            <CommandItem onSelect={() => go("/orders/new")} value="upload cost sheet ai pdf">
-              <Upload className="mr-2 h-4 w-4" />Upload cost sheet (AI)
-            </CommandItem>
-            <CommandItem onSelect={() => go("/orders/new/edit")} value="create blank manual order">
-              <FilePlus2 className="mr-2 h-4 w-4" />Create blank order
-            </CommandItem>
-          </CommandGroup>
+          {(q ? actionMatches : defaultActions).length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading={q ? "Actions" : "Quick actions"}>
+                {(q ? actionMatches : defaultActions).map((e) => (
+                  <CommandItem key={e.id} value={e.id} onSelect={() => runEntry(e)}>
+                    <e.icon className="mr-2 h-4 w-4 text-emerald-500" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm">{e.title}</div>
+                      <div className="text-xs text-muted-foreground truncate">{e.subtitle}</div>
+                    </div>
+                    <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-[10px]">Action</Badge>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
 
           <CommandSeparator />
 
