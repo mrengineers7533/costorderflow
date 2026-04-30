@@ -406,8 +406,8 @@ export default function OrderEditor() {
               <>
                 {!currentBoq ? (
                   <Button
-                    variant="outline"
-                    className="rounded-lg"
+                    variant="default"
+                    className="rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                     onClick={() => navigate(`/boqs/new?orderId=${orderId}`)}
                     title="Generate a BOQ from this OA — auto-fills items, header, T&C"
                   >
