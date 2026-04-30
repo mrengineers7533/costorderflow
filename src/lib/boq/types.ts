@@ -28,6 +28,13 @@ export interface BoqRecord {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** OA-aligned revision number (matches the source OA revision). */
+  revision?: number;
+  /** Only one BOQ per OA family is current. */
+  is_current?: boolean;
+  /** The exact OA revision id this BOQ was generated from. */
+  source_order_id?: string | null;
+  revised_from_id?: string | null;
 }
 
 /** Derive BOQ number from an OA number.
