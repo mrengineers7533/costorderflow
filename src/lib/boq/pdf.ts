@@ -112,7 +112,6 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
   const leftRows: [string, string][] = [
     ["BOQ No.", boq.boq_number + (boq.version > 1 ? `  (v${boq.version})` : "")],
     ["Order Acceptance No.", boq.reference_oa_number || "-"],
-    ["Client Name", boq.client_name || "-"],
   ];
   const rightRows: [string, string][] = [
     ["Date", fmtDate(boq.boq_date)],
