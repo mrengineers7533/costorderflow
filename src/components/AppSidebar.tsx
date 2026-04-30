@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, FilePlus2 } from "lucide-react";
+import { LayoutDashboard, FileText, FilePlus2, ChevronLeft, ChevronRight } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -20,19 +20,31 @@ const items = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
 
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarContent className="bg-sidebar">
-        <div className={`flex items-center ${collapsed ? "justify-center px-2" : "px-4"} h-16 border-b border-sidebar-border`}>
+        <div className={`relative flex items-center ${collapsed ? "justify-center px-2" : "px-4"} h-16 border-b border-sidebar-border`}>
           <img
             src={appLogo}
             alt="GMS | MR Engineers"
             className={collapsed ? "h-8 w-8 object-contain" : "h-10 w-auto object-contain"}
           />
+          {/* Floating collapse/expand handle on the sidebar's right edge.
+              Visible in both expanded and icon-collapsed states so users
+              always have a way to toggle from inside the sidebar. */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          </button>
         </div>
         <SidebarGroup>
           {!collapsed && (
