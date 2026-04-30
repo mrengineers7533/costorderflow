@@ -25,7 +25,7 @@ type OaOption = {
   oa_number: string;
   format: "MR" | "GMS";
   order_date: string;
-  has_boq: boolean;
+  boq_status: "finalized" | "draft" | "none";
 };
 
 export default function BoqList() {
@@ -57,16 +57,22 @@ export default function BoqList() {
         .order("created_at", { ascending: false });
       const { data: existing } = await supabase
         .from("boqs")
-        .select("order_id, is_current")
+        .select("order_id, status, is_current")
         .eq("is_current", true);
-      const withBoq = new Set((existing || []).map((b: any) => b.order_id));
+      const statusByOrder = new Map<string, "finalized" | "draft">();
+      (existing || []).forEach((b: any) => {
+        // Prefer finalized over draft if both somehow exist for the same OA.
+        const prev = statusByOrder.get(b.order_id);
+        if (prev === "finalized") return;
+        statusByOrder.set(b.order_id, b.status === "finalized" ? "finalized" : "draft");
+      });
       setOas(
         ((ords as any[]) || []).map((o) => ({
           id: o.id,
           oa_number: o.oa_number,
           format: o.format,
           order_date: o.order_date,
-          has_boq: withBoq.has(o.id),
+          boq_status: statusByOrder.get(o.id) ?? "none",
         }))
       );
     })();
@@ -134,8 +140,21 @@ export default function BoqList() {
                           <Badge variant={o.format === "MR" ? "default" : "secondary"} className="text-[9px] px-1.5 py-0">
                             {o.format}
                           </Badge>
-                          {o.has_boq && (
-                            <Badge variant="outline" className="text-[9px] px-1.5 py-0">Has BOQ</Badge>
+                          {o.boq_status === "finalized" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-primary">
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                              Final
+                            </span>
+                          ) : o.boq_status === "draft" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              Draft
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                              None
+                            </span>
                           )}
                         </div>
                       </DropdownMenuItem>
