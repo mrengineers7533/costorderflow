@@ -16,9 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, FilePlus2, Search } from "lucide-react";
+import { ChevronDown, FilePlus2, Search, Pencil, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqRecord } from "@/lib/boq/types";
+import { generateBoqPDF } from "@/lib/boq/pdf";
 
 type OaOption = {
   id: string;
@@ -81,6 +82,17 @@ export default function BoqList() {
   const filteredOas = oas.filter((o) =>
     o.oa_number.toLowerCase().includes(oaSearch.trim().toLowerCase())
   );
+
+  async function handleDownload(b: BoqRecord) {
+    try {
+      const doc = await generateBoqPDF(b);
+      const safe = (b.boq_number || "BOQ").replace(/[/\\]/g, "_");
+      doc.save(`${safe}.pdf`);
+      toast({ title: "BOQ PDF downloaded" });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
 
   return (
     <div className="min-h-screen p-6 lg:p-8">
@@ -187,6 +199,7 @@ export default function BoqList() {
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Reference OA</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -209,6 +222,16 @@ export default function BoqList() {
                             <span className={`h-1.5 w-1.5 rounded-full ${b.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
                             {b.status}
                           </span>
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex items-center gap-1">
+                            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => nav(`/boqs/${b.id}`)}>
+                              <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleDownload(b)}>
+                              <Download className="h-3.5 w-3.5 mr-1" />PDF
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
