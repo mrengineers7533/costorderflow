@@ -12,6 +12,9 @@ import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import type { OrderRecord } from "@/lib/orders/types";
+import mrLogoUrl from "@/assets/mr-logo.png";
+import gmsLogoUrl from "@/assets/gms-logo.png";
+import ugurLogoUrl from "@/assets/ugur-logo.png";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -258,83 +261,113 @@ export default function BoqEditor() {
   }
 }
 
-/* -------- BOQ document-style preview (mirrors PDF visual) -------- */
+/* -------- BOQ document-style preview — mirrors generated PDF 1:1 --------
+   Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
+   exactly: same header, accent rule, BOQ title bar, two-column meta block,
+   table column widths, header colors, terms box, and notes line. */
 function BoqDocPreview({ rec }: { rec: BoqRecord }) {
   const isMR = rec.format === "MR";
+  const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
+  const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
   return (
-    <Card className="overflow-hidden bg-background">
+    <Card className="overflow-hidden bg-muted/40 print:bg-white print:border-0 print:shadow-none">
       <div className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground border-b print:hidden">
-        Live BOQ Preview
+        Live BOQ Preview — exact PDF output
       </div>
-      <div className="p-5 text-[12px] leading-snug space-y-3">
-        {/* Header */}
+      {/* A4 page: 210mm wide. Use mm units so it visually matches the PDF. */}
+      <div className="mx-auto my-4 bg-white text-black shadow-md print:shadow-none print:my-0"
+           style={{ width: "210mm", minHeight: "297mm", padding: "12mm", fontFamily: "Helvetica, Arial, sans-serif", fontSize: "9pt", lineHeight: 1.25 }}>
+        {/* ===== Header ===== */}
         {isMR ? (
-          <div className="border-b-2 border-orange-600 pb-2 flex items-start justify-between">
-            <div className="font-bold text-lg">M.R. Engineers</div>
-            <div className="text-right text-[10px]">
-              <div className="font-bold">*  ENGINEERS    *  CONTRACTORS    *  SUPPLIERS</div>
-              <div>Shed No. 33, HSIIDC, Murthal, Sonepat.</div>
-              <div className="font-bold">GSTIN-06AARPM1849G1ZF</div>
+          <div style={{ position: "relative", paddingBottom: "6mm", marginBottom: "6mm" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <img src={mrLogoUrl} alt="MR" style={{ maxWidth: "60mm", maxHeight: "20mm", objectFit: "contain" }} />
+              <div style={{ textAlign: "right", color: "#1e1e1e" }}>
+                <div style={{ fontWeight: 700, fontSize: "13pt" }}>M.R. Engineers</div>
+                <div style={{ fontWeight: 700, fontSize: "7pt", marginTop: "1mm" }}>*  ENGINEERS    *  CONTRACTORS    *  SUPPLIERS</div>
+                <div style={{ fontSize: "7pt" }}>Shed No. 33, HSIIDC, Murthal, Sonepat.</div>
+                <div style={{ fontWeight: 700, fontSize: "7pt" }}>GSTIN-06AARPM1849G1ZF</div>
+              </div>
             </div>
+            <div style={{ position: "absolute", left: "-12mm", right: "-12mm", bottom: 0, height: "0.6mm", background: accent }} />
           </div>
         ) : (
-          <div className="border-b pb-2 flex items-start justify-between">
-            <div>
-              <div className="font-bold">GRAIN MILLING SOLUTIONS</div>
-              <div className="text-[10px]">PRIVATE LIMITED</div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold">UGUR MACHINE, TURKEY</div>
-              <div className="italic text-[10px]">Quality Standard is an Assurance of UGUR at all parts</div>
+          <div style={{ marginBottom: "4mm" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <img src={gmsLogoUrl} alt="GMS" style={{ maxWidth: "50mm", maxHeight: "22mm", objectFit: "contain", display: "block" }} />
+                <div style={{ fontWeight: 700, fontSize: "8pt", marginTop: "2mm" }}>GRAIN MILLING SOLUTIONS PRIVATE LIMITED</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <img src={ugurLogoUrl} alt="UGUR" style={{ maxWidth: "45mm", maxHeight: "22mm", objectFit: "contain", display: "block", marginLeft: "auto" }} />
+                <div style={{ fontWeight: 700, fontSize: "9pt", marginTop: "2mm" }}>UGUR MACHINE, TURKEY</div>
+                <div style={{ fontStyle: "italic", fontSize: "6.5pt" }}>Quality Standard is an Assurance of UGUR at all parts</div>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="bg-muted text-center font-bold py-1 text-base tracking-wider">BOQ</div>
-
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
-          <div><span className="font-bold">BOQ No.:</span> {rec.boq_number}{rec.version > 1 ? `  (v${rec.version})` : ""}</div>
-          <div><span className="font-bold">Date:</span> {new Date(rec.boq_date).toLocaleDateString("en-GB").replace(/\//g, "-")}</div>
-          <div><span className="font-bold">Order Acceptance No.:</span> {rec.reference_oa_number || "-"}</div>
-          <div><span className="font-bold">Prepared By:</span> {rec.prepared_by || "-"}</div>
-          <div><span className="font-bold">Project / Cost Sheet No.:</span> {rec.project_number || "-"}</div>
+        {/* ===== BOQ title bar ===== */}
+        <div style={{ background: "rgb(200,200,200)", textAlign: "center", fontWeight: 700, fontSize: "12pt", padding: "1.5mm 0" }}>
+          BOQ
         </div>
 
-        <table className="w-full border-collapse text-[11px] border border-foreground">
+        {/* ===== Meta two-column ===== */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: "10mm", rowGap: "1.2mm", marginTop: "4mm", fontSize: "8.5pt" }}>
+          <div><b>BOQ No.:</b> {rec.boq_number}{rec.version > 1 ? `  (v${rec.version})` : ""}</div>
+          <div><b>Date:</b> {fmtDate(rec.boq_date)}</div>
+          <div><b>Order Acceptance No.:</b> {rec.reference_oa_number || "-"}</div>
+          <div><b>Prepared By:</b> {rec.prepared_by || "-"}</div>
+          <div></div>
+          <div><b>Project / Cost Sheet No.:</b> {rec.project_number || "-"}</div>
+        </div>
+
+        {/* ===== Items table ===== */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "16mm" }} />
+            <col style={{ width: "32mm" }} />
+            <col />
+            <col style={{ width: "14mm" }} />
+            <col style={{ width: "14mm" }} />
+            <col style={{ width: "50mm" }} />
+          </colgroup>
           <thead>
-            <tr className={isMR ? "" : ""} style={{ backgroundColor: isMR ? "rgb(234,88,12)" : "rgb(200,200,200)", color: isMR ? "white" : "black" }}>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">ITEM No.</th>
-              <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>
-              <th className="border border-foreground px-1.5 py-1 text-left">DESCRIPTION</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">QTY</th>
-              <th className="border border-foreground px-1.5 py-1 w-12 text-center">UNIT</th>
-              <th className="border border-foreground px-1.5 py-1 w-32 text-left">Remarks</th>
+            <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
+              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"].map((h, i) => (
+                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 ? "center" : "left" }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={6} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No items</td></tr>
+              <tr><td colSpan={6} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
-              <tr key={it.id} className="align-top">
-                <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.item_no || i + 1}</td>
-                <td className="border border-foreground px-1.5 py-1">{it.model_number}</td>
-                <td className="border border-foreground px-1.5 py-1 whitespace-pre-wrap">{it.description}</td>
-                <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || ""}</td>
-                <td className="border border-foreground px-1.5 py-1 text-center">{it.unit}</td>
-                <td className="border border-foreground px-1.5 py-1 whitespace-pre-wrap">{it.remarks}</td>
+              <tr key={it.id} style={{ verticalAlign: "top" }}>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
+        {/* ===== Terms box ===== */}
         {rec.terms?.trim() && (
-          <div className="border border-foreground p-2 text-[11px] whitespace-pre-wrap">
-            <div className="font-bold mb-0.5">TERMS & CONDITIONS:</div>
+          <div style={{ marginTop: "4mm", border: "0.3mm solid #000", padding: "2mm", fontSize: "8pt", whiteSpace: "pre-wrap" }}>
+            <div style={{ fontWeight: 700, marginBottom: "0.5mm" }}>TERMS & CONDITIONS:</div>
             {rec.terms}
           </div>
         )}
+
+        {/* ===== Notes inline ===== */}
         {rec.notes?.trim() && (
-          <div className="text-[11px]"><span className="font-bold">Notes:</span> {rec.notes}</div>
+          <div style={{ marginTop: "3mm", fontSize: "8pt" }}>
+            <b>Notes:</b> {rec.notes}
+          </div>
         )}
       </div>
     </Card>
