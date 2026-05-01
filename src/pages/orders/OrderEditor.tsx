@@ -21,7 +21,7 @@ import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails,
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
-import { createPiFromOa } from "@/lib/pi/convert";
+import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -332,17 +332,13 @@ export default function OrderEditor() {
 
   async function handleConvertToPi() {
     if (!orderId) return;
-    setSaving(true);
     try {
       const { data: oa, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
       if (error || !oa) throw error || new Error("OA not found");
-      const pi = await createPiFromOa(oa as unknown as OrderRecord);
-      toast({ title: `PI ${pi.pi_number} created from OA` });
-      navigate(`/pi/${pi.id}`);
+      setPiDialogOa(oa as unknown as OrderRecord);
+      setPiDialogOpen(true);
     } catch (e: any) {
-      toast({ title: "Failed to convert to PI", description: e?.message || String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Failed to open PI dialog", description: e?.message || String(e), variant: "destructive" });
     }
   }
 
