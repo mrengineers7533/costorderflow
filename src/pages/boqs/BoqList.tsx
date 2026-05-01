@@ -16,8 +16,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, FilePlus2, Search, Pencil, Download } from "lucide-react";
+import { ChevronDown, FilePlus2, Search, Pencil, Download, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
@@ -36,6 +40,9 @@ export default function BoqList() {
   const [showSuperseded, setShowSuperseded] = useState(false);
   const [oas, setOas] = useState<OaOption[]>([]);
   const [oaSearch, setOaSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -46,7 +53,21 @@ export default function BoqList() {
       else setRows((data as unknown as BoqRecord[]) || []);
       setLoading(false);
     });
-  }, [showSuperseded]);
+  }, [showSuperseded, refreshTick]);
+
+  async function handleDelete() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const { error } = await supabase.from("boqs").delete().eq("id", confirmDelete.id);
+    setDeleting(false);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Deleted ${confirmDelete.label}` });
+    setConfirmDelete(null);
+    setRefreshTick((t) => t + 1);
+  }
 
   // Load current OAs + which already have a current BOQ, for the dropdown.
   useEffect(() => {
@@ -231,6 +252,15 @@ export default function BoqList() {
                             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleDownload(b)}>
                               <Download className="h-3.5 w-3.5 mr-1" />PDF
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: b.id, label: b.boq_number }); }}
+                              aria-label={`Delete ${b.boq_number}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -241,6 +271,28 @@ export default function BoqList() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete BOQ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <span className="font-mono font-semibold">{confirmDelete?.label}</span>.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="mr-1 h-4 w-4" />Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
