@@ -974,6 +974,12 @@ export default function OrderEditor() {
             </div>
           </section>
         </div>
+          </div>
+          {!isNew && parentOrderId && (
+            <aside className="lg:col-span-1 lg:sticky lg:top-6">
+              <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+            </aside>
+          )}
       </div>
     </div>
   );
