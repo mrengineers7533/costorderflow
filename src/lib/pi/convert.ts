@@ -25,7 +25,7 @@ export async function fetchOaItemPiStatus(
     .eq("is_current", true);
   if (error) throw error;
   const map: Record<string, OaItemPiStatus> = {};
-  for (const pi of (data || []) as Array<{
+  for (const pi of ((data || []) as unknown) as Array<{
     id: string;
     pi_number: string;
     line_items: LineItem[] | null;
