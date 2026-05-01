@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye, Receipt } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -21,6 +21,7 @@ import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails,
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
+import { createPiFromOa } from "@/lib/pi/convert";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -329,6 +330,22 @@ export default function OrderEditor() {
     doc.save(`${(currentBoq.boq_number || "BOQ").replace(/[/\\]/g, "_")}-Rev${currentBoq.revision ?? 0}.pdf`);
   }
 
+  async function handleConvertToPi() {
+    if (!orderId) return;
+    setSaving(true);
+    try {
+      const { data: oa, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+      if (error || !oa) throw error || new Error("OA not found");
+      const pi = await createPiFromOa(oa as unknown as OrderRecord);
+      toast({ title: `PI ${pi.pi_number} created from OA` });
+      navigate(`/pi/${pi.id}`);
+    } catch (e: any) {
+      toast({ title: "Failed to convert to PI", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   function applyCostSheet(data: ExtractedCostSheet) {
@@ -448,6 +465,15 @@ export default function OrderEditor() {
                   title="Create a new OA revision (and matching BOQ revision)"
                 >
                   <GitBranch className="mr-1 h-4 w-4" />Revise OA
+                </Button>
+                <Button
+                  variant="default"
+                  className="rounded-lg"
+                  onClick={handleConvertToPi}
+                  disabled={saving}
+                  title="Create a new Proforma Invoice from this OA"
+                >
+                  <Receipt className="mr-1 h-4 w-4" />Convert to PI
                 </Button>
                 <Button variant="ghost" className="rounded-lg" onClick={downloadPDF}>
                   <Download className="mr-1 h-4 w-4" />OA PDF

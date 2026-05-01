@@ -64,9 +64,32 @@ const COMPANY_GMS = {
   email: "info@gmsengg.com",
 };
 
+export interface ExtraTotalsRow {
+  label: string;
+  value: number;
+  bold?: boolean;
+  highlight?: boolean;
+}
+
+export interface DocMetaOverride {
+  /** Replaces "ORDER ACCEPTANCE" centered title. */
+  title?: string;
+  /** Replaces "OA Number" / "OA No.:" label. */
+  numberLabel?: string;
+  /** Replaces the OA number value. */
+  numberValue?: string;
+  /** Optional second meta line (e.g. Reference OA No.). MR uses Reference slot. */
+  refLabel?: string;
+  refValue?: string;
+  /** Extra rows appended to the totals section (e.g. PI Discount / Advance / Net). */
+  extraTotalsRows?: ExtraTotalsRow[];
+  /** When true, hide the default Grand Total row so PI can supply its own chain. */
+  hideDefaultGrandTotal?: boolean;
+}
+
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; docMeta?: DocMetaOverride },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -115,15 +138,18 @@ export async function generateOrderPDF(
   y = headerH + 6;
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold").setFontSize(13);
-  doc.text("ORDER ACCEPTANCE", W / 2, y, { align: "center" });
+  doc.text(opts?.docMeta?.title || "ORDER ACCEPTANCE", W / 2, y, { align: "center" });
   y += 6;
 
   // Meta box
   doc.setFontSize(9).setFont("helvetica", "normal");
   const metaLeft = [
-    ["OA Number", order.oa_number],
+    [opts?.docMeta?.numberLabel || "OA Number", opts?.docMeta?.numberValue || order.oa_number],
     ["Date", new Date(order.order_date).toLocaleDateString("en-IN")],
-    ["Reference", order.reference || order.cost_sheet_number || "-"],
+    [
+      opts?.docMeta?.refLabel || "Reference",
+      opts?.docMeta?.refValue ?? (order.reference || order.cost_sheet_number || "-"),
+    ],
   ];
   const metaRight = [
     ["Prepared By", order.prepared_by || "-"],
@@ -199,7 +225,15 @@ export async function generateOrderPDF(
     const disc = c.discount_percent > 0 ? (t.grand_total * c.discount_percent) / 100 : c.discount;
     if (disc > 0) totalsRows.push({ label: `Discount${c.discount_percent ? ` @ ${c.discount_percent}%` : ""}`, value: -disc });
   }
-  totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+  if (!opts?.docMeta?.hideDefaultGrandTotal) {
+    totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+  }
+  // Extra rows (e.g. PI: One-Time Discount / Advance Adjustment / Net Payable)
+  if (opts?.docMeta?.extraTotalsRows?.length) {
+    for (const r of opts.docMeta.extraTotalsRows) {
+      totalsRows.push({ label: r.label, value: r.value, bold: !!r.bold });
+    }
+  }
 
   const totalsAsBody = totalsRows.map((r) => [
     { content: r.label, colSpan: 6, styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "bold") as "bold" } },
@@ -326,7 +360,7 @@ const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 async function renderGmsPdf(
   doc: jsPDF,
   order: OrderRecord,
-  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms } | undefined,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; docMeta?: DocMetaOverride } | undefined,
   layout: GmsLayout,
 ) {
   const { W, H, M } = layout;
@@ -375,7 +409,7 @@ async function renderGmsPdf(
     doc.setFillColor(200, 200, 200);
     doc.rect(M, GMS_HEADER_H, W - M * 2, GMS_TITLE_BAR_H, "F");
     doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(13);
-    doc.text("ORDER ACCEPTANCE", W / 2, GMS_HEADER_H + 5, { align: "center" });
+    doc.text(opts?.docMeta?.title || "ORDER ACCEPTANCE", W / 2, GMS_HEADER_H + 5, { align: "center" });
   };
 
   const drawFooterBlock = (startY: number) => {
@@ -432,8 +466,8 @@ async function renderGmsPdf(
   let yR = y;
   const rightLines: string[] = [
     `Date : ${new Date(order.order_date).toLocaleDateString("en-GB").replace(/\//g, "-")}`,
-    `OA No.: ${order.oa_number}`,
-    `Ref. : ${order.reference || order.cost_sheet_number || "-"}`,
+    `${opts?.docMeta?.numberLabel || "OA No."}: ${opts?.docMeta?.numberValue || order.oa_number}`,
+    `${opts?.docMeta?.refLabel || "Ref."} : ${opts?.docMeta?.refValue ?? (order.reference || order.cost_sheet_number || "-")}`,
     `Contact :- Mr. Bhavesh Makin`,
     `Mob : - +91-9910066823`,
   ];
@@ -495,6 +529,11 @@ async function renderGmsPdf(
   } else {
   totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
   totalsRows.push({ label: "Grand Total", value: t.basic_total, bold: true });
+  }
+  if (opts?.docMeta?.extraTotalsRows?.length) {
+    for (const er of opts.docMeta.extraTotalsRows) {
+      totalsRows.push({ label: er.label, value: er.value, bold: !!er.bold });
+    }
   }
 
   const totalsAsBody = totalsRows.map((r) => [
