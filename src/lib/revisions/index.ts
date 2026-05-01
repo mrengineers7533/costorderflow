@@ -119,7 +119,7 @@ export async function reviseBoqFromOrder(
     };
   });
 
-  const payload = {
+  const payload = sanitizeUuids({
     order_id: orderRev.id,
     source_order_id: orderRev.id,
     revised_from_id: prevBoq?.id || null,
@@ -137,7 +137,7 @@ export async function reviseBoqFromOrder(
     line_items: items,
     terms: prevBoq?.terms || DEFAULT_BOQ_TERMS,
     notes: prevBoq?.notes || orderRev.notes || null,
-  };
+  }, BOQ_UUID_FIELDS);
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) throw error;
   return data as unknown as BoqRecord;
