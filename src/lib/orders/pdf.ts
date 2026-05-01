@@ -9,6 +9,7 @@ import {
   DEFAULT_GMS_BANK,
   DEFAULT_GMS_TERMS,
   GMS_HEAD_OFFICE_LINES,
+  DEFAULT_GMS_EXCLUSIONS,
   type BankDetails,
   type GMSTerms,
 } from "./defaults";
@@ -85,6 +86,8 @@ export interface DocMetaOverride {
   extraTotalsRows?: ExtraTotalsRow[];
   /** When true, hide the default Grand Total row so PI can supply its own chain. */
   hideDefaultGrandTotal?: boolean;
+  /** When true (PI), hide the page-1 HEAD OFFICE/Bank/Exclusions footer block; render it on the T&C page instead. */
+  hideFirstPageFooter?: boolean;
 }
 
 export async function generateOrderPDF(
@@ -585,13 +588,15 @@ async function renderGmsPdf(
   // @ts-expect-error lastAutoTable runtime
   let yEnd = doc.lastAutoTable.finalY + 6;
 
-  // If footer block won't fit on the current page, push to a new one
-  if (yEnd + GMS_FOOTER_RESERVED > H - M) {
-    doc.addPage();
-    drawHeader();
-    yEnd = GMS_HEADER_H + GMS_TITLE_BAR_H + 8;
+  if (!opts?.docMeta?.hideFirstPageFooter) {
+    // If footer block won't fit on the current page, push to a new one
+    if (yEnd + GMS_FOOTER_RESERVED > H - M) {
+      doc.addPage();
+      drawHeader();
+      yEnd = GMS_HEADER_H + GMS_TITLE_BAR_H + 8;
+    }
+    drawFooterBlock(yEnd);
   }
-  drawFooterBlock(yEnd);
 
   // -------- Terms & Conditions page --------
   doc.addPage();
@@ -626,6 +631,22 @@ async function renderGmsPdf(
     wrapped.forEach((w: string) => { doc.text(w, M, yT); yT += 4.5; });
     yT += 3;
   });
+
+  // When the page-1 footer was suppressed, surface the exclusions + FX line here
+  if (opts?.docMeta?.hideFirstPageFooter) {
+    doc.setFont("helvetica", "bold").setFontSize(9);
+    DEFAULT_GMS_EXCLUSIONS.forEach((line) => { doc.text(line, M, yT); yT += 4.5; });
+    const fxRate = order.charges.fx_rate || 0;
+    const currency = order.charges.currency || "INR";
+    if (fxRate > 0 && currency !== "INR") {
+      doc.text(
+        `${currency} conversion rate - @Rs${fxRate}. Any variation in exchange rate will be borne by client.`,
+        M, yT,
+      );
+      yT += 4.5;
+    }
+    yT += 3;
+  }
 
   // Footer block on T&C page (anchored near bottom)
   const footerStart = Math.max(yT + 4, H - GMS_FOOTER_RESERVED);

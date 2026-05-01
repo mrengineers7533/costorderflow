@@ -71,6 +71,7 @@ export async function generatePiPDF(
       refLabel: "Ref. OA No.",
       refValue: pi.reference_oa_number || "-",
       extraTotalsRows,
+      hideFirstPageFooter: pi.format === "GMS",
     },
   });
 }
