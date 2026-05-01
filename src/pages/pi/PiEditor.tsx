@@ -19,6 +19,13 @@ import { generatePiPDF } from "@/lib/pi/pdf";
 import { createPiRevision, fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { amountInWords, calcLineAmount } from "@/lib/orders/calc";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_MR_TERMS,
+  DEFAULT_GMS_TERMS,
+  DEFAULT_MR_BANK,
+  type GMSTerms,
+} from "@/lib/orders/defaults";
 
 export default function PiEditor() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +35,8 @@ export default function PiEditor() {
   const [saving, setSaving] = useState(false);
   const [confirmRevise, setConfirmRevise] = useState(false);
   const [family, setFamily] = useState<PiRecord[]>([]);
+  const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
+  const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
 
   useEffect(() => {
     if (!id) return;
@@ -71,7 +80,7 @@ export default function PiEditor() {
           net_payable: totals!.net_payable_pi,
         },
         amount_in_words: amountInWords(totals!.net_payable_pi),
-      });
+      }, { terms, gmsTerms });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
@@ -263,6 +272,34 @@ export default function PiEditor() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Terms & Conditions */}
+            {pi.format === "MR" ? (
+              <Card>
+                <CardHeader><CardTitle className="text-base">Terms &amp; Conditions</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} rows={8} className="font-mono text-xs" />
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setTerms(DEFAULT_MR_TERMS)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader><CardTitle className="text-base">GMS Terms &amp; Conditions</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                  <div><Label>Taxation</Label><Input value={gmsTerms.taxation} onChange={(e) => setGmsTerms({ ...gmsTerms, taxation: e.target.value })} /></div>
+                  <div><Label>Freight</Label><Input value={gmsTerms.freight} onChange={(e) => setGmsTerms({ ...gmsTerms, freight: e.target.value })} /></div>
+                  <div><Label>Insurance</Label><Input value={gmsTerms.insurance} onChange={(e) => setGmsTerms({ ...gmsTerms, insurance: e.target.value })} /></div>
+                  <div className="col-span-2"><Label>Delivery Time</Label><Textarea rows={2} value={gmsTerms.delivery_time} onChange={(e) => setGmsTerms({ ...gmsTerms, delivery_time: e.target.value })} /></div>
+                  <div className="col-span-2"><Label>Payment Terms</Label><Textarea rows={2} value={gmsTerms.payment_terms} onChange={(e) => setGmsTerms({ ...gmsTerms, payment_terms: e.target.value })} /></div>
+                  <div className="col-span-2"><Label>General Conditions</Label><Textarea rows={2} value={gmsTerms.general_conditions} onChange={(e) => setGmsTerms({ ...gmsTerms, general_conditions: e.target.value })} /></div>
+                  <div className="col-span-2 flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setGmsTerms(DEFAULT_GMS_TERMS)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
         </div>
 
         {/* Review & Export — full-width preview at the bottom (matches OA/BOQ) */}
@@ -295,6 +332,9 @@ export default function PiEditor() {
               amountInWords={amountInWords(totals.net_payable_pi)}
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
+              terms={terms}
+              bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
+              gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
               docMeta={{
                 title: "Proforma Invoice",
                 numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
