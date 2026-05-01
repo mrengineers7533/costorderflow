@@ -348,15 +348,21 @@ export function OrderPreview(p: Props) {
 
         {p.format === "MR" && <MRPostItems terms={p.terms} bank={p.bank} preparedBy={p.preparedBy} />}
 
-        {p.format === "GMS" && isFX && (
+        {p.format === "GMS" && !p.docMeta?.hideFirstPageFooter && isFX && (
           <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
         )}
-        {p.format === "GMS" && !isFX && (
+        {p.format === "GMS" && !p.docMeta?.hideFirstPageFooter && !isFX && (
           <GMSHeadOfficeBank />
         )}
 
         {p.format === "GMS" && p.gmsTerms && (
-          <GMSTermsBlock t={p.gmsTerms} />
+          <GMSTermsBlock
+            t={p.gmsTerms}
+            includeExclusions={!!p.docMeta?.hideFirstPageFooter}
+            fxRate={fxRate}
+            currency={p.charges.currency || "INR"}
+            isFX={isFX}
+          />
         )}
 
         {p.format !== "MR" && p.preparedBy && (
