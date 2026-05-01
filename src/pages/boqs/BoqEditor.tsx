@@ -177,8 +177,6 @@ export default function BoqEditor() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print</Button>
-            <Button variant="outline" size="sm" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />Download PDF</Button>
             <Button variant="outline" size="sm" onClick={uploadToBoqFolder}>Save to BOQ Folder</Button>
             <Button variant="secondary" size="sm" disabled={saving} onClick={() => save(false)}><Save className="mr-1 h-4 w-4" />Save Draft</Button>
             <Button size="sm" disabled={saving} onClick={() => save(true)}>Finalize</Button>
@@ -243,6 +241,13 @@ export default function BoqEditor() {
 
           {/* ---------- Live document preview (below editor) ---------- */}
           <div id="boq-preview">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 print:hidden">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Live Preview</div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print</Button>
+                <Button variant="outline" size="sm" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />Download PDF</Button>
+              </div>
+            </div>
             <BoqDocPreview rec={buildRecord()} />
           </div>
         </div>
