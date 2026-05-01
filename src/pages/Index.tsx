@@ -88,33 +88,33 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="container mx-auto px-4 lg:px-8 py-8 space-y-8">
+      <main className="container mx-auto px-4 lg:px-6 py-5 space-y-4">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Overview across Order Acceptances, BOQs, and Proforma Invoices.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" className="rounded-lg">
-              <Link to="/orders"><FileText className="mr-1.5 h-4 w-4" />OAs</Link>
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/orders"><FileText className="mr-1 h-3.5 w-3.5" />OAs</Link>
             </Button>
-            <Button asChild variant="outline" className="rounded-lg">
-              <Link to="/boqs"><ClipboardList className="mr-1.5 h-4 w-4" />BOQs</Link>
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/boqs"><ClipboardList className="mr-1 h-3.5 w-3.5" />BOQs</Link>
             </Button>
-            <Button asChild variant="outline" className="rounded-lg">
-              <Link to="/pi"><Receipt className="mr-1.5 h-4 w-4" />PIs</Link>
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/pi"><Receipt className="mr-1 h-3.5 w-3.5" />PIs</Link>
             </Button>
-            <Button asChild className="rounded-lg">
-              <Link to="/orders/new"><FilePlus2 className="mr-1.5 h-4 w-4" />New OA</Link>
+            <Button asChild size="sm" className="rounded-lg h-8">
+              <Link to="/orders/new"><FilePlus2 className="mr-1 h-3.5 w-3.5" />New OA</Link>
             </Button>
           </div>
         </div>
 
         {/* Hero strip */}
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section className="grid gap-3 lg:grid-cols-2">
           <ValueHero
             label="Total OA Value"
             value={oaStats.totalValue}
@@ -132,7 +132,7 @@ const Index = () => {
         </section>
 
         {/* Module stat tiles */}
-        <section className="space-y-6">
+        <section className="space-y-3">
           <ModuleRow
             tone="oa"
             heading="Order Acceptances"
@@ -170,10 +170,10 @@ const Index = () => {
 
         {/* Quick actions */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold tracking-tight">Quick actions</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick actions</h2>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <ActionCard
               icon={<Upload className="h-5 w-5" />}
               badge={<span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"><Sparkles className="h-3 w-3" />AI</span>}
@@ -205,8 +205,8 @@ const Index = () => {
 
         {/* Recent activity (tabbed) */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent activity</h2>
           </div>
           <Card className="rounded-xl border-border/70 shadow-sm">
             <CardContent className="p-0">
@@ -321,33 +321,33 @@ function ValueHero({
   const mrPct = total ? Math.round((mr / total) * 100) : 0;
   const gmsPct = total ? 100 - mrPct : 0;
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent shadow-sm">
-      <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" aria-hidden />
-      <CardContent className="relative p-6 lg:p-8">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-primary">
-          <TrendingUp className="h-3.5 w-3.5" />
+    <Card className="relative overflow-hidden rounded-xl border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent shadow-sm">
+      <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-primary/10 blur-3xl" aria-hidden />
+      <CardContent className="relative p-4">
+        <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-primary">
+          <TrendingUp className="h-3 w-3" />
           {label}
         </div>
-        <div className="mt-3 flex items-baseline gap-2">
-          <IndianRupee className="h-7 w-7 text-foreground/70" />
-          <span className="text-4xl lg:text-5xl font-semibold tracking-tight tabular-nums">
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <IndianRupee className="h-5 w-5 text-foreground/70" />
+          <span className="text-2xl lg:text-3xl font-semibold tracking-tight tabular-nums">
             {value.toLocaleString("en-IN")}
           </span>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">{countLine}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{countLine}</p>
 
-        <div className="mt-6 space-y-2">
-          <div className="flex items-center justify-between text-xs">
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
             <span className="text-muted-foreground">Format split</span>
             <span className="font-medium">MR {mrPct}% · GMS {gmsPct}%</span>
           </div>
-          <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+          <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
             <div className="bg-primary" style={{ width: `${mrPct}%` }} />
             <div className="bg-primary/40" style={{ width: `${gmsPct}%` }} />
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
-            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />MR · {mr}</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary/40" />GMS · {gms}</span>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-0.5">
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-primary" />MR · {mr}</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-primary/40" />GMS · {gms}</span>
           </div>
         </div>
       </CardContent>
@@ -365,13 +365,13 @@ function ModuleRow({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{heading}</h2>
-        <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
-          <Link to={href}>View all<ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</h2>
+        <Button variant="ghost" size="sm" asChild className="h-6 px-1.5 text-[11px]">
+          <Link to={href}>View all<ArrowRight className="h-3 w-3 ml-0.5" /></Link>
         </Button>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {tiles.map((t, i) => <StatTile key={i} icon={t.icon} label={t.label} value={t.value} tone={tone} accent={i === 1} />)}
       </div>
     </div>
@@ -388,14 +388,14 @@ function StatTile({
     "";
   return (
     <Card className={`rounded-xl shadow-sm transition-shadow hover:shadow-md ${accent ? "border-primary/30 bg-primary/5" : "border-border/70"} ${toneBorder}`}>
-      <CardContent className="p-5">
-        <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-          {icon}
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2">
+          <div className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {icon}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">{label}</div>
         </div>
-        <div className="mt-4">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-          <div className="text-2xl font-semibold leading-tight tabular-nums mt-1">{value.toLocaleString("en-IN")}</div>
-        </div>
+        <div className="text-xl font-semibold leading-tight tabular-nums mt-1.5">{value.toLocaleString("en-IN")}</div>
       </CardContent>
     </Card>
   );
@@ -407,19 +407,19 @@ function ActionCard({
   return (
     <Link to={to} className="group">
       <Card className={`h-full rounded-xl shadow-sm transition-all group-hover:shadow-md group-hover:-translate-y-0.5 ${accent ? "border-primary/30 bg-gradient-to-br from-primary/10 to-transparent" : "border-border/70"}`}>
-        <CardContent className="p-5 space-y-3">
+        <CardContent className="p-3.5 space-y-2">
           <div className="flex items-start justify-between">
-            <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
               {icon}
             </div>
             {badge}
           </div>
           <div>
-            <div className="font-semibold">{title}</div>
-            <p className="text-sm text-muted-foreground mt-1">{desc}</p>
+            <div className="font-semibold text-sm">{title}</div>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{desc}</p>
           </div>
-          <div className="flex items-center text-sm font-medium text-primary pt-1 gap-1 group-hover:gap-2 transition-all">
-            Open<ArrowRight className="h-4 w-4" />
+          <div className="flex items-center text-xs font-medium text-primary pt-0.5 gap-1 group-hover:gap-2 transition-all">
+            Open<ArrowRight className="h-3.5 w-3.5" />
           </div>
         </CardContent>
       </Card>
@@ -441,40 +441,40 @@ function RecentRow({
 }) {
   return (
     <li>
-      <Link to={to} className="group flex items-center justify-between gap-3 px-5 py-4 hover:bg-accent/40 transition-colors">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground shrink-0">
-            <Building2 className="h-4 w-4" />
+      <Link to={to} className="group flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-accent/40 transition-colors">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground shrink-0">
+            <Building2 className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm font-medium truncate">{title}</span>
-              <Badge variant={format === "MR" ? "default" : "secondary"} className="rounded-full px-2 py-0 text-[10px] font-semibold">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-xs font-medium truncate">{title}</span>
+              <Badge variant={format === "MR" ? "default" : "secondary"} className="rounded-full px-1.5 py-0 text-[9px] font-semibold">
                 {format}
               </Badge>
               {typeof revision === "number" && (
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">R{revision}</span>
+                <span className="font-mono text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground">R{revision}</span>
               )}
               {isCurrent === false && (
-                <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>
+                <Badge variant="outline" className="text-[8px] uppercase px-1 py-0">Superseded</Badge>
               )}
             </div>
-            <div className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</div>
+            <div className="text-[11px] text-muted-foreground truncate mt-0.5">{subtitle}</div>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {typeof amount === "number" && (
-            <span className="text-sm font-semibold tabular-nums">
+            <span className="text-xs font-semibold tabular-nums">
               ₹ {amount.toLocaleString("en-IN")}
             </span>
           )}
           {status && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
-              <span className={`h-1.5 w-1.5 rounded-full ${status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-1.5 py-0 text-[10px] capitalize text-muted-foreground">
+              <span className={`h-1 w-1 rounded-full ${status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
               {status}
             </span>
           )}
-          <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
         </div>
       </Link>
     </li>
@@ -485,13 +485,13 @@ function EmptyState({
   icon, title, desc, ctaLabel, ctaTo,
 }: { icon: React.ReactNode; title: string; desc: string; ctaLabel: string; ctaTo: string }) {
   return (
-    <div className="p-10 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+    <div className="p-6 text-center">
+      <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
         {icon}
       </div>
-      <p className="mt-3 font-medium">{title}</p>
-      <p className="text-sm text-muted-foreground">{desc}</p>
-      <Button className="mt-4 rounded-lg" asChild>
+      <p className="mt-2 font-medium text-sm">{title}</p>
+      <p className="text-xs text-muted-foreground">{desc}</p>
+      <Button size="sm" className="mt-3 rounded-lg" asChild>
         <Link to={ctaTo}>{ctaLabel}</Link>
       </Button>
     </div>
