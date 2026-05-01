@@ -475,10 +475,7 @@ export default function OrderEditor() {
           </div>
         )}
 
-        {/* Revisions section (OA + linked BOQ history) */}
-        {!isNew && parentOrderId && (
-          <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
-        )}
+        {/* Revisions rail moved to right side below */}
 
         {/* Confirmation prompts */}
         <AlertDialog open={confirmReviseOa} onOpenChange={setConfirmReviseOa}>
@@ -514,8 +511,9 @@ export default function OrderEditor() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <div className="space-y-4">
-          <div className="space-y-4 min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="space-y-4 lg:col-span-2 min-w-0">
+            <div className="space-y-4 min-w-0">
             {isNew && location.pathname !== "/orders/new/edit" && (
               <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />
             )}
@@ -976,6 +974,12 @@ export default function OrderEditor() {
             </div>
           </section>
         </div>
+          </div>
+          {!isNew && parentOrderId && (
+            <aside className="lg:col-span-1 lg:sticky lg:top-6">
+              <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+            </aside>
+          )}
       </div>
     </div>
   );

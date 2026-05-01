@@ -70,7 +70,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
           return (
             <div key={o.id} className="rounded-lg border bg-card overflow-hidden">
               {/* OA row */}
-              <div className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 ${o.is_current ? "bg-primary/5" : "bg-muted/30"}`}>
+              <div className={`flex flex-wrap items-center justify-between gap-2 px-2.5 py-2 ${o.is_current ? "bg-primary/5" : "bg-muted/30"}`}>
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
                   <Badge variant={o.is_current ? "default" : "secondary"} className="text-[10px] uppercase tracking-wide">
                     {o.is_current ? "Current" : "Superseded"}
@@ -82,7 +82,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                   <span className="text-[11px] text-muted-foreground">· {new Date(o.created_at).toLocaleDateString("en-IN")}</span>
                   {o.prepared_by && <span className="text-[11px] text-muted-foreground">· by {o.prepared_by}</span>}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <Button size="sm" variant="ghost" onClick={() => nav(`/orders/${o.id}`)}>
                     {o.is_current ? <Pencil className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
                     {o.is_current ? "Edit" : "View"}
@@ -96,7 +96,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
               {linkedBoqs.length > 0 ? (
                 <div className="divide-y border-t">
                   {linkedBoqs.map((b) => (
-                    <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-1.5 ${b.is_current ? "" : "opacity-70"}`}>
+                    <div key={b.id} className={`flex flex-wrap items-center justify-between gap-2 pl-6 pr-2.5 py-1.5 ${b.is_current ? "" : "opacity-70"}`}>
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <Badge variant={b.is_current ? "default" : "outline"} className="text-[10px]">
                           {b.is_current ? "Current" : "Superseded"}
@@ -108,7 +108,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                         <span className="text-[11px] text-muted-foreground capitalize">· {b.status}</span>
                         <span className="text-[11px] text-muted-foreground">· {new Date(b.created_at).toLocaleDateString("en-IN")}</span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <Button size="sm" variant="ghost" onClick={() => nav(`/boqs/${b.id}`)}>
                           {b.is_current ? <Pencil className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
                           {b.is_current ? "Edit" : "View"}
