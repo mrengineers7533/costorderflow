@@ -122,9 +122,6 @@ export default function PiEditor() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" className="rounded-lg" onClick={downloadPdf}>
-              <Download className="mr-1 h-4 w-4" />PI PDF
-            </Button>
             <Button className="rounded-lg" disabled={saving} onClick={() => setConfirmRevise(true)}>
               <GitBranch className="mr-1 h-4 w-4" />Save as new revision
             </Button>
