@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, Settings, Menu, ClipboardList, Receipt, HelpCircle } from "lucide-react";
+import { LayoutGrid, FileText, Settings, Menu, ClipboardList, Receipt, HelpCircle } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/", icon: LayoutGrid },
   { title: "Orders",    url: "/orders",     icon: FileText },
   { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
   { title: "Proforma Invoices", url: "/pi", icon: Receipt },
