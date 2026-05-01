@@ -8,12 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { OrderRecord } from "@/lib/orders/types";
+import { generateOrderPDF } from "@/lib/orders/pdf";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -58,6 +59,17 @@ export default function OrdersList() {
     toast({ title: `Deleted ${order.oa_number}${isRoot ? " (and revisions)" : ""}` });
     setConfirmDelete(null);
     setRefreshTick((t) => t + 1);
+  }
+
+  async function downloadOrderPdf(o: OrderRecord) {
+    try {
+      const doc = await generateOrderPDF(o);
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      doc.save(`${safe}.pdf`);
+      toast({ title: "OA PDF downloaded", description: o.oa_number });
+    } catch (err) {
+      toast({ title: "Download failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (
@@ -142,6 +154,15 @@ export default function OrdersList() {
                         <div className="inline-flex items-center gap-1">
                           <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => navigate(`/orders/${o.id}`)}>
                             <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={(e) => { e.stopPropagation(); downloadOrderPdf(o); }}
+                            aria-label={`Download ${o.oa_number}`}
+                          >
+                            <Download className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
