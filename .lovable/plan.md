@@ -1,47 +1,40 @@
-# Fix: Grand Total = Subtotal + GST
+# Move PI Live Preview to Bottom (match OA/BOQ pattern)
 
-## The Bug
+## Problem
+On the PI editor (`/pi/:id`), the live preview currently sits in a sticky **right-hand column** of a 2-column grid. The OA editor (and BOQ) instead show all editing sections stacked first, then a **full-width "Review & Export" preview section at the bottom** under a top border. The user wants PI to follow the same layout.
 
-In the live preview, totals show:
-- Subtotal: ₹1,35,25,238.99
-- GST (18%): ₹24,34,543.02
-- **Grand Total: ₹1,35,25,238.99**  ← wrong, GST not added
-- Net Payable: ₹1,35,25,238.99
+## Changes
 
-Expected Grand Total: **₹1,59,59,782.01** (Subtotal + GST).
+### `src/pages/pi/PiEditor.tsx`
+1. Remove the `lg:grid-cols-2` wrapper that splits inputs (left) and preview (right).
+2. Stack all the existing edit cards (PI details, Line items, PI adjustments, Revision history) in a single full-width column.
+3. After those cards, add a `<section id="preview" className="space-y-3 pt-6 border-t">` containing:
+   - A heading row: "Review & Export" with subtitle "Scroll through the preview below. When everything looks correct, export the PI PDF."
+   - The existing `<OrderPreview …/>` (same props, full width — no sticky/side column).
+   - The existing italic note explaining the title swap to PROFORMA INVOICE and the extra Discount/Advance/Net Payable rows.
+   - A right-aligned "Export PI PDF" button (mirrors OA's bottom export button) calling `downloadPdf`.
+4. Keep the top header bar (back button, PI number, format chip, R-badge, "PI PDF" and "Save as new revision" buttons) unchanged.
+5. Keep the existing "scroll to preview" behavior available — the section keeps `id="preview"` so the top "PI PDF" button area can later get a "Jump to preview" link if desired (optional, not required).
 
-## Root Cause
-
-In `src/lib/orders/calc.ts` (line 17), `calcTotals` computes GST as:
-
-```ts
-const gst = charges.gst_amount ?? (subtotal * (charges.gst_percent || 0)) / 100;
+### Resulting layout
+```text
+┌──────────────────────────────────────────────┐
+│ Header (PI number, format, revision, actions)│
+├──────────────────────────────────────────────┤
+│ PI details                                   │
+├──────────────────────────────────────────────┤
+│ Line items                                   │
+├──────────────────────────────────────────────┤
+│ PI adjustments + totals                      │
+├──────────────────────────────────────────────┤
+│ Revision history                             │
+├──────────────────────────────────────────────┤  ← border-t
+│ Review & Export                              │
+│ [ full-width OrderPreview ]                  │
+│                          [ Export PI PDF ]   │
+└──────────────────────────────────────────────┘
 ```
 
-`charges.gst_amount` defaults to `0` (not `undefined`), and the nullish-coalescing `??` only falls back when the value is `null`/`undefined`. So `gst` becomes `0`, which makes `grand_total` and `net_payable` equal to `subtotal` — even though `gst_percent` is 18.
-
-The `OrderPreview` component independently recomputes a display-only `gstAmount` from `gst_percent`, which is why the GST row shows the correct ₹24,34,543 — but the Grand Total / Net Payable values come from `calcTotals` and stay wrong.
-
-## Fix
-
-Change the GST resolution in `calcTotals` so a stored amount is only used when `gst_percent` is not provided (or both are zero, gracefully fall back). Concretely: prefer the percentage when present, otherwise use `gst_amount`.
-
-```ts
-const gstFromPercent = (subtotal * (charges.gst_percent || 0)) / 100;
-const gst = charges.gst_percent
-  ? gstFromPercent
-  : (charges.gst_amount || 0);
-```
-
-This makes:
-- `subtotal` = basic + P&F + insurance + freight
-- `grand_total` = subtotal + gst
-- `net_payable` = grand_total − discount
-
-Result with the screenshot's data: Grand Total and Net Payable both become ₹1,59,59,782.01 (minus any discount).
-
-## Files to Edit
-
-- `src/lib/orders/calc.ts` — fix the `gst` line in `calcTotals`
-
-No UI changes needed; `OrderPreview` already renders `p.totals.net_payable` for the Grand Total row, so it will reflect the corrected number automatically. The same fix also corrects the generated PDF totals (which use the same `calcTotals`).
+## Out of scope
+- No changes to PI calculation, PDF rendering, revisions, schema, or routing.
+- No changes to OA, BOQ, sidebar, or theme.

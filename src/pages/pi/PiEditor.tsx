@@ -131,10 +131,9 @@ export default function PiEditor() {
           </div>
         </div>
 
-        {/* Main grid */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="space-y-5">
-            <Card>
+        {/* Edit sections (stacked, full width — preview moved to bottom) */}
+        <div className="space-y-5">
+          <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -267,11 +266,17 @@ export default function PiEditor() {
                 </Table>
               </CardContent>
             </Card>
-          </div>
+        </div>
 
-          {/* Live preview */}
-          <div className="lg:sticky lg:top-4 lg:self-start" id="preview">
-            <OrderPreview
+        {/* Review & Export — full-width preview at the bottom (matches OA/BOQ) */}
+        <section id="preview" className="space-y-3 pt-6 border-t">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Review &amp; Export</h2>
+            <p className="text-sm text-muted-foreground">
+              Scroll through the preview below. When everything looks correct, export the PI PDF.
+            </p>
+          </div>
+          <OrderPreview
               oaNumber={pi.pi_number}
               format={pi.format}
               companyName={pi.company_name || ""}
@@ -293,12 +298,16 @@ export default function PiEditor() {
               amountInWords={amountInWords(totals.net_payable_pi)}
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
-            />
-            <p className="mt-2 text-[11px] text-muted-foreground italic">
-              Live preview uses the OA layout — final PDF replaces the title with <span className="font-semibold">PROFORMA INVOICE</span> and adds Discount / Advance / Net Payable rows.
-            </p>
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground italic">
+            Live preview uses the OA layout — final PDF replaces the title with <span className="font-semibold">PROFORMA INVOICE</span> and adds Discount / Advance / Net Payable rows.
+          </p>
+          <div className="flex justify-end pt-2">
+            <Button size="lg" onClick={downloadPdf} className="w-full sm:w-auto">
+              <Download className="mr-2 h-4 w-4" />Export PI PDF
+            </Button>
           </div>
-        </div>
+        </section>
       </div>
 
       <AlertDialog open={confirmRevise} onOpenChange={setConfirmRevise}>
