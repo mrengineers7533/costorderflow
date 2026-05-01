@@ -409,7 +409,7 @@ async function renderGmsPdf(
     doc.setFillColor(200, 200, 200);
     doc.rect(M, GMS_HEADER_H, W - M * 2, GMS_TITLE_BAR_H, "F");
     doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(13);
-    doc.text("ORDER ACCEPTANCE", W / 2, GMS_HEADER_H + 5, { align: "center" });
+    doc.text(opts?.docMeta?.title || "ORDER ACCEPTANCE", W / 2, GMS_HEADER_H + 5, { align: "center" });
   };
 
   const drawFooterBlock = (startY: number) => {
@@ -466,8 +466,8 @@ async function renderGmsPdf(
   let yR = y;
   const rightLines: string[] = [
     `Date : ${new Date(order.order_date).toLocaleDateString("en-GB").replace(/\//g, "-")}`,
-    `OA No.: ${order.oa_number}`,
-    `Ref. : ${order.reference || order.cost_sheet_number || "-"}`,
+    `${opts?.docMeta?.numberLabel || "OA No."}: ${opts?.docMeta?.numberValue || order.oa_number}`,
+    `${opts?.docMeta?.refLabel || "Ref."} : ${opts?.docMeta?.refValue ?? (order.reference || order.cost_sheet_number || "-")}`,
     `Contact :- Mr. Bhavesh Makin`,
     `Mob : - +91-9910066823`,
   ];
