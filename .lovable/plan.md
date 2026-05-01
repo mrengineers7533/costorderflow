@@ -1,45 +1,47 @@
-## Goal
+# Fix: Grand Total = Subtotal + GST
 
-Move the **Revision History** panel from below the OA editor to a **right-side rail** so the user can see the full revision history (OA + linked BOQs, Edit/View, OA PDF / BOQ PDF download buttons) alongside the OA being edited — exactly as in the uploaded screenshot.
+## The Bug
 
-## Layout change
+In the live preview, totals show:
+- Subtotal: ₹1,35,25,238.99
+- GST (18%): ₹24,34,543.02
+- **Grand Total: ₹1,35,25,238.99**  ← wrong, GST not added
+- Net Payable: ₹1,35,25,238.99
 
-Currently in `src/pages/orders/OrderEditor.tsx`, the page renders a single vertical column inside `max-w-7xl mx-auto space-y-5`, with `<RevisionsPanel />` placed at the bottom (around line 480).
+Expected Grand Total: **₹1,59,59,782.01** (Subtotal + GST).
 
-Change the page body to a **two-column grid on large screens**:
+## Root Cause
 
-```text
-┌─ Top header bar (OA number, action buttons) ─ unchanged, full width ─┐
-│                                                                       │
-├──────────────────────────────────┬────────────────────────────────────┤
-│  LEFT (main, ~2/3 width)         │  RIGHT (rail, ~1/3 width)          │
-│  • Revision badge banner         │  • Revision History card           │
-│  • Header form                   │    (sticky on scroll)              │
-│  • Line items                    │                                    │
-│  • Charges / totals              │                                    │
-│  • Live preview                  │                                    │
-└──────────────────────────────────┴────────────────────────────────────┘
+In `src/lib/orders/calc.ts` (line 17), `calcTotals` computes GST as:
+
+```ts
+const gst = charges.gst_amount ?? (subtotal * (charges.gst_percent || 0)) / 100;
 ```
 
-- Use Tailwind: outer `grid grid-cols-1 lg:grid-cols-3 gap-5`, left column `lg:col-span-2 space-y-5`, right column `lg:col-span-1`.
-- Wrap `<RevisionsPanel />` in a `lg:sticky lg:top-20` container so it stays in view while the user scrolls/edits the OA.
-- On screens smaller than `lg`, the right rail collapses to a full-width section below the OA (mobile-friendly fallback).
-- The full-width top header (OA number + action buttons + revision banners) stays above the grid so it spans the entire width as it does today.
+`charges.gst_amount` defaults to `0` (not `undefined`), and the nullish-coalescing `??` only falls back when the value is `null`/`undefined`. So `gst` becomes `0`, which makes `grand_total` and `net_payable` equal to `subtotal` — even though `gst_percent` is 18.
 
-## Revisions panel polish (so it matches the screenshot)
+The `OrderPreview` component independently recomputes a display-only `gstAmount` from `gst_percent`, which is why the GST row shows the correct ₹24,34,543 — but the Grand Total / Net Payable values come from `calcTotals` and stay wrong.
 
-`src/components/orders/RevisionsPanel.tsx` already shows everything needed:
-- OA row: Current/Superseded badge, OA number, Rev N, status, date, Edit/View, **OA PDF** download.
-- Indented BOQ rows under each OA: Current/Superseded badge, BOQ number, Rev N, status, date, Edit/View, **BOQ PDF** download.
+## Fix
 
-Minor tweaks for the narrower right-rail width:
-- Reduce horizontal padding inside rows (`px-3` → `px-2.5`) and tighten gaps so content doesn't wrap awkwardly at ~400px column width.
-- Allow the action buttons (`Edit/View`, `OA PDF`, `BOQ PDF`) to wrap to a second line if needed by adding `flex-wrap` to the button cluster.
-- Keep the orange **Current** pill, the muted **Superseded** chip, and the monospace Rev/number styling as in the screenshot.
+Change the GST resolution in `calcTotals` so a stored amount is only used when `gst_percent` is not provided (or both are zero, gracefully fall back). Concretely: prefer the percentage when present, otherwise use `gst_amount`.
 
-## Files to change
+```ts
+const gstFromPercent = (subtotal * (charges.gst_percent || 0)) / 100;
+const gst = charges.gst_percent
+  ? gstFromPercent
+  : (charges.gst_amount || 0);
+```
 
-- `src/pages/orders/OrderEditor.tsx` — restructure the body into a two-column grid; move `<RevisionsPanel />` into the right column inside a sticky wrapper.
-- `src/components/orders/RevisionsPanel.tsx` — small responsive polish (padding, flex-wrap on action buttons) so it reads cleanly in the narrower rail.
+This makes:
+- `subtotal` = basic + P&F + insurance + freight
+- `grand_total` = subtotal + gst
+- `net_payable` = grand_total − discount
 
-No data, schema, or PDF logic changes.
+Result with the screenshot's data: Grand Total and Net Payable both become ₹1,59,59,782.01 (minus any discount).
+
+## Files to Edit
+
+- `src/lib/orders/calc.ts` — fix the `gst` line in `calcTotals`
+
+No UI changes needed; `OrderPreview` already renders `p.totals.net_payable` for the Grand Total row, so it will reflect the corrected number automatically. The same fix also corrects the generated PDF totals (which use the same `calcTotals`).

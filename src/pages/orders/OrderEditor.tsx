@@ -270,7 +270,7 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
     return {
       id: orderId || "",
-      user_id: null as unknown as string,
+      user_id: "",
       oa_number: oaNumber, format, status: "finalized",
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate,
@@ -475,7 +475,10 @@ export default function OrderEditor() {
           </div>
         )}
 
-        {/* Revisions rail moved to right side below */}
+        {/* Revisions section (OA + linked BOQ history) */}
+        {!isNew && parentOrderId && (
+          <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+        )}
 
         {/* Confirmation prompts */}
         <AlertDialog open={confirmReviseOa} onOpenChange={setConfirmReviseOa}>
@@ -511,9 +514,8 @@ export default function OrderEditor() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          <div className="space-y-4 lg:col-span-2 min-w-0">
-            <div className="space-y-4 min-w-0">
+        <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             {isNew && location.pathname !== "/orders/new/edit" && (
               <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />
             )}
@@ -974,12 +976,6 @@ export default function OrderEditor() {
             </div>
           </section>
         </div>
-          </div>
-          {!isNew && parentOrderId && (
-            <aside className="lg:col-span-1 lg:sticky lg:top-6">
-              <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
-            </aside>
-          )}
       </div>
     </div>
   );
