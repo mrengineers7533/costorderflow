@@ -281,32 +281,30 @@ function NewOaCard({
   return <button type="button" onClick={onClick} className="block h-full text-left w-full group">{inner}</button>;
 }
 
-function DocsBadges({ boqCount, piCount }: { boqCount: number; piCount: number }) {
-  if (!boqCount && !piCount) {
-    return <span className="text-muted-foreground/50 text-xs">—</span>;
-  }
+function BoqBadge({ count }: { count: number }) {
+  if (!count) return <span className="text-muted-foreground/50 text-xs">—</span>;
   return (
-    <div className="inline-flex items-center gap-1">
-      {boqCount > 0 && (
-        <Link
-          to="/boqs"
-          title={`${boqCount} BOQ${boqCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
-        >
-          <ClipboardList className="h-3 w-3" />
-          BOQ{boqCount > 1 ? ` ×${boqCount}` : ""}
-        </Link>
-      )}
-      {piCount > 0 && (
-        <Link
-          to="/pi"
-          title={`${piCount} PI${piCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
-        >
-          <Receipt className="h-3 w-3" />
-          PI{piCount > 1 ? ` ×${piCount}` : ""}
-        </Link>
-      )}
-    </div>
+    <Link
+      to="/boqs"
+      title={`${count} BOQ${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
+    >
+      <ClipboardList className="h-3 w-3" />
+      BOQ{count > 1 ? ` ×${count}` : ""}
+    </Link>
+  );
+}
+
+function PiBadge({ count }: { count: number }) {
+  if (!count) return <span className="text-muted-foreground/50 text-xs">—</span>;
+  return (
+    <Link
+      to="/pi"
+      title={`${count} PI${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
+    >
+      <Receipt className="h-3 w-3" />
+      PI{count > 1 ? ` ×${count}` : ""}
+    </Link>
   );
 }
