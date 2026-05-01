@@ -1,40 +1,44 @@
-# Move PI Live Preview to Bottom (match OA/BOQ pattern)
+# Add Delete option to BOQ, OA, and PI lists
 
-## Problem
-On the PI editor (`/pi/:id`), the live preview currently sits in a sticky **right-hand column** of a 2-column grid. The OA editor (and BOQ) instead show all editing sections stacked first, then a **full-width "Review & Export" preview section at the bottom** under a top border. The user wants PI to follow the same layout.
+## Goal
+On the **BOQs**, **Orders (OA)**, and **Proforma Invoices (PI)** list pages, let the user delete an individual row. Each delete shows a confirmation dialog (irreversible) and then removes the row from the database.
 
-## Changes
+## Scope per page
 
-### `src/pages/pi/PiEditor.tsx`
-1. Remove the `lg:grid-cols-2` wrapper that splits inputs (left) and preview (right).
-2. Stack all the existing edit cards (PI details, Line items, PI adjustments, Revision history) in a single full-width column.
-3. After those cards, add a `<section id="preview" className="space-y-3 pt-6 border-t">` containing:
-   - A heading row: "Review & Export" with subtitle "Scroll through the preview below. When everything looks correct, export the PI PDF."
-   - The existing `<OrderPreview …/>` (same props, full width — no sticky/side column).
-   - The existing italic note explaining the title swap to PROFORMA INVOICE and the extra Discount/Advance/Net Payable rows.
-   - A right-aligned "Export PI PDF" button (mirrors OA's bottom export button) calling `downloadPdf`.
-4. Keep the top header bar (back button, PI number, format chip, R-badge, "PI PDF" and "Save as new revision" buttons) unchanged.
-5. Keep the existing "scroll to preview" behavior available — the section keeps `id="preview"` so the top "PI PDF" button area can later get a "Jump to preview" link if desired (optional, not required).
+### 1. `src/pages/orders/OrdersList.tsx` (currently has NO Actions column)
+- Add an **Actions** column header on the right.
+- For each order row add a small **Delete** icon-button (trash icon, ghost variant, destructive color).
+- The button stops row click propagation (otherwise it would also navigate to the editor).
+- Clicking opens an `AlertDialog`: "Delete OA `{oa_number}`? This also removes its revision history and cannot be undone."
+- On confirm:
+  - If the OA is a revision root (no `parent_order_id`): delete all rows where `parent_order_id = id` OR `id = id` (whole family).
+  - Else: delete just this revision row.
+  - After delete, refetch the list and toast success.
+- (Optional, minor) Also add an **Edit** icon-button to be consistent with BOQ/PI lists.
 
-### Resulting layout
-```text
-┌──────────────────────────────────────────────┐
-│ Header (PI number, format, revision, actions)│
-├──────────────────────────────────────────────┤
-│ PI details                                   │
-├──────────────────────────────────────────────┤
-│ Line items                                   │
-├──────────────────────────────────────────────┤
-│ PI adjustments + totals                      │
-├──────────────────────────────────────────────┤
-│ Revision history                             │
-├──────────────────────────────────────────────┤  ← border-t
-│ Review & Export                              │
-│ [ full-width OrderPreview ]                  │
-│                          [ Export PI PDF ]   │
-└──────────────────────────────────────────────┘
-```
+### 2. `src/pages/boqs/BoqList.tsx` (already has Edit + PDF in Actions)
+- Add a third **Delete** icon-button in the existing Actions cell (after PDF), destructive style, with `e.stopPropagation()`.
+- Confirmation dialog: "Delete BOQ `{boq_number}`?"
+- On confirm: delete the BOQ row by id (BOQs already store revisions as separate rows tied via `parent_order_id` family but not via a direct parent ref on boqs — so delete just the selected row, like PI/OA per-revision behavior). Refetch + toast.
+
+### 3. `src/pages/pi/PiList.tsx` (already has Edit + PDF in Actions)
+- Add a third **Delete** icon-button after PDF.
+- Confirmation dialog: "Delete PI `{pi_number}`?"
+- On confirm:
+  - If the PI has no `parent_pi_id` (it's the root of a family): delete the entire family — all rows where `parent_pi_id = id` OR `id = id`.
+  - Else: delete just this revision row.
+  - Refetch + toast.
+
+## Shared implementation details
+- Use the existing `AlertDialog` shadcn component (already used in `PiEditor.tsx` for the revision dialog).
+- Use the `Trash2` icon from `lucide-react`.
+- All Action buttons use `e.stopPropagation()` on their `onClick` so the row click that opens the editor doesn't also fire.
+- Use the existing `supabase` client. The `proforma_invoices`, `orders`, and `boqs` tables already have public delete RLS policies, so `.delete().eq('id', ...)` works directly.
+- Use the existing `useToast` (`@/hooks/use-toast`) for success/error feedback.
+- Track which row is being confirmed in local state: `const [confirmDelete, setConfirmDelete] = useState<{id: string; label: string} | null>(null)` per page.
 
 ## Out of scope
-- No changes to PI calculation, PDF rendering, revisions, schema, or routing.
-- No changes to OA, BOQ, sidebar, or theme.
+- No bulk-delete / multi-select.
+- No soft-delete / archive flag — these are hard deletes.
+- No deletion of associated PDFs in storage buckets (`oa-documents`, `boq-documents`, `pi-documents`). We only remove the database rows. Can be added later if needed.
+- No changes to editor pages (delete is list-only as requested).
