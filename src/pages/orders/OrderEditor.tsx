@@ -448,14 +448,6 @@ export default function OrderEditor() {
                     >
                       <GitBranch className="mr-1 h-4 w-4" />Revise BOQ
                     </Button>
-                    <Button
-                      variant="ghost"
-                      className="rounded-lg"
-                      onClick={downloadCurrentBoqPdf}
-                      title="Download current BOQ PDF"
-                    >
-                      <Download className="mr-1 h-4 w-4" />BOQ PDF
-                    </Button>
                   </>
                 )}
                 <Button
@@ -474,9 +466,6 @@ export default function OrderEditor() {
                   title="Create a new Proforma Invoice from this OA"
                 >
                   <Receipt className="mr-1 h-4 w-4" />Convert to PI
-                </Button>
-                <Button variant="ghost" className="rounded-lg" onClick={downloadPDF}>
-                  <Download className="mr-1 h-4 w-4" />OA PDF
                 </Button>
               </>
             )}
