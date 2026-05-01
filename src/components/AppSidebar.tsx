@@ -17,10 +17,10 @@ const items = [
   { title: "Orders",    url: "/orders",     icon: FileText },
   { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
   { title: "Proforma Invoices", url: "/pi", icon: Receipt },
-  { title: "How to use?", url: "/how-to-use", icon: HelpCircle },
 ];
 
 const footerItems = [
+  { title: "How to use?", url: "/how-to-use", icon: HelpCircle },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
