@@ -280,6 +280,13 @@ export default function PiList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <PiItemSelectDialog
+        open={piDialogOpen}
+        onOpenChange={setPiDialogOpen}
+        oa={piDialogOa}
+        onCreated={() => setRefreshTick((t) => t + 1)}
+      />
     </div>
   );
 }
