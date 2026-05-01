@@ -138,15 +138,18 @@ export async function generateOrderPDF(
   y = headerH + 6;
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold").setFontSize(13);
-  doc.text("ORDER ACCEPTANCE", W / 2, y, { align: "center" });
+  doc.text(opts?.docMeta?.title || "ORDER ACCEPTANCE", W / 2, y, { align: "center" });
   y += 6;
 
   // Meta box
   doc.setFontSize(9).setFont("helvetica", "normal");
   const metaLeft = [
-    ["OA Number", order.oa_number],
+    [opts?.docMeta?.numberLabel || "OA Number", opts?.docMeta?.numberValue || order.oa_number],
     ["Date", new Date(order.order_date).toLocaleDateString("en-IN")],
-    ["Reference", order.reference || order.cost_sheet_number || "-"],
+    [
+      opts?.docMeta?.refLabel || "Reference",
+      opts?.docMeta?.refValue ?? (order.reference || order.cost_sheet_number || "-"),
+    ],
   ];
   const metaRight = [
     ["Prepared By", order.prepared_by || "-"],
