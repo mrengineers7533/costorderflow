@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { CreatorCredit } from "@/components/CreatorCredit";
 import { useLocation } from "react-router-dom";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
@@ -8,6 +9,7 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/orders": { title: "Order Acceptances", desc: "Manage and review all OAs." },
   "/boqs": { title: "BOQs", desc: "Bill of Quantities across OAs and revisions." },
   "/pi": { title: "Proforma Invoices", desc: "Manage PIs and revisions." },
+  "/how-to-use": { title: "How to use?", desc: "Quick guide to using this app." },
 };
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
+          <CreatorCredit variant="footer" />
         </div>
       </div>
     </SidebarProvider>
