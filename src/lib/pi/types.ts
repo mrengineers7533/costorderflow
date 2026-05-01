@@ -27,7 +27,6 @@ export interface PiRecord {
   totals: Totals;
   amount_in_words: string | null;
   notes: string | null;
-  terms: string | null;
 
   one_time_discount_percent: number;
   advance_adjustment_percent: number;

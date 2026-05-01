@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,7 +71,7 @@ export default function PiEditor() {
           net_payable: totals!.net_payable_pi,
         },
         amount_in_words: amountInWords(totals!.net_payable_pi),
-      }, { terms: pi.terms || undefined });
+      });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
@@ -234,24 +233,6 @@ export default function PiEditor() {
               </CardContent>
             </Card>
 
-            {/* Terms & Conditions — editable */}
-            <Card>
-              <CardHeader><CardTitle className="text-base">Terms &amp; Conditions</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <Label htmlFor="pi-terms" className="text-xs text-muted-foreground">
-                  These terms appear in the generated PI PDF (and in the live preview). Leave blank to use the default {pi.format} terms.
-                </Label>
-                <Textarea
-                  id="pi-terms"
-                  rows={10}
-                  value={pi.terms || ""}
-                  onChange={(e) => update("terms", e.target.value)}
-                  placeholder={`Enter ${pi.format} Terms & Conditions for this PI…`}
-                  className="font-mono text-[12px] leading-relaxed"
-                />
-              </CardContent>
-            </Card>
-
             {/* Revision history */}
             <Card>
               <CardHeader><CardTitle className="text-base">Revision history</CardTitle></CardHeader>
@@ -313,7 +294,6 @@ export default function PiEditor() {
               }}
               amountInWords={amountInWords(totals.net_payable_pi)}
               notes={pi.notes || ""}
-              terms={pi.terms || undefined}
               onDownloadPDF={downloadPdf}
               docMeta={{
                 title: "Proforma Invoice",

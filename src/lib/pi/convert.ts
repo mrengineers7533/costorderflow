@@ -3,7 +3,6 @@ import { getFinancialYear, calcTotals, amountInWords } from "@/lib/orders/calc";
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
-import { DEFAULT_MR_TERMS } from "@/lib/orders/defaults";
 
 export interface OaItemPiStatus {
   done: boolean;
@@ -108,7 +107,6 @@ export async function createPiFromOaItems(
     },
     amount_in_words: amountInWords(totals.net_payable_pi),
     notes: oa.notes,
-    terms: oa.format === "MR" ? DEFAULT_MR_TERMS : null,
     one_time_discount_percent: 0,
     advance_adjustment_percent: 0,
   };
@@ -197,7 +195,6 @@ export async function createPiRevision(
     },
     amount_in_words: amountInWords(totals.net_payable_pi),
     notes: next.notes,
-    terms: (next as any).terms ?? null,
     one_time_discount_percent: next.one_time_discount_percent,
     advance_adjustment_percent: next.advance_adjustment_percent,
   };
