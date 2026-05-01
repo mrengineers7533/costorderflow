@@ -48,6 +48,8 @@ interface Props {
     refValue?: string;
     extraTotalsRows?: { label: string; value: number; bold?: boolean }[];
     hideDefaultGrandTotal?: boolean;
+    /** When true (PI), hide the page-1 HEAD OFFICE/Bank/Exclusions block; render it on the T&C page instead. */
+    hideFirstPageFooter?: boolean;
   };
 }
 
