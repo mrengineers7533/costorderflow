@@ -19,6 +19,13 @@ import { generatePiPDF } from "@/lib/pi/pdf";
 import { createPiRevision, fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { amountInWords, calcLineAmount } from "@/lib/orders/calc";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_MR_TERMS,
+  DEFAULT_GMS_TERMS,
+  DEFAULT_MR_BANK,
+  type GMSTerms,
+} from "@/lib/orders/defaults";
 
 export default function PiEditor() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +35,8 @@ export default function PiEditor() {
   const [saving, setSaving] = useState(false);
   const [confirmRevise, setConfirmRevise] = useState(false);
   const [family, setFamily] = useState<PiRecord[]>([]);
+  const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
+  const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
 
   useEffect(() => {
     if (!id) return;
@@ -71,7 +80,7 @@ export default function PiEditor() {
           net_payable: totals!.net_payable_pi,
         },
         amount_in_words: amountInWords(totals!.net_payable_pi),
-      });
+      }, { terms, gmsTerms });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
