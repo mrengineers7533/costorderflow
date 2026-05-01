@@ -117,20 +117,22 @@ export function AppSidebar() {
         </SidebarMenu>
 
         {/* Collapse / expand toggle at the very bottom */}
-        <button
-          onClick={toggleSidebar}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`mt-2 flex items-center gap-2 h-10 rounded-full px-3 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors ${collapsed ? "justify-center" : ""}`}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.8} />
-          ) : (
-            <>
-              <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.8} />
-              <span className="text-sm">Collapse</span>
-            </>
-          )}
-        </button>
+        <SidebarMenu className="gap-1.5 mt-1">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={toggleSidebar}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="h-11 rounded-full px-4 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              {collapsed ? (
+                <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.8} />
+              ) : (
+                <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.8} />
+              )}
+              {!collapsed && <span className="text-sm">Collapse</span>}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );
