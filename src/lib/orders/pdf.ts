@@ -85,6 +85,8 @@ export interface DocMetaOverride {
   extraTotalsRows?: ExtraTotalsRow[];
   /** When true, hide the default Grand Total row so PI can supply its own chain. */
   hideDefaultGrandTotal?: boolean;
+  /** When true (PI), hide the page-1 HEAD OFFICE/Bank/Exclusions footer block; render it on the T&C page instead. */
+  hideFirstPageFooter?: boolean;
 }
 
 export async function generateOrderPDF(
