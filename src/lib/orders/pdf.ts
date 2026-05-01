@@ -64,9 +64,32 @@ const COMPANY_GMS = {
   email: "info@gmsengg.com",
 };
 
+export interface ExtraTotalsRow {
+  label: string;
+  value: number;
+  bold?: boolean;
+  highlight?: boolean;
+}
+
+export interface DocMetaOverride {
+  /** Replaces "ORDER ACCEPTANCE" centered title. */
+  title?: string;
+  /** Replaces "OA Number" / "OA No.:" label. */
+  numberLabel?: string;
+  /** Replaces the OA number value. */
+  numberValue?: string;
+  /** Optional second meta line (e.g. Reference OA No.). MR uses Reference slot. */
+  refLabel?: string;
+  refValue?: string;
+  /** Extra rows appended to the totals section (e.g. PI Discount / Advance / Net). */
+  extraTotalsRows?: ExtraTotalsRow[];
+  /** When true, hide the default Grand Total row so PI can supply its own chain. */
+  hideDefaultGrandTotal?: boolean;
+}
+
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; docMeta?: DocMetaOverride },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
