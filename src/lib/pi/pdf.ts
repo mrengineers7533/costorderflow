@@ -65,7 +65,7 @@ export async function generatePiPDF(
     bank: opts?.bank ?? (pi.format === "MR" ? DEFAULT_MR_BANK : undefined),
     gmsTerms: opts?.gmsTerms ?? (pi.format === "GMS" ? DEFAULT_GMS_TERMS : undefined),
     docMeta: {
-      title: "PROFORMA INVOICE",
+      title: "Proforma Invoice",
       numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
       numberValue: pi.pi_number,
       refLabel: "Ref. OA No.",
