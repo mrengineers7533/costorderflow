@@ -513,7 +513,15 @@ function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
   );
 }
 
-function GMSTermsBlock({ t }: { t: GMSTerms }) {
+function GMSTermsBlock({
+  t, includeExclusions, fxRate, currency, isFX,
+}: {
+  t: GMSTerms;
+  includeExclusions?: boolean;
+  fxRate?: number;
+  currency?: string;
+  isFX?: boolean;
+}) {
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="space-y-0.5">
       <div className="font-bold">{label}</div>
@@ -530,6 +538,18 @@ function GMSTermsBlock({ t }: { t: GMSTerms }) {
       <Row label="Delivery Time :" value={t.delivery_time} />
       <Row label="Payment Terms :" value={t.payment_terms} />
       <Row label="General Conditions :" value={t.general_conditions} />
+      {includeExclusions && (
+        <div className="space-y-0.5 font-semibold pt-2 border-t border-foreground/40">
+          {DEFAULT_GMS_EXCLUSIONS.map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+          {isFX && fxRate ? (
+            <div>
+              {currency} conversion rate - @Rs{fxRate}. Any variation in exchange rate will be borne by client.
+            </div>
+          ) : null}
+        </div>
+      )}
       <GMSHeadOfficeBank />
     </div>
   );
