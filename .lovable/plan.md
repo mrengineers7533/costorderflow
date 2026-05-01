@@ -1,49 +1,36 @@
 ## Goal
 
-On the **Order Acceptances** list (`/orders`), visually indicate for each OA whether a **BOQ** and/or a **PI (Proforma Invoice)** has already been created from it — so users can tell at a glance which OAs already have downstream documents.
+On the **Order Acceptances** list (`/orders`), split the current single **"Docs"** column into two distinct columns — one for **BOQ** badges and one for **PI** badges — so users can scan each document type independently.
 
 ## What the user will see
 
-A new **"Docs"** column (between *Status* and *Actions*) on each OA row showing two small badges:
-
-- **BOQ** badge — appears when one or more BOQs exist for that OA. Shows count if more than 1 (e.g. `BOQ ×2`). Tooltip: "2 BOQ revisions created".
-- **PI** badge — appears when one or more PIs exist. Shows count if more than 1 (e.g. `PI ×4`). Tooltip: "4 PI revisions created".
-- When neither exists, a faint dash (`—`) is shown so the column never looks broken.
-
-Badges use existing UI:
-- BOQ → `secondary` variant with a `ClipboardList` icon
-- PI → `default` variant (primary tint) with a `Receipt` icon
-- Both rounded-full, `text-[10px]`, compact padding to match existing row density.
-
-Clicking a badge navigates to the filtered list (BOQ badge → `/boqs`, PI badge → `/pi`); clicks on the badge `stopPropagation` so the row's edit navigation does not fire.
+Replace the single `Docs` column with two separate columns, each rendering only its own badge (or a faint `—` when none exists):
 
 ```text
-| OA Number | Rev | Format | Company | Date | Net | Status   | Docs        | Actions |
-| OA-0004   | R0  | GMS    | Acme    | …    | ₹X  | finalized| [PI ×4]     |  ⋯      |
-| SANJEEV   | R0  | MR     | Beta    | …    | ₹Y  | draft    | [BOQ ×2][PI]|  ⋯      |
-| OA-0001   | R0  | MR     | Gamma   | …    | ₹Z  | draft    | —           |  ⋯      |
+| OA Number | Rev | Format | Company | Date | Net | Status   | BOQ      | PI       | Actions |
+| OA-0004   | R0  | GMS    | Acme    | …    | ₹X  | finalized| —        | [PI ×4]  |  ⋯      |
+| SANJEEV   | R0  | MR     | Beta    | …    | ₹Y  | draft    | [BOQ ×2] | [PI]     |  ⋯      |
+| OA-0001   | R0  | MR     | Gamma   | …    | ₹Z  | draft    | —        | —        |  ⋯      |
 ```
+
+- **BOQ column**: shows the secondary-styled `BOQ` badge with `ClipboardList` icon and count suffix (`×N` if >1). Click → `/boqs`.
+- **PI column**: shows the primary-tinted `PI` badge with `Receipt` icon and count suffix. Click → `/pi`.
+- Both cells use `stopPropagation` on click so row navigation isn't triggered.
+- Empty state in each column is a muted dash so the columns never look broken.
 
 ## Technical plan
 
 **File:** `src/pages/orders/OrdersList.tsx`
 
-1. After loading `orders`, fetch counts in two lightweight queries (only the linking columns, scoped to the loaded order ids):
-   - `supabase.from("boqs").select("order_id").in("order_id", ids)`
-   - `supabase.from("proforma_invoices").select("reference_oa_id").in("reference_oa_id", ids)`
-   
-   Reduce each result into a `Record<orderId, number>` map stored in state (`boqCounts`, `piCounts`). Re-run alongside the existing `refreshTick` / `showSuperseded` effect.
-
-2. Add a new `<TableHead>Docs</TableHead>` between Status and Actions, plus a matching `<TableCell>` per row that renders:
-   - `BoqBadge` if `boqCounts[o.id] > 0`
-   - `PiBadge` if `piCounts[o.id] > 0`
-   - else a muted `—`
-
-3. Add small inline `BoqBadge` / `PiBadge` components using the existing `Badge` + `lucide-react` icons (`ClipboardList`, `Receipt`). Wrap each in a `<Link>` (with `onClick={(e) => e.stopPropagation()}`) so clicks don't trigger row navigation.
-
-4. No DB schema changes, no migrations, no RLS changes — these tables already allow public select.
+1. Replace the single `<TableHead>Docs</TableHead>` with two heads: `<TableHead>BOQ</TableHead>` and `<TableHead>PI</TableHead>` (kept between Status and Actions).
+2. Replace the single `<TableCell>` containing `<DocsBadges />` with two adjacent cells, each with `onClick={(e) => e.stopPropagation()}`:
+   - First cell renders just the BOQ badge (or `—`)
+   - Second cell renders just the PI badge (or `—`)
+3. Refactor the inline `DocsBadges` component into two small components — `BoqBadge` and `PiBadge` — each taking a `count` prop and returning either the badge `<Link>` or the muted dash. Reuses existing `ClipboardList` / `Receipt` icons and the same color scheme already in place.
+4. No data-fetching changes — `boqCounts` and `piCounts` state already exist and continue to power the new cells.
 
 ## Out of scope
 
-- Doing the same on the dashboard's "Recent OAs" list (can be added later if you want).
-- Filtering OAs by "has BOQ" / "has PI" — only visual indicators for now.
+- No DB changes, no new queries, no schema changes.
+- No filtering by "has BOQ" / "has PI".
+- No dashboard "Recent OAs" changes.

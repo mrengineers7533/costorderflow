@@ -150,7 +150,8 @@ export default function OrdersList() {
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Docs</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">BOQ</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">PI</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -179,7 +180,10 @@ export default function OrdersList() {
                         </span>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DocsBadges boqCount={boqCounts[o.id] || 0} piCount={piCounts[o.id] || 0} />
+                        <BoqBadge count={boqCounts[o.id] || 0} />
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <PiBadge count={piCounts[o.id] || 0} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
