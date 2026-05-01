@@ -107,6 +107,7 @@ export async function createPiFromOaItems(
     },
     amount_in_words: amountInWords(totals.net_payable_pi),
     notes: oa.notes,
+    terms: null,
     one_time_discount_percent: 0,
     advance_adjustment_percent: 0,
   };
@@ -195,6 +196,7 @@ export async function createPiRevision(
     },
     amount_in_words: amountInWords(totals.net_payable_pi),
     notes: next.notes,
+    terms: (next as any).terms ?? null,
     one_time_discount_percent: next.one_time_discount_percent,
     advance_adjustment_percent: next.advance_adjustment_percent,
   };
