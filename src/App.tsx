@@ -12,6 +12,7 @@ import BoqList from "./pages/boqs/BoqList";
 import BoqEditor from "./pages/boqs/BoqEditor";
 import PiList from "./pages/pi/PiList";
 import PiEditor from "./pages/pi/PiEditor";
+import HowToUse from "./pages/HowToUse";
 import { AppLayout } from "./components/AppLayout";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/boqs/:id" element={<BoqEditor />} />
             <Route path="/pi" element={<PiList />} />
             <Route path="/pi/:id" element={<PiEditor />} />
+            <Route path="/how-to-use" element={<HowToUse />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
