@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download } from "lucide-react";
+import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -24,6 +24,8 @@ export default function OrdersList() {
   const [confirmDelete, setConfirmDelete] = useState<{ order: OrderRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [boqCounts, setBoqCounts] = useState<Record<string, number>>({});
+  const [piCounts, setPiCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setLoading(true);
@@ -35,6 +37,31 @@ export default function OrdersList() {
       setLoading(false);
     });
   }, [showSuperseded, refreshTick]);
+
+  useEffect(() => {
+    const ids = orders.map((o) => o.id);
+    if (ids.length === 0) {
+      setBoqCounts({});
+      setPiCounts({});
+      return;
+    }
+    (async () => {
+      const [boqRes, piRes] = await Promise.all([
+        supabase.from("boqs").select("order_id").in("order_id", ids),
+        supabase.from("proforma_invoices").select("reference_oa_id").in("reference_oa_id", ids),
+      ]);
+      const bMap: Record<string, number> = {};
+      ((boqRes.data as { order_id: string }[]) || []).forEach((r) => {
+        if (r.order_id) bMap[r.order_id] = (bMap[r.order_id] || 0) + 1;
+      });
+      const pMap: Record<string, number> = {};
+      ((piRes.data as { reference_oa_id: string }[]) || []).forEach((r) => {
+        if (r.reference_oa_id) pMap[r.reference_oa_id] = (pMap[r.reference_oa_id] || 0) + 1;
+      });
+      setBoqCounts(bMap);
+      setPiCounts(pMap);
+    })();
+  }, [orders]);
 
   async function handleDelete() {
     if (!confirmDelete) return;
@@ -123,6 +150,7 @@ export default function OrdersList() {
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Docs</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -149,6 +177,9 @@ export default function OrdersList() {
                           <span className={`h-1.5 w-1.5 rounded-full ${o.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
                           {o.status}
                         </span>
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DocsBadges boqCount={boqCounts[o.id] || 0} piCount={piCounts[o.id] || 0} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
@@ -244,4 +275,34 @@ function NewOaCard({
   );
   if (to) return <Link to={to} className="block h-full group">{inner}</Link>;
   return <button type="button" onClick={onClick} className="block h-full text-left w-full group">{inner}</button>;
+}
+
+function DocsBadges({ boqCount, piCount }: { boqCount: number; piCount: number }) {
+  if (!boqCount && !piCount) {
+    return <span className="text-muted-foreground/50 text-xs">—</span>;
+  }
+  return (
+    <div className="inline-flex items-center gap-1">
+      {boqCount > 0 && (
+        <Link
+          to="/boqs"
+          title={`${boqCount} BOQ${boqCount > 1 ? " revisions" : ""} created`}
+          className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
+        >
+          <ClipboardList className="h-3 w-3" />
+          BOQ{boqCount > 1 ? ` ×${boqCount}` : ""}
+        </Link>
+      )}
+      {piCount > 0 && (
+        <Link
+          to="/pi"
+          title={`${piCount} PI${piCount > 1 ? " revisions" : ""} created`}
+          className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
+        >
+          <Receipt className="h-3 w-3" />
+          PI{piCount > 1 ? ` ×${piCount}` : ""}
+        </Link>
+      )}
+    </div>
+  );
 }
