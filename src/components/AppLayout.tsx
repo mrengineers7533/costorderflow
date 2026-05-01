@@ -40,7 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
-          {location.pathname !== "/how-to-use" && <CreatorCredit variant="footer" />}
+          <CreatorCredit variant="footer" />
         </div>
       </div>
     </SidebarProvider>
