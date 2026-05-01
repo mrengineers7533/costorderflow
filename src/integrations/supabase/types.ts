@@ -294,6 +294,30 @@ export type Database = {
           },
         ]
       }
+      pi_counters: {
+        Row: {
+          financial_year: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          financial_year: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          financial_year?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -315,6 +339,123 @@ export type Database = {
           id?: string
           prepared_by?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      proforma_invoice_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          file_name: string
+          file_path: string
+          id: string
+          parent_pi_id: string | null
+          pi_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          file_name: string
+          file_path: string
+          id?: string
+          parent_pi_id?: string | null
+          pi_id: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          parent_pi_id?: string | null
+          pi_id?: string
+        }
+        Relationships: []
+      }
+      proforma_invoices: {
+        Row: {
+          advance_adjustment_percent: number
+          amount_in_words: string | null
+          base_pi_number: string
+          bill_to: Json
+          charges: Json
+          company_name: string | null
+          created_at: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          is_current: boolean
+          line_items: Json
+          notes: string | null
+          one_time_discount_percent: number
+          parent_pi_id: string | null
+          pi_date: string
+          pi_number: string
+          prepared_by: string | null
+          reference_oa_id: string | null
+          reference_oa_number: string | null
+          revised_from_id: string | null
+          revision: number
+          ship_to: Json
+          status: Database["public"]["Enums"]["order_status"]
+          totals: Json
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          advance_adjustment_percent?: number
+          amount_in_words?: string | null
+          base_pi_number: string
+          bill_to?: Json
+          charges?: Json
+          company_name?: string | null
+          created_at?: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          is_current?: boolean
+          line_items?: Json
+          notes?: string | null
+          one_time_discount_percent?: number
+          parent_pi_id?: string | null
+          pi_date?: string
+          pi_number: string
+          prepared_by?: string | null
+          reference_oa_id?: string | null
+          reference_oa_number?: string | null
+          revised_from_id?: string | null
+          revision?: number
+          ship_to?: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          totals?: Json
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          advance_adjustment_percent?: number
+          amount_in_words?: string | null
+          base_pi_number?: string
+          bill_to?: Json
+          charges?: Json
+          company_name?: string | null
+          created_at?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          is_current?: boolean
+          line_items?: Json
+          notes?: string | null
+          one_time_discount_percent?: number
+          parent_pi_id?: string | null
+          pi_date?: string
+          pi_number?: string
+          prepared_by?: string | null
+          reference_oa_id?: string | null
+          reference_oa_number?: string | null
+          revised_from_id?: string | null
+          revision?: number
+          ship_to?: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          totals?: Json
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -352,6 +493,13 @@ export type Database = {
         Returns: boolean
       }
       next_oa_number: {
+        Args: {
+          _financial_year: string
+          _format: Database["public"]["Enums"]["order_format"]
+        }
+        Returns: string
+      }
+      next_pi_number: {
         Args: {
           _financial_year: string
           _format: Database["public"]["Enums"]["order_format"]
