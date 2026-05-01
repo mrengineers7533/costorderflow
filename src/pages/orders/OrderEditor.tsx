@@ -1003,6 +1003,12 @@ export default function OrderEditor() {
           </section>
         </div>
       </div>
+
+      <PiItemSelectDialog
+        open={piDialogOpen}
+        onOpenChange={setPiDialogOpen}
+        oa={piDialogOa}
+      />
     </div>
   );
 }

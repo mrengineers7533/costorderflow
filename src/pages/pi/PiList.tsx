@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { PiRecord } from "@/lib/pi/types";
 import { generatePiPDF } from "@/lib/pi/pdf";
-import { createPiFromOa } from "@/lib/pi/convert";
 import type { OrderRecord } from "@/lib/orders/types";
+import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 
 type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_date: string; pi_count: number };
 
@@ -35,6 +35,8 @@ export default function PiList() {
   const [confirmDelete, setConfirmDelete] = useState<{ pi: PiRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [piDialogOpen, setPiDialogOpen] = useState(false);
+  const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -102,11 +104,10 @@ export default function PiList() {
     try {
       const { data: oa, error } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
       if (error || !oa) throw error || new Error("OA not found");
-      const pi = await createPiFromOa(oa as unknown as OrderRecord);
-      toast({ title: `PI ${pi.pi_number} created` });
-      nav(`/pi/${pi.id}`);
+      setPiDialogOa(oa as unknown as OrderRecord);
+      setPiDialogOpen(true);
     } catch (e: any) {
-      toast({ title: "Failed to create PI", description: e?.message || String(e), variant: "destructive" });
+      toast({ title: "Failed to open PI dialog", description: e?.message || String(e), variant: "destructive" });
     }
   }
 
