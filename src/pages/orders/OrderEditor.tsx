@@ -330,6 +330,22 @@ export default function OrderEditor() {
     doc.save(`${(currentBoq.boq_number || "BOQ").replace(/[/\\]/g, "_")}-Rev${currentBoq.revision ?? 0}.pdf`);
   }
 
+  async function handleConvertToPi() {
+    if (!orderId) return;
+    setSaving(true);
+    try {
+      const { data: oa, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+      if (error || !oa) throw error || new Error("OA not found");
+      const pi = await createPiFromOa(oa as unknown as OrderRecord);
+      toast({ title: `PI ${pi.pi_number} created from OA` });
+      navigate(`/pi/${pi.id}`);
+    } catch (e: any) {
+      toast({ title: "Failed to convert to PI", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   function applyCostSheet(data: ExtractedCostSheet) {
