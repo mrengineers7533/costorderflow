@@ -225,7 +225,15 @@ export async function generateOrderPDF(
     const disc = c.discount_percent > 0 ? (t.grand_total * c.discount_percent) / 100 : c.discount;
     if (disc > 0) totalsRows.push({ label: `Discount${c.discount_percent ? ` @ ${c.discount_percent}%` : ""}`, value: -disc });
   }
-  totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+  if (!opts?.docMeta?.hideDefaultGrandTotal) {
+    totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+  }
+  // Extra rows (e.g. PI: One-Time Discount / Advance Adjustment / Net Payable)
+  if (opts?.docMeta?.extraTotalsRows?.length) {
+    for (const r of opts.docMeta.extraTotalsRows) {
+      totalsRows.push({ label: r.label, value: r.value, bold: !!r.bold });
+    }
+  }
 
   const totalsAsBody = totalsRows.map((r) => [
     { content: r.label, colSpan: 6, styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "bold") as "bold" } },
