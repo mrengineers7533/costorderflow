@@ -87,15 +87,8 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <main className="container mx-auto px-4 lg:px-6 py-5 space-y-4">
-        {/* Header */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Overview across Order Acceptances, BOQs, and Proforma Invoices.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Header actions */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
               <Link to="/orders"><FileText className="mr-1 h-3.5 w-3.5" />OAs</Link>
             </Button>
@@ -108,7 +101,6 @@ const Index = () => {
             <Button asChild size="sm" className="rounded-lg h-8">
               <Link to="/orders/new"><FilePlus2 className="mr-1 h-3.5 w-3.5" />New OA</Link>
             </Button>
-          </div>
         </div>
 
         {/* Hero strip */}
