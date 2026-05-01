@@ -3,6 +3,19 @@ import type { OrderRecord, LineItem } from "@/lib/orders/types";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
 import { deriveBoqNumber, DEFAULT_BOQ_TERMS } from "@/lib/boq/types";
 
+/** UUID columns on orders/boqs that must be a valid uuid or null — never "". */
+const ORDER_UUID_FIELDS = ["user_id", "parent_order_id", "revised_from_id"] as const;
+const BOQ_UUID_FIELDS = ["user_id", "order_id", "source_order_id", "revised_from_id"] as const;
+
+/** Coerce empty strings on uuid fields to null so Postgres doesn't reject the insert. */
+function sanitizeUuids<T extends Record<string, unknown>>(payload: T, fields: readonly string[]): T {
+  const out: Record<string, unknown> = { ...payload };
+  for (const f of fields) {
+    if (out[f] === "" || out[f] === undefined) out[f] = null;
+  }
+  return out as T;
+}
+
 /** Strip an OrderRecord down to a payload safe for inserting a fresh revision row. */
 function stripOrderForInsert(o: OrderRecord) {
   const {
@@ -16,7 +29,8 @@ function stripOrderForInsert(o: OrderRecord) {
 
 /** Resolve the family root (parent_order_id). Falls back to the row's own id. */
 function rootOf(o: Pick<OrderRecord, "id" | "parent_order_id">) {
-  return o.parent_order_id || o.id;
+  const p = o.parent_order_id;
+  return p && p !== "" ? p : o.id;
 }
 
 /** Clone an OA into a new revision row (revision = max+1, is_current = true).
@@ -41,14 +55,14 @@ export async function reviseOrder(
 
   // Insert a new OA row carrying the same content, bumped revision.
   const base = stripOrderForInsert(source);
-  const insertPayload = {
+  const insertPayload = sanitizeUuids({
     ...base,
     parent_order_id: root,
     revision: nextRev,
     is_current: true,
-    revised_from_id: source.id,
+    revised_from_id: source.id || null,
     status: "draft" as const, // new revision starts as a draft
-  };
+  }, ORDER_UUID_FIELDS);
   const { data: newOrder, error: insErr } = await supabase
     .from("orders").insert(insertPayload as never).select().single();
   if (insErr) throw insErr;
