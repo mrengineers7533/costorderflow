@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye } from "lucide-react";
+import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye, Receipt } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
@@ -21,6 +21,7 @@ import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails,
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
+import { createPiFromOa } from "@/lib/pi/convert";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
