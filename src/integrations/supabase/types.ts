@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       boqs: {
         Row: {
           boq_date: string
@@ -141,6 +162,30 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      credit_removal_attempts: {
+        Row: {
+          action: string | null
+          attempted_at: string
+          id: string
+          success: boolean
+          user_identifier: string | null
+        }
+        Insert: {
+          action?: string | null
+          attempted_at?: string
+          id?: string
+          success: boolean
+          user_identifier?: string | null
+        }
+        Update: {
+          action?: string | null
+          attempted_at?: string
+          id?: string
+          success?: boolean
+          user_identifier?: string | null
         }
         Relationships: []
       }
