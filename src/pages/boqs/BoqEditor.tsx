@@ -6,12 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2, Download, Printer, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Download, Printer, Save, GitBranch } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import type { OrderRecord } from "@/lib/orders/types";
+import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
+import { reviseBoqFromOrder } from "@/lib/revisions";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
@@ -32,6 +38,9 @@ export default function BoqEditor() {
 
   const [boqId, setBoqId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>("");
+  const [parentOrderId, setParentOrderId] = useState<string>("");
+  const [revisionsKey, setRevisionsKey] = useState(0);
+  const [confirmRevise, setConfirmRevise] = useState(false);
   const [boqNumber, setBoqNumber] = useState("");
   const [version, setVersion] = useState(1);
   const [format, setFormat] = useState<"MR" | "GMS">("MR");
@@ -62,6 +71,12 @@ export default function BoqEditor() {
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
         setItems(b.line_items?.length ? b.line_items : [newBoqItem(1)]);
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");
+        // Resolve the family root via the linked OA so the revisions panel works.
+        if (b.order_id) {
+          const { data: ord } = await supabase.from("orders").select("id,parent_order_id").eq("id", b.order_id).maybeSingle();
+          const o = ord as { id: string; parent_order_id: string | null } | null;
+          if (o) setParentOrderId(o.parent_order_id || o.id);
+        }
         setLoading(false);
         return;
       }
@@ -79,6 +94,7 @@ export default function BoqEditor() {
       }
       const o = order as unknown as OrderRecord;
       setOrderId(o.id);
+      setParentOrderId(o.parent_order_id || o.id);
       setFormat(o.format);
       setReferenceOa(o.oa_number);
       setBoqNumber(deriveBoqNumber(o.oa_number));
