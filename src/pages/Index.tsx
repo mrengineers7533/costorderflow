@@ -15,8 +15,6 @@ import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { PiRecord } from "@/lib/pi/types";
 
-type Tone = "oa" | "boq" | "pi";
-
 function isThisMonth(d: string | undefined | null) {
   if (!d) return false;
   const date = new Date(d);
@@ -134,7 +132,6 @@ const Index = () => {
         {/* Module stat tiles */}
         <section className="space-y-3">
           <ModuleRow
-            tone="oa"
             heading="Order Acceptances"
             href="/orders"
             tiles={[
@@ -145,7 +142,6 @@ const Index = () => {
             ]}
           />
           <ModuleRow
-            tone="boq"
             heading="BOQs"
             href="/boqs"
             tiles={[
@@ -156,7 +152,6 @@ const Index = () => {
             ]}
           />
           <ModuleRow
-            tone="pi"
             heading="Proforma Invoices"
             href="/pi"
             tiles={[
@@ -356,9 +351,8 @@ function ValueHero({
 }
 
 function ModuleRow({
-  tone, heading, href, tiles,
+  heading, href, tiles,
 }: {
-  tone: Tone;
   heading: string;
   href: string;
   tiles: { icon: React.ReactNode; label: string; value: number }[];
@@ -372,25 +366,20 @@ function ModuleRow({
         </Button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {tiles.map((t, i) => <StatTile key={i} icon={t.icon} label={t.label} value={t.value} tone={tone} accent={i === 1} />)}
+        {tiles.map((t, i) => <StatTile key={i} icon={t.icon} label={t.label} value={t.value} />)}
       </div>
     </div>
   );
 }
 
 function StatTile({
-  icon, label, value, accent, tone,
-}: { icon: React.ReactNode; label: string; value: number; accent?: boolean; tone?: Tone }) {
-  const toneBorder =
-    tone === "boq" ? "border-l-4 border-l-primary/50" :
-    tone === "pi"  ? "border-l-4 border-l-primary/80" :
-    tone === "oa"  ? "border-l-4 border-l-primary" :
-    "";
+  icon, label, value,
+}: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <Card className={`rounded-xl shadow-sm transition-shadow hover:shadow-md ${accent ? "border-primary/30 bg-primary/5" : "border-border/70"} ${toneBorder}`}>
+    <Card className={`rounded-xl shadow-sm transition-shadow hover:shadow-md "border-border/70"`}>
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
-          <div className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${accent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+          <div className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
             {icon}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">{label}</div>
