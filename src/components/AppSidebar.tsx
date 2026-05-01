@@ -64,7 +64,7 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       isActive={active}
-                      className="h-11 rounded-xl px-3 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
+                      className="h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
                     >
                       <NavLink
                         to={item.url}
@@ -97,7 +97,7 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={active}
-                  className="h-11 rounded-xl px-3 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+                  className="h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
                 >
                   <NavLink
                     to={item.url}
