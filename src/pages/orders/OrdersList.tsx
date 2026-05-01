@@ -150,7 +150,8 @@ export default function OrdersList() {
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Docs</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">BOQ</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">PI</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -179,7 +180,10 @@ export default function OrdersList() {
                         </span>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DocsBadges boqCount={boqCounts[o.id] || 0} piCount={piCounts[o.id] || 0} />
+                        <BoqBadge count={boqCounts[o.id] || 0} />
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <PiBadge count={piCounts[o.id] || 0} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
@@ -277,32 +281,30 @@ function NewOaCard({
   return <button type="button" onClick={onClick} className="block h-full text-left w-full group">{inner}</button>;
 }
 
-function DocsBadges({ boqCount, piCount }: { boqCount: number; piCount: number }) {
-  if (!boqCount && !piCount) {
-    return <span className="text-muted-foreground/50 text-xs">—</span>;
-  }
+function BoqBadge({ count }: { count: number }) {
+  if (!count) return <span className="text-muted-foreground/50 text-xs">—</span>;
   return (
-    <div className="inline-flex items-center gap-1">
-      {boqCount > 0 && (
-        <Link
-          to="/boqs"
-          title={`${boqCount} BOQ${boqCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
-        >
-          <ClipboardList className="h-3 w-3" />
-          BOQ{boqCount > 1 ? ` ×${boqCount}` : ""}
-        </Link>
-      )}
-      {piCount > 0 && (
-        <Link
-          to="/pi"
-          title={`${piCount} PI${piCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
-        >
-          <Receipt className="h-3 w-3" />
-          PI{piCount > 1 ? ` ×${piCount}` : ""}
-        </Link>
-      )}
-    </div>
+    <Link
+      to="/boqs"
+      title={`${count} BOQ${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
+    >
+      <ClipboardList className="h-3 w-3" />
+      BOQ{count > 1 ? ` ×${count}` : ""}
+    </Link>
+  );
+}
+
+function PiBadge({ count }: { count: number }) {
+  if (!count) return <span className="text-muted-foreground/50 text-xs">—</span>;
+  return (
+    <Link
+      to="/pi"
+      title={`${count} PI${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
+    >
+      <Receipt className="h-3 w-3" />
+      PI{count > 1 ? ` ×${count}` : ""}
+    </Link>
   );
 }
