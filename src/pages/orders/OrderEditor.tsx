@@ -475,10 +475,7 @@ export default function OrderEditor() {
           </div>
         )}
 
-        {/* Revisions section (OA + linked BOQ history) */}
-        {!isNew && parentOrderId && (
-          <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
-        )}
+        {/* Revisions rail moved to right side below */}
 
         {/* Confirmation prompts */}
         <AlertDialog open={confirmReviseOa} onOpenChange={setConfirmReviseOa}>
