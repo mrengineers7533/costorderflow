@@ -2,20 +2,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-
-const HeaderActionsContext = createContext<{
-  setActions: (node: ReactNode | null) => void;
-}>({ setActions: () => {} });
-
-export function useHeaderActions(node: ReactNode, deps: unknown[] = []) {
-  const { setActions } = useContext(HeaderActionsContext);
-  useEffect(() => {
-    setActions(node);
-    return () => setActions(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/": { title: "Dashboard", desc: "Overview across Order Acceptances, BOQs, and Proforma Invoices." },
@@ -26,7 +12,6 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const [actions, setActions] = useState<ReactNode | null>(null);
   const meta =
     PAGE_META[location.pathname] ||
     (location.pathname.startsWith("/orders") ? { title: "Order Acceptances" } :
@@ -49,15 +34,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <div className="ml-auto flex items-center gap-2">
-              {actions}
               <GlobalSearch />
             </div>
           </header>
-          <main className="flex-1 min-w-0">
-            <HeaderActionsContext.Provider value={{ setActions }}>
-              {children}
-            </HeaderActionsContext.Provider>
-          </main>
+          <main className="flex-1 min-w-0">{children}</main>
         </div>
       </div>
     </SidebarProvider>
