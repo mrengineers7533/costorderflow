@@ -3,13 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Eye, Pencil, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
+import { Eye, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { fetchOrderFamily, fetchBoqsForFamily } from "@/lib/revisions";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
-import { generateOrderPDF } from "@/lib/orders/pdf";
-import { generateBoqPDF } from "@/lib/boq/pdf";
 
 interface Props {
   rootOrderId: string;
@@ -40,15 +38,6 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
 
   // Lazy-load: only fetch when the section is opened (refetch on reloadKey while open).
   useEffect(() => { if (open) load(); }, [open, load, reloadKey]);
-
-  async function downloadOaPdf(o: OrderRecord) {
-    const doc = await generateOrderPDF(o);
-    doc.save(`${(o.oa_number || "OA").replace(/[/\\]/g, "_")}-Rev${o.revision ?? 0}.pdf`);
-  }
-  async function downloadBoqPdf(b: BoqRecord) {
-    const doc = await generateBoqPDF(b);
-    doc.save(`${(b.boq_number || "BOQ").replace(/[/\\]/g, "_")}-Rev${b.revision ?? 0}.pdf`);
-  }
 
   // Group BOQ revisions by their source OA revision id.
   const boqsBySourceOrder = new Map<string, BoqRecord[]>();
@@ -102,11 +91,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                   </div>
                   <div className="flex items-center gap-1">
                     <Button size="sm" variant="ghost" onClick={() => nav(`/orders/${o.id}`)}>
-                      {o.is_current ? <Pencil className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
-                      {o.is_current ? "Edit" : "View"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => downloadOaPdf(o)}>
-                      <Download className="h-3.5 w-3.5 mr-1" />OA PDF
+                      <Eye className="h-3.5 w-3.5 mr-1" />View
                     </Button>
                   </div>
                 </div>
@@ -128,11 +113,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                         </div>
                         <div className="flex items-center gap-1">
                           <Button size="sm" variant="ghost" onClick={() => nav(`/boqs/${b.id}`)}>
-                            {b.is_current ? <Pencil className="h-3.5 w-3.5 mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
-                            {b.is_current ? "Edit" : "View"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => downloadBoqPdf(b)}>
-                            <Download className="h-3.5 w-3.5 mr-1" />BOQ PDF
+                            <Eye className="h-3.5 w-3.5 mr-1" />View
                           </Button>
                         </div>
                       </div>
