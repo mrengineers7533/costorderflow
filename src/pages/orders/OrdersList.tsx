@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt } from "lucide-react";
+import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt, Plus, Eye } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -26,6 +28,9 @@ export default function OrdersList() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [boqCounts, setBoqCounts] = useState<Record<string, number>>({});
   const [piCounts, setPiCounts] = useState<Record<string, number>>({});
+  const [docFilter, setDocFilter] = useState<"all" | "boq" | "pi" | "none">("all");
+  const [piDialogOpen, setPiDialogOpen] = useState(false);
+  const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -61,7 +66,28 @@ export default function OrdersList() {
       setBoqCounts(bMap);
       setPiCounts(pMap);
     })();
-  }, [orders]);
+  }, [orders, refreshTick]);
+
+  const counts = {
+    all: orders.length,
+    boq: orders.filter((o) => (boqCounts[o.id] || 0) > 0).length,
+    pi: orders.filter((o) => (piCounts[o.id] || 0) > 0).length,
+    none: orders.filter((o) => !(boqCounts[o.id] || 0) && !(piCounts[o.id] || 0)).length,
+  };
+
+  const visibleOrders = orders.filter((o) => {
+    const b = boqCounts[o.id] || 0;
+    const p = piCounts[o.id] || 0;
+    if (docFilter === "boq") return b > 0;
+    if (docFilter === "pi") return p > 0;
+    if (docFilter === "none") return !b && !p;
+    return true;
+  });
+
+  function openCreatePi(o: OrderRecord) {
+    setPiDialogOa(o);
+    setPiDialogOpen(true);
+  }
 
   async function handleDelete() {
     if (!confirmDelete) return;
@@ -140,6 +166,15 @@ export default function OrdersList() {
           <CardContent>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
               orders.length === 0 ? <p className="text-muted-foreground">No orders yet. Click “New Order” to create one.</p> :
+              <>
+              <Tabs value={docFilter} onValueChange={(v) => setDocFilter(v as typeof docFilter)} className="mb-4">
+                <TabsList>
+                  <TabsTrigger value="all">All <span className="ml-1.5 text-[10px] opacity-70">{counts.all}</span></TabsTrigger>
+                  <TabsTrigger value="boq">Has BOQ <span className="ml-1.5 text-[10px] opacity-70">{counts.boq}</span></TabsTrigger>
+                  <TabsTrigger value="pi">Has PI <span className="ml-1.5 text-[10px] opacity-70">{counts.pi}</span></TabsTrigger>
+                  <TabsTrigger value="none">No Docs <span className="ml-1.5 text-[10px] opacity-70">{counts.none}</span></TabsTrigger>
+                </TabsList>
+              </Tabs>
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -150,12 +185,15 @@ export default function OrdersList() {
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Docs</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">BOQ</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">PI</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((o) => (
+                  {visibleOrders.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No orders match this filter.</TableCell></TableRow>
+                  ) : visibleOrders.map((o) => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
                       <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
                       <TableCell>
@@ -179,7 +217,10 @@ export default function OrdersList() {
                         </span>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DocsBadges boqCount={boqCounts[o.id] || 0} piCount={piCounts[o.id] || 0} />
+                        <BoqCell orderId={o.id} count={boqCounts[o.id] || 0} onCreate={() => navigate(`/boqs/new?orderId=${o.id}`)} />
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <PiCell count={piCounts[o.id] || 0} onCreate={() => openCreatePi(o)} onView={() => navigate("/pi")} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
@@ -210,6 +251,7 @@ export default function OrdersList() {
                   ))}
                 </TableBody>
               </Table>
+              </>
             }
           </CardContent>
         </Card>
@@ -239,6 +281,13 @@ export default function OrdersList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <PiItemSelectDialog
+        open={piDialogOpen}
+        onOpenChange={setPiDialogOpen}
+        oa={piDialogOa}
+        onCreated={() => setRefreshTick((t) => t + 1)}
+      />
     </div>
   );
 }
@@ -277,32 +326,45 @@ function NewOaCard({
   return <button type="button" onClick={onClick} className="block h-full text-left w-full group">{inner}</button>;
 }
 
-function DocsBadges({ boqCount, piCount }: { boqCount: number; piCount: number }) {
-  if (!boqCount && !piCount) {
-    return <span className="text-muted-foreground/50 text-xs">—</span>;
+function BoqCell({ orderId, count, onCreate }: { orderId: string; count: number; onCreate: () => void }) {
+  if (count === 0) {
+    return (
+      <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={onCreate}>
+        <Plus className="h-3 w-3 mr-1" />Create BOQ
+      </Button>
+    );
   }
   return (
-    <div className="inline-flex items-center gap-1">
-      {boqCount > 0 && (
-        <Link
-          to="/boqs"
-          title={`${boqCount} BOQ${boqCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-secondary/80 transition-colors"
-        >
-          <ClipboardList className="h-3 w-3" />
-          BOQ{boqCount > 1 ? ` ×${boqCount}` : ""}
-        </Link>
-      )}
-      {piCount > 0 && (
-        <Link
-          to="/pi"
-          title={`${piCount} PI${piCount > 1 ? " revisions" : ""} created`}
-          className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold hover:bg-primary/80 transition-colors"
-        >
-          <Receipt className="h-3 w-3" />
-          PI{piCount > 1 ? ` ×${piCount}` : ""}
-        </Link>
-      )}
-    </div>
+    <Link
+      to="/boqs"
+      title={`${count} BOQ${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-md bg-secondary text-secondary-foreground px-2 py-1 text-[11px] font-medium hover:bg-secondary/80 transition-colors"
+    >
+      <Eye className="h-3 w-3" />
+      <ClipboardList className="h-3 w-3" />
+      View BOQ{count > 1 ? ` ×${count}` : ""}
+    </Link>
+  );
+}
+
+function PiCell({ count, onCreate, onView }: { count: number; onCreate: () => void; onView: () => void }) {
+  if (count === 0) {
+    return (
+      <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={onCreate}>
+        <Plus className="h-3 w-3 mr-1" />Create PI
+      </Button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onView}
+      title={`${count} PI${count > 1 ? " revisions" : ""} created`}
+      className="inline-flex items-center gap-1 rounded-md bg-primary text-primary-foreground px-2 py-1 text-[11px] font-medium hover:bg-primary/90 transition-colors"
+    >
+      <Eye className="h-3 w-3" />
+      <Receipt className="h-3 w-3" />
+      View PI{count > 1 ? ` ×${count}` : ""}
+    </button>
   );
 }
