@@ -530,6 +530,11 @@ async function renderGmsPdf(
   totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
   totalsRows.push({ label: "Grand Total", value: t.basic_total, bold: true });
   }
+  if (opts?.docMeta?.extraTotalsRows?.length) {
+    for (const er of opts.docMeta.extraTotalsRows) {
+      totalsRows.push({ label: er.label, value: er.value, bold: !!er.bold });
+    }
+  }
 
   const totalsAsBody = totalsRows.map((r) => [
     {
