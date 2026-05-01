@@ -270,7 +270,7 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
     return {
       id: orderId || "",
-      user_id: "",
+      user_id: null as unknown as string,
       oa_number: oaNumber, format, status: "finalized",
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate,
