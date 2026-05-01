@@ -1,7 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import { CreatorCredit } from "@/components/CreatorCredit";
 import { useLocation } from "react-router-dom";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
@@ -40,7 +39,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
-          <CreatorCredit variant="footer" />
         </div>
       </div>
     </SidebarProvider>

@@ -6,6 +6,7 @@ import {
   Eye,
   Save,
 } from "lucide-react";
+import { CreatorCredit } from "@/components/CreatorCredit";
 const steps = [
   {
     n: 1,
@@ -75,6 +76,7 @@ export default function HowToUse() {
           </Card>
         ))}
       </div>
+      <CreatorCredit variant="footer" />
     </div>
   );
 }
