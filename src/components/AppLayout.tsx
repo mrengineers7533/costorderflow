@@ -2,21 +2,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { useLocation } from "react-router-dom";
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-
-type HeaderActionsCtx = {
-  setActions: (node: ReactNode) => void;
-};
-const HeaderActionsContext = createContext<HeaderActionsCtx>({ setActions: () => {} });
-
-export function useHeaderActions(node: ReactNode, deps: unknown[] = []) {
-  const { setActions } = useContext(HeaderActionsContext);
-  useEffect(() => {
-    setActions(node);
-    return () => setActions(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/": { title: "Dashboard", desc: "Overview across Order Acceptances, BOQs, and Proforma Invoices." },
@@ -27,7 +12,6 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const [actions, setActions] = useState<ReactNode>(null);
   const meta =
     PAGE_META[location.pathname] ||
     (location.pathname.startsWith("/orders") ? { title: "Order Acceptances" } :
@@ -37,7 +21,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <HeaderActionsContext.Provider value={{ setActions }}>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
@@ -50,15 +33,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
               </div>
             )}
-            <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
-              {actions}
+            <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
         </div>
       </div>
-      </HeaderActionsContext.Provider>
     </SidebarProvider>
   );
 }

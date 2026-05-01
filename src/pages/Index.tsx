@@ -14,7 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { PiRecord } from "@/lib/pi/types";
-import { useHeaderActions } from "@/components/AppLayout";
 
 function isThisMonth(d: string | undefined | null) {
   if (!d) return false;
@@ -28,24 +27,6 @@ const Index = () => {
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
   const [pis, setPis] = useState<PiRecord[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useHeaderActions(
-    <>
-      <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
-        <Link to="/orders"><FileText className="mr-1 h-3.5 w-3.5" />OAs</Link>
-      </Button>
-      <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
-        <Link to="/boqs"><ClipboardList className="mr-1 h-3.5 w-3.5" />BOQs</Link>
-      </Button>
-      <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
-        <Link to="/pi"><Receipt className="mr-1 h-3.5 w-3.5" />PIs</Link>
-      </Button>
-      <Button asChild size="sm" className="rounded-lg h-8">
-        <Link to="/orders/new"><FilePlus2 className="mr-1 h-3.5 w-3.5" />New OA</Link>
-      </Button>
-    </>,
-    []
-  );
 
   useEffect(() => {
     (async () => {
@@ -106,6 +87,22 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <main className="container mx-auto px-4 lg:px-6 py-5 space-y-4">
+        {/* Header actions */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/orders"><FileText className="mr-1 h-3.5 w-3.5" />OAs</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/boqs"><ClipboardList className="mr-1 h-3.5 w-3.5" />BOQs</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
+              <Link to="/pi"><Receipt className="mr-1 h-3.5 w-3.5" />PIs</Link>
+            </Button>
+            <Button asChild size="sm" className="rounded-lg h-8">
+              <Link to="/orders/new"><FilePlus2 className="mr-1 h-3.5 w-3.5" />New OA</Link>
+            </Button>
+        </div>
+
         {/* Hero strip */}
         <section className="grid gap-3 lg:grid-cols-2">
           <ValueHero
