@@ -412,13 +412,6 @@ export default function OrderEditor() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="ghost"
-              className="rounded-lg"
-              onClick={() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" })}
-            >
-              Jump to Preview
-            </Button>
             {!isNew && (
               <>
                 {!currentBoq ? (
@@ -432,14 +425,6 @@ export default function OrderEditor() {
                   </Button>
                 ) : (
                   <>
-                    <Button
-                      variant="outline"
-                      className="rounded-lg"
-                      onClick={() => navigate(`/boqs/${currentBoq.id}`)}
-                      title="Open the current BOQ for this OA"
-                    >
-                      <Eye className="mr-1 h-4 w-4" />View BOQ
-                    </Button>
                     <Button
                       variant="outline"
                       className="rounded-lg"
