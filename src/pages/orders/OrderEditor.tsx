@@ -76,6 +76,10 @@ export default function OrderEditor() {
   // format / preview / PDF — those still follow the Format dropdown above.
   const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
 
+  // PI item-selection dialog state (opened from "Convert to PI" button).
+  const [piDialogOpen, setPiDialogOpen] = useState(false);
+  const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
+
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
   }
