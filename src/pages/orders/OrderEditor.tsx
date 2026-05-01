@@ -21,7 +21,7 @@ import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails,
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
-import { createPiFromOa } from "@/lib/pi/convert";
+import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -75,6 +75,10 @@ export default function OrderEditor() {
   // Editor-only filter for the Line Items table. Does NOT affect the OA
   // format / preview / PDF — those still follow the Format dropdown above.
   const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
+
+  // PI item-selection dialog state (opened from "Convert to PI" button).
+  const [piDialogOpen, setPiDialogOpen] = useState(false);
+  const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
 
   function newItem(): LineItem {
     return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
@@ -332,17 +336,13 @@ export default function OrderEditor() {
 
   async function handleConvertToPi() {
     if (!orderId) return;
-    setSaving(true);
     try {
       const { data: oa, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
       if (error || !oa) throw error || new Error("OA not found");
-      const pi = await createPiFromOa(oa as unknown as OrderRecord);
-      toast({ title: `PI ${pi.pi_number} created from OA` });
-      navigate(`/pi/${pi.id}`);
+      setPiDialogOa(oa as unknown as OrderRecord);
+      setPiDialogOpen(true);
     } catch (e: any) {
-      toast({ title: "Failed to convert to PI", description: e?.message || String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Failed to open PI dialog", description: e?.message || String(e), variant: "destructive" });
     }
   }
 
@@ -1003,6 +1003,12 @@ export default function OrderEditor() {
           </section>
         </div>
       </div>
+
+      <PiItemSelectDialog
+        open={piDialogOpen}
+        onOpenChange={setPiDialogOpen}
+        oa={piDialogOa}
+      />
     </div>
   );
 }

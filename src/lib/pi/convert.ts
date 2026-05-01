@@ -1,14 +1,77 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFinancialYear, calcTotals, amountInWords } from "@/lib/orders/calc";
-import type { OrderRecord } from "@/lib/orders/types";
+import type { LineItem, OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
 
+export interface OaItemPiStatus {
+  done: boolean;
+  pi_number?: string;
+  pi_id?: string;
+}
+
 /**
- * Creates a new PI (revision 0) from a source OA. Returns the inserted PI row.
- * Multiple PIs can be created from the same OA — each gets a fresh PI number.
+ * For a given OA, returns a map of `lineItem.id` → which current PI (if any)
+ * already contains it. Used to disable already-converted items in the
+ * OA → PI selection dialog and to guard against duplicate PI generation.
  */
-export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
+export async function fetchOaItemPiStatus(
+  oaId: string,
+): Promise<Record<string, OaItemPiStatus>> {
+  const { data, error } = await supabase
+    .from("proforma_invoices")
+    .select("id, pi_number, line_items, status")
+    .eq("reference_oa_id", oaId)
+    .eq("is_current", true);
+  if (error) throw error;
+  const map: Record<string, OaItemPiStatus> = {};
+  for (const pi of ((data || []) as unknown) as Array<{
+    id: string;
+    pi_number: string;
+    line_items: LineItem[] | null;
+    status: string;
+  }>) {
+    // Skip cancelled PIs once that status exists. For now status is
+    // 'draft' | 'finalized' so this is a no-op.
+    if ((pi.status as string) === "cancelled") continue;
+    for (const item of pi.line_items || []) {
+      if (!item?.id) continue;
+      if (!map[item.id]) {
+        map[item.id] = { done: true, pi_number: pi.pi_number, pi_id: pi.id };
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Creates a PI from a subset of OA line items. Each call allocates a fresh
+ * unique PI number. Throws if any selected item is already part of a current
+ * PI for the same OA (server-side duplicate guard).
+ */
+export async function createPiFromOaItems(
+  oa: OrderRecord,
+  selectedItemIds: string[],
+): Promise<PiRecord> {
+  if (!selectedItemIds || selectedItemIds.length === 0) {
+    throw new Error("Select at least one item to generate a PI.");
+  }
+
+  // Re-check status server-side to prevent races / duplicates.
+  const status = await fetchOaItemPiStatus(oa.id);
+  const conflict = selectedItemIds.find((id) => status[id]?.done);
+  if (conflict) {
+    throw new Error(
+      `Item is already part of PI ${status[conflict]?.pi_number}. Refresh and try again.`,
+    );
+  }
+
+  const wantedIds = new Set(selectedItemIds);
+  const filteredItems = (oa.line_items || []).filter((it) => wantedIds.has(it.id));
+  if (filteredItems.length === 0) {
+    throw new Error("Selected items were not found on this OA.");
+  }
+
   const fy = getFinancialYear(new Date());
   const { data: piNum, error: numErr } = await supabase.rpc("next_pi_number", {
     _format: oa.format,
@@ -16,8 +79,7 @@ export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
   });
   if (numErr || !piNum) throw numErr || new Error("Failed to allocate PI number");
 
-  // PI starts with no discount/advance — same totals as OA.
-  const totals = calcPiTotals(oa.line_items || [], oa.charges, 0, 0);
+  const totals = calcPiTotals(filteredItems, oa.charges, 0, 0);
 
   const insertRow = {
     pi_number: piNum as string,
@@ -35,7 +97,7 @@ export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
     company_name: oa.company_name,
     bill_to: oa.bill_to,
     ship_to: oa.ship_to,
-    line_items: oa.line_items,
+    line_items: filteredItems,
     charges: oa.charges,
     totals: {
       basic_total: totals.basic_total,
@@ -56,9 +118,24 @@ export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
     .single();
   if (error || !data) throw error || new Error("Failed to create PI");
 
-  // Self-reference parent_pi_id to its own id (root of family).
   await supabase.from("proforma_invoices").update({ parent_pi_id: data.id }).eq("id", data.id);
   return { ...(data as any), parent_pi_id: data.id } as PiRecord;
+}
+
+/**
+ * Compatibility wrapper: creates a PI from every still-pending OA item
+ * (i.e. items not already in a current PI). Prefer the dialog-driven
+ * `createPiFromOaItems` for new flows.
+ */
+export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
+  const status = await fetchOaItemPiStatus(oa.id);
+  const pendingIds = (oa.line_items || [])
+    .map((it) => it.id)
+    .filter((id) => id && !status[id]?.done);
+  if (pendingIds.length === 0) {
+    throw new Error("All items on this OA already have a PI generated.");
+  }
+  return createPiFromOaItems(oa, pendingIds);
 }
 
 /**
