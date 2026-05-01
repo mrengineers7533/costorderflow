@@ -1,44 +1,93 @@
-# Add Delete option to BOQ, OA, and PI lists
+# Revise Dashboard to cover OA, BOQ, and PI
 
 ## Goal
-On the **BOQs**, **Orders (OA)**, and **Proforma Invoices (PI)** list pages, let the user delete an individual row. Each delete shows a confirmation dialog (irreversible) and then removes the row from the database.
+The dashboard at `/` (`src/pages/Index.tsx`) currently only shows Order Acceptance (OA) data. Revise it so all three modules — **OA, BOQ, PI** — are reflected in stats, value, splits, recent activity, and quick actions.
 
-## Scope per page
+## Layout
 
-### 1. `src/pages/orders/OrdersList.tsx` (currently has NO Actions column)
-- Add an **Actions** column header on the right.
-- For each order row add a small **Delete** icon-button (trash icon, ghost variant, destructive color).
-- The button stops row click propagation (otherwise it would also navigate to the editor).
-- Clicking opens an `AlertDialog`: "Delete OA `{oa_number}`? This also removes its revision history and cannot be undone."
-- On confirm:
-  - If the OA is a revision root (no `parent_order_id`): delete all rows where `parent_order_id = id` OR `id = id` (whole family).
-  - Else: delete just this revision row.
-  - After delete, refetch the list and toast success.
-- (Optional, minor) Also add an **Edit** icon-button to be consistent with BOQ/PI lists.
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Header: Dashboard  +  [View OAs] [View BOQs] [View PIs]     │
+│                      [+ New OA]                             │
+├─────────────────────────────────────────────────────────────┤
+│ HERO STRIP                                                  │
+│ ┌──────────────────────────┐ ┌──────────────────────────┐   │
+│ │ Total OA Value (₹)       │ │ Total PI Value (₹)       │   │
+│ │ + finalized/draft counts │ │ + finalized/draft counts │   │
+│ │ MR/GMS split bar         │ │ MR/GMS split bar         │   │
+│ └──────────────────────────┘ └──────────────────────────┘   │
+├─────────────────────────────────────────────────────────────┤
+│ MODULE STAT TILES (3 rows × 4 cols, grouped & color-coded)  │
+│ OA  : Total · This Month · Drafts · Finalized               │
+│ BOQ : Total · This Month · Current Revs · Total Items       │
+│ PI  : Total · This Month · Drafts · Finalized               │
+├─────────────────────────────────────────────────────────────┤
+│ Quick actions: Upload Cost Sheet · New Blank OA ·           │
+│                Browse BOQs · Browse PIs                     │
+├─────────────────────────────────────────────────────────────┤
+│ RECENT ACTIVITY (tabbed)                                    │
+│ [ Recent OAs | Recent BOQs | Recent PIs ]                   │
+│ Top 5 of selected, link rows to their editor                │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### 2. `src/pages/boqs/BoqList.tsx` (already has Edit + PDF in Actions)
-- Add a third **Delete** icon-button in the existing Actions cell (after PDF), destructive style, with `e.stopPropagation()`.
-- Confirmation dialog: "Delete BOQ `{boq_number}`?"
-- On confirm: delete the BOQ row by id (BOQs already store revisions as separate rows tied via `parent_order_id` family but not via a direct parent ref on boqs — so delete just the selected row, like PI/OA per-revision behavior). Refetch + toast.
+## Data fetching
 
-### 3. `src/pages/pi/PiList.tsx` (already has Edit + PDF in Actions)
-- Add a third **Delete** icon-button after PDF.
-- Confirmation dialog: "Delete PI `{pi_number}`?"
-- On confirm:
-  - If the PI has no `parent_pi_id` (it's the root of a family): delete the entire family — all rows where `parent_pi_id = id` OR `id = id`.
-  - Else: delete just this revision row.
-  - Refetch + toast.
+Inside `useEffect`, fire three parallel queries and join in state:
 
-## Shared implementation details
-- Use the existing `AlertDialog` shadcn component (already used in `PiEditor.tsx` for the revision dialog).
-- Use the `Trash2` icon from `lucide-react`.
-- All Action buttons use `e.stopPropagation()` on their `onClick` so the row click that opens the editor doesn't also fire.
-- Use the existing `supabase` client. The `proforma_invoices`, `orders`, and `boqs` tables already have public delete RLS policies, so `.delete().eq('id', ...)` works directly.
-- Use the existing `useToast` (`@/hooks/use-toast`) for success/error feedback.
-- Track which row is being confirmed in local state: `const [confirmDelete, setConfirmDelete] = useState<{id: string; label: string} | null>(null)` per page.
+```ts
+const [ordersRes, boqsRes, pisRes] = await Promise.all([
+  supabase.from("orders").select("*").order("created_at", { ascending: false }),
+  supabase.from("boqs").select("*").order("created_at", { ascending: false }),
+  supabase.from("proforma_invoices").select("*").order("created_at", { ascending: false }),
+]);
+```
+
+Filter `is_current === true` for the headline counts/values, but keep the unfiltered arrays for "recent activity" lists.
+
+## Computed stats per module
+
+Compute in a single `useMemo`:
+
+- **OA**: total, drafts, finalized, thisMonth, mrCount, gmsCount, totalValue (sum of `totals.net_payable` over current).
+- **BOQ**: total, currentRevs (rows with `is_current`), thisMonth, totalLineItems (sum `line_items.length`), mrCount, gmsCount.
+- **PI**: total, drafts, finalized, thisMonth, mrCount, gmsCount, totalValue (sum `totals.net_payable`).
+
+## Hero strip (top)
+
+Two side-by-side gradient cards:
+- **Total OA Value** (existing card, restyled to half-width).
+- **Total PI Value** (new, mirrored card with PI counts and MR/GMS split).
+
+## Stat tiles section
+
+Reuse existing `StatTile` with a new optional `tone` prop ("oa" | "boq" | "pi") that picks a soft tinted background and icon color so each row is visually grouped. Section heading per row (`Order Acceptances`, `BOQs`, `Proforma Invoices`) with a small "View all →" link to the corresponding list page.
+
+## Quick actions
+
+Update the 3-card row to a 4-card row:
+1. Upload Cost Sheet (AI) → `/orders/new`
+2. New Blank OA → `/orders/new/edit`
+3. Browse BOQs → `/boqs`
+4. Browse PIs → `/pi`
+
+## Recent activity
+
+Replace single "Recent orders" list with a `Tabs` (shadcn) component with three tabs: **Recent OAs**, **Recent BOQs**, **Recent PIs**. Each tab renders the existing list-item style:
+- OA row: oa_number · format · company · date · ₹ net_payable · status.
+- BOQ row: boq_number · format · ref OA · date · status (no monetary value).
+- PI row: pi_number · format · ref OA · customer · date · ₹ net_payable · status.
+
+Each row links to its respective editor (`/orders/:id`, `/boqs/:id`, `/pi/:id`).
+
+Empty-state per tab with a CTA pointing to the right "new" path.
+
+## Files
+
+- Edit `src/pages/Index.tsx` only. Add type imports `BoqRecord` from `@/lib/boq/types` and `PiRecord` from `@/lib/pi/types`. Use shadcn `Tabs` (already available).
 
 ## Out of scope
-- No bulk-delete / multi-select.
-- No soft-delete / archive flag — these are hard deletes.
-- No deletion of associated PDFs in storage buckets (`oa-documents`, `boq-documents`, `pi-documents`). We only remove the database rows. Can be added later if needed.
-- No changes to editor pages (delete is list-only as requested).
+
+- No charts/graphs library — keep the lightweight progress-bar visualization for splits.
+- No new routes, schema changes, or backend work.
+- No changes to the sidebar.
