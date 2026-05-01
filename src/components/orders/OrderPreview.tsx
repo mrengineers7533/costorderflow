@@ -40,6 +40,15 @@ interface Props {
   terms?: string;
   bank?: BankDetails;
   gmsTerms?: GMSTerms;
+  docMeta?: {
+    title?: string;
+    numberLabel?: string;
+    numberValue?: string;
+    refLabel?: string;
+    refValue?: string;
+    extraTotalsRows?: { label: string; value: number; bold?: boolean }[];
+    hideDefaultGrandTotal?: boolean;
+  };
 }
 
 const fmt = (n: number) =>
@@ -129,14 +138,14 @@ export function OrderPreview(p: Props) {
         {/* Header */}
         {p.format === "MR" ? (
           <>
-            <MRHeader />
+            <MRHeader title={p.docMeta?.title} />
             {/* Meta — bordered table matching template */}
             <table className="w-full border-collapse text-[11px] border border-foreground">
               <tbody>
                 <tr>
                   <td className="border border-foreground px-2 py-1 w-1/2">
-                    <span className="font-bold">OA No.: </span>
-                    {p.oaNumber || <Placeholder text="auto on save" />}
+                    <span className="font-bold">{(p.docMeta?.numberLabel || "OA No.") + ": "}</span>
+                    {(p.docMeta?.numberValue ?? p.oaNumber) || <Placeholder text="auto on save" />}
                   </td>
                   <td className="border border-foreground px-2 py-1 w-1/2">
                     <span className="font-bold">Dated: </span>
@@ -145,8 +154,8 @@ export function OrderPreview(p: Props) {
                 </tr>
                 <tr>
                   <td className="border border-foreground px-2 py-1">
-                    <span className="font-bold">Ref. NO.: </span>
-                    {p.reference || p.costSheetNumber || <Placeholder />}
+                    <span className="font-bold">{(p.docMeta?.refLabel || "Ref. NO.") + ": "}</span>
+                    {(p.docMeta?.refValue ?? (p.reference || p.costSheetNumber)) || <Placeholder />}
                   </td>
                   <td className="border border-foreground px-2 py-1">
                     <span className="font-bold">Prepared By: </span>
@@ -158,6 +167,11 @@ export function OrderPreview(p: Props) {
           </>
         ) : (
           <GMSHeader
+            title={p.docMeta?.title}
+            numberLabel={p.docMeta?.numberLabel}
+            numberValue={p.docMeta?.numberValue}
+            refLabel={p.docMeta?.refLabel}
+            refValue={p.docMeta?.refValue}
             companyName={p.companyName}
             billTo={p.billTo}
             oaNumber={p.oaNumber}
@@ -240,7 +254,12 @@ export function OrderPreview(p: Props) {
                   isGMS ? (
                     <>
                       <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
-                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight />
+                      {p.docMeta?.extraTotalsRows?.map((r, i) => (
+                        <TotalsRow key={`xg${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} />
+                      ))}
+                      {!p.docMeta?.hideDefaultGrandTotal && (
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight />
+                      )}
                     </>
                   ) : (
                     <>
@@ -259,7 +278,12 @@ export function OrderPreview(p: Props) {
                       {discountAmount > 0 && (
                         <TotalsRow colSpan={totalsColSpan} label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
                       )}
-                      <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                      {p.docMeta?.extraTotalsRows?.map((r, i) => (
+                        <TotalsRow key={`xm${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} />
+                      ))}
+                      {!p.docMeta?.hideDefaultGrandTotal && (
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                      )}
                     </>
                   )
                 )}
@@ -621,7 +645,7 @@ function AddressCellContent({ addr, fallbackName }: { addr: Address; fallbackNam
   );
 }
 
-function MRHeader() {
+function MRHeader({ title }: { title?: string }) {
   return (
     <div>
       <div className="flex items-start justify-between gap-4 pb-2">
@@ -644,7 +668,7 @@ function MRHeader() {
       </div>
       <div className="border-t-[1.5px] border-primary" />
       <div className="text-center mt-2">
-        <div className="text-sm font-bold tracking-[0.2em] text-foreground">ORDER ACCEPTANCE</div>
+        <div className="text-sm font-bold tracking-[0.2em] text-foreground">{title || "ORDER ACCEPTANCE"}</div>
       </div>
     </div>
   );
@@ -652,9 +676,11 @@ function MRHeader() {
 
 function GMSHeader({
   companyName, billTo, oaNumber, orderDate, reference, costSheetNumber, preparedBy,
+  title, numberLabel, numberValue, refLabel, refValue,
 }: {
   companyName: string; billTo: Address; oaNumber: string; orderDate: string;
   reference: string; costSheetNumber: string; preparedBy: string;
+  title?: string; numberLabel?: string; numberValue?: string; refLabel?: string; refValue?: string;
 }) {
   const customerName = billTo?.name || companyName;
   const dateStr = orderDate ? new Date(orderDate).toLocaleDateString("en-IN") : "—";
@@ -692,7 +718,7 @@ function GMSHeader({
       </div>
       {/* Grey ORDER ACCEPTANCE bar */}
       <div className="mt-2 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
-        <div className="text-sm font-bold tracking-[0.2em] text-black">ORDER ACCEPTANCE</div>
+        <div className="text-sm font-bold tracking-[0.2em] text-black">{title || "ORDER ACCEPTANCE"}</div>
       </div>
       {/* Customer / OA meta — borderless two-column block */}
       <div className="grid grid-cols-2 gap-4 mt-3 text-[11px]">
@@ -711,8 +737,8 @@ function GMSHeader({
         </div>
         <div className="text-right space-y-0.5">
           <div><span className="font-semibold">Date :</span> {dateStr}</div>
-          <div><span className="font-semibold">OA No.:</span> {oaNumber || <Placeholder text="auto on save" />}</div>
-          <div><span className="font-semibold">Ref. :</span> {reference || costSheetNumber || <Placeholder />}</div>
+          <div><span className="font-semibold">{(numberLabel || "OA No.") + ":"}</span> {(numberValue ?? oaNumber) || <Placeholder text="auto on save" />}</div>
+          <div><span className="font-semibold">{(refLabel || "Ref.") + " :"}</span> {(refValue ?? (reference || costSheetNumber)) || <Placeholder />}</div>
           <div><span className="font-semibold">Contact :-</span> Mr. Bhavesh Makin</div>
           <div><span className="font-semibold">Mob :-</span> +91-9910066823</div>
           {preparedBy && <div><span className="font-semibold">Prepared By:-</span> {preparedBy}</div>}

@@ -285,20 +285,41 @@ export default function PiEditor() {
               orderDate={pi.pi_date}
               preparedBy={pi.prepared_by || ""}
               items={pi.line_items}
-              charges={{ ...pi.charges, discount_percent: pi.one_time_discount_percent }}
+              charges={{ ...pi.charges, discount_percent: 0 }}
               totals={{
                 basic_total: totals.basic_total,
                 subtotal: totals.subtotal,
                 grand_total: totals.grand_total_pi,
-                net_payable: totals.net_payable_pi,
+                net_payable: totals.grand_total_pi,
               }}
               amountInWords={amountInWords(totals.net_payable_pi)}
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
+              docMeta={{
+                title: "Proforma Invoice",
+                numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
+                numberValue: pi.pi_number,
+                refLabel: "Ref. OA No.",
+                refValue: pi.reference_oa_number || "-",
+                extraTotalsRows: [
+                  ...(pi.one_time_discount_percent > 0 && totals.one_time_discount_amount > 0
+                    ? [{
+                        label: `One-Time Discount @ ${pi.one_time_discount_percent}% (on Subtotal)`,
+                        value: -totals.one_time_discount_amount,
+                      }]
+                    : []),
+                  ...(pi.advance_adjustment_percent > 0 && totals.advance_adjustment_amount > 0
+                    ? [
+                        {
+                          label: `Advance Adjustment @ ${pi.advance_adjustment_percent}% (on Grand Total)`,
+                          value: -totals.advance_adjustment_amount,
+                        },
+                        { label: "Net Payable", value: totals.net_payable_pi, bold: true },
+                      ]
+                    : []),
+                ],
+              }}
           />
-          <p className="mt-2 text-[11px] text-muted-foreground italic">
-            Live preview uses the OA layout — final PDF replaces the title with <span className="font-semibold">PROFORMA INVOICE</span> and adds Discount / Advance / Net Payable rows.
-          </p>
           <div className="flex justify-end pt-2">
             <Button size="lg" onClick={downloadPdf} className="w-full sm:w-auto">
               <Download className="mr-2 h-4 w-4" />Export PI PDF
