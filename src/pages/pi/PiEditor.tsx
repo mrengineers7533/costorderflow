@@ -341,6 +341,7 @@ export default function PiEditor() {
                 numberValue: pi.pi_number,
                 refLabel: "Ref. OA No.",
                 refValue: pi.reference_oa_number || "-",
+                hideFirstPageFooter: pi.format === "GMS",
                 extraTotalsRows: [
                   ...(pi.one_time_discount_percent > 0 && totals.one_time_discount_amount > 0
                     ? [{
