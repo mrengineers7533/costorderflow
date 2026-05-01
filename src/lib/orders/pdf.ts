@@ -9,6 +9,7 @@ import {
   DEFAULT_GMS_BANK,
   DEFAULT_GMS_TERMS,
   GMS_HEAD_OFFICE_LINES,
+  DEFAULT_GMS_EXCLUSIONS,
   type BankDetails,
   type GMSTerms,
 } from "./defaults";
