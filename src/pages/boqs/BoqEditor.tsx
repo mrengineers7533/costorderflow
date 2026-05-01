@@ -6,12 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2, Download, Printer, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Download, Printer, Save, GitBranch } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import type { OrderRecord } from "@/lib/orders/types";
+import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
+import { reviseBoqFromOrder } from "@/lib/revisions";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
@@ -32,6 +38,9 @@ export default function BoqEditor() {
 
   const [boqId, setBoqId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>("");
+  const [parentOrderId, setParentOrderId] = useState<string>("");
+  const [revisionsKey, setRevisionsKey] = useState(0);
+  const [confirmRevise, setConfirmRevise] = useState(false);
   const [boqNumber, setBoqNumber] = useState("");
   const [version, setVersion] = useState(1);
   const [format, setFormat] = useState<"MR" | "GMS">("MR");
@@ -62,6 +71,12 @@ export default function BoqEditor() {
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
         setItems(b.line_items?.length ? b.line_items : [newBoqItem(1)]);
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");
+        // Resolve the family root via the linked OA so the revisions panel works.
+        if (b.order_id) {
+          const { data: ord } = await supabase.from("orders").select("id,parent_order_id").eq("id", b.order_id).maybeSingle();
+          const o = ord as { id: string; parent_order_id: string | null } | null;
+          if (o) setParentOrderId(o.parent_order_id || o.id);
+        }
         setLoading(false);
         return;
       }
@@ -79,6 +94,7 @@ export default function BoqEditor() {
       }
       const o = order as unknown as OrderRecord;
       setOrderId(o.id);
+      setParentOrderId(o.parent_order_id || o.id);
       setFormat(o.format);
       setReferenceOa(o.oa_number);
       setBoqNumber(deriveBoqNumber(o.oa_number));
@@ -182,10 +198,16 @@ export default function BoqEditor() {
             <Button variant="outline" size="sm" onClick={uploadToBoqFolder}>Save to BOQ Folder</Button>
             <Button variant="secondary" size="sm" disabled={saving} onClick={() => save(false)}><Save className="mr-1 h-4 w-4" />Save Draft</Button>
             <Button size="sm" disabled={saving} onClick={() => save(true)}>Finalize</Button>
+            {!isNew && (
+              <Button variant="outline" size="sm" disabled={saving} onClick={() => setConfirmRevise(true)}>
+                <GitBranch className="mr-1 h-4 w-4" />Revise BOQ
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="space-y-5 lg:col-span-2 min-w-0">
           {/* ---------- Editor ---------- */}
           <div className="space-y-4 print:hidden">
             <Card>
@@ -245,8 +267,30 @@ export default function BoqEditor() {
           <div id="boq-preview">
             <BoqDocPreview rec={buildRecord()} />
           </div>
+          </div>
+
+          {!isNew && parentOrderId && (
+            <aside className="lg:col-span-1 lg:sticky lg:top-6 print:hidden">
+              <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+            </aside>
+          )}
         </div>
       </div>
+
+      <AlertDialog open={confirmRevise} onOpenChange={setConfirmRevise}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create new BOQ revision?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A new BOQ revision will be created from the current OA, preserving Remarks and T&C from this BOQ. The current BOQ will be marked Superseded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReviseBoq}>Create revision</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
@@ -258,6 +302,27 @@ export default function BoqEditor() {
       const next = p.filter((it) => it.id !== idv);
       return next.length ? next : [newBoqItem(1)];
     });
+  }
+
+  async function handleReviseBoq() {
+    if (!boqId || !orderId) return;
+    setSaving(true);
+    try {
+      // Load the current OA the BOQ is linked to so the new BOQ revision pulls
+      // the latest item data from that OA revision.
+      const { data: ord, error: ordErr } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+      if (ordErr || !ord) throw ordErr || new Error("Linked OA not found");
+      const prev = buildRecord();
+      const newBoq = await reviseBoqFromOrder(ord as unknown as OrderRecord, prev);
+      toast({ title: `BOQ Rev ${newBoq.revision} created` });
+      setRevisionsKey((k) => k + 1);
+      navigate(`/boqs/${newBoq.id}`);
+    } catch (e) {
+      toast({ title: "Revise BOQ failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+      setConfirmRevise(false);
+    }
   }
 }
 
