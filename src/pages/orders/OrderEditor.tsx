@@ -734,7 +734,9 @@ export default function OrderEditor() {
                         // sensible defaults on first enable of EXW Turkey
                         turkey_custom_percent: charges.turkey_custom_percent ?? 10,
                         turkey_gst_percent: charges.turkey_gst_percent ?? 18,
-                        turkey_local_freight_mode: charges.turkey_local_freight_mode ?? "amount",
+                        turkey_pf_percent: charges.turkey_pf_percent ?? 1.5,
+                        turkey_pf_mode: charges.turkey_pf_mode ?? "percent",
+                        turkey_advance_mode: charges.turkey_advance_mode ?? "percent",
                       });
                     }}
                   >
@@ -796,52 +798,47 @@ export default function OrderEditor() {
                       onChange={(e) => setCharges({ ...charges, turkey_custom_percent: +e.target.value || 0 })}
                     />
                   </div>
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    Landed Price = Base + Sea Freight + Custom Duty. Insurance &amp; P&amp;F below are computed on the Landed Price.
+                  </p>
+                  {/* P&F on Landed Price */}
                   <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
-                    <Switch checked={!!charges.turkey_local_freight_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_local_freight_enabled: b })} />
-                    <Label className={`text-sm ${charges.turkey_local_freight_enabled ? "" : "text-muted-foreground line-through"}`}>Local Freight</Label>
+                    <Switch checked={!!charges.turkey_pf_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_pf_enabled: b })} />
+                    <Label className={`text-sm ${charges.turkey_pf_enabled ? "" : "text-muted-foreground line-through"}`}>P&amp;F (on Landed)</Label>
                     <Select
-                      value={charges.turkey_local_freight_mode || "amount"}
-                      onValueChange={(v) => setCharges({ ...charges, turkey_local_freight_mode: v as "amount" | "percent" })}
-                      disabled={!charges.turkey_local_freight_enabled}
+                      value={charges.turkey_pf_mode || "percent"}
+                      onValueChange={(v) => setCharges({ ...charges, turkey_pf_mode: v as "amount" | "percent" })}
+                      disabled={!charges.turkey_pf_enabled}
                     >
                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="amount">Flat ₹</SelectItem>
                         <SelectItem value="percent">%</SelectItem>
+                        <SelectItem value="amount">Flat ₹</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input
-                      type="number" step="any" disabled={!charges.turkey_local_freight_enabled}
-                      value={(charges.turkey_local_freight_mode || "amount") === "percent" ? (charges.turkey_local_freight_percent || 0) : (charges.turkey_local_freight || 0)}
+                      type="number" step="any" disabled={!charges.turkey_pf_enabled}
+                      value={(charges.turkey_pf_mode || "percent") === "percent" ? (charges.turkey_pf_percent ?? 1.5) : (charges.turkey_pf_amount || 0)}
                       onChange={(e) => {
                         const v = +e.target.value || 0;
-                        if ((charges.turkey_local_freight_mode || "amount") === "percent") {
-                          setCharges({ ...charges, turkey_local_freight_percent: v });
+                        if ((charges.turkey_pf_mode || "percent") === "percent") {
+                          setCharges({ ...charges, turkey_pf_percent: v });
                         } else {
-                          setCharges({ ...charges, turkey_local_freight: v });
+                          setCharges({ ...charges, turkey_pf_amount: v });
                         }
                       }}
                     />
                   </div>
-                  {(charges.turkey_local_freight_mode || "amount") === "percent" && charges.turkey_local_freight_enabled && (
-                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
-                      <div />
-                      <Label className="text-xs text-muted-foreground">Local Freight % base</Label>
-                      <Select
-                        value={charges.turkey_local_freight_base || "basic"}
-                        onValueChange={(v) => setCharges({ ...charges, turkey_local_freight_base: v as "basic" | "landed" })}
-                      >
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="basic">on Basic</SelectItem>
-                          <SelectItem value="landed">on Landed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <div />
-                    </div>
-                  )}
+                  {/* Freight (flat ₹) */}
                   <ToggleNumberRow
-                    label="GST % (on Basic + Sea + Ins + Custom + Local Freight)" enabled={!!charges.turkey_gst_enabled} value={charges.turkey_gst_percent ?? 18}
+                    label="Freight (flat ₹) — joins GST base"
+                    enabled={!!charges.turkey_freight_enabled}
+                    value={charges.turkey_freight || 0}
+                    onToggle={(b) => setCharges({ ...charges, turkey_freight_enabled: b })}
+                    onValue={(v) => setCharges({ ...charges, turkey_freight: v })}
+                  />
+                  <ToggleNumberRow
+                    label="GST % (on Landed + P&F + Insurance + Freight)" enabled={!!charges.turkey_gst_enabled} value={charges.turkey_gst_percent ?? 18}
                     onToggle={(b) => setCharges({ ...charges, turkey_gst_enabled: b })}
                     onValue={(v) => setCharges({ ...charges, turkey_gst_percent: v })}
                   />
@@ -850,6 +847,34 @@ export default function OrderEditor() {
                     onToggle={(b) => setCharges({ ...charges, turkey_discount_enabled: b })}
                     onValue={(v) => setCharges({ ...charges, turkey_discount: v })}
                   />
+                  {/* Advance Adjustment (% or flat ₹) */}
+                  <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                    <Switch checked={!!charges.turkey_advance_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_advance_enabled: b })} />
+                    <Label className={`text-sm ${charges.turkey_advance_enabled ? "" : "text-muted-foreground line-through"}`}>Advance Adjustment</Label>
+                    <Select
+                      value={charges.turkey_advance_mode || "percent"}
+                      onValueChange={(v) => setCharges({ ...charges, turkey_advance_mode: v as "amount" | "percent" })}
+                      disabled={!charges.turkey_advance_enabled}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percent">% of Grand Total</SelectItem>
+                        <SelectItem value="amount">Flat ₹</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="any" disabled={!charges.turkey_advance_enabled}
+                      value={(charges.turkey_advance_mode || "percent") === "percent" ? (charges.turkey_advance_percent || 0) : (charges.turkey_advance_amount || 0)}
+                      onChange={(e) => {
+                        const v = +e.target.value || 0;
+                        if ((charges.turkey_advance_mode || "percent") === "percent") {
+                          setCharges({ ...charges, turkey_advance_percent: v });
+                        } else {
+                          setCharges({ ...charges, turkey_advance_amount: v });
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
               )}
               {format === "GMS" && (

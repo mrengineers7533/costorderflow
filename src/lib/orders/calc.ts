@@ -81,15 +81,28 @@ export function calcExMurthal(
 export interface ExTurkeyBreakdown {
   base_amount: number;       // 1. basic_total in INR (FX-converted if applicable)
   hike: number;              // 2. optional hike
-  total_amount: number;      // 3. base + hike (landed price in INR)
-  sea_freight: number;       // 4a
-  insurance: number;         // 4b
-  custom: number;            // 5. (base + sea_freight) * custom%
-  local_freight: number;     // 5b
-  gst: number;               // 6. (base + sea + ins + custom + local_freight) * gst%
-  discount: number;          // 7. one-time, subtracted from grand total
-  grand_total: number;       // total + sea + ins + custom + local + gst
-  net_payable: number;       // grand_total - discount
+  /** Landed Price = base + sea_freight + custom (per new GMS rule). */
+  total_amount: number;
+  sea_freight: number;
+  custom: number;            // % of base (default 10)
+  /** Insurance computed on Landed Price (% or flat ₹). */
+  insurance: number;
+  /** P&F computed on Landed Price (% or flat ₹). */
+  pf: number;
+  /** Optional flat freight that participates in GST base. */
+  freight: number;
+  /** Local freight (legacy field, kept for back-compat; no longer in totals chain). */
+  local_freight: number;
+  /** GST = (Landed + P&F + Insurance + Freight) × gst%. */
+  gst: number;
+  /** Grand Total = Landed + Insurance + P&F + Freight + GST. */
+  grand_total: number;
+  /** One-time discount (legacy, kept for back-compat — subtracted before advance). */
+  discount: number;
+  /** Advance adjustment in ₹ (% of Grand Total or flat). */
+  advance_amount: number;
+  /** Net Payable = Grand Total - discount - advance. */
+  net_payable: number;
 }
 
 export function calcExTurkey(
@@ -99,46 +112,92 @@ export function calcExTurkey(
   const r = (n: number) => Math.round(n * 100) / 100;
   const base = basicInInr;
   const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
-  const total = base + hike;
-  const landed = total; // "Landed Price" base for % charges (basic + hike)
-  const baseFor = (sel?: "basic" | "landed") => (sel === "landed" ? landed : base);
+  const baseWithHike = base + hike;
+
+  // 1. Sea Freight (flat ₹ or % of base)
   let seaFreight = 0;
   if (c.turkey_sea_freight_enabled) {
     if ((c.turkey_sea_freight_mode || "amount") === "percent") {
-      seaFreight = (baseFor(c.turkey_sea_freight_base) * (c.turkey_sea_freight_percent || 0)) / 100;
+      seaFreight = (baseWithHike * (c.turkey_sea_freight_percent || 0)) / 100;
     } else {
       seaFreight = c.turkey_sea_freight || 0;
     }
   }
+
+  // 2. Custom Duty: % of base (or base + sea, configurable)
+  const customBase = c.turkey_custom_base === "landed"
+    ? baseWithHike
+    : (baseWithHike + seaFreight);
+  const custom = c.turkey_custom_enabled
+    ? (customBase * (c.turkey_custom_percent ?? 10)) / 100
+    : 0;
+
+  // 3. Landed Price = Base + Sea Freight + Custom
+  const landed = baseWithHike + seaFreight + custom;
+
+  // 4. Insurance — on Landed Price
   let insurance = 0;
   if (c.turkey_insurance_enabled) {
     if ((c.turkey_insurance_mode || "amount") === "percent") {
-      insurance = (baseFor(c.turkey_insurance_base) * (c.turkey_insurance_percent || 0)) / 100;
+      insurance = (landed * (c.turkey_insurance_percent || 0)) / 100;
     } else {
       insurance = c.turkey_insurance || 0;
     }
   }
-  const customBase = c.turkey_custom_base === "landed" ? landed : (base + seaFreight);
-  const custom = c.turkey_custom_enabled ? (customBase * (c.turkey_custom_percent ?? 10)) / 100 : 0;
-  let localFreight = 0;
-  if (c.turkey_local_freight_enabled) {
-    if ((c.turkey_local_freight_mode || "amount") === "percent") {
-      localFreight = (baseFor(c.turkey_local_freight_base) * (c.turkey_local_freight_percent || 0)) / 100;
+
+  // 5. P&F — on Landed Price
+  let pf = 0;
+  if (c.turkey_pf_enabled) {
+    if ((c.turkey_pf_mode || "percent") === "percent") {
+      pf = (landed * (c.turkey_pf_percent ?? 0)) / 100;
     } else {
-      localFreight = c.turkey_local_freight || 0;
+      pf = c.turkey_pf_amount || 0;
     }
   }
-  const gstBase = base + seaFreight + insurance + custom + localFreight;
+
+  // 6. Freight (optional flat ₹) — included in GST base
+  const freight = c.turkey_freight_enabled ? (c.turkey_freight || 0) : 0;
+
+  // 7. GST on (Landed + P&F + Insurance + Freight)
+  const gstBase = landed + pf + insurance + freight;
   const gst = c.turkey_gst_enabled ? (gstBase * (c.turkey_gst_percent ?? 18)) / 100 : 0;
+
+  // 8. Grand Total
+  const grand = landed + insurance + pf + freight + gst;
+
+  // Legacy one-time discount (subtracted from Grand Total before advance)
   const discount = c.turkey_discount_enabled ? (c.turkey_discount || 0) : 0;
-  const grand = total + seaFreight + insurance + custom + localFreight + gst;
-  const net = grand - discount;
+
+  // 9. Advance Adjustment
+  let advance = 0;
+  if (c.turkey_advance_enabled) {
+    if ((c.turkey_advance_mode || "percent") === "percent") {
+      advance = ((grand - discount) * (c.turkey_advance_percent || 0)) / 100;
+    } else {
+      advance = c.turkey_advance_amount || 0;
+    }
+  }
+
+  const net = grand - discount - advance;
+
+  // Local freight kept at 0 — field is legacy and no longer part of the chain.
+  const localFreight = 0;
+
   return {
-    base_amount: r(base), hike: r(hike), total_amount: r(total),
-    sea_freight: r(seaFreight), insurance: r(insurance),
-    custom: r(custom), local_freight: r(localFreight),
-    gst: r(gst), discount: r(discount),
-    grand_total: r(grand), net_payable: r(net),
+    base_amount: r(base),
+    hike: r(hike),
+    total_amount: r(landed),
+    sea_freight: r(seaFreight),
+    custom: r(custom),
+    insurance: r(insurance),
+    pf: r(pf),
+    freight: r(freight),
+    local_freight: r(localFreight),
+    gst: r(gst),
+    grand_total: r(grand),
+    discount: r(discount),
+    advance_amount: r(advance),
+    net_payable: r(net),
   };
 }
 
