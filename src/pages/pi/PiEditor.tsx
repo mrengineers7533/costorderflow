@@ -57,7 +57,17 @@ export default function PiEditor() {
 
   const totals = useMemo(() => {
     if (!pi) return null;
-    return calcPiTotals(pi.line_items, pi.charges, pi.one_time_discount_percent, pi.advance_adjustment_percent);
+    const advMode = pi.advance_mode || "percent";
+    const advValue = advMode === "amount"
+      ? (pi.advance_amount || 0)
+      : (pi.advance_adjustment_percent || 0);
+    return calcPiTotals(
+      pi.line_items,
+      pi.charges,
+      pi.one_time_discount_percent,
+      { mode: advMode, value: advValue },
+      pi.other_charges || 0,
+    );
   }, [pi]);
 
   if (loading || !pi || !totals) {
@@ -201,7 +211,7 @@ export default function PiEditor() {
               <CardHeader><CardTitle className="text-base">PI adjustments</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <Label>One-Time Discount % <span className="text-muted-foreground text-xs">(on Subtotal)</span></Label>
+                  <Label>Discount % <span className="text-muted-foreground text-xs">(on Basic Amount only)</span></Label>
                   <Input
                     type="number" step="0.01" min={0} max={100}
                     value={pi.one_time_discount_percent}
@@ -209,12 +219,33 @@ export default function PiEditor() {
                   />
                 </div>
                 <div>
-                  <Label>Advance Adjustment % <span className="text-muted-foreground text-xs">(on Grand Total)</span></Label>
-                  <Input
-                    type="number" step="0.01" min={0} max={100}
-                    value={pi.advance_adjustment_percent}
-                    onChange={(e) => update("advance_adjustment_percent", Number(e.target.value))}
-                  />
+                  <Label>
+                    Advance Adjustment{" "}
+                    <span className="text-muted-foreground text-xs">(deducted at the end)</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                      value={pi.advance_mode || "percent"}
+                      onChange={(e) => update("advance_mode", e.target.value as "amount" | "percent")}
+                    >
+                      <option value="percent">% of Gross</option>
+                      <option value="amount">₹ Amount</option>
+                    </select>
+                    {(pi.advance_mode || "percent") === "amount" ? (
+                      <Input
+                        type="number" step="0.01" min={0}
+                        value={pi.advance_amount || 0}
+                        onChange={(e) => update("advance_amount", Number(e.target.value))}
+                      />
+                    ) : (
+                      <Input
+                        type="number" step="0.01" min={0} max={100}
+                        value={pi.advance_adjustment_percent}
+                        onChange={(e) => update("advance_adjustment_percent", Number(e.target.value))}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label>GST %</Label>
@@ -226,17 +257,45 @@ export default function PiEditor() {
                   <Input type="number" value={pi.charges.freight || 0}
                     onChange={(e) => update("charges", { ...pi.charges, freight: Number(e.target.value), freight_enabled: Number(e.target.value) > 0 })} />
                 </div>
+                <div>
+                  <Label>P&amp;F % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
+                  <Input type="number" step="0.01" value={pi.charges.pf_percent || 0}
+                    onChange={(e) => update("charges", { ...pi.charges, pf_percent: Number(e.target.value), pf_amount: 0 })} />
+                </div>
+                <div>
+                  <Label>Insurance % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
+                  <Input type="number" step="0.01" value={pi.charges.insurance_percent || 0}
+                    onChange={(e) => update("charges", { ...pi.charges, insurance_percent: Number(e.target.value), insurance: 0 })} />
+                </div>
+                <div className="col-span-2">
+                  <Label>Other Charges (₹)</Label>
+                  <Input type="number" step="0.01" min={0}
+                    value={pi.other_charges || 0}
+                    onChange={(e) => update("other_charges", Number(e.target.value))} />
+                </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
                 <Row label="Basic Total" value={totals.basic_total} />
-                <Row label="Subtotal" value={totals.subtotal} />
                 {totals.one_time_discount_amount > 0 && (
                   <Row label={`(–) Discount @ ${pi.one_time_discount_percent}%`} value={-totals.one_time_discount_amount} />
                 )}
+                <Row label="Basic After Discount" value={totals.basic_after_discount} />
+                {totals.pf_amount > 0 && <Row label="(+) P&F" value={totals.pf_amount} />}
+                {totals.insurance_amount > 0 && <Row label="(+) Insurance" value={totals.insurance_amount} />}
+                {totals.freight_amount > 0 && <Row label="(+) Freight" value={totals.freight_amount} />}
+                {totals.other_charges_amount > 0 && <Row label="(+) Other Charges" value={totals.other_charges_amount} />}
+                <Row label="Taxable Value" value={totals.taxable_value} />
                 <Row label={`GST @ ${pi.charges.gst_percent}%`} value={totals.gst_amount} />
-                <Row label="Grand Total" value={totals.grand_total_pi} bold />
+                <Row label="Gross Invoice Total" value={totals.gross_invoice_total} bold />
                 {totals.advance_adjustment_amount > 0 && (
-                  <Row label={`(–) Advance @ ${pi.advance_adjustment_percent}%`} value={-totals.advance_adjustment_amount} />
+                  <Row
+                    label={
+                      (pi.advance_mode || "percent") === "amount"
+                        ? "(–) Advance Adjustment"
+                        : `(–) Advance @ ${pi.advance_adjustment_percent}% of Gross`
+                    }
+                    value={-totals.advance_adjustment_amount}
+                  />
                 )}
                 <Row label="Net Payable" value={totals.net_payable_pi} bold highlight />
               </CardContent>
