@@ -109,6 +109,15 @@ export interface Charges {
   turkey_advance_percent?: number;       // % of Grand Total
   turkey_advance_amount?: number;        // flat ₹
 
+  /** Discount on Landed Price (GMS Turkey only).
+   *  When enabled, Discount Amount = Landed × % (or flat ₹).
+   *  Net Landed Price = Landed - Discount Amount.
+   *  All downstream charges (Insurance, P&F, GST) compute on Net Landed Price. */
+  turkey_landed_discount_enabled?: boolean;
+  turkey_landed_discount_mode?: "amount" | "percent"; // default "percent"
+  turkey_landed_discount_percent?: number;            // % of Landed Price
+  turkey_landed_discount_amount?: number;             // flat ₹
+
   /** When false, the OA discount row is hidden in the editor breakdown and
    *  omitted from the PDF (even if a discount value was entered). Default true
    *  if any discount is set, undefined otherwise. */
