@@ -66,7 +66,8 @@ export default function OrderEditor() {
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [preparedBy, setPreparedBy] = useState("");
   const [items, setItems] = useState<LineItem[]>([newItem()]);
-  const [charges, setCharges] = useState<Charges>(emptyCharges);
+  const [chargesMr, setChargesMr] = useState<Charges>(emptyCharges);
+  const [chargesGms, setChargesGms] = useState<Charges>(emptyCharges);
   const [notes, setNotes] = useState("");
   const [parsing, setParsing] = useState(false);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
