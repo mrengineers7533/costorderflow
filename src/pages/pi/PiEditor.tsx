@@ -436,13 +436,13 @@ export default function PiEditor() {
                 refValue: pi.reference_oa_number || "-",
                 hideFirstPageFooter: pi.format === "GMS",
                 extraTotalsRows: [
-                  ...(pi.one_time_discount_percent > 0 && totals.one_time_discount_amount > 0
+                  ...(pi.apply_discount && totals.one_time_discount_amount > 0
                     ? [
                         {
-                          label: `Discount @ ${pi.one_time_discount_percent}% (on Basic Amount)`,
-                          value: -totals.one_time_discount_amount,
+                          label: (pi.discount_label || "").trim() || "One Time Very Special Discount",
+                          value: totals.one_time_discount_amount,
                         },
-                        { label: "Basic After Discount", value: totals.basic_after_discount },
+                        { label: "After Discount", value: totals.basic_after_discount },
                       ]
                     : []),
                   ...(totals.other_charges_amount > 0
@@ -450,12 +450,12 @@ export default function PiEditor() {
                     : []),
                   ...(totals.advance_adjustment_amount > 0
                     ? [
-                        { label: "Gross Invoice Total", value: totals.gross_invoice_total, bold: true },
+                        { label: "Grand Total", value: totals.gross_invoice_total, bold: true },
                         {
                           label: (pi.advance_mode || "percent") === "amount"
-                            ? "Advance Adjustment (₹)"
-                            : `Advance Adjustment @ ${pi.advance_adjustment_percent}% (of Gross)`,
-                          value: -totals.advance_adjustment_amount,
+                            ? "Advance Adjustment"
+                            : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`,
+                          value: totals.advance_adjustment_amount,
                         },
                         { label: "Net Payable", value: totals.net_payable_pi, bold: true },
                       ]
