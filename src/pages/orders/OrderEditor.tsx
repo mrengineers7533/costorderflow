@@ -66,7 +66,8 @@ export default function OrderEditor() {
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [preparedBy, setPreparedBy] = useState("");
   const [items, setItems] = useState<LineItem[]>([newItem()]);
-  const [charges, setCharges] = useState<Charges>(emptyCharges);
+  const [chargesMr, setChargesMr] = useState<Charges>(emptyCharges);
+  const [chargesGms, setChargesGms] = useState<Charges>(emptyCharges);
   const [notes, setNotes] = useState("");
   const [parsing, setParsing] = useState(false);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
@@ -100,7 +101,8 @@ export default function OrderEditor() {
       setReference(o.reference || ""); setCostSheetNumber(o.cost_sheet_number || "");
       setOrderDate(o.order_date); setPreparedBy(o.prepared_by || "");
       setItems(o.line_items?.length ? o.line_items : [newItem()]);
-      setCharges({ ...emptyCharges, ...o.charges });
+      setChargesMr({ ...emptyCharges, ...o.charges });
+      setChargesGms({ ...emptyCharges, ...(o.charges_gms || o.charges) });
       setNotes(o.notes || "");
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
@@ -177,6 +179,14 @@ export default function OrderEditor() {
       : allItemsWithAmounts,
     [allItemsWithAmounts, splitMode, format]
   );
+  // Active charges: when the OA contains both MR and GMS items, each side
+  // edits its own independent charges block. Otherwise both states stay in
+  // lock-step on the MR slot (legacy behaviour).
+  const charges = splitMode && format === "GMS" ? chargesGms : chargesMr;
+  const setCharges = (updater: Charges | ((c: Charges) => Charges)) => {
+    if (splitMode && format === "GMS") setChargesGms(updater as never);
+    else setChargesMr(updater as never);
+  };
   // List used by the editor table — filtered by the in-section toggle.
   const editorItems = useMemo(
     () => lineItemsView === "ALL"
@@ -220,7 +230,12 @@ export default function OrderEditor() {
       oa_number: oa, format, status: finalize ? "finalized" as const : "draft" as const,
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate, prepared_by: preparedBy,
-      line_items: itemsWithAmounts, charges, totals, amount_in_words: words, notes,
+      line_items: itemsWithAmounts,
+      // In split mode `charges` is the MR side and `charges_gms` is the GMS side.
+      // Single-make OAs keep `charges_gms` null so legacy rows are unchanged.
+      charges: chargesMr,
+      charges_gms: splitMode ? chargesGms : null,
+      totals, amount_in_words: words, notes,
     };
 
     const res = isNew
@@ -238,15 +253,15 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
 
     // Render one PDF for a given format + item subset.
-    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string) => {
-      const subTotals = calcTotals(subsetItems, charges);
+    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
+      const subTotals = calcTotals(subsetItems, sideCharges);
       const subWords = amountInWords(subTotals.net_payable);
       const record: OrderRecord = {
         id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
         format: fmt, status: "draft", company_name: companyName, bill_to: billTo,
         ship_to: ship, reference, cost_sheet_number: costSheetNumber,
         order_date: orderDate, prepared_by: preparedBy, line_items: subsetItems,
-        charges, totals: subTotals, amount_in_words: subWords, notes,
+        charges: sideCharges, totals: subTotals, amount_in_words: subWords, notes,
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
@@ -260,12 +275,13 @@ export default function OrderEditor() {
       // using that format's items only.
       const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
       const subset = format === "MR" ? mr : gms;
-      await renderOne(format, subset, `-${format}`);
+      const sideCharges = format === "MR" ? chargesMr : chargesGms;
+      await renderOne(format, subset, `-${format}`, sideCharges);
       toast({ title: "PDF generated", description: `${format} PDF downloaded` });
       return;
     }
 
-    await renderOne(format, itemsWithAmounts, "");
+    await renderOne(format, itemsWithAmounts, "", chargesMr);
     toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
@@ -279,7 +295,9 @@ export default function OrderEditor() {
       oa_number: oaNumber, format, status: "finalized",
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate,
-      prepared_by: preparedBy, line_items: itemsWithAmounts, charges,
+      prepared_by: preparedBy, line_items: itemsWithAmounts,
+      charges: chargesMr,
+      charges_gms: splitMode ? chargesGms : null,
       totals, amount_in_words: words, notes,
       created_at: "", updated_at: "",
       parent_order_id: parentOrderId || orderId || "",
