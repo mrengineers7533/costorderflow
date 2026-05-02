@@ -403,15 +403,24 @@ export default function PiEditor() {
                 hideFirstPageFooter: pi.format === "GMS",
                 extraTotalsRows: [
                   ...(pi.one_time_discount_percent > 0 && totals.one_time_discount_amount > 0
-                    ? [{
-                        label: `One-Time Discount @ ${pi.one_time_discount_percent}% (on Subtotal)`,
-                        value: -totals.one_time_discount_amount,
-                      }]
-                    : []),
-                  ...(pi.advance_adjustment_percent > 0 && totals.advance_adjustment_amount > 0
                     ? [
                         {
-                          label: `Advance Adjustment @ ${pi.advance_adjustment_percent}% (on Grand Total)`,
+                          label: `Discount @ ${pi.one_time_discount_percent}% (on Basic Amount)`,
+                          value: -totals.one_time_discount_amount,
+                        },
+                        { label: "Basic After Discount", value: totals.basic_after_discount },
+                      ]
+                    : []),
+                  ...(totals.other_charges_amount > 0
+                    ? [{ label: "Other Charges", value: totals.other_charges_amount }]
+                    : []),
+                  ...(totals.advance_adjustment_amount > 0
+                    ? [
+                        { label: "Gross Invoice Total", value: totals.gross_invoice_total, bold: true },
+                        {
+                          label: (pi.advance_mode || "percent") === "amount"
+                            ? "Advance Adjustment (₹)"
+                            : `Advance Adjustment @ ${pi.advance_adjustment_percent}% (of Gross)`,
                           value: -totals.advance_adjustment_amount,
                         },
                         { label: "Net Payable", value: totals.net_payable_pi, bold: true },
