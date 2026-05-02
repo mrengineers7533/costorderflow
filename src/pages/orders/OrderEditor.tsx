@@ -651,8 +651,27 @@ export default function OrderEditor() {
                   </div>
                   {charges.freight_enabled && <NumberField label="Freight" value={charges.freight} onChange={(v) => setCharges({ ...charges, freight: v })} />}
                   <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
-                  <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
-                  <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+                  <div className="flex items-center gap-3 pt-1">
+                    <Switch
+                      checked={charges.apply_discount ?? false}
+                      onCheckedChange={(b) => setCharges({ ...charges, apply_discount: b })}
+                    />
+                    <Label>Apply discount</Label>
+                  </div>
+                  {charges.apply_discount && (
+                    <>
+                      <div>
+                        <Label>Discount label</Label>
+                        <Input
+                          placeholder="One Time Very Special Discount"
+                          value={charges.discount_label || ""}
+                          onChange={(e) => setCharges({ ...charges, discount_label: e.target.value })}
+                        />
+                      </div>
+                      <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
+                      <NumberField label="Discount Amount (one-time ₹)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+                    </>
+                  )}
                 </>
               )}
               {format === "GMS" && (
@@ -868,13 +887,39 @@ export default function OrderEditor() {
               </div>
             </div>
             <div className="rounded-lg border p-4 space-y-2 bg-card">
-              <Row k="Basic Total" v={totals.basic_total} />
-              <Row k="Subtotal" v={totals.subtotal} />
-              <Row k={`GST (${charges.gst_percent}%)`} v={(totals.subtotal * charges.gst_percent) / 100} />
-              <Row k="Grand Total" v={totals.grand_total} bold />
-              {charges.discount > 0 && <Row k="Discount" v={-charges.discount} />}
-              <Row k="Net Payable" v={totals.net_payable} bold />
-              <div className="pt-2 text-sm text-muted-foreground italic">{words}</div>
+              {(() => {
+                const rawDisc = charges.discount_percent > 0
+                  ? (totals.basic_total * charges.discount_percent) / 100
+                  : (charges.discount || 0);
+                const showDisc = !!charges.apply_discount && rawDisc > 0;
+                const discLbl = (charges.discount_label || "").trim()
+                  || "One Time Very Special Discount";
+                const baseAfter = totals.basic_total - (showDisc ? rawDisc : 0);
+                const pf = charges.pf_amount > 0
+                  ? charges.pf_amount
+                  : (baseAfter * (charges.pf_percent || 0)) / 100;
+                const ins = charges.insurance_percent > 0
+                  ? (baseAfter * charges.insurance_percent) / 100
+                  : (charges.insurance || 0);
+                const frt = charges.freight_enabled ? (charges.freight || 0) : 0;
+                const taxable = baseAfter + pf + ins + frt;
+                const gst = (taxable * (charges.gst_percent || 0)) / 100;
+                const grand = taxable + gst;
+                return (
+                  <>
+                    <Row k={showDisc ? "Sub Total" : "Basic Total"} v={totals.basic_total} />
+                    {showDisc && <Row k={discLbl} v={rawDisc} />}
+                    {showDisc && <Row k="After Discount" v={baseAfter} />}
+                    {pf > 0 && <Row k={`P&F${charges.pf_percent ? ` @ ${charges.pf_percent}%` : ""}`} v={pf} />}
+                    {ins > 0 && <Row k={`Insurance${charges.insurance_percent ? ` @ ${charges.insurance_percent}%` : ""}`} v={ins} />}
+                    {frt > 0 && <Row k="Freight" v={frt} />}
+                    {!showDisc && <Row k="Subtotal" v={totals.subtotal} />}
+                    <Row k={`GST @ ${charges.gst_percent || 0}%`} v={gst} />
+                    <Row k="Grand Total" v={showDisc ? grand : totals.grand_total} bold />
+                    <div className="pt-2 text-sm text-muted-foreground italic">{words}</div>
+                  </>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>

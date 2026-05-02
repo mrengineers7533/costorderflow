@@ -52,13 +52,18 @@ export async function generatePiPDF(
   );
 
   const extraTotalsRows: ExtraTotalsRow[] = [];
-  if (pi.one_time_discount_percent > 0 && t.one_time_discount_amount > 0) {
+  const showDiscount =
+    (pi.apply_discount ?? (pi.one_time_discount_percent > 0)) &&
+    t.one_time_discount_amount > 0;
+  const discountLabel = (pi.discount_label || "One Time Very Special Discount").trim()
+    || "One Time Very Special Discount";
+  if (showDiscount) {
     extraTotalsRows.push({
-      label: `Discount @ ${pi.one_time_discount_percent}% (on Basic Amount)`,
-      value: -t.one_time_discount_amount,
+      label: discountLabel,
+      value: t.one_time_discount_amount,
     });
     extraTotalsRows.push({
-      label: "Basic After Discount",
+      label: "After Discount",
       value: t.basic_after_discount,
     });
   }
@@ -66,11 +71,11 @@ export async function generatePiPDF(
     extraTotalsRows.push({ label: "Other Charges", value: t.other_charges_amount });
   }
   if (t.advance_adjustment_amount > 0) {
-    extraTotalsRows.push({ label: "Gross Invoice Total", value: t.gross_invoice_total, bold: true });
+    extraTotalsRows.push({ label: "Grand Total", value: t.gross_invoice_total, bold: true });
     const advLabel = advMode === "amount"
-      ? "Advance Adjustment (₹)"
-      : `Advance Adjustment @ ${pi.advance_adjustment_percent}% (of Gross)`;
-    extraTotalsRows.push({ label: advLabel, value: -t.advance_adjustment_amount });
+      ? "Advance Adjustment"
+      : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`;
+    extraTotalsRows.push({ label: advLabel, value: t.advance_adjustment_amount });
     extraTotalsRows.push({ label: "Net Payable", value: t.net_payable_pi, bold: true });
   }
 

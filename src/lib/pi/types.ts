@@ -31,6 +31,13 @@ export interface PiRecord {
   one_time_discount_percent: number;
   advance_adjustment_percent: number;
 
+  /** When false, the discount row is hidden in the editor breakdown and
+   *  completely omitted from the PDF (even if a percent was entered). */
+  apply_discount?: boolean;
+  /** Custom label shown for the discount line (e.g. "One Time Very Special
+   *  Discount"). Defaults to "One Time Very Special Discount" when empty. */
+  discount_label?: string;
+
   /** Flat ₹ "other charges" line added to the taxable value. */
   other_charges: number;
   /** Advance entry mode: flat rupee amount or percent of Gross Invoice Total. */

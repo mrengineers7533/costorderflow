@@ -213,23 +213,47 @@ export async function generateOrderPDF(
   ]);
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
-  totalsRows.push({ label: "Basic Total", value: t.basic_total });
+  // Discount applies ONLY on Basic. When toggled on, show Sub Total → Discount
+  // → After Discount, then P&F/Insurance/Freight, then GST, then Grand Total.
+  const rawDiscount = c.discount_percent > 0
+    ? (t.basic_total * c.discount_percent) / 100
+    : (c.discount || 0);
+  const showDiscount = (c.apply_discount ?? (rawDiscount > 0)) && rawDiscount > 0;
+  const discountLabel = (c.discount_label || "One Time Very Special Discount").trim()
+    || "One Time Very Special Discount";
+  const discountAmt = showDiscount ? rawDiscount : 0;
+  const basicAfterDiscount = t.basic_total - discountAmt;
+
+  totalsRows.push({ label: showDiscount ? "Sub Total" : "Basic Total", value: t.basic_total });
+  if (showDiscount) {
+    totalsRows.push({ label: discountLabel, value: discountAmt });
+    totalsRows.push({ label: "After Discount", value: basicAfterDiscount });
+  }
+  // Charges base — when discount applied, % charges resolve against the
+  // discounted basic; otherwise legacy behaviour (against Basic Total).
+  const chargesBase = showDiscount ? basicAfterDiscount : t.basic_total;
   if (c.pf_amount > 0 || c.pf_percent > 0) {
-    const pf = c.pf_amount > 0 ? c.pf_amount : (t.basic_total * c.pf_percent) / 100;
+    const pf = c.pf_amount > 0 ? c.pf_amount : (chargesBase * c.pf_percent) / 100;
     totalsRows.push({ label: `P&F${c.pf_percent ? ` @ ${c.pf_percent}%` : ""}`, value: pf });
   }
-  const ins = c.insurance_percent > 0 ? (t.basic_total * c.insurance_percent) / 100 : (c.insurance || 0);
+  const ins = c.insurance_percent > 0 ? (chargesBase * c.insurance_percent) / 100 : (c.insurance || 0);
   if (ins > 0) totalsRows.push({ label: `Insurance${c.insurance_percent ? ` @ ${c.insurance_percent}%` : ""}`, value: ins });
   if (c.freight_enabled && c.freight > 0) totalsRows.push({ label: "Freight", value: c.freight });
-  totalsRows.push({ label: "Subtotal", value: t.subtotal });
-  const gst = c.gst_amount ?? (t.subtotal * (c.gst_percent || 0)) / 100;
-  totalsRows.push({ label: `GST @ ${c.gst_percent || 0}%`, value: gst });
-  if (c.discount > 0 || c.discount_percent > 0) {
-    const disc = c.discount_percent > 0 ? (t.grand_total * c.discount_percent) / 100 : c.discount;
-    if (disc > 0) totalsRows.push({ label: `Discount${c.discount_percent ? ` @ ${c.discount_percent}%` : ""}`, value: -disc });
+  // Taxable value (subtotal) is unchanged when no discount; when discount is
+  // applied, recompute it because the legacy `t.subtotal` was based on the
+  // pre-discount basic. We avoid showing a "Subtotal" row in the discount
+  // layout because the screenshot doesn't include one before GST.
+  const pfFinal = c.pf_amount > 0 ? c.pf_amount : (chargesBase * (c.pf_percent || 0)) / 100;
+  const freightFinal = c.freight_enabled ? (c.freight || 0) : 0;
+  const taxable = chargesBase + pfFinal + ins + freightFinal;
+  if (!showDiscount) {
+    totalsRows.push({ label: "Subtotal", value: t.subtotal });
   }
+  const gst = c.gst_amount ?? (taxable * (c.gst_percent || 0)) / 100;
+  totalsRows.push({ label: `GST @ ${c.gst_percent || 0}%`, value: gst });
   if (!opts?.docMeta?.hideDefaultGrandTotal) {
-    totalsRows.push({ label: "Grand Total", value: t.net_payable, bold: true });
+    const grand = showDiscount ? (taxable + gst) : t.net_payable;
+    totalsRows.push({ label: "Grand Total", value: grand, bold: true });
   }
   // Extra rows (e.g. PI: One-Time Discount / Advance Adjustment / Net Payable)
   if (opts?.docMeta?.extraTotalsRows?.length) {

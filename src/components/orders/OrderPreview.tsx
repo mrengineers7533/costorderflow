@@ -78,9 +78,14 @@ export function OrderPreview(p: Props) {
   const insuranceAmount = p.charges.insurance_percent > 0
     ? (p.totals.basic_total * p.charges.insurance_percent) / 100
     : (p.charges.insurance || 0);
-  const discountAmount = p.charges.discount_percent > 0
-    ? (p.totals.grand_total * p.charges.discount_percent) / 100
+  // Discount applies on Basic Amount only and is hidden unless apply_discount.
+  const rawDiscount = p.charges.discount_percent > 0
+    ? (p.totals.basic_total * p.charges.discount_percent) / 100
     : (p.charges.discount || 0);
+  const showDiscount = !!p.charges.apply_discount && rawDiscount > 0;
+  const discountAmount = showDiscount ? rawDiscount : 0;
+  const discountLabel = (p.charges.discount_label || "").trim()
+    || "One Time Very Special Discount";
 
   return (
     <Card className="overflow-hidden order-preview-card">
@@ -208,6 +213,18 @@ export function OrderPreview(p: Props) {
           const totalsColSpan = isGMS ? 7 : 6;
           const emptyColSpan = isGMS ? 8 : 7;
           const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
+          // When discount applied, % charges resolve against the discounted basic.
+          const baseForCharges = showDiscount ? afterDiscount : p.totals.basic_total;
+          const pfShown = p.charges.pf_amount > 0
+            ? p.charges.pf_amount
+            : (baseForCharges * (p.charges.pf_percent || 0)) / 100;
+          const insShown = p.charges.insurance_percent > 0
+            ? (baseForCharges * p.charges.insurance_percent) / 100
+            : (p.charges.insurance || 0);
+          const frtShown = p.charges.freight_enabled ? (p.charges.freight || 0) : 0;
+          const taxableShown = baseForCharges + pfShown + insShown + frtShown;
+          const gstShown = (taxableShown * (p.charges.gst_percent || 0)) / 100;
+          const grandShown = showDiscount ? (taxableShown + gstShown) : p.totals.net_payable;
           return (
             <table className="w-full border-collapse text-[11px] border border-foreground">
               <thead>
@@ -265,26 +282,31 @@ export function OrderPreview(p: Props) {
                     </>
                   ) : (
                     <>
-                      <TotalsRow colSpan={totalsColSpan} label="Basic Total" value={p.totals.basic_total} />
-                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && (
-                        <TotalsRow colSpan={totalsColSpan} label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfAmount} />
+                      <TotalsRow colSpan={totalsColSpan} label={showDiscount ? "Sub Total" : "Basic Total"} value={p.totals.basic_total} />
+                      {showDiscount && (
+                        <TotalsRow colSpan={totalsColSpan} label={discountLabel} value={discountAmount} />
                       )}
-                      {insuranceAmount > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insuranceAmount} />
+                      {showDiscount && (
+                        <TotalsRow colSpan={totalsColSpan} label="After Discount" value={afterDiscount} />
                       )}
-                      {p.charges.freight_enabled && p.charges.freight > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={p.charges.freight} />
+                      {(p.charges.pf_amount > 0 || p.charges.pf_percent > 0) && pfShown > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`P&F${p.charges.pf_percent ? ` @ ${p.charges.pf_percent}%` : ""}`} value={pfShown} />
                       )}
-                      <TotalsRow colSpan={totalsColSpan} label="Subtotal" value={p.totals.subtotal} />
-                      <TotalsRow colSpan={totalsColSpan} label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstAmount} />
-                      {discountAmount > 0 && (
-                        <TotalsRow colSpan={totalsColSpan} label={`Discount${p.charges.discount_percent ? ` @ ${p.charges.discount_percent}%` : ""}`} value={-discountAmount} />
+                      {insShown > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label={`Insurance${p.charges.insurance_percent ? ` @ ${p.charges.insurance_percent}%` : ""}`} value={insShown} />
                       )}
+                      {frtShown > 0 && (
+                        <TotalsRow colSpan={totalsColSpan} label="Freight" value={frtShown} />
+                      )}
+                      {!showDiscount && (
+                        <TotalsRow colSpan={totalsColSpan} label="Subtotal" value={p.totals.subtotal} />
+                      )}
+                      <TotalsRow colSpan={totalsColSpan} label={`GST @ ${p.charges.gst_percent || 0}%`} value={gstShown} />
                       {p.docMeta?.extraTotalsRows?.map((r, i) => (
                         <TotalsRow key={`xm${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} />
                       ))}
                       {!p.docMeta?.hideDefaultGrandTotal && (
-                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.net_payable} highlight />
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={grandShown} highlight />
                       )}
                     </>
                   )
