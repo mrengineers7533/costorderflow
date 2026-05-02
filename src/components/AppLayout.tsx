@@ -8,7 +8,6 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/orders": { title: "Order Acceptances", desc: "Manage and review all OAs." },
   "/boqs": { title: "BOQs", desc: "Bill of Quantities across OAs and revisions." },
   "/pi": { title: "Proforma Invoices", desc: "Manage PIs and revisions." },
-  "/how-to-use": { title: "How to use?", desc: "Quick guide to using this app." },
 };
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
