@@ -1,53 +1,57 @@
+# Independent charges per format (MR vs GMS) — always
+
+## Problem
+
+Today the editor keeps two separate charge slots (`chargesMr`, `chargesGms`) but only routes between them when the OA contains **both** MR and GMS items (`splitMode = hasMR && hasGMS`). For a single-make OA — or while you're still building one — switching the Format dropdown reuses the MR slot for both, so a P&F % typed under MR also shows up under GMS, and vice-versa. The same bleed affects every other input (Insurance %, Sea Freight %, Custom %, Clearing %, GST %, Discount, EXW-Murthal/Turkey panels, currency, FX, advance %, hike, etc.).
+
 ## Goal
 
-When an OA contains both MR and GMS items, the two should calculate completely independently — each with its own P&F, GST, freight, discount, landed-cost, etc. Switching the editor's MR/GMS toggle swaps **both** the visible items **and** the charges block. Each side's totals, preview and PDF use only its own items + its own charges. When the OA has only one make, behaviour stays exactly as today.
+Whenever the user toggles the **Format** dropdown (MR ⇄ GMS), the entire charges & totals area — including the Ex-works Murthal (Landed Cost) panel, EXW-Turkey panel, and currency/FX/advance fields — must show **only that format's own values**. Editing any field on one side never affects the other side. This applies to every OA, regardless of whether it has one make or both.
 
 ## Changes
 
-### 1. Data model — split charges per make
-**`src/lib/orders/types.ts`**
-- Keep `Charges` shape as-is (avoid a breaking schema change).
-- Add an optional sibling field on `OrderRecord`: `charges_gms?: Charges`. When the OA is mixed, `charges` holds the MR charges and `charges_gms` holds the GMS charges. When the OA is single-make, only `charges` is used (as today).
-- `totals` on the row is the active-format totals (for backward compatibility with the saved JSON used by lists/search). Both side totals are recomputed at render/PDF time.
-
-The DB columns don't change — `charges` jsonb continues to be MR (or single-make) charges; `charges_gms` is a new optional jsonb. Add a migration adding the column.
-
-### 2. Editor wiring
+### 1. Drop the `splitMode` gate on charges routing
 **`src/pages/orders/OrderEditor.tsx`**
-- Add `chargesGms` state alongside the existing `charges` state. Load it from `row.charges_gms` if present, otherwise initialise from defaults.
-- Introduce a derived `activeCharges` / `setActiveCharges` pair: when `splitMode` is true, they point at `chargesGms` if `format === "GMS"` else `charges`. When not in split mode, they always point at `charges`.
-- Replace every `charges` / `setCharges` reference inside the Charges & Totals column, the Ex-works Murthal panel, the EXW Turkey panel, the discount controls, and the totals `useMemo` with the active pair. The format-gated blocks (`format === "MR" && …` and `format === "GMS" && …`) already key off the active format, so their inputs will naturally bind to the right side.
-- `totals` (and the words/snapshot) compute from `itemsWithAmounts` (already filtered by active format) + `activeCharges`.
-- Save payload includes both `charges` (MR side, or the only side) and `charges_gms` (GMS side, only when split).
+- Change the active-charges proxy from `splitMode && format === "GMS"` to simply `format === "GMS"`. So:
+  - `charges = format === "GMS" ? chargesGms : chargesMr`
+  - `setCharges` always writes to `chargesGms` when format is GMS, otherwise `chargesMr`.
+- The keyboard / UI bindings already use the proxied `charges` / `setCharges`, so every input listed below automatically becomes per-format:
+  - **Charges & Totals column**: P&F %, P&F Amount, Insurance %, Insurance Amount, Freight toggle + amount, GST %, Apply discount toggle + label + Discount % + Discount Amount.
+  - **GMS Mode selector** (None / EXW-Turkey / EXW-Murthal) and all its derived defaults.
+  - **EXW-Turkey panel**: Sea Freight (toggle / mode / amount / % / base), Insurance (same), Custom (toggle / base / %), Local Freight (toggle / mode / amount / % / base), GST, One-time Discount.
+  - **Ex-works Murthal panel**: Hike, P&F (toggle + %), Sea Freight % (of Basic), Sea Insurance %, Custom %, Clearing %, Landed GST %, Landed Discount.
+  - **Currency block**: currency, currency_symbol, fx_rate, advance_percent.
+- `totals` already derives from the proxied `charges`; it stays correct.
 
-### 3. PDF generation — render each side with its own charges
-**`src/pages/orders/OrderEditor.tsx` → `downloadPDF`**
-- In `splitMode`, build the chosen side's record using that side's items **and** that side's charges (`charges` for MR, `chargesGms` for GMS). Today it reuses the shared `charges` object — that's the bug to fix.
-- Single-make path unchanged.
+### 2. Persist both slots, always
+- Save payload (insert + update + revision snapshot) currently writes `charges_gms: splitMode ? chargesGms : null`. Change to always persist both: `charges: chargesMr`, `charges_gms: chargesGms`.
+- `snapshotOrder` likewise stores both.
 
-### 4. Preview
-**`src/components/orders/OrderPreview.tsx`**
-- No structural change. The editor already passes `charges` and items into the preview; once the editor swaps `activeCharges` based on the format toggle, the preview reflects the right side automatically.
+### 3. Load both slots, always
+- On load, hydrate `chargesMr` from `row.charges` and `chargesGms` from `row.charges_gms`. If `row.charges_gms` is null (legacy rows), seed `chargesGms` from defaults (NOT from `row.charges`) so a legacy MR-only OA doesn't pre-fill GMS with MR's values. This is the key fix vs. today's `o.charges_gms || o.charges` fallback.
 
-### 5. Defaults / initialisation
-**`src/lib/orders/defaults.ts`**
-- Reuse the existing default charges factory for both sides. No new defaults needed.
+### 4. PDF download uses the format's own charges
+- `downloadPDF` already passes `format === "MR" ? chargesMr : chargesGms` per side in split mode, and uses `chargesMr` for the single-make path. Change the single-make path to use the active-format slot too: MR PDF → `chargesMr`, GMS PDF → `chargesGms`.
 
-### 6. Revisions / snapshots
-**`src/pages/orders/OrderEditor.tsx` → `snapshotOrder`** and the revision flow include `charges_gms` in the snapshot so revising a mixed OA preserves both sides.
+### 5. Defaults for the second slot
+**`src/lib/orders/defaults.ts`** — no change. Both slots initialise from the existing `emptyCharges` factory.
 
-### 7. Database
-- Migration: `ALTER TABLE public.orders ADD COLUMN charges_gms jsonb;` (nullable, default null). RLS unchanged.
+### 6. Database
+- No schema change. `orders.charges_gms` already exists. We will start writing it for every OA (not just mixed ones); the column stays nullable so older rows continue to load fine.
 
-### Out of scope
-- PI editor (`src/pages/pi/PiEditor.tsx`) — PIs are single-format, so no split there.
-- BOQ — unchanged.
-- The Ex-works Murthal / EXW Turkey panel UIs themselves — they keep their current controls; they just bind to whichever charges side is active.
-- No change to the `OrderFormat`/`detectFormat` heuristic.
+## Out of scope
+- PI editor (single-format).
+- BOQ editor.
+- Auto-detect / `detectFormat` heuristic.
+- The visual layout of the Charges & Totals / EXW panels — they keep their current controls; only the binding behind them changes.
+- Line items continue to be shared (one item list with `make` tags); only **charges** are split per format.
+
+## Files to edit
+- `src/pages/orders/OrderEditor.tsx` (proxy, load, save, snapshot, downloadPDF)
 
 ## Acceptance
-
-- Mixed OA: switch toggle MR ⇄ GMS — items, charges inputs, totals, words, and preview all swap. Editing MR P&F % does not affect GMS totals and vice-versa.
-- Mixed OA: download PDF in MR mode → MR PDF uses only MR items + MR charges. Switch to GMS, download → GMS PDF uses only GMS items + GMS charges.
-- Single-make OA (only MR or only GMS): no behavioural change; `charges_gms` stays null.
-- Saving + reopening a mixed OA restores both charges blocks intact.
+- Brand-new OA, Format=MR, type P&F % = 1. Switch Format → GMS. P&F % field is empty (or its own GMS value). Type P&F % = 2. Switch back to MR → still 1. Switch to GMS → still 2.
+- Same independence for Insurance %, Freight, GST %, Discount, Sea Freight %, Sea Insurance %, Custom %, Clearing %, Landed GST %, Landed Discount, Hike, EXW-Turkey rows, currency / FX / advance %.
+- Save the OA, reload it: both MR and GMS values restored exactly as entered.
+- Mixed-make OAs continue to work (already worked before this change).
+- Legacy single-make OAs (where `charges_gms` is null in DB) load with their original `charges` on the MR side and an empty GMS side — no surprise pre-fill.
