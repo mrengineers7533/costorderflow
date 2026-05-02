@@ -801,6 +801,44 @@ export default function OrderEditor() {
                   <p className="text-[11px] text-muted-foreground -mt-1">
                     Landed Price = Base + Sea Freight + Custom Duty. Insurance &amp; P&amp;F below are computed on the Landed Price.
                   </p>
+                  {/* Discount on Landed Price (GMS rule) */}
+                  <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                    <Switch
+                      checked={!!charges.turkey_landed_discount_enabled}
+                      onCheckedChange={(b) => setCharges({ ...charges, turkey_landed_discount_enabled: b })}
+                    />
+                    <Label className={`text-sm ${charges.turkey_landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>
+                      Discount on Landed Price
+                    </Label>
+                    <Select
+                      value={charges.turkey_landed_discount_mode || "percent"}
+                      onValueChange={(v) => setCharges({ ...charges, turkey_landed_discount_mode: v as "amount" | "percent" })}
+                      disabled={!charges.turkey_landed_discount_enabled}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percent">% of Landed</SelectItem>
+                        <SelectItem value="amount">Flat ₹</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="any" disabled={!charges.turkey_landed_discount_enabled}
+                      value={(charges.turkey_landed_discount_mode || "percent") === "percent"
+                        ? (charges.turkey_landed_discount_percent || 0)
+                        : (charges.turkey_landed_discount_amount || 0)}
+                      onChange={(e) => {
+                        const v = +e.target.value || 0;
+                        if ((charges.turkey_landed_discount_mode || "percent") === "percent") {
+                          setCharges({ ...charges, turkey_landed_discount_percent: v });
+                        } else {
+                          setCharges({ ...charges, turkey_landed_discount_amount: v });
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    Net Landed Price = Landed − Discount. Insurance, P&amp;F &amp; GST below recompute on Net Landed Price.
+                  </p>
                   {/* P&F on Landed Price */}
                   <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
                     <Switch checked={!!charges.turkey_pf_enabled} onCheckedChange={(b) => setCharges({ ...charges, turkey_pf_enabled: b })} />

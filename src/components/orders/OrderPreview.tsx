@@ -480,6 +480,9 @@ function ExTurkeyBlock({
   const advLbl = (c.turkey_advance_mode || "percent") === "percent" && c.turkey_advance_percent
     ? `Advance Adjustment @ ${c.turkey_advance_percent}%`
     : "Advance Adjustment";
+  const discLbl = (c.turkey_landed_discount_mode || "percent") === "percent" && c.turkey_landed_discount_percent
+    ? `Discount @ ${c.turkey_landed_discount_percent}% on Landed`
+    : "Discount on Landed";
   return (
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
@@ -492,6 +495,12 @@ function ExTurkeyBlock({
       {c.turkey_sea_freight_enabled && <Row k="Sea Freight" v={t.sea_freight} />}
       {c.turkey_custom_enabled && <Row k={customLbl} v={t.custom} />}
       <Row k="Landed Price" v={t.total_amount} bold />
+      {c.turkey_landed_discount_enabled && t.landed_discount > 0 && (
+        <>
+          <Row k={discLbl} v={-t.landed_discount} />
+          <Row k="Net Landed Price" v={t.net_landed} bold />
+        </>
+      )}
       {c.turkey_insurance_enabled && <Row k={insLbl} v={t.insurance} />}
       {c.turkey_pf_enabled && <Row k={pfLbl} v={t.pf} />}
       {c.turkey_freight_enabled && t.freight > 0 && <Row k="Freight" v={t.freight} />}
