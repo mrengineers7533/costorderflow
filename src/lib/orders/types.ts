@@ -94,6 +94,21 @@ export interface Charges {
   turkey_discount_enabled?: boolean;
   turkey_discount?: number;             // one-time INR
 
+  /** EXW-Turkey extras (new GMS rule):
+   *  Insurance & P&F are computed on the Landed Price (base + sea_freight + custom).
+   *  Freight is an optional flat ₹ that joins the GST base.
+   *  Advance Adjustment is subtracted from the Grand Total to produce Net Payable. */
+  turkey_pf_enabled?: boolean;
+  turkey_pf_mode?: "amount" | "percent"; // default "percent"
+  turkey_pf_percent?: number;            // default 1.5
+  turkey_pf_amount?: number;             // flat ₹
+  turkey_freight_enabled?: boolean;
+  turkey_freight?: number;               // flat ₹
+  turkey_advance_enabled?: boolean;
+  turkey_advance_mode?: "amount" | "percent"; // default "percent"
+  turkey_advance_percent?: number;       // % of Grand Total
+  turkey_advance_amount?: number;        // flat ₹
+
   /** When false, the OA discount row is hidden in the editor breakdown and
    *  omitted from the PDF (even if a discount value was entered). Default true
    *  if any discount is set, undefined otherwise. */
