@@ -183,7 +183,7 @@ export default function OrderEditor() {
   // edits its own independent charges block. Otherwise both states stay in
   // lock-step on the MR slot (legacy behaviour).
   const charges = splitMode && format === "GMS" ? chargesGms : chargesMr;
-  const setCharges: React.Dispatch<React.SetStateAction<Charges>> = (updater) => {
+  const setCharges = (updater: Charges | ((c: Charges) => Charges)) => {
     if (splitMode && format === "GMS") setChargesGms(updater as never);
     else setChargesMr(updater as never);
   };
