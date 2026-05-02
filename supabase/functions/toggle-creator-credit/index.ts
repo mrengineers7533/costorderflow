@@ -65,6 +65,26 @@ Deno.serve(async (req) => {
   const validFormat = /^\d{6}$/.test(pin);
   const pinOk = validFormat && expected.length > 0 && timingSafeEqual(pin, expected);
 
+  // Brute-force protection: lock out an IP after 10 failed attempts in the past hour.
+  const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
+  const { data: recentFails } = await supabase
+    .from("credit_removal_attempts")
+    .select("id")
+    .eq("user_identifier", requesterIp)
+    .eq("success", false)
+    .gte("attempted_at", oneHourAgo);
+  if ((recentFails?.length ?? 0) >= 10) {
+    await supabase.from("credit_removal_attempts").insert({
+      success: false,
+      action,
+      user_identifier: requesterIp,
+    });
+    return new Response(
+      JSON.stringify({ error: "Too many attempts. Try again later." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   // Log attempt regardless of outcome.
   await supabase.from("credit_removal_attempts").insert({
     success: pinOk,
