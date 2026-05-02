@@ -210,14 +210,41 @@ export default function PiEditor() {
             <Card>
               <CardHeader><CardTitle className="text-base">PI adjustments</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <Label>Discount % <span className="text-muted-foreground text-xs">(on Basic Amount only)</span></Label>
-                  <Input
-                    type="number" step="0.01" min={0} max={100}
-                    value={pi.one_time_discount_percent}
-                    onChange={(e) => update("one_time_discount_percent", Number(e.target.value))}
+                <div className="col-span-2 flex items-center gap-3">
+                  <input
+                    id="pi-apply-discount"
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={pi.apply_discount ?? false}
+                    onChange={(e) => update("apply_discount", e.target.checked)}
                   />
+                  <Label htmlFor="pi-apply-discount" className="cursor-pointer">
+                    Apply discount
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    (hidden from PDF when off)
+                  </span>
                 </div>
+                {pi.apply_discount && (
+                  <>
+                    <div>
+                      <Label>Discount label</Label>
+                      <Input
+                        placeholder="One Time Very Special Discount"
+                        value={pi.discount_label || ""}
+                        onChange={(e) => update("discount_label", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Discount % <span className="text-muted-foreground text-xs">(on Basic Amount only)</span></Label>
+                      <Input
+                        type="number" step="0.01" min={0} max={100}
+                        value={pi.one_time_discount_percent}
+                        onChange={(e) => update("one_time_discount_percent", Number(e.target.value))}
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <Label>
                     Advance Adjustment{" "}
@@ -275,29 +302,36 @@ export default function PiEditor() {
                 </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
-                <Row label="Basic Total" value={totals.basic_total} />
-                {totals.one_time_discount_amount > 0 && (
-                  <Row label={`(–) Discount @ ${pi.one_time_discount_percent}%`} value={-totals.one_time_discount_amount} />
-                )}
-                <Row label="Basic After Discount" value={totals.basic_after_discount} />
-                {totals.pf_amount > 0 && <Row label="(+) P&F" value={totals.pf_amount} />}
-                {totals.insurance_amount > 0 && <Row label="(+) Insurance" value={totals.insurance_amount} />}
-                {totals.freight_amount > 0 && <Row label="(+) Freight" value={totals.freight_amount} />}
-                {totals.other_charges_amount > 0 && <Row label="(+) Other Charges" value={totals.other_charges_amount} />}
-                <Row label="Taxable Value" value={totals.taxable_value} />
-                <Row label={`GST @ ${pi.charges.gst_percent}%`} value={totals.gst_amount} />
-                <Row label="Gross Invoice Total" value={totals.gross_invoice_total} bold />
-                {totals.advance_adjustment_amount > 0 && (
-                  <Row
-                    label={
-                      (pi.advance_mode || "percent") === "amount"
-                        ? "(–) Advance Adjustment"
-                        : `(–) Advance @ ${pi.advance_adjustment_percent}% of Gross`
-                    }
-                    value={-totals.advance_adjustment_amount}
-                  />
-                )}
-                <Row label="Net Payable" value={totals.net_payable_pi} bold highlight />
+                {(() => {
+                  const showDisc = !!pi.apply_discount && totals.one_time_discount_amount > 0;
+                  const discLbl = (pi.discount_label || "").trim() || "One Time Very Special Discount";
+                  return (
+                    <>
+                      <Row label={showDisc ? "Sub Total" : "Basic Total"} value={totals.basic_total} />
+                      {showDisc && <Row label={discLbl} value={totals.one_time_discount_amount} />}
+                      {showDisc && <Row label="After Discount" value={totals.basic_after_discount} />}
+                      {totals.pf_amount > 0 && <Row label="P&F" value={totals.pf_amount} />}
+                      {totals.insurance_amount > 0 && <Row label="Insurance" value={totals.insurance_amount} />}
+                      {totals.freight_amount > 0 && <Row label="Freight" value={totals.freight_amount} />}
+                      {totals.other_charges_amount > 0 && <Row label="Other Charges" value={totals.other_charges_amount} />}
+                      <Row label={`GST @ ${pi.charges.gst_percent}%`} value={totals.gst_amount} />
+                      <Row label="Grand Total" value={totals.gross_invoice_total} bold highlight={totals.advance_adjustment_amount === 0} />
+                      {totals.advance_adjustment_amount > 0 && (
+                        <>
+                          <Row
+                            label={
+                              (pi.advance_mode || "percent") === "amount"
+                                ? "Advance Adjustment"
+                                : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`
+                            }
+                            value={totals.advance_adjustment_amount}
+                          />
+                          <Row label="Net Payable" value={totals.net_payable_pi} bold highlight />
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 
