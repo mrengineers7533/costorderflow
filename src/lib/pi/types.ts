@@ -31,17 +31,38 @@ export interface PiRecord {
   one_time_discount_percent: number;
   advance_adjustment_percent: number;
 
+  /** Flat ₹ "other charges" line added to the taxable value. */
+  other_charges: number;
+  /** Advance entry mode: flat rupee amount or percent of Gross Invoice Total. */
+  advance_mode: "amount" | "percent";
+  /** Advance amount in ₹ (used when advance_mode === "amount"). */
+  advance_amount: number;
+
   created_at: string;
   updated_at: string;
 }
 
 export interface PiTotals extends Totals {
   one_time_discount_amount: number;
-  /** Subtotal after one-time discount (before GST). */
+  /** Basic amount after subtracting the discount (= Basic × (1 - d%)). */
+  basic_after_discount: number;
+  /** Resolved P&F amount in ₹ (computed against basic_after_discount when %). */
+  pf_amount: number;
+  /** Resolved insurance amount in ₹. */
+  insurance_amount: number;
+  /** Resolved freight amount in ₹. */
+  freight_amount: number;
+  /** Other charges in ₹ (flat). */
+  other_charges_amount: number;
+  /** Taxable value = basic_after_discount + pf + insurance + freight + other. */
+  taxable_value: number;
+  /** Subtotal after one-time discount (before GST). Alias for taxable_value (back-compat). */
   taxable_after_discount: number;
-  /** GST recomputed on the post-discount taxable amount. */
+  /** GST computed on the taxable value. */
   gst_amount: number;
-  /** Sum of post-discount taxable + GST + freight (the "Grand Total"). */
+  /** Gross invoice total = taxable_value + GST. */
+  gross_invoice_total: number;
+  /** Alias for gross_invoice_total (back-compat). */
   grand_total_pi: number;
   advance_adjustment_amount: number;
   net_payable_pi: number;

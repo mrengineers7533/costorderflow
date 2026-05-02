@@ -39,25 +39,39 @@ export async function generatePiPDF(
     updated_at: pi.updated_at,
   };
 
-  const t = calcPiTotals(pi.line_items, pi.charges, pi.one_time_discount_percent, pi.advance_adjustment_percent);
+  const advMode = pi.advance_mode || "percent";
+  const advValue = advMode === "amount"
+    ? (pi.advance_amount || 0)
+    : (pi.advance_adjustment_percent || 0);
+  const t = calcPiTotals(
+    pi.line_items,
+    pi.charges,
+    pi.one_time_discount_percent,
+    { mode: advMode, value: advValue },
+    pi.other_charges || 0,
+  );
 
   const extraTotalsRows: ExtraTotalsRow[] = [];
   if (pi.one_time_discount_percent > 0 && t.one_time_discount_amount > 0) {
     extraTotalsRows.push({
-      label: `One-Time Discount @ ${pi.one_time_discount_percent}% (on Subtotal)`,
+      label: `Discount @ ${pi.one_time_discount_percent}% (on Basic Amount)`,
       value: -t.one_time_discount_amount,
     });
+    extraTotalsRows.push({
+      label: "Basic After Discount",
+      value: t.basic_after_discount,
+    });
   }
-  if (pi.advance_adjustment_percent > 0 && t.advance_adjustment_amount > 0) {
-    extraTotalsRows.push({
-      label: `Advance Adjustment @ ${pi.advance_adjustment_percent}% (on Grand Total)`,
-      value: -t.advance_adjustment_amount,
-    });
-    extraTotalsRows.push({
-      label: "Net Payable",
-      value: t.net_payable_pi,
-      bold: true,
-    });
+  if (t.other_charges_amount > 0) {
+    extraTotalsRows.push({ label: "Other Charges", value: t.other_charges_amount });
+  }
+  if (t.advance_adjustment_amount > 0) {
+    extraTotalsRows.push({ label: "Gross Invoice Total", value: t.gross_invoice_total, bold: true });
+    const advLabel = advMode === "amount"
+      ? "Advance Adjustment (₹)"
+      : `Advance Adjustment @ ${pi.advance_adjustment_percent}% (of Gross)`;
+    extraTotalsRows.push({ label: advLabel, value: -t.advance_adjustment_amount });
+    extraTotalsRows.push({ label: "Net Payable", value: t.net_payable_pi, bold: true });
   }
 
   return generateOrderPDF(orderLike, {
