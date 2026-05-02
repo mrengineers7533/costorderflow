@@ -461,10 +461,25 @@ function ExTurkeyBlock({
       <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
     </div>
   );
-  // Percentage details intentionally hidden from output – only clean labels shown.
-  const lfPct = "";
-  const sfPct = "";
-  const insPct = "";
+  const insLbl = c.turkey_insurance_enabled
+    ? ((c.turkey_insurance_mode || "amount") === "percent" && c.turkey_insurance_percent
+        ? `Insurance @ ${c.turkey_insurance_percent}%`
+        : "Insurance")
+    : "Insurance";
+  const pfLbl = c.turkey_pf_enabled
+    ? ((c.turkey_pf_mode || "percent") === "percent" && c.turkey_pf_percent
+        ? `P&F @ ${c.turkey_pf_percent}%`
+        : "P&F")
+    : "P&F";
+  const customLbl = c.turkey_custom_percent
+    ? `Custom Duty @ ${c.turkey_custom_percent}%`
+    : "Custom Duty";
+  const gstLbl = c.turkey_gst_percent
+    ? `GST @ ${c.turkey_gst_percent}%`
+    : "GST";
+  const advLbl = (c.turkey_advance_mode || "percent") === "percent" && c.turkey_advance_percent
+    ? `Advance Adjustment @ ${c.turkey_advance_percent}%`
+    : "Advance Adjustment";
   return (
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
@@ -474,23 +489,22 @@ function ExTurkeyBlock({
         </div>
       )}
       <Row k="Base Amount (EXW Turkey)" v={t.base_amount} />
-      <Row k="Total Amount / Landed Price" v={t.total_amount} bold />
-      {c.turkey_sea_freight_enabled && <Row k={`Sea Freight${sfPct}`} v={t.sea_freight} />}
-      {c.turkey_insurance_enabled && <Row k={`Insurance${insPct}`} v={t.insurance} />}
-      {c.turkey_custom_enabled && (
-        <Row k="Custom Duty" v={t.custom} />
-      )}
-      {c.turkey_local_freight_enabled && (
-        <Row k={`Local Freight${lfPct}`} v={t.local_freight} />
-      )}
-      {c.turkey_gst_enabled && (
-        <Row k="GST" v={t.gst} />
-      )}
+      {c.turkey_sea_freight_enabled && <Row k="Sea Freight" v={t.sea_freight} />}
+      {c.turkey_custom_enabled && <Row k={customLbl} v={t.custom} />}
+      <Row k="Landed Price" v={t.total_amount} bold />
+      {c.turkey_insurance_enabled && <Row k={insLbl} v={t.insurance} />}
+      {c.turkey_pf_enabled && <Row k={pfLbl} v={t.pf} />}
+      {c.turkey_freight_enabled && t.freight > 0 && <Row k="Freight" v={t.freight} />}
+      {c.turkey_gst_enabled && <Row k={gstLbl} v={t.gst} />}
       <Row k="Grand Total" v={t.grand_total} bold />
       {c.turkey_discount_enabled && t.discount > 0 && (
         <Row k="One-time Discount" v={-t.discount} />
       )}
-      {c.turkey_discount_enabled && t.discount > 0 && (
+      {c.turkey_advance_enabled && t.advance_amount > 0 && (
+        <Row k={advLbl} v={t.advance_amount} />
+      )}
+      {((c.turkey_advance_enabled && t.advance_amount > 0) ||
+        (c.turkey_discount_enabled && t.discount > 0)) && (
         <Row k="Net Payable" v={t.net_payable} bold />
       )}
     </div>
