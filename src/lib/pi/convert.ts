@@ -79,7 +79,7 @@ export async function createPiFromOaItems(
   });
   if (numErr || !piNum) throw numErr || new Error("Failed to allocate PI number");
 
-  const totals = calcPiTotals(filteredItems, oa.charges, 0, 0);
+  const totals = calcPiTotals(filteredItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
 
   const insertRow = {
     pi_number: piNum as string,
@@ -109,6 +109,9 @@ export async function createPiFromOaItems(
     notes: oa.notes,
     one_time_discount_percent: 0,
     advance_adjustment_percent: 0,
+    other_charges: 0,
+    advance_mode: "percent",
+    advance_amount: 0,
   };
 
   const { data, error } = await supabase
@@ -166,7 +169,13 @@ export async function createPiRevision(
     next.line_items,
     next.charges,
     next.one_time_discount_percent,
-    next.advance_adjustment_percent,
+    {
+      mode: next.advance_mode || "percent",
+      value: (next.advance_mode || "percent") === "amount"
+        ? (next.advance_amount || 0)
+        : (next.advance_adjustment_percent || 0),
+    },
+    next.other_charges || 0,
   );
 
   const row = {
@@ -197,6 +206,9 @@ export async function createPiRevision(
     notes: next.notes,
     one_time_discount_percent: next.one_time_discount_percent,
     advance_adjustment_percent: next.advance_adjustment_percent,
+    other_charges: next.other_charges || 0,
+    advance_mode: next.advance_mode || "percent",
+    advance_amount: next.advance_amount || 0,
   };
   const { data, error } = await supabase
     .from("proforma_invoices")
