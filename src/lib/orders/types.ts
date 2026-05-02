@@ -126,6 +126,10 @@ export interface OrderRecord {
   line_items: LineItem[];
   charges: Charges;
   totals: Totals;
+  /** Independent GMS-side charges for mixed-make OAs. When the OA contains
+   *  both MR and GMS items, `charges` holds the MR side and `charges_gms`
+   *  holds the GMS side. Single-make OAs leave this null/undefined. */
+  charges_gms?: Charges | null;
   amount_in_words: string | null;
   notes: string | null;
   created_at: string;
