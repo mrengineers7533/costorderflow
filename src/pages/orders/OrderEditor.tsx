@@ -189,9 +189,20 @@ export default function OrderEditor() {
   // entire charges block (P&F, Insurance, Sea Freight, Custom, GST, Discount,
   // EXW Murthal/Turkey rows, currency/FX, etc.) regardless of split mode.
   const charges = format === "GMS" ? chargesGms : chargesMr;
+  // Functional updates so the write always uses the latest slot for the
+  // currently-active format and never accidentally captures the other side.
   const setCharges = (updater: Charges | ((c: Charges) => Charges)) => {
-    if (format === "GMS") setChargesGms(updater as never);
-    else setChargesMr(updater as never);
+    const fn = typeof updater === "function"
+      ? (updater as (c: Charges) => Charges)
+      : () => updater;
+    if (format === "GMS") setChargesGms((prev) => fn(prev));
+    else setChargesMr((prev) => fn(prev));
+  };
+  // Single helper so the top Format dropdown, preview MR/GMS toggle, and
+  // line-items MR/GMS toggle all switch the active company in lock-step.
+  const switchFormat = (f: OrderFormat) => {
+    setAutoFormat(false);
+    setFormat(f);
   };
   // List used by the editor table — filtered by the in-section toggle.
   const editorItems = useMemo(
@@ -551,7 +562,7 @@ export default function OrderEditor() {
             <div>
               <Label>Format</Label>
               <div className="flex gap-2 items-center">
-                <Select value={format} onValueChange={(v) => { setAutoFormat(false); setFormat(v as OrderFormat); }}>
+                <Select value={format} onValueChange={(v) => switchFormat(v as OrderFormat)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MR">MR Engineers</SelectItem>
@@ -599,7 +610,14 @@ export default function OrderEditor() {
                   type="single"
                   size="sm"
                   value={lineItemsView}
-                  onValueChange={(v) => v && setLineItemsView(v as "MR" | "GMS" | "ALL")}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next = v as "MR" | "GMS" | "ALL";
+                    setLineItemsView(next);
+                    // MR/GMS also switches the active company so the
+                    // Charges & Totals panel below edits the right side.
+                    if (next === "MR" || next === "GMS") switchFormat(next);
+                  }}
                   className="border rounded-md"
                 >
                   <ToggleGroupItem value="MR" aria-label="Show MR items" disabled={!hasMR}>MR</ToggleGroupItem>
@@ -834,6 +852,7 @@ export default function OrderEditor() {
                   />
                 </div>
               )}
+              {format === "GMS" && (
               <div className="pt-2 border-t">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Foreign Currency (Ex-works)</Label>
                 <p className="text-[11px] text-muted-foreground mb-2">For GMS imports (e.g. Ex-works Turkey in USD). Leave currency blank or "INR" for domestic orders.</p>
@@ -857,6 +876,8 @@ export default function OrderEditor() {
                   <NumberField label="Advance %" value={charges.advance_percent ?? 40} onChange={(v) => setCharges({ ...charges, advance_percent: v })} />
                 </div>
               </div>
+              )}
+              {format === "GMS" && (
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <div>
@@ -920,6 +941,7 @@ export default function OrderEditor() {
                   </div>
                 )}
               </div>
+              )}
             </div>
             <div className="rounded-lg border p-4 space-y-2 bg-card">
               {(() => {
@@ -1037,7 +1059,7 @@ export default function OrderEditor() {
               notes={notes}
               parsing={parsing}
               splitMode={splitMode}
-              onFormatChange={(f) => { setAutoFormat(false); setFormat(f); }}
+              onFormatChange={(f) => switchFormat(f)}
               onDownloadPDF={downloadPDF}
               terms={terms}
               bank={bank}
