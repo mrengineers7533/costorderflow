@@ -651,8 +651,27 @@ export default function OrderEditor() {
                   </div>
                   {charges.freight_enabled && <NumberField label="Freight" value={charges.freight} onChange={(v) => setCharges({ ...charges, freight: v })} />}
                   <NumberField label="GST %" value={charges.gst_percent} onChange={(v) => setCharges({ ...charges, gst_percent: v, gst_amount: 0 })} />
-                  <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
-                  <NumberField label="Discount Amount (one-time)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+                  <div className="flex items-center gap-3 pt-1">
+                    <Switch
+                      checked={charges.apply_discount ?? false}
+                      onCheckedChange={(b) => setCharges({ ...charges, apply_discount: b })}
+                    />
+                    <Label>Apply discount</Label>
+                  </div>
+                  {charges.apply_discount && (
+                    <>
+                      <div>
+                        <Label>Discount label</Label>
+                        <Input
+                          placeholder="One Time Very Special Discount"
+                          value={charges.discount_label || ""}
+                          onChange={(e) => setCharges({ ...charges, discount_label: e.target.value })}
+                        />
+                      </div>
+                      <NumberField label="Discount %" value={charges.discount_percent} onChange={(v) => setCharges({ ...charges, discount_percent: v, discount: 0 })} />
+                      <NumberField label="Discount Amount (one-time ₹)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
+                    </>
+                  )}
                 </>
               )}
               {format === "GMS" && (
