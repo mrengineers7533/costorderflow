@@ -93,6 +93,14 @@ export interface Charges {
   turkey_gst_percent?: number;          // default 18
   turkey_discount_enabled?: boolean;
   turkey_discount?: number;             // one-time INR
+
+  /** When false, the OA discount row is hidden in the editor breakdown and
+   *  omitted from the PDF (even if a discount value was entered). Default true
+   *  if any discount is set, undefined otherwise. */
+  apply_discount?: boolean;
+  /** Custom label for the discount line in the editor & PDF. Default
+   *  "One Time Very Special Discount". */
+  discount_label?: string;
 }
 
 export interface Totals {
