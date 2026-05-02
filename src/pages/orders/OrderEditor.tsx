@@ -189,9 +189,20 @@ export default function OrderEditor() {
   // entire charges block (P&F, Insurance, Sea Freight, Custom, GST, Discount,
   // EXW Murthal/Turkey rows, currency/FX, etc.) regardless of split mode.
   const charges = format === "GMS" ? chargesGms : chargesMr;
+  // Functional updates so the write always uses the latest slot for the
+  // currently-active format and never accidentally captures the other side.
   const setCharges = (updater: Charges | ((c: Charges) => Charges)) => {
-    if (format === "GMS") setChargesGms(updater as never);
-    else setChargesMr(updater as never);
+    const fn = typeof updater === "function"
+      ? (updater as (c: Charges) => Charges)
+      : () => updater;
+    if (format === "GMS") setChargesGms((prev) => fn(prev));
+    else setChargesMr((prev) => fn(prev));
+  };
+  // Single helper so the top Format dropdown, preview MR/GMS toggle, and
+  // line-items MR/GMS toggle all switch the active company in lock-step.
+  const switchFormat = (f: OrderFormat) => {
+    setAutoFormat(false);
+    setFormat(f);
   };
   // List used by the editor table — filtered by the in-section toggle.
   const editorItems = useMemo(
