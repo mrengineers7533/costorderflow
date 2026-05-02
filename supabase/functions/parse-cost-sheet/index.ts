@@ -90,6 +90,22 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
+    // Rate limiting: cap total AI parses across the project to protect LOVABLE_API_KEY credits.
+    // Counts cost sheets that were marked "parsing" or "parsed" in the past hour.
+    const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
+    const { count: recentParses } = await admin
+      .from("cost_sheets")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["parsing", "parsed"])
+      .gte("updated_at", oneHourAgo);
+    const HOURLY_LIMIT = 30;
+    if ((recentParses ?? 0) >= HOURLY_LIMIT) {
+      return new Response(
+        JSON.stringify({ error: "Parsing rate limit reached. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Load cost sheet (and verify ownership)
     const { data: sheet, error: sheetErr } = await admin
       .from("cost_sheets").select("*").eq("id", costSheetId).maybeSingle();
