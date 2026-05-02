@@ -253,15 +253,15 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
 
     // Render one PDF for a given format + item subset.
-    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string) => {
-      const subTotals = calcTotals(subsetItems, charges);
+    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
+      const subTotals = calcTotals(subsetItems, sideCharges);
       const subWords = amountInWords(subTotals.net_payable);
       const record: OrderRecord = {
         id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
         format: fmt, status: "draft", company_name: companyName, bill_to: billTo,
         ship_to: ship, reference, cost_sheet_number: costSheetNumber,
         order_date: orderDate, prepared_by: preparedBy, line_items: subsetItems,
-        charges, totals: subTotals, amount_in_words: subWords, notes,
+        charges: sideCharges, totals: subTotals, amount_in_words: subWords, notes,
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
@@ -275,12 +275,13 @@ export default function OrderEditor() {
       // using that format's items only.
       const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
       const subset = format === "MR" ? mr : gms;
-      await renderOne(format, subset, `-${format}`);
+      const sideCharges = format === "MR" ? chargesMr : chargesGms;
+      await renderOne(format, subset, `-${format}`, sideCharges);
       toast({ title: "PDF generated", description: `${format} PDF downloaded` });
       return;
     }
 
-    await renderOne(format, itemsWithAmounts, "");
+    await renderOne(format, itemsWithAmounts, "", chargesMr);
     toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
