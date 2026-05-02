@@ -852,6 +852,17 @@ export default function OrderEditor() {
                 {charges.ex_murthal_enabled && (
                   <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                     <ToggleNumberRow
+                      label="P&F %"
+                      enabled={(charges.pf_percent || 0) > 0 || (charges.pf_amount || 0) > 0}
+                      value={charges.pf_percent || 0}
+                      onToggle={(b) => setCharges({
+                        ...charges,
+                        pf_percent: b ? (charges.pf_percent || 1.5) : 0,
+                        pf_amount: 0,
+                      })}
+                      onValue={(v) => setCharges({ ...charges, pf_percent: v, pf_amount: 0 })}
+                    />
+                    <ToggleNumberRow
                       label="Sea Freight % (of Basic)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
                       onToggle={(b) => setCharges({ ...charges, sea_freight_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, sea_freight: v })}
