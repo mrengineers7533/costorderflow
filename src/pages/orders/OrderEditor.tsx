@@ -178,6 +178,14 @@ export default function OrderEditor() {
       : allItemsWithAmounts,
     [allItemsWithAmounts, splitMode, format]
   );
+  // Active charges: when the OA contains both MR and GMS items, each side
+  // edits its own independent charges block. Otherwise both states stay in
+  // lock-step on the MR slot (legacy behaviour).
+  const charges = splitMode && format === "GMS" ? chargesGms : chargesMr;
+  const setCharges: React.Dispatch<React.SetStateAction<Charges>> = (updater) => {
+    if (splitMode && format === "GMS") setChargesGms(updater as never);
+    else setChargesMr(updater as never);
+  };
   // List used by the editor table — filtered by the in-section toggle.
   const editorItems = useMemo(
     () => lineItemsView === "ALL"
