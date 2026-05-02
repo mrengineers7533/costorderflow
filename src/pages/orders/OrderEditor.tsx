@@ -101,7 +101,8 @@ export default function OrderEditor() {
       setReference(o.reference || ""); setCostSheetNumber(o.cost_sheet_number || "");
       setOrderDate(o.order_date); setPreparedBy(o.prepared_by || "");
       setItems(o.line_items?.length ? o.line_items : [newItem()]);
-      setCharges({ ...emptyCharges, ...o.charges });
+      setChargesMr({ ...emptyCharges, ...o.charges });
+      setChargesGms({ ...emptyCharges, ...(o.charges_gms || o.charges) });
       setNotes(o.notes || "");
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
