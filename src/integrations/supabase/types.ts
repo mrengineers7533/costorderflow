@@ -251,6 +251,7 @@ export type Database = {
           amount_in_words: string | null
           bill_to: Json
           charges: Json
+          charges_gms: Json | null
           company_name: string | null
           cost_sheet_number: string | null
           created_at: string
@@ -276,6 +277,7 @@ export type Database = {
           amount_in_words?: string | null
           bill_to?: Json
           charges?: Json
+          charges_gms?: Json | null
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
@@ -301,6 +303,7 @@ export type Database = {
           amount_in_words?: string | null
           bill_to?: Json
           charges?: Json
+          charges_gms?: Json | null
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
