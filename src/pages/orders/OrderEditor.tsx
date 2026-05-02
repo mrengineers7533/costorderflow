@@ -1055,7 +1055,7 @@ export default function OrderEditor() {
               notes={notes}
               parsing={parsing}
               splitMode={splitMode}
-              onFormatChange={(f) => { setAutoFormat(false); setFormat(f); }}
+              onFormatChange={(f) => switchFormat(f)}
               onDownloadPDF={downloadPDF}
               terms={terms}
               bank={bank}
