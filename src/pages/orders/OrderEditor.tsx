@@ -562,7 +562,7 @@ export default function OrderEditor() {
             <div>
               <Label>Format</Label>
               <div className="flex gap-2 items-center">
-                <Select value={format} onValueChange={(v) => { setAutoFormat(false); setFormat(v as OrderFormat); }}>
+                <Select value={format} onValueChange={(v) => switchFormat(v as OrderFormat)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MR">MR Engineers</SelectItem>
@@ -610,7 +610,14 @@ export default function OrderEditor() {
                   type="single"
                   size="sm"
                   value={lineItemsView}
-                  onValueChange={(v) => v && setLineItemsView(v as "MR" | "GMS" | "ALL")}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next = v as "MR" | "GMS" | "ALL";
+                    setLineItemsView(next);
+                    // MR/GMS also switches the active company so the
+                    // Charges & Totals panel below edits the right side.
+                    if (next === "MR" || next === "GMS") switchFormat(next);
+                  }}
                   className="border rounded-md"
                 >
                   <ToggleGroupItem value="MR" aria-label="Show MR items" disabled={!hasMR}>MR</ToggleGroupItem>
