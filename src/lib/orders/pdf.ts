@@ -535,15 +535,34 @@ async function renderGmsPdf(
   if (c.gms_mode === "EXW_TURKEY") {
     const tk = calcExTurkey(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
-    totalsRows.push({ label: "Total Amount / Landed Price", value: tk.total_amount, bold: true });
     if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
-    if (c.turkey_insurance_enabled) totalsRows.push({ label: "Insurance", value: tk.insurance });
-    if (c.turkey_custom_enabled) totalsRows.push({ label: "Custom Duty", value: tk.custom });
-    if (c.turkey_local_freight_enabled) totalsRows.push({ label: "Local Freight", value: tk.local_freight });
-    if (c.turkey_gst_enabled) totalsRows.push({ label: "GST", value: tk.gst });
+    if (c.turkey_custom_enabled) totalsRows.push({ label: `Custom Duty${c.turkey_custom_percent ? ` @ ${c.turkey_custom_percent}%` : ""}`, value: tk.custom });
+    totalsRows.push({ label: "Landed Price", value: tk.total_amount, bold: true });
+    if (c.turkey_insurance_enabled) {
+      const lbl = (c.turkey_insurance_mode || "amount") === "percent" && c.turkey_insurance_percent
+        ? `Insurance @ ${c.turkey_insurance_percent}%`
+        : "Insurance";
+      totalsRows.push({ label: lbl, value: tk.insurance });
+    }
+    if (c.turkey_pf_enabled) {
+      const lbl = (c.turkey_pf_mode || "percent") === "percent" && c.turkey_pf_percent
+        ? `P&F @ ${c.turkey_pf_percent}%`
+        : "P&F";
+      totalsRows.push({ label: lbl, value: tk.pf });
+    }
+    if (c.turkey_freight_enabled && tk.freight > 0) totalsRows.push({ label: "Freight", value: tk.freight });
+    if (c.turkey_gst_enabled) totalsRows.push({ label: `GST${c.turkey_gst_percent ? ` @ ${c.turkey_gst_percent}%` : ""}`, value: tk.gst });
     totalsRows.push({ label: "Grand Total", value: tk.grand_total, bold: true });
     if (c.turkey_discount_enabled && tk.discount > 0) {
       totalsRows.push({ label: "One-time Discount", value: -tk.discount });
+    }
+    if (c.turkey_advance_enabled && tk.advance_amount > 0) {
+      const lbl = (c.turkey_advance_mode || "percent") === "percent" && c.turkey_advance_percent
+        ? `Advance Adjustment @ ${c.turkey_advance_percent}%`
+        : "Advance Adjustment";
+      totalsRows.push({ label: lbl, value: tk.advance_amount });
+      totalsRows.push({ label: "Net Payable", value: tk.net_payable, bold: true });
+    } else if (c.turkey_discount_enabled && tk.discount > 0) {
       totalsRows.push({ label: "Net Payable", value: tk.net_payable, bold: true });
     }
   } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
