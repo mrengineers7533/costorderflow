@@ -538,6 +538,13 @@ async function renderGmsPdf(
     if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
     if (c.turkey_custom_enabled) totalsRows.push({ label: `Custom Duty${c.turkey_custom_percent ? ` @ ${c.turkey_custom_percent}%` : ""}`, value: tk.custom });
     totalsRows.push({ label: "Landed Price", value: tk.total_amount, bold: true });
+    if (c.turkey_landed_discount_enabled && tk.landed_discount > 0) {
+      const lbl = (c.turkey_landed_discount_mode || "percent") === "percent" && c.turkey_landed_discount_percent
+        ? `Discount @ ${c.turkey_landed_discount_percent}% on Landed`
+        : "Discount on Landed";
+      totalsRows.push({ label: lbl, value: -tk.landed_discount });
+      totalsRows.push({ label: "Net Landed Price", value: tk.net_landed, bold: true });
+    }
     if (c.turkey_insurance_enabled) {
       const lbl = (c.turkey_insurance_mode || "amount") === "percent" && c.turkey_insurance_percent
         ? `Insurance @ ${c.turkey_insurance_percent}%`
