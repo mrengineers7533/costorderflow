@@ -734,7 +734,9 @@ export default function OrderEditor() {
                         // sensible defaults on first enable of EXW Turkey
                         turkey_custom_percent: charges.turkey_custom_percent ?? 10,
                         turkey_gst_percent: charges.turkey_gst_percent ?? 18,
-                        turkey_local_freight_mode: charges.turkey_local_freight_mode ?? "amount",
+                        turkey_pf_percent: charges.turkey_pf_percent ?? 1.5,
+                        turkey_pf_mode: charges.turkey_pf_mode ?? "percent",
+                        turkey_advance_mode: charges.turkey_advance_mode ?? "percent",
                       });
                     }}
                   >
