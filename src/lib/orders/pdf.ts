@@ -247,12 +247,22 @@ export async function generateOrderPDF(
   const freightFinal = c.freight_enabled ? (c.freight || 0) : 0;
   const taxable = chargesBase + pfFinal + ins + freightFinal;
   if (!showDiscount) {
-    totalsRows.push({ label: "Subtotal", value: t.subtotal });
+    totalsRows.push({ label: "Subtotal", value: taxable });
   }
-  const gst = c.gst_amount ?? (taxable * (c.gst_percent || 0)) / 100;
+  // Prefer percent when set; only fall back to a stored amount when no percent
+  // is configured. Using `??` here was wrong because `gst_amount` defaults to
+  // 0 (not null/undefined), which forced GST to render as 0 in the PDF even
+  // when `gst_percent` was set.
+  const gst = (c.gst_percent || 0) > 0
+    ? (taxable * c.gst_percent) / 100
+    : (c.gst_amount || 0);
   totalsRows.push({ label: `GST @ ${c.gst_percent || 0}%`, value: gst });
   if (!opts?.docMeta?.hideDefaultGrandTotal) {
-    const grand = showDiscount ? (taxable + gst) : t.net_payable;
+    // Always derive the grand total from the rows we just printed so the
+    // displayed numbers add up. (Previously the no-discount path used
+    // `t.net_payable`, which silently included GST even when the GST row
+    // showed 0, making rows and total disagree.)
+    const grand = taxable + gst;
     totalsRows.push({ label: "Grand Total", value: grand, bold: true });
   }
   // Extra rows (e.g. PI: One-Time Discount / Advance Adjustment / Net Payable)
