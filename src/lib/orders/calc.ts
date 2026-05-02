@@ -85,6 +85,10 @@ export interface ExTurkeyBreakdown {
   total_amount: number;
   sea_freight: number;
   custom: number;            // % of base (default 10)
+  /** Discount on Landed Price (GMS rule). 0 if disabled. */
+  landed_discount: number;
+  /** Net Landed Price = Landed - landed_discount. Equals Landed when no discount. */
+  net_landed: number;
   /** Insurance computed on Landed Price (% or flat ₹). */
   insurance: number;
   /** P&F computed on Landed Price (% or flat ₹). */
@@ -135,21 +139,32 @@ export function calcExTurkey(
   // 3. Landed Price = Base + Sea Freight + Custom
   const landed = baseWithHike + seaFreight + custom;
 
-  // 4. Insurance — on Landed Price
+  // 3b. Discount on Landed Price (GMS rule) — applied BEFORE downstream charges.
+  let landedDiscount = 0;
+  if (c.turkey_landed_discount_enabled) {
+    if ((c.turkey_landed_discount_mode || "percent") === "percent") {
+      landedDiscount = (landed * (c.turkey_landed_discount_percent || 0)) / 100;
+    } else {
+      landedDiscount = c.turkey_landed_discount_amount || 0;
+    }
+  }
+  const netLanded = Math.max(0, landed - landedDiscount);
+
+  // 4. Insurance — on Net Landed Price
   let insurance = 0;
   if (c.turkey_insurance_enabled) {
     if ((c.turkey_insurance_mode || "amount") === "percent") {
-      insurance = (landed * (c.turkey_insurance_percent || 0)) / 100;
+      insurance = (netLanded * (c.turkey_insurance_percent || 0)) / 100;
     } else {
       insurance = c.turkey_insurance || 0;
     }
   }
 
-  // 5. P&F — on Landed Price
+  // 5. P&F — on Net Landed Price
   let pf = 0;
   if (c.turkey_pf_enabled) {
     if ((c.turkey_pf_mode || "percent") === "percent") {
-      pf = (landed * (c.turkey_pf_percent ?? 0)) / 100;
+      pf = (netLanded * (c.turkey_pf_percent ?? 0)) / 100;
     } else {
       pf = c.turkey_pf_amount || 0;
     }
@@ -158,12 +173,12 @@ export function calcExTurkey(
   // 6. Freight (optional flat ₹) — included in GST base
   const freight = c.turkey_freight_enabled ? (c.turkey_freight || 0) : 0;
 
-  // 7. GST on (Landed + P&F + Insurance + Freight)
-  const gstBase = landed + pf + insurance + freight;
+  // 7. GST on (Net Landed + P&F + Insurance + Freight)
+  const gstBase = netLanded + pf + insurance + freight;
   const gst = c.turkey_gst_enabled ? (gstBase * (c.turkey_gst_percent ?? 18)) / 100 : 0;
 
-  // 8. Grand Total
-  const grand = landed + insurance + pf + freight + gst;
+  // 8. Grand Total = Net Landed + Insurance + P&F + Freight + GST
+  const grand = netLanded + insurance + pf + freight + gst;
 
   // Legacy one-time discount (subtracted from Grand Total before advance)
   const discount = c.turkey_discount_enabled ? (c.turkey_discount || 0) : 0;
@@ -189,6 +204,8 @@ export function calcExTurkey(
     total_amount: r(landed),
     sea_freight: r(seaFreight),
     custom: r(custom),
+    landed_discount: r(landedDiscount),
+    net_landed: r(netLanded),
     insurance: r(insurance),
     pf: r(pf),
     freight: r(freight),
