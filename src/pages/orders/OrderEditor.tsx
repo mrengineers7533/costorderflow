@@ -230,7 +230,12 @@ export default function OrderEditor() {
       oa_number: oa, format, status: finalize ? "finalized" as const : "draft" as const,
       company_name: companyName, bill_to: billTo, ship_to: ship,
       reference, cost_sheet_number: costSheetNumber, order_date: orderDate, prepared_by: preparedBy,
-      line_items: itemsWithAmounts, charges, totals, amount_in_words: words, notes,
+      line_items: itemsWithAmounts,
+      // In split mode `charges` is the MR side and `charges_gms` is the GMS side.
+      // Single-make OAs keep `charges_gms` null so legacy rows are unchanged.
+      charges: chargesMr,
+      charges_gms: splitMode ? chargesGms : null,
+      totals, amount_in_words: words, notes,
     };
 
     const res = isNew
