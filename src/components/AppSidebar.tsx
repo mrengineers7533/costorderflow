@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Settings, Menu, ClipboardList, Receipt, HelpCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutGrid, FileText, Settings, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -20,7 +20,6 @@ const items = [
 ];
 
 const footerItems = [
-  { title: "How to use?", url: "/how-to-use", icon: HelpCircle },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
