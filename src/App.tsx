@@ -15,6 +15,10 @@ import PiList from "./pages/pi/PiList";
 import PiEditor from "./pages/pi/PiEditor";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
+import { RequireAdmin } from "./components/RequireAdmin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminDomains from "./pages/admin/AdminDomains";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +47,18 @@ const App = () => (
                       <Route path="/boqs/:id" element={<BoqEditor />} />
                       <Route path="/pi" element={<PiList />} />
                       <Route path="/pi/:id" element={<PiEditor />} />
+                      <Route
+                        path="/admin"
+                        element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/users"
+                        element={<RequireAdmin user={user}><AdminUsers /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/domains"
+                        element={<RequireAdmin user={user}><AdminDomains /></RequireAdmin>}
+                      />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </AppLayout>
