@@ -18,8 +18,13 @@ import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
 import { createPiRevision, fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
-import { amountInWords, calcLineAmount } from "@/lib/orders/calc";
+import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
+import type { Charges } from "@/lib/orders/types";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   DEFAULT_MR_TERMS,
   DEFAULT_GMS_TERMS,
@@ -70,6 +75,29 @@ export default function PiEditor() {
     );
   }, [pi]);
 
+  // GMS landed-cost breakdown (drives the editor preview & saved net for
+  // GMS PIs whose charges have a `gms_mode` set). Mirrors the OA editor.
+  const gmsBreakdown = useMemo(() => {
+    if (!pi || pi.format !== "GMS" || !totals) return null;
+    const mode = pi.charges.gms_mode;
+    if (mode === "EXW_TURKEY") {
+      return { kind: "turkey" as const, data: calcExTurkey(totals.basic_total, pi.charges) };
+    }
+    if (mode === "EXW_MURTHAL" || pi.charges.ex_murthal_enabled) {
+      return { kind: "murthal" as const, data: calcExMurthal(totals.basic_total, pi.charges) };
+    }
+    return null;
+  }, [pi, totals]);
+
+  // The figure that flows into the saved `totals.net_payable` row and the
+  // PI list. For GMS landed-cost modes, prefer the GMS net.
+  const effectiveNet = gmsBreakdown
+    ? gmsBreakdown.data.net_payable
+    : (totals?.net_payable_pi ?? 0);
+  const effectiveGrand = gmsBreakdown
+    ? gmsBreakdown.data.grand_total
+    : (totals?.gross_invoice_total ?? 0);
+
   if (loading || !pi || !totals) {
     return <div className="p-6 text-muted-foreground">Loading PI…</div>;
   }
@@ -86,10 +114,10 @@ export default function PiEditor() {
         totals: {
           basic_total: totals!.basic_total,
           subtotal: totals!.subtotal,
-          grand_total: totals!.grand_total_pi,
-          net_payable: totals!.net_payable_pi,
+          grand_total: effectiveGrand,
+          net_payable: effectiveNet,
         },
-        amount_in_words: amountInWords(totals!.net_payable_pi),
+        amount_in_words: amountInWords(effectiveNet),
       }, { terms, gmsTerms });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
@@ -303,6 +331,76 @@ export default function PiEditor() {
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
                 {(() => {
+                  // GMS landed-cost breakdown takes over when active.
+                  if (gmsBreakdown?.kind === "turkey") {
+                    const t = gmsBreakdown.data;
+                    const c = pi.charges;
+                    return (
+                      <>
+                        <Row label="Basic Total" value={t.base_amount} />
+                        {t.hike > 0 && <Row label="Hike" value={t.hike} />}
+                        {t.sea_freight > 0 && <Row label="Sea Freight" value={t.sea_freight} />}
+                        {t.custom > 0 && <Row label={`Custom Duty${c.turkey_custom_percent != null ? ` @ ${c.turkey_custom_percent}%` : ""}`} value={t.custom} />}
+                        <Row label="Landed Price" value={t.total_amount} />
+                        {t.landed_discount > 0 && <Row label="Discount on Landed" value={t.landed_discount} />}
+                        {t.landed_discount > 0 && <Row label="Net Landed" value={t.net_landed} />}
+                        {t.insurance > 0 && <Row label="Insurance" value={t.insurance} />}
+                        {t.pf > 0 && <Row label="P&F" value={t.pf} />}
+                        {t.freight > 0 && <Row label="Freight" value={t.freight} />}
+                        {t.gst > 0 && <Row label={`GST @ ${c.turkey_gst_percent ?? 18}%`} value={t.gst} />}
+                        <Row label="Grand Total" value={t.grand_total} bold highlight={t.advance_amount === 0 && t.discount === 0} />
+                        {t.discount > 0 && <Row label="One-time Discount" value={t.discount} />}
+                        {t.advance_amount > 0 && (
+                          <Row
+                            label={
+                              (c.turkey_advance_mode || "percent") === "amount"
+                                ? "Advance Adjustment"
+                                : `Advance Adjustment @ ${c.turkey_advance_percent || 0}%`
+                            }
+                            value={t.advance_amount}
+                          />
+                        )}
+                        {(t.advance_amount > 0 || t.discount > 0) && (
+                          <Row label="Net Payable" value={t.net_payable} bold highlight />
+                        )}
+                      </>
+                    );
+                  }
+                  if (gmsBreakdown?.kind === "murthal") {
+                    const m = gmsBreakdown.data;
+                    const c = pi.charges;
+                    return (
+                      <>
+                        <Row label="Basic Total" value={m.base_amount} />
+                        {m.hike > 0 && <Row label="Hike" value={m.hike} />}
+                        {m.sea_freight > 0 && <Row label="Sea Freight" value={m.sea_freight} />}
+                        {m.custom > 0 && <Row label={`Custom Duty${c.custom_percent != null ? ` @ ${c.custom_percent}%` : ""}`} value={m.custom} />}
+                        {m.clearing > 0 && <Row label={`Clearing${c.clearing_percent != null ? ` @ ${c.clearing_percent}%` : ""}`} value={m.clearing} />}
+                        <Row label="Landed Price" value={m.total_amount} />
+                        {m.landed_discount_amount > 0 && <Row label="Discount on Landed" value={m.landed_discount_amount} />}
+                        {m.landed_discount_amount > 0 && <Row label="Net Landed" value={m.net_landed} />}
+                        {m.sea_insurance > 0 && <Row label="Insurance" value={m.sea_insurance} />}
+                        {m.pf > 0 && <Row label="P&F" value={m.pf} />}
+                        {m.freight > 0 && <Row label="Freight" value={m.freight} />}
+                        {m.gst > 0 && <Row label={`GST @ ${c.landed_gst_percent ?? 18}%`} value={m.gst} />}
+                        <Row label="Grand Total" value={m.grand_total} bold highlight={m.advance_amount === 0 && m.discount === 0} />
+                        {m.discount > 0 && <Row label="One-time Discount" value={m.discount} />}
+                        {m.advance_amount > 0 && (
+                          <Row
+                            label={
+                              (c.murthal_advance_mode || "percent") === "amount"
+                                ? "Advance Adjustment"
+                                : `Advance Adjustment @ ${c.murthal_advance_percent || 0}%`
+                            }
+                            value={m.advance_amount}
+                          />
+                        )}
+                        {(m.advance_amount > 0 || m.discount > 0) && (
+                          <Row label="Net Payable" value={m.net_payable} bold highlight />
+                        )}
+                      </>
+                    );
+                  }
                   const showDisc = !!pi.apply_discount && totals.one_time_discount_amount > 0;
                   const discLbl = (pi.discount_label || "").trim() || "One Time Very Special Discount";
                   return (
@@ -334,6 +432,395 @@ export default function PiEditor() {
                 })()}
               </CardContent>
             </Card>
+
+            {/* GMS landed-cost charges (parity with OA editor) */}
+            {pi.format === "GMS" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">GMS Charges</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div>
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">GMS Pricing Mode</Label>
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      EXW Turkey: base + Sea Freight, Custom, Local Freight, Insurance, GST as extras.
+                      EXW Murthal: full landed-cost breakdown (uses the section below).
+                    </p>
+                    <Select
+                      value={pi.charges.gms_mode || "NONE"}
+                      onValueChange={(v) => {
+                        const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL");
+                        update("charges", {
+                          ...pi.charges,
+                          gms_mode: mode,
+                          ex_murthal_enabled:
+                            mode === "EXW_MURTHAL" ? true : (mode === "EXW_TURKEY" ? false : pi.charges.ex_murthal_enabled),
+                          turkey_custom_percent: pi.charges.turkey_custom_percent ?? 10,
+                          turkey_gst_percent: pi.charges.turkey_gst_percent ?? 18,
+                          turkey_pf_percent: pi.charges.turkey_pf_percent ?? 1.5,
+                          turkey_pf_mode: pi.charges.turkey_pf_mode ?? "percent",
+                          turkey_advance_mode: pi.charges.turkey_advance_mode ?? "percent",
+                        });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Legacy (use simple PI charges above)</SelectItem>
+                        <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
+                        <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {pi.charges.gms_mode === "EXW_TURKEY" && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                      <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
+                      <PiModeToggleRow
+                        label="Sea Freight"
+                        enabled={!!pi.charges.turkey_sea_freight_enabled}
+                        mode={pi.charges.turkey_sea_freight_mode || "amount"}
+                        amount={pi.charges.turkey_sea_freight || 0}
+                        percent={pi.charges.turkey_sea_freight_percent || 0}
+                        base={pi.charges.turkey_sea_freight_base || "basic"}
+                        onPatch={(p) => update("charges", { ...pi.charges, ...p })}
+                        keys={{ enabled: "turkey_sea_freight_enabled", mode: "turkey_sea_freight_mode", amount: "turkey_sea_freight", percent: "turkey_sea_freight_percent", base: "turkey_sea_freight_base" }}
+                      />
+                      <PiModeToggleRow
+                        label="Insurance"
+                        enabled={!!pi.charges.turkey_insurance_enabled}
+                        mode={pi.charges.turkey_insurance_mode || "amount"}
+                        amount={pi.charges.turkey_insurance || 0}
+                        percent={pi.charges.turkey_insurance_percent || 0}
+                        base={pi.charges.turkey_insurance_base || "basic"}
+                        onPatch={(p) => update("charges", { ...pi.charges, ...p })}
+                        keys={{ enabled: "turkey_insurance_enabled", mode: "turkey_insurance_mode", amount: "turkey_insurance", percent: "turkey_insurance_percent", base: "turkey_insurance_base" }}
+                      />
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.turkey_custom_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, turkey_custom_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.turkey_custom_enabled ? "" : "text-muted-foreground line-through"}`}>Custom Duty (%)</Label>
+                        <Select
+                          value={pi.charges.turkey_custom_base || "basic"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, turkey_custom_base: v as "basic" | "landed" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.turkey_custom_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="basic">on Basic + Sea</SelectItem>
+                            <SelectItem value="landed">on Landed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.turkey_custom_enabled}
+                          value={pi.charges.turkey_custom_percent ?? 10}
+                          onChange={(e) => update("charges", { ...pi.charges, turkey_custom_percent: +e.target.value || 0 })}
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground -mt-1">
+                        Landed Price = Base + Sea Freight + Custom Duty.
+                      </p>
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch
+                          checked={!!pi.charges.turkey_landed_discount_enabled}
+                          onCheckedChange={(b) => update("charges", { ...pi.charges, turkey_landed_discount_enabled: b })}
+                        />
+                        <Label className={`text-sm ${pi.charges.turkey_landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>Discount on Landed Price</Label>
+                        <Select
+                          value={pi.charges.turkey_landed_discount_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, turkey_landed_discount_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.turkey_landed_discount_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">% of Landed</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.turkey_landed_discount_enabled}
+                          value={(pi.charges.turkey_landed_discount_mode || "percent") === "percent"
+                            ? (pi.charges.turkey_landed_discount_percent || 0)
+                            : (pi.charges.turkey_landed_discount_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.turkey_landed_discount_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, turkey_landed_discount_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, turkey_landed_discount_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.turkey_pf_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, turkey_pf_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.turkey_pf_enabled ? "" : "text-muted-foreground line-through"}`}>P&amp;F (on Landed)</Label>
+                        <Select
+                          value={pi.charges.turkey_pf_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, turkey_pf_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.turkey_pf_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">%</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.turkey_pf_enabled}
+                          value={(pi.charges.turkey_pf_mode || "percent") === "percent" ? (pi.charges.turkey_pf_percent ?? 1.5) : (pi.charges.turkey_pf_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.turkey_pf_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, turkey_pf_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, turkey_pf_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                      <PiToggleNumberRow
+                        label="Freight (flat ₹) — joins GST base"
+                        enabled={!!pi.charges.turkey_freight_enabled}
+                        value={pi.charges.turkey_freight || 0}
+                        onToggle={(b) => update("charges", { ...pi.charges, turkey_freight_enabled: b })}
+                        onValue={(v) => update("charges", { ...pi.charges, turkey_freight: v })}
+                      />
+                      <PiToggleNumberRow
+                        label="GST % (on Landed + P&F + Insurance + Freight)"
+                        enabled={!!pi.charges.turkey_gst_enabled}
+                        value={pi.charges.turkey_gst_percent ?? 18}
+                        onToggle={(b) => update("charges", { ...pi.charges, turkey_gst_enabled: b })}
+                        onValue={(v) => update("charges", { ...pi.charges, turkey_gst_percent: v })}
+                      />
+                      <PiToggleNumberRow
+                        label="One-time Discount (₹) — after GST"
+                        enabled={!!pi.charges.turkey_discount_enabled}
+                        value={pi.charges.turkey_discount || 0}
+                        onToggle={(b) => update("charges", { ...pi.charges, turkey_discount_enabled: b })}
+                        onValue={(v) => update("charges", { ...pi.charges, turkey_discount: v })}
+                      />
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.turkey_advance_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, turkey_advance_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.turkey_advance_enabled ? "" : "text-muted-foreground line-through"}`}>Advance Adjustment</Label>
+                        <Select
+                          value={pi.charges.turkey_advance_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, turkey_advance_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.turkey_advance_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">% of Grand Total</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.turkey_advance_enabled}
+                          value={(pi.charges.turkey_advance_mode || "percent") === "percent" ? (pi.charges.turkey_advance_percent || 0) : (pi.charges.turkey_advance_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.turkey_advance_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, turkey_advance_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, turkey_advance_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {pi.charges.gms_mode === "EXW_MURTHAL" && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                      <div className="text-xs font-semibold uppercase tracking-wide">EXW Murthal Charges</div>
+                      <PiModeToggleRow
+                        label="Sea Freight"
+                        enabled={!!pi.charges.sea_freight_enabled}
+                        mode={pi.charges.murthal_sea_freight_mode || "percent"}
+                        amount={pi.charges.murthal_sea_freight_amount || 0}
+                        percent={pi.charges.sea_freight || 0}
+                        base={pi.charges.murthal_sea_freight_base || "basic"}
+                        onPatch={(p) => update("charges", { ...pi.charges, ...p })}
+                        keys={{ enabled: "sea_freight_enabled", mode: "murthal_sea_freight_mode", amount: "murthal_sea_freight_amount", percent: "sea_freight", base: "murthal_sea_freight_base" }}
+                      />
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.custom_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, custom_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.custom_enabled ? "" : "text-muted-foreground line-through"}`}>Custom Duty (%)</Label>
+                        <Select
+                          value={pi.charges.murthal_custom_base || "basic"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_custom_base: v as "basic" | "landed" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.custom_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="basic">on Basic + Sea</SelectItem>
+                            <SelectItem value="landed">on Landed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.custom_enabled}
+                          value={pi.charges.custom_percent ?? 8.25}
+                          onChange={(e) => update("charges", { ...pi.charges, custom_percent: +e.target.value || 0 })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.clearing_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, clearing_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.clearing_enabled ? "" : "text-muted-foreground line-through"}`}>Clearing (CHA &amp; Port) (%)</Label>
+                        <Select
+                          value={pi.charges.murthal_clearing_base || "basic"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_clearing_base: v as "basic" | "landed" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.clearing_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="basic">on Basic + Sea</SelectItem>
+                            <SelectItem value="landed">on Landed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.clearing_enabled}
+                          value={pi.charges.clearing_percent ?? 1.5}
+                          onChange={(e) => update("charges", { ...pi.charges, clearing_percent: +e.target.value || 0 })}
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground -mt-1">
+                        Landed Price = Base + Sea Freight + Custom + Clearing.
+                      </p>
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch
+                          checked={!!pi.charges.murthal_landed_discount_enabled}
+                          onCheckedChange={(b) => update("charges", { ...pi.charges, murthal_landed_discount_enabled: b })}
+                        />
+                        <Label className={`text-sm ${pi.charges.murthal_landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>Discount on Landed Price</Label>
+                        <Select
+                          value={pi.charges.murthal_landed_discount_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_landed_discount_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.murthal_landed_discount_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">% of Landed</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.murthal_landed_discount_enabled}
+                          value={(pi.charges.murthal_landed_discount_mode || "percent") === "percent"
+                            ? (pi.charges.murthal_landed_discount_percent || 0)
+                            : (pi.charges.murthal_landed_discount_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.murthal_landed_discount_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, murthal_landed_discount_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, murthal_landed_discount_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                      <PiModeToggleRow
+                        label="Insurance"
+                        enabled={!!pi.charges.sea_insurance_enabled}
+                        mode={pi.charges.murthal_insurance_mode || "percent"}
+                        amount={pi.charges.murthal_insurance_amount || 0}
+                        percent={pi.charges.sea_insurance || 0}
+                        base={pi.charges.murthal_insurance_base || "landed"}
+                        onPatch={(p) => update("charges", { ...pi.charges, ...p })}
+                        keys={{ enabled: "sea_insurance_enabled", mode: "murthal_insurance_mode", amount: "murthal_insurance_amount", percent: "sea_insurance", base: "murthal_insurance_base" }}
+                      />
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.murthal_pf_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, murthal_pf_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.murthal_pf_enabled ? "" : "text-muted-foreground line-through"}`}>P&amp;F (on Landed)</Label>
+                        <Select
+                          value={pi.charges.murthal_pf_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_pf_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.murthal_pf_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">%</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.murthal_pf_enabled}
+                          value={(pi.charges.murthal_pf_mode || "percent") === "percent" ? (pi.charges.murthal_pf_percent ?? 1.5) : (pi.charges.murthal_pf_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.murthal_pf_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, murthal_pf_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, murthal_pf_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                      <PiToggleNumberRow
+                        label="Freight (flat ₹) — joins GST base"
+                        enabled={!!pi.charges.murthal_freight_enabled}
+                        value={pi.charges.murthal_freight || 0}
+                        onToggle={(b) => update("charges", { ...pi.charges, murthal_freight_enabled: b })}
+                        onValue={(v) => update("charges", { ...pi.charges, murthal_freight: v })}
+                      />
+                      <PiToggleNumberRow
+                        label="GST % (on Net Landed + Insurance + P&F + Freight)"
+                        enabled={!!pi.charges.landed_gst_enabled}
+                        value={pi.charges.landed_gst_percent ?? 18}
+                        onToggle={(b) => update("charges", { ...pi.charges, landed_gst_enabled: b })}
+                        onValue={(v) => update("charges", { ...pi.charges, landed_gst_percent: v })}
+                      />
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch
+                          checked={!!pi.charges.landed_discount_enabled}
+                          onCheckedChange={(b) => update("charges", { ...pi.charges, landed_discount_enabled: b })}
+                        />
+                        <Label className={`text-sm ${pi.charges.landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>One-time Discount — after GST</Label>
+                        <Select
+                          value={pi.charges.murthal_one_time_discount_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_one_time_discount_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.landed_discount_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">% of Grand Total</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.landed_discount_enabled}
+                          value={(pi.charges.murthal_one_time_discount_mode || "percent") === "percent"
+                            ? (pi.charges.landed_discount || 0)
+                            : (pi.charges.murthal_one_time_discount_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.murthal_one_time_discount_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, landed_discount: v });
+                            } else {
+                              update("charges", { ...pi.charges, murthal_one_time_discount_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                        <Switch checked={!!pi.charges.murthal_advance_enabled} onCheckedChange={(b) => update("charges", { ...pi.charges, murthal_advance_enabled: b })} />
+                        <Label className={`text-sm ${pi.charges.murthal_advance_enabled ? "" : "text-muted-foreground line-through"}`}>Advance Adjustment</Label>
+                        <Select
+                          value={pi.charges.murthal_advance_mode || "percent"}
+                          onValueChange={(v) => update("charges", { ...pi.charges, murthal_advance_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9" disabled={!pi.charges.murthal_advance_enabled}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">% of Grand Total</SelectItem>
+                            <SelectItem value="amount">Flat ₹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any" disabled={!pi.charges.murthal_advance_enabled}
+                          value={(pi.charges.murthal_advance_mode || "percent") === "percent" ? (pi.charges.murthal_advance_percent || 0) : (pi.charges.murthal_advance_amount || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((pi.charges.murthal_advance_mode || "percent") === "percent") {
+                              update("charges", { ...pi.charges, murthal_advance_percent: v });
+                            } else {
+                              update("charges", { ...pi.charges, murthal_advance_amount: v });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Revision history */}
             <Card>
@@ -419,10 +906,10 @@ export default function PiEditor() {
               totals={{
                 basic_total: totals.basic_total,
                 subtotal: totals.subtotal,
-                grand_total: totals.grand_total_pi,
-                net_payable: totals.grand_total_pi,
+                grand_total: effectiveGrand,
+                net_payable: effectiveNet,
               }}
-              amountInWords={amountInWords(totals.net_payable_pi)}
+              amountInWords={amountInWords(effectiveNet)}
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
               terms={terms}
@@ -435,7 +922,7 @@ export default function PiEditor() {
                 refLabel: "Ref. OA No.",
                 refValue: pi.reference_oa_number || "-",
                 hideFirstPageFooter: pi.format === "GMS",
-                extraTotalsRows: [
+                extraTotalsRows: gmsBreakdown ? [] : [
                   ...(pi.apply_discount && totals.one_time_discount_amount > 0
                     ? [
                         {
@@ -500,6 +987,80 @@ function Row({ label, value, bold, highlight }: { label: string; value: number; 
       <span className={`font-mono tabular-nums ${bold ? "font-semibold" : ""}`}>
         {value < 0 ? "−" : ""}₹ {Math.abs(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
+    </div>
+  );
+}
+
+function PiToggleNumberRow({
+  label, enabled, value, onToggle, onValue,
+}: { label: string; enabled: boolean; value: number; onToggle: (b: boolean) => void; onValue: (v: number) => void; }) {
+  return (
+    <div className="grid grid-cols-[auto_1fr_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={onToggle} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>{label}</Label>
+      <Input type="number" step="any" disabled={!enabled} value={value} onChange={(e) => onValue(+e.target.value || 0)} />
+    </div>
+  );
+}
+
+function PiModeToggleRow({
+  label, enabled, mode, amount, percent, base, onPatch, keys,
+}: {
+  label: string;
+  enabled: boolean;
+  mode: "amount" | "percent";
+  amount: number;
+  percent: number;
+  base?: "basic" | "landed";
+  onPatch: (patch: Partial<Charges>) => void;
+  keys: {
+    enabled: keyof Charges;
+    mode: keyof Charges;
+    amount: keyof Charges;
+    percent: keyof Charges;
+    base?: keyof Charges;
+  };
+}) {
+  const isPercent = mode === "percent";
+  return (
+    <div className="grid grid-cols-[auto_1fr_120px_120px_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={(b) => onPatch({ [keys.enabled]: b } as Partial<Charges>)} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>
+        {label} {isPercent ? "(%)" : "(₹)"}
+      </Label>
+      <Select
+        value={mode}
+        onValueChange={(v) => onPatch({ [keys.mode]: v as "amount" | "percent" } as Partial<Charges>)}
+      >
+        <SelectTrigger className="h-9" disabled={!enabled}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="amount">Flat ₹</SelectItem>
+          <SelectItem value="percent">%</SelectItem>
+        </SelectContent>
+      </Select>
+      {isPercent && keys.base ? (
+        <Select
+          value={base || "basic"}
+          onValueChange={(v) => onPatch({ [keys.base as keyof Charges]: v as "basic" | "landed" } as Partial<Charges>)}
+        >
+          <SelectTrigger className="h-9" disabled={!enabled}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="basic">on Basic</SelectItem>
+            <SelectItem value="landed">on Landed</SelectItem>
+          </SelectContent>
+        </Select>
+      ) : (
+        <div />
+      )}
+      <Input
+        type="number" step="any" disabled={!enabled}
+        value={isPercent ? percent : amount}
+        onChange={(e) => {
+          const v = +e.target.value || 0;
+          if (isPercent) onPatch({ [keys.percent]: v } as Partial<Charges>);
+          else onPatch({ [keys.amount]: v } as Partial<Charges>);
+        }}
+      />
     </div>
   );
 }
