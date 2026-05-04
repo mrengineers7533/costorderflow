@@ -693,6 +693,17 @@ async function renderGmsPdf(
     yT += 3;
   });
 
+  // Optional free-form note printed only when set.
+  const tcNote = (opts?.tcNote || (order as unknown as { tc_note?: string }).tc_note || "").trim();
+  if (tcNote) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Note :", M, yT); yT += 5;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    const wrapped = doc.splitTextToSize(tcNote, W - M * 2);
+    wrapped.forEach((w: string) => { doc.text(w, M, yT); yT += 4.5; });
+    yT += 3;
+  }
+
   // When the page-1 footer was suppressed, surface the exclusions + FX line here
   if (opts?.docMeta?.hideFirstPageFooter) {
     doc.setFont("helvetica", "bold").setFontSize(9);
