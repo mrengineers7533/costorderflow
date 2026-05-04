@@ -447,10 +447,10 @@ export default function PiEditor() {
               totals={{
                 basic_total: totals.basic_total,
                 subtotal: totals.subtotal,
-                grand_total: totals.grand_total_pi,
-                net_payable: totals.grand_total_pi,
+                grand_total: effectiveGrand,
+                net_payable: effectiveNet,
               }}
-              amountInWords={amountInWords(totals.net_payable_pi)}
+              amountInWords={amountInWords(effectiveNet)}
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
               terms={terms}
@@ -463,7 +463,7 @@ export default function PiEditor() {
                 refLabel: "Ref. OA No.",
                 refValue: pi.reference_oa_number || "-",
                 hideFirstPageFooter: pi.format === "GMS",
-                extraTotalsRows: [
+                extraTotalsRows: gmsBreakdown ? [] : [
                   ...(pi.apply_discount && totals.one_time_discount_amount > 0
                     ? [
                         {
