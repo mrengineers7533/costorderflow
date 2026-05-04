@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, User as UserIcon } from "lucide-react";
 import gmsLogo from "@/assets/gms-logo.png";
 
 const FALLBACK_DOMAINS = ["fmec.in", "gmsdelhi.com", "mrengineers.com"];
@@ -70,6 +70,7 @@ function AuthForm() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -101,10 +102,17 @@ function AuthForm() {
         } catch { /* ignore */ }
         await logLoginAttempt(email, "success", res.data.user?.id);
       } else {
+        if (!fullName.trim()) {
+          setError("Please enter your full name.");
+          return;
+        }
         const res = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { full_name: fullName.trim() },
+          },
         });
         if (res.error) {
           setError(res.error.message);
@@ -152,6 +160,25 @@ function AuthForm() {
         )}
 
         <form onSubmit={submit} className="mt-6 space-y-4">
+          {mode === "signup" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="fullName">Full Name</Label>
+              <div className="relative">
+                <UserIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="fullName"
+                  type="text"
+                  required
+                  placeholder="Your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="pl-9 h-11 rounded-xl bg-muted/40"
+                  autoComplete="name"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="email">Email Address</Label>
             <div className="relative">
@@ -177,7 +204,7 @@ function AuthForm() {
                 id="password"
                 type={showPw ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={1}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
