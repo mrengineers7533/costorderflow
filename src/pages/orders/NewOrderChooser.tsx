@@ -11,9 +11,15 @@ export default function NewOrderChooser() {
   const navigate = useNavigate();
   const [extracted, setExtracted] = useState<ExtractedCostSheet | null>(null);
 
-  function handleExtracted(data: ExtractedCostSheet) {
-    // Don't auto-navigate. Let the user pick MR or GMS — the same cost
-    // sheet stays available so they can come back for the other format.
+  function handleExtracted(data: ExtractedCostSheet, _sheet: unknown, forcedFormat?: OrderFormat) {
+    // If the user clicked the per-sheet "Create MR/GMS OA" button, skip the
+    // in-page chooser and go straight to the editor with the chosen format.
+    if (forcedFormat) {
+      navigate("/orders/new/edit", { state: { extracted: data, forcedFormat } });
+      return;
+    }
+    // Otherwise (Apply / first parse), let the user pick MR or GMS below.
+    // The same cost sheet stays available for the other format later.
     setExtracted(data);
   }
 
