@@ -77,12 +77,18 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
       return toast({ title: "Only PDF files are supported", variant: "destructive" });
     }
     setUploading(true);
-    const path = `public/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id;
+    if (!uid) {
+      setUploading(false);
+      return toast({ title: "Not signed in", variant: "destructive" });
+    }
+    const path = `${uid}/${Date.now()}-${file.name.replace(/[^A-Za-z0-9._-]/g, "_")}`;
     const up = await supabase.storage.from("cost-sheets").upload(path, file, { contentType: "application/pdf" });
     if (up.error) { setUploading(false); return toast({ title: "Upload failed", description: up.error.message, variant: "destructive" }); }
 
     const ins = await supabase.from("cost_sheets").insert({
-      file_path: path, original_filename: file.name, status: "pending",
+      file_path: path, original_filename: file.name, status: "pending", user_id: uid,
     }).select().single();
     setUploading(false);
     if (ins.error) return toast({ title: "Save failed", description: ins.error.message, variant: "destructive" });
