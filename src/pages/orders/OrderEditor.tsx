@@ -138,9 +138,16 @@ export default function OrderEditor() {
   // Pre-fill from extracted cost sheet passed via router state (from chooser page).
   useEffect(() => {
     if (!isNew) return;
-    const extracted = (location.state as { extracted?: ExtractedCostSheet } | null)?.extracted;
+    const state = location.state as { extracted?: ExtractedCostSheet; forcedFormat?: OrderFormat } | null;
+    const extracted = state?.extracted;
     if (!extracted) return;
-    applyCostSheet(extracted);
+    if (state?.forcedFormat) {
+      setFormat(state.forcedFormat);
+      setAutoFormat(false);
+      applyCostSheet(extracted, state.forcedFormat);
+    } else {
+      applyCostSheet(extracted);
+    }
     // Clear router state so refresh / back doesn't re-apply.
     navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
