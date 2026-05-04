@@ -1249,6 +1249,24 @@ export default function OrderEditor() {
                     {!showDisc && <Row k="Subtotal" v={totals.subtotal} />}
                     <Row k={`GST @ ${charges.gst_percent || 0}%`} v={gst} />
                     <Row k="Grand Total" v={showDisc ? grand : totals.grand_total} bold />
+                    {(() => {
+                      if (format !== "MR" || !charges.mr_advance_enabled) return null;
+                      const grandFinal = showDisc ? grand : totals.grand_total;
+                      const mode = charges.mr_advance_mode || "percent";
+                      const adv = mode === "percent"
+                        ? (grandFinal * (charges.mr_advance_percent || 0)) / 100
+                        : (charges.mr_advance_amount || 0);
+                      if (adv <= 0) return null;
+                      const lbl = mode === "percent"
+                        ? `Advance Adjustment @ ${charges.mr_advance_percent || 0}%`
+                        : "Advance Adjustment";
+                      return (
+                        <>
+                          <Row k={lbl} v={adv} />
+                          <Row k="Net Payable" v={Math.max(0, grandFinal - adv)} bold />
+                        </>
+                      );
+                    })()}
                     <div className="pt-2 text-sm text-muted-foreground italic">{words}</div>
                   </>
                 );
