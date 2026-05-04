@@ -118,6 +118,37 @@ export interface Charges {
   turkey_landed_discount_percent?: number;            // % of Landed Price
   turkey_landed_discount_amount?: number;             // flat ₹
 
+  /** EXW Murthal extras — mirror of the EXW Turkey controls so each
+   *  Murthal row can be enabled/disabled, switched between flat ₹ and %,
+   *  and (where relevant) target either the basic or the landed base. The
+   *  legacy `sea_freight`, `sea_insurance`, `custom_percent`, `clearing_percent`,
+   *  `landed_gst_percent`, `landed_discount` fields stay for back-compat
+   *  and are still read when the new `*_mode` / `*_amount` fields are unset. */
+  murthal_sea_freight_mode?: "amount" | "percent"; // default "percent"
+  murthal_sea_freight_amount?: number;             // flat ₹ (when mode="amount")
+  murthal_sea_freight_base?: "basic" | "landed";   // default "basic"
+  murthal_insurance_mode?: "amount" | "percent";   // default "percent"
+  murthal_insurance_amount?: number;
+  murthal_insurance_base?: "basic" | "landed";     // default "basic"
+  murthal_custom_base?: "basic" | "landed";        // default "basic" (basic + sea)
+  murthal_clearing_base?: "basic" | "landed";      // default "basic" (basic + sea)
+  murthal_landed_discount_enabled?: boolean;
+  murthal_landed_discount_mode?: "amount" | "percent"; // default "percent"
+  murthal_landed_discount_percent?: number;
+  murthal_landed_discount_amount?: number;
+  murthal_pf_enabled?: boolean;
+  murthal_pf_mode?: "amount" | "percent";          // default "percent"
+  murthal_pf_percent?: number;                     // default 1.5
+  murthal_pf_amount?: number;
+  murthal_freight_enabled?: boolean;
+  murthal_freight?: number;                        // flat ₹ — joins GST base
+  murthal_one_time_discount_mode?: "amount" | "percent"; // default "percent"
+  murthal_one_time_discount_amount?: number;
+  murthal_advance_enabled?: boolean;
+  murthal_advance_mode?: "amount" | "percent";     // default "percent"
+  murthal_advance_percent?: number;
+  murthal_advance_amount?: number;
+
   /** When false, the OA discount row is hidden in the editor breakdown and
    *  omitted from the PDF (even if a discount value was entered). Default true
    *  if any discount is set, undefined otherwise. */
