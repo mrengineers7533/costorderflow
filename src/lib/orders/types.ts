@@ -156,6 +156,14 @@ export interface Charges {
   /** Custom label for the discount line in the editor & PDF. Default
    *  "One Time Very Special Discount". */
   discount_label?: string;
+
+  /** MR Advance Adjustment (deducted from Grand Total to produce Net Payable).
+   *  Mirrors the GMS Turkey/Murthal advance behaviour so MR OAs can show an
+   *  advance line and a Net Payable row. */
+  mr_advance_enabled?: boolean;
+  mr_advance_mode?: "amount" | "percent"; // default "percent"
+  mr_advance_percent?: number;            // % of Grand Total
+  mr_advance_amount?: number;             // flat ₹
 }
 
 export interface Totals {

@@ -264,6 +264,20 @@ export async function generateOrderPDF(
     // showed 0, making rows and total disagree.)
     const grand = taxable + gst;
     totalsRows.push({ label: "Grand Total", value: grand, bold: true });
+    // MR Advance Adjustment (deducted from Grand Total → Net Payable).
+    if (order.format === "MR" && c.mr_advance_enabled) {
+      const mode = c.mr_advance_mode || "percent";
+      const adv = mode === "percent"
+        ? (grand * (c.mr_advance_percent || 0)) / 100
+        : (c.mr_advance_amount || 0);
+      if (adv > 0) {
+        const lbl = mode === "percent"
+          ? `Advance Adjustment @ ${c.mr_advance_percent || 0}%`
+          : "Advance Adjustment";
+        totalsRows.push({ label: lbl, value: adv });
+        totalsRows.push({ label: "Net Payable", value: Math.max(0, grand - adv), bold: true });
+      }
+    }
   }
   // Extra rows (e.g. PI: One-Time Discount / Advance Adjustment / Net Payable)
   if (opts?.docMeta?.extraTotalsRows?.length) {

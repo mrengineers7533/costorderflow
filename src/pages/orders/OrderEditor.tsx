@@ -720,6 +720,37 @@ export default function OrderEditor() {
                       <NumberField label="Discount Amount (one-time ₹)" value={charges.discount} onChange={(v) => setCharges({ ...charges, discount: v, discount_percent: 0 })} />
                     </>
                   )}
+                  {/* Advance Adjustment (% of Grand Total or flat ₹) */}
+                  <div className="grid grid-cols-[auto_1fr_140px_140px] items-center gap-3 pt-2 border-t">
+                    <Switch
+                      checked={!!charges.mr_advance_enabled}
+                      onCheckedChange={(b) => setCharges({ ...charges, mr_advance_enabled: b, mr_advance_mode: charges.mr_advance_mode ?? "percent" })}
+                    />
+                    <Label className={`text-sm ${charges.mr_advance_enabled ? "" : "text-muted-foreground line-through"}`}>Advance Adjustment</Label>
+                    <Select
+                      value={charges.mr_advance_mode || "percent"}
+                      onValueChange={(v) => setCharges({ ...charges, mr_advance_mode: v as "amount" | "percent" })}
+                      disabled={!charges.mr_advance_enabled}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percent">% of Grand Total</SelectItem>
+                        <SelectItem value="amount">Flat ₹</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="any" disabled={!charges.mr_advance_enabled}
+                      value={(charges.mr_advance_mode || "percent") === "percent" ? (charges.mr_advance_percent || 0) : (charges.mr_advance_amount || 0)}
+                      onChange={(e) => {
+                        const v = +e.target.value || 0;
+                        if ((charges.mr_advance_mode || "percent") === "percent") {
+                          setCharges({ ...charges, mr_advance_percent: v });
+                        } else {
+                          setCharges({ ...charges, mr_advance_amount: v });
+                        }
+                      }}
+                    />
+                  </div>
                 </>
               )}
               {format === "GMS" && (
@@ -1218,6 +1249,24 @@ export default function OrderEditor() {
                     {!showDisc && <Row k="Subtotal" v={totals.subtotal} />}
                     <Row k={`GST @ ${charges.gst_percent || 0}%`} v={gst} />
                     <Row k="Grand Total" v={showDisc ? grand : totals.grand_total} bold />
+                    {(() => {
+                      if (format !== "MR" || !charges.mr_advance_enabled) return null;
+                      const grandFinal = showDisc ? grand : totals.grand_total;
+                      const mode = charges.mr_advance_mode || "percent";
+                      const adv = mode === "percent"
+                        ? (grandFinal * (charges.mr_advance_percent || 0)) / 100
+                        : (charges.mr_advance_amount || 0);
+                      if (adv <= 0) return null;
+                      const lbl = mode === "percent"
+                        ? `Advance Adjustment @ ${charges.mr_advance_percent || 0}%`
+                        : "Advance Adjustment";
+                      return (
+                        <>
+                          <Row k={lbl} v={adv} />
+                          <Row k="Net Payable" v={Math.max(0, grandFinal - adv)} bold />
+                        </>
+                      );
+                    })()}
                     <div className="pt-2 text-sm text-muted-foreground italic">{words}</div>
                   </>
                 );
