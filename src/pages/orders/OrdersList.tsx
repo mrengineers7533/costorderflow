@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt } from "lucide-react";
 import {
@@ -18,6 +19,10 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 
 export default function OrdersList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const folderParam = (searchParams.get("folder") || "all").toLowerCase();
+  const folder: "all" | "MR" | "GMS" =
+    folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuperseded, setShowSuperseded] = useState(false);
@@ -26,6 +31,27 @@ export default function OrdersList() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [boqCounts, setBoqCounts] = useState<Record<string, number>>({});
   const [piCounts, setPiCounts] = useState<Record<string, number>>({});
+
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const o of orders) {
+      if (o.format === "MR") mr++;
+      else if (o.format === "GMS") gms++;
+    }
+    return { all: orders.length, MR: mr, GMS: gms };
+  }, [orders]);
+
+  const visibleOrders = useMemo(
+    () => (folder === "all" ? orders : orders.filter((o) => o.format === folder)),
+    [orders, folder],
+  );
+
+  function setFolder(next: "all" | "MR" | "GMS") {
+    const sp = new URLSearchParams(searchParams);
+    if (next === "all") sp.delete("folder");
+    else sp.set("folder", next);
+    setSearchParams(sp, { replace: true });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -131,15 +157,30 @@ export default function OrdersList() {
 
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold">All Orders</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              {folder === "all" ? "All Orders" : `${folder} Folder`}
+            </CardTitle>
             <div className="flex items-center gap-2 text-xs">
               <Switch id="show-superseded" checked={showSuperseded} onCheckedChange={setShowSuperseded} />
               <Label htmlFor="show-superseded" className="cursor-pointer">Show superseded revisions</Label>
             </div>
           </CardHeader>
           <CardContent>
+            <Tabs value={folder} onValueChange={(v) => setFolder(v as "all" | "MR" | "GMS")} className="mb-4">
+              <TabsList>
+                <TabsTrigger value="all">All <span className="ml-1.5 text-[10px] opacity-70">{counts.all}</span></TabsTrigger>
+                <TabsTrigger value="MR">MR Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.MR}</span></TabsTrigger>
+                <TabsTrigger value="GMS">GMS Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.GMS}</span></TabsTrigger>
+              </TabsList>
+            </Tabs>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
-              orders.length === 0 ? <p className="text-muted-foreground">No orders yet. Click “New Order” to create one.</p> :
+              visibleOrders.length === 0 ? (
+                <p className="text-muted-foreground">
+                  {orders.length === 0
+                    ? "No orders yet. Upload a cost sheet to get started."
+                    : `No ${folder === "all" ? "" : folder + " "}OAs in this folder yet.`}
+                </p>
+              ) :
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -156,7 +197,7 @@ export default function OrdersList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((o) => (
+                  {visibleOrders.map((o) => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
                       <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
                       <TableCell>
