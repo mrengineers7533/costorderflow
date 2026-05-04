@@ -11,6 +11,8 @@ import {
   ClipboardList, Receipt, Layers, GitBranch,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProfileName } from "@/hooks/useProfileName";
+import type { User } from "@supabase/supabase-js";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { PiRecord } from "@/lib/pi/types";
@@ -27,6 +29,12 @@ const Index = () => {
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
   const [pis, setPis] = useState<PiRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const displayName = useProfileName(user);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -88,7 +96,16 @@ const Index = () => {
     <div className="min-h-screen">
       <main className="container mx-auto px-4 lg:px-6 py-5 space-y-4">
         {/* Header actions */}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold tracking-tight truncate">
+              Welcome back{displayName ? `, ${displayName.split(" ")[0]}` : ""} 👋
+            </h2>
+            {displayName && (
+              <p className="text-xs text-muted-foreground truncate">{displayName}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-lg h-8">
               <Link to="/orders"><FileText className="mr-1 h-3.5 w-3.5" />OAs</Link>
             </Button>
@@ -101,6 +118,7 @@ const Index = () => {
             <Button asChild size="sm" className="rounded-lg h-8">
               <Link to="/orders/new"><FilePlus2 className="mr-1 h-3.5 w-3.5" />New OA</Link>
             </Button>
+          </div>
         </div>
 
         {/* Hero strip */}
