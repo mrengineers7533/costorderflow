@@ -1,138 +1,163 @@
 ## Goal
 
-Bring the **EXW Murthal** charges block to feature parity with **EXW Turkey** (every row enable/disable + Flat ₹ / % mode where relevant + base selector where relevant + Discount on Landed + Advance Adjustment), and add a free-form **Additional Note** field inside the **Terms & Conditions** card (both MR and GMS) that prints in the PDF.
+Replace the current generic auth screen with a polished GMS-branded login matching the attached design, enforce a domain allow-list, and add a full Admin Panel for `it@mrengineers.com` with Users, Login Activity, Domain Access, and Settings modules.
 
-This change applies only to the GMS format. MR is untouched except for the new T&C note field.
+## 1. Brand assets
 
----
+- Copy `user-uploads://GMS-Pvt-Ltd-150x150.png` → `src/assets/gms-logo.png` for use in the login card and sidebar header.
 
-## 1. EXW Murthal — mirror EXW Turkey UI
+## 2. New Login UI (`src/components/AuthGate.tsx`)
 
-**File:** `src/pages/orders/OrderEditor.tsx` (lines ~960–1005, the `ex_murthal_enabled` block)
+Rebuild the `AuthForm` to match the mockup:
+- Light gray page bg (`bg-muted/40`), centered white rounded-2xl card with soft shadow, max-w-md, fully responsive.
+- GMS logo at top, "Welcome Back" heading, subtitle "Sign in to your account to continue".
+- Email input with `Mail` icon (left), Password input with `Lock` icon + show/hide toggle (`Eye`/`EyeOff`).
+- "Remember me" checkbox + "Forgot password?" link row.
+- Orange full-width "Sign In" button with `LogIn` icon, disabled while submitting.
+- Toggle to a matching Sign-up form (same styling, same domain rules).
+- Inline error banner for: disallowed domain, invalid credentials, network errors.
 
-Replace the current `ToggleNumberRow`-only layout with the same row components used by EXW Turkey so every charge gets:
-- enable/disable Switch
-- Flat ₹ / % mode select (where applicable)
-- "on Basic" / "on Landed" base select (where applicable)
-- value input
+Domain enforcement (client + DB):
+- Allowed domains read from a new `allowed_domains` table (fallback to defaults `fmec.in`, `gmsdelhi.com`, `mrengineers.com` if fetch fails / unauthenticated).
+- On submit (signin & signup), validate email domain before calling Supabase; show "This email domain is not permitted" if not in list.
+- "Remember me" — when unchecked, after successful sign-in switch the Supabase session storage to `sessionStorage` for that tab (set a `lovable.remember=false` flag in `localStorage` and read it during AuthGate init to migrate the session). When checked (default), keep current `localStorage` persistence.
+- Keep "Continue with Google" button (Lovable OAuth) — after redirect callback, validate email domain; if not allowed, sign out immediately and show the disallowed-domain error.
 
-New rows (each independently toggleable, mirroring the Turkey panel):
+## 3. Routing & redirects
 
-| Row | Mode (₹ / %) | Base selector | Notes |
-|---|---|---|---|
-| Sea Freight | yes | Basic / Landed | replaces "% of Basic" only |
-| Insurance | yes | Basic / Landed | replaces "% of Basic" only |
-| Custom Duty | % only | Basic+Sea / Landed | already had base; keep |
-| Clearing (CHA & Port) | % only | Basic+Sea / Landed | new base option |
-| **Discount on Landed Price** | yes | — | **new**; same rule as Turkey |
-| P&F (on Landed) | yes | — | replaces fixed P&F % field |
-| Freight (flat ₹) — joins GST base | flat ₹ | — | new |
-| GST % | % only | — | keep |
-| One-time Discount | yes | — | replaces "% of Grand Total" only |
-| **Advance Adjustment** | yes | — | **new**; same rule as Turkey |
+- Add a `useUserRole()` hook that returns `{ role, loading }` by querying `user_roles` for `auth.uid()`.
+- After login, root `/` resolves to:
+  - `it@mrengineers.com` (admin role) → redirect to `/admin`
+  - All other users → existing dashboard (`Index`)
+- Add a `RequireAdmin` wrapper for all `/admin/*` routes that 404s/redirects non-admins.
 
-The `ex_murthal_enabled` master toggle stays.
+## 4. Admin Panel (new pages under `src/pages/admin/`)
 
-### Type additions (`src/lib/orders/types.ts`)
+New layout: `src/components/admin/AdminLayout.tsx` — sidebar shell distinct from main app sidebar.
 
-Add to `Charges` (mirroring the `turkey_*` fields):
+Sidebar items (lucide icons): Dashboard (`LayoutDashboard`), Users (`Users`), Login Activity (`Activity`), Domain Access (`Globe`), Settings (`Settings`), Logout (`LogOut`).
 
-```ts
-murthal_sea_freight_mode?: "amount" | "percent";
-murthal_sea_freight_amount?: number;
-murthal_sea_freight_base?: "basic" | "landed";
+Routes (added to `App.tsx`):
+- `/admin` — Dashboard overview
+- `/admin/users`
+- `/admin/login-activity`
+- `/admin/domains`
+- `/admin/settings`
 
-murthal_insurance_mode?: "amount" | "percent";
-murthal_insurance_amount?: number;
-murthal_insurance_base?: "basic" | "landed";
+### 4.1 Dashboard (`AdminDashboard.tsx`)
+Four stat cards using real data where possible, mock where not:
+- Total Users → `count(*) from profiles`
+- Active Users → `count from profiles where is_active=true`
+- Pending Users → `count where is_active=false`
+- Failed Login Attempts (last 24h) → `count from login_activity where status='failed'`
+Recent activity preview list below.
 
-murthal_custom_base?: "basic" | "landed";
-murthal_clearing_base?: "basic" | "landed";
+### 4.2 Users (`AdminUsers.tsx`)
+Table of `profiles` joined with `user_roles`:
+- Columns: Email, Full name, Domain, Role (Admin/User), Status (Active/Inactive), Created, Actions.
+- Search box (filters by email/name), domain filter dropdown.
+- Add User dialog (email + role + send invite via `supabase.auth.admin` is not available client-side → use an edge function `admin-create-user`).
+- Edit User dialog (name, role).
+- Activate/Deactivate toggle (updates `profiles.is_active`).
+- Delete user (calls edge function `admin-delete-user`).
+- All admin mutations gated by `has_role(auth.uid(),'admin')` RLS.
 
-murthal_landed_discount_enabled?: boolean;
-murthal_landed_discount_mode?: "amount" | "percent";
-murthal_landed_discount_percent?: number;
-murthal_landed_discount_amount?: number;
+### 4.3 Login Activity (`AdminLoginActivity.tsx`)
+Table from `login_activity`:
+- Columns: Email, Login time, IP/Device (placeholder text — captured from `navigator.userAgent` at login time, IP left as "—"), Status badge (success/failed).
+- Filters: status (all/success/failed) and date range.
 
-murthal_pf_enabled?: boolean;
-murthal_pf_mode?: "amount" | "percent";
-murthal_pf_percent?: number;
-murthal_pf_amount?: number;
+### 4.4 Domain Access (`AdminDomains.tsx`)
+- Lists rows from `allowed_domains`.
+- Add domain input + button (validates `*.tld` shape).
+- Remove button per row, disabled for `mrengineers.com` (the admin-email domain) with tooltip "Required for admin access".
 
-murthal_freight_enabled?: boolean;
-murthal_freight?: number;
+### 4.5 Settings (`AdminSettings.tsx`)
+Three sections:
+- Admin profile (read-only email, editable full name → updates `profiles`).
+- Change password form (uses `supabase.auth.updateUser({ password })`).
+- App branding card: logo upload placeholder (disabled file input + helper text), primary color shown as orange swatch (informational only).
 
-murthal_one_time_discount_mode?: "amount" | "percent";
-murthal_one_time_discount_amount?: number;
+## 5. Database changes (migration)
 
-murthal_advance_enabled?: boolean;
-murthal_advance_mode?: "amount" | "percent";
-murthal_advance_percent?: number;
-murthal_advance_amount?: number;
+```sql
+-- Track active/pending users
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+
+-- Allowed sign-in domains
+CREATE TABLE public.allowed_domains (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain text UNIQUE NOT NULL,
+  is_protected boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.allowed_domains (domain, is_protected) VALUES
+  ('mrengineers.com', true), ('gmsdelhi.com', false), ('fmec.in', false);
+ALTER TABLE public.allowed_domains ENABLE ROW LEVEL SECURITY;
+-- Authenticated users can read (so login screen can fetch list once signed in or via edge fn)
+-- Admins manage:
+CREATE POLICY "domains_read_auth" ON public.allowed_domains FOR SELECT TO authenticated USING (true);
+CREATE POLICY "domains_admin_write" ON public.allowed_domains FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(),'admin')) WITH CHECK (public.has_role(auth.uid(),'admin'));
+
+-- Login activity log
+CREATE TABLE public.login_activity (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  email text NOT NULL,
+  status text NOT NULL CHECK (status IN ('success','failed')),
+  user_agent text,
+  ip text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.login_activity ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "login_activity_insert_any" ON public.login_activity FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "login_activity_admin_read" ON public.login_activity FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'admin'));
+
+-- Public domain check function for pre-auth UX (returns boolean only, no row data)
+CREATE OR REPLACE FUNCTION public.is_domain_allowed(_domain text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+  SELECT EXISTS(SELECT 1 FROM public.allowed_domains WHERE lower(domain)=lower(_domain));
+$$;
+GRANT EXECUTE ON FUNCTION public.is_domain_allowed(text) TO anon, authenticated;
 ```
 
-Existing `sea_freight`, `sea_insurance`, `custom_percent`, `clearing_percent`, `landed_gst_percent`, `landed_discount` fields are kept for back-compat; new `*_mode` / `*_amount` fields override when set so old saved orders keep rendering correctly.
+After login attempt (success or failure), the client inserts a row into `login_activity` capturing `email`, `status`, and `navigator.userAgent`.
 
-### Calc updates (`src/lib/orders/calc.ts` → `calcExMurthal`)
+## 6. Edge functions
 
-Update to apply the same GMS rule chain Turkey already uses:
+- `admin-create-user` — verifies caller is admin via JWT, validates domain, calls `supabase.auth.admin.createUser` with service role, then sets role.
+- `admin-delete-user` — verifies admin, calls `supabase.auth.admin.deleteUser`.
+Both use `verify_jwt = true` and `SUPABASE_SERVICE_ROLE_KEY`.
 
-```text
-Landed Price        = Base + Hike + Sea Freight + Custom + Clearing
-                       (Sea Freight & Insurance honor their base selector;
-                        Custom/Clearing honor their base selector; rows can
-                        be ₹ or %.)
-Discount on Landed  = Landed × % (or flat ₹)        ← optional
-Net Landed          = Landed − Discount on Landed
-Insurance           = on Net Landed (₹ or %)
-P&F                 = on Net Landed (₹ or %)
-Freight (flat ₹)    = adds to GST base
-GST                 = (Net Landed + Insurance + P&F + Freight) × %
-Grand Total         = Net Landed + Insurance + P&F + Freight + GST
-One-time Discount   = subtracted from Grand Total
-Advance Adjustment  = subtracted from (Grand Total − One-time Discount)
-Net Payable         = Grand Total − One-time Discount − Advance
-```
+## 7. Files to create / edit
 
-Return shape extends `ExMurthalBreakdown` with `landed_discount_amount`, `net_landed`, `advance_amount`, `net_payable` so the preview/PDF can render them.
+Create:
+- `src/assets/gms-logo.png`
+- `src/hooks/useUserRole.ts`
+- `src/components/RequireAdmin.tsx`
+- `src/components/admin/AdminLayout.tsx`
+- `src/components/admin/AdminSidebar.tsx`
+- `src/pages/admin/AdminDashboard.tsx`
+- `src/pages/admin/AdminUsers.tsx`
+- `src/pages/admin/AdminLoginActivity.tsx`
+- `src/pages/admin/AdminDomains.tsx`
+- `src/pages/admin/AdminSettings.tsx`
+- `supabase/functions/admin-create-user/index.ts`
+- `supabase/functions/admin-delete-user/index.ts`
+- New migration file (schema in §5)
 
-### Preview & PDF rendering
+Edit:
+- `src/components/AuthGate.tsx` — new login UI + domain validation + remember me + activity logging.
+- `src/App.tsx` — add admin routes, role-based root redirect.
+- `src/components/AppLayout.tsx` — link to "Admin Panel" when current user is admin.
 
-- `src/components/orders/OrderPreview.tsx` and `src/lib/orders/pdf.ts` already render the EXW Turkey breakdown rows. Extend the EXW Murthal rendering (currently shows fixed rows) to:
-  - Skip any row whose toggle is off.
-  - Show **Landed Price → Discount → Net Landed Price → Insurance → P&F → Freight → GST → Grand Total → One-time Discount → Advance Adjustment → Net Payable** (skipping disabled rows).
-- Reuse the same number-formatting helpers already used for Turkey rows.
+## 8. Acceptance checks
 
----
-
-## 2. Additional Note inside Terms & Conditions
-
-**File:** `src/pages/orders/OrderEditor.tsx`
-
-Add a new state `const [tcNote, setTcNote] = useState("")` and persist it on the order row.
-
-- Inside the **MR** "Terms & Conditions" Card (line ~1055): add a labeled `Textarea` "Additional Note (optional)" below the existing terms textarea.
-- Inside the **GMS** "GMS Terms & Conditions" Card (line ~1081): add the same "Additional Note (optional)" textarea at the bottom.
-
-This is separate from the existing top-level **Notes** card (which is internal/order-level). The new note prints inside the T&C block on the PDF.
-
-### Persistence
-
-Add `tc_note` (text, nullable) to the `orders` table via migration, and include it in the `payload` on save / load. Default empty string.
-
-### PDF output
-
-- `src/lib/orders/pdf.ts`: where MR terms and GMS terms are rendered, append the `tc_note` (if non-empty) as an extra paragraph titled **"Note:"** under the terms list — so it only appears when the user actually wrote one (matches the "if not applied, do not show" pattern already used for discount).
-
----
-
-## Files touched
-
-- `src/lib/orders/types.ts` — extend `Charges` with `murthal_*` fields; add `tc_note` to `OrderRecord`.
-- `src/lib/orders/calc.ts` — rewrite `calcExMurthal` per new chain; export `landed_discount_amount`, `net_landed`, `advance_amount`, `net_payable`.
-- `src/pages/orders/OrderEditor.tsx` — replace EXW Murthal panel rows with `ModeToggleRow` / mirrored controls; add T&C Note textarea (MR + GMS); load/save `tc_note`.
-- `src/components/orders/OrderPreview.tsx` — render new Murthal rows + T&C note.
-- `src/lib/orders/pdf.ts` — render new Murthal rows + T&C note under terms.
-- `supabase/migrations/<new>.sql` — `ALTER TABLE public.orders ADD COLUMN tc_note text;`
-
-No changes to MR calculation logic. PI conversion already passes the full `charges` object through, so the new fields flow into PI without further work.
+- Login screen visually matches mockup on desktop and mobile.
+- Sign-in with `foo@gmail.com` blocked with clear error; sign-in with `x@fmec.in` works.
+- `it@mrengineers.com` lands on `/admin`; any other user lands on `/`.
+- Non-admin visiting `/admin/*` is redirected away.
+- Admin can add/remove a test domain; cannot remove `mrengineers.com`.
+- Failed and successful login attempts appear in Login Activity table.
+- Remember-me unchecked → closing tab logs the user out; checked → session persists.

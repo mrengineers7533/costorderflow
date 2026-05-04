@@ -4,7 +4,9 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
+import { ShieldCheck } from "lucide-react";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/": { title: "Dashboard", desc: "Overview across Order Acceptances, BOQs, and Proforma Invoices." },
@@ -15,6 +17,7 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
 
 export function AppLayout({ children, user }: { children: React.ReactNode; user: User }) {
   const location = useLocation();
+  const { isAdmin } = useUserRole(user.id);
   const meta =
     PAGE_META[location.pathname] ||
     (location.pathname.startsWith("/orders") ? { title: "Order Acceptances" } :
@@ -38,6 +41,11 @@ export function AppLayout({ children, user }: { children: React.ReactNode; user:
             )}
             <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
+              {isAdmin && (
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Link to="/admin"><ShieldCheck className="h-4 w-4" />Admin</Link>
+                </Button>
+              )}
               <span className="hidden md:inline text-xs text-muted-foreground max-w-[180px] truncate">{user.email}</span>
               <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>
             </div>
