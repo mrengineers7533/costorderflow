@@ -71,7 +71,6 @@ export async function generatePiPDF(
     extraTotalsRows.push({ label: "Other Charges", value: t.other_charges_amount });
   }
   if (t.advance_adjustment_amount > 0) {
-    extraTotalsRows.push({ label: "Grand Total", value: t.gross_invoice_total, bold: true });
     const advLabel = advMode === "amount"
       ? "Advance Adjustment"
       : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`;
