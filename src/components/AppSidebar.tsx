@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Settings, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, ShieldCheck, LogOut } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, ShieldCheck, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,10 +21,6 @@ const items = [
   { title: "Orders",    url: "/orders",     icon: FileText },
   { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
   { title: "Proforma Invoices", url: "/pi", icon: Receipt },
-];
-
-const footerItems = [
-  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {
@@ -137,30 +133,6 @@ export function AppSidebar({ user }: { user?: User | null }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
-          {footerItems.map((item) => {
-            const active = pathname === item.url || pathname.startsWith(item.url + "/");
-            return (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={active}
-                  className="h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
-                >
-                  <NavLink
-                    to={item.url}
-                    className={
-                      active
-                        ? "font-semibold"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    }
-                  >
-                    <item.icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
-                    {!collapsed && <span className="text-sm">{item.title}</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
           {user && (
             <SidebarMenuItem>
               <SidebarMenuButton
