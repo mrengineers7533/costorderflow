@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          is_protected: boolean
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          is_protected?: boolean
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          is_protected?: boolean
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string
@@ -186,6 +207,36 @@ export type Database = {
           id?: string
           success?: boolean
           user_identifier?: string | null
+        }
+        Relationships: []
+      }
+      login_activity: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip: string | null
+          status: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip?: string | null
+          status: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip?: string | null
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -377,6 +428,7 @@ export type Database = {
           email_notifications: boolean
           full_name: string | null
           id: string
+          is_active: boolean
           prepared_by: string | null
           updated_at: string
         }
@@ -387,6 +439,7 @@ export type Database = {
           email_notifications?: boolean
           full_name?: string | null
           id: string
+          is_active?: boolean
           prepared_by?: string | null
           updated_at?: string
         }
@@ -397,6 +450,7 @@ export type Database = {
           email_notifications?: boolean
           full_name?: string | null
           id?: string
+          is_active?: boolean
           prepared_by?: string | null
           updated_at?: string
         }
@@ -570,6 +624,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_domain_allowed: { Args: { _domain: string }; Returns: boolean }
       next_oa_number: {
         Args: {
           _financial_year: string
