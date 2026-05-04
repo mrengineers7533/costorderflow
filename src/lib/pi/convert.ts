@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { getFinancialYear, calcTotals, amountInWords } from "@/lib/orders/calc";
+import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
@@ -178,6 +178,24 @@ export async function createPiRevision(
     next.other_charges || 0,
   );
 
+  // GMS landed-cost overrides — when the PI charges have a gms_mode set,
+  // the saved grand/net should come from the EXW Turkey/Murthal breakdown
+  // so list views & PDFs match the editor.
+  let savedGrand = totals.grand_total_pi;
+  let savedNet = totals.net_payable_pi;
+  if (next.format === "GMS") {
+    const c = next.charges;
+    if (c.gms_mode === "EXW_TURKEY") {
+      const tk = calcExTurkey(totals.basic_total, c);
+      savedGrand = tk.grand_total;
+      savedNet = tk.net_payable;
+    } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
+      const m = calcExMurthal(totals.basic_total, c);
+      savedGrand = m.grand_total;
+      savedNet = m.net_payable;
+    }
+  }
+
   const row = {
     pi_number: newPiNumber,
     base_pi_number: next.base_pi_number,
@@ -199,10 +217,10 @@ export async function createPiRevision(
     totals: {
       basic_total: totals.basic_total,
       subtotal: totals.subtotal,
-      grand_total: totals.grand_total_pi,
-      net_payable: totals.net_payable_pi,
+      grand_total: savedGrand,
+      net_payable: savedNet,
     },
-    amount_in_words: amountInWords(totals.net_payable_pi),
+    amount_in_words: amountInWords(savedNet),
     notes: next.notes,
     one_time_discount_percent: next.one_time_discount_percent,
     advance_adjustment_percent: next.advance_adjustment_percent,
