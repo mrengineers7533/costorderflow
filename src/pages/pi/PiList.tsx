@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -27,6 +28,10 @@ type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_dat
 
 export default function PiList() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const folderParam = (searchParams.get("folder") || "all").toLowerCase();
+  const folder: "all" | "MR" | "GMS" =
+    folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [rows, setRows] = useState<PiRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuperseded, setShowSuperseded] = useState(false);
@@ -37,6 +42,27 @@ export default function PiList() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [piDialogOpen, setPiDialogOpen] = useState(false);
   const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
+
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const r of rows) {
+      if (r.format === "MR") mr++;
+      else if (r.format === "GMS") gms++;
+    }
+    return { all: rows.length, MR: mr, GMS: gms };
+  }, [rows]);
+
+  const visibleRows = useMemo(
+    () => (folder === "all" ? rows : rows.filter((r) => r.format === folder)),
+    [rows, folder],
+  );
+
+  function setFolder(next: "all" | "MR" | "GMS") {
+    const sp = new URLSearchParams(searchParams);
+    if (next === "all") sp.delete("folder");
+    else sp.set("folder", next);
+    setSearchParams(sp, { replace: true });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -98,7 +124,10 @@ export default function PiList() {
     })();
   }, [rows]);
 
-  const filteredOas = oas.filter((o) => o.oa_number.toLowerCase().includes(oaSearch.trim().toLowerCase()));
+  const filteredOas = oas.filter((o) =>
+    o.oa_number.toLowerCase().includes(oaSearch.trim().toLowerCase()) &&
+    (folder === "all" || o.format === folder)
+  );
 
   async function handleConvert(oaId: string) {
     try {
@@ -177,16 +206,29 @@ export default function PiList() {
 
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold">All Proforma Invoices</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              {folder === "all" ? "All Proforma Invoices" : `${folder} PI Folder`}
+            </CardTitle>
             <div className="flex items-center gap-2 text-xs">
               <Switch id="pi-show-superseded" checked={showSuperseded} onCheckedChange={setShowSuperseded} />
               <Label htmlFor="pi-show-superseded" className="cursor-pointer">Show superseded revisions</Label>
             </div>
           </CardHeader>
           <CardContent>
+            <Tabs value={folder} onValueChange={(v) => setFolder(v as "all" | "MR" | "GMS")} className="mb-4">
+              <TabsList>
+                <TabsTrigger value="all">All <span className="ml-1.5 text-[10px] opacity-70">{counts.all}</span></TabsTrigger>
+                <TabsTrigger value="MR">MR Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.MR}</span></TabsTrigger>
+                <TabsTrigger value="GMS">GMS Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.GMS}</span></TabsTrigger>
+              </TabsList>
+            </Tabs>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
-              rows.length === 0 ? (
-                <p className="text-muted-foreground">No PIs yet. Click <span className="font-medium">Create PI from OA</span>.</p>
+              visibleRows.length === 0 ? (
+                <p className="text-muted-foreground">
+                  {rows.length === 0
+                    ? <>No PIs yet. Click <span className="font-medium">Create PI from OA</span>.</>
+                    : `No ${folder} PIs in this folder yet.`}
+                </p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -203,7 +245,7 @@ export default function PiList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((p) => (
+                    {visibleRows.map((p) => (
                       <TableRow key={p.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/pi/${p.id}`)}>
                         <TableCell className="font-mono font-medium">{p.pi_number}</TableCell>
                         <TableCell>
