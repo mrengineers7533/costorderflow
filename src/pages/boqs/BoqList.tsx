@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,10 @@ type OaOption = {
 
 export default function BoqList() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const folderParam = (searchParams.get("folder") || "all").toLowerCase();
+  const folder: "all" | "MR" | "GMS" =
+    folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [rows, setRows] = useState<BoqRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSuperseded, setShowSuperseded] = useState(false);
@@ -43,6 +48,27 @@ export default function BoqList() {
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const r of rows) {
+      if (r.format === "MR") mr++;
+      else if (r.format === "GMS") gms++;
+    }
+    return { all: rows.length, MR: mr, GMS: gms };
+  }, [rows]);
+
+  const visibleRows = useMemo(
+    () => (folder === "all" ? rows : rows.filter((r) => r.format === folder)),
+    [rows, folder],
+  );
+
+  function setFolder(next: "all" | "MR" | "GMS") {
+    const sp = new URLSearchParams(searchParams);
+    if (next === "all") sp.delete("folder");
+    else sp.set("folder", next);
+    setSearchParams(sp, { replace: true });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -101,7 +127,8 @@ export default function BoqList() {
   }, [rows]);
 
   const filteredOas = oas.filter((o) =>
-    o.oa_number.toLowerCase().includes(oaSearch.trim().toLowerCase())
+    o.oa_number.toLowerCase().includes(oaSearch.trim().toLowerCase()) &&
+    (folder === "all" || o.format === folder)
   );
 
   async function handleDownload(b: BoqRecord) {
@@ -200,16 +227,29 @@ export default function BoqList() {
         </div>
         <Card className="rounded-xl border-border/70 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold">All BOQs</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              {folder === "all" ? "All BOQs" : `${folder} BOQ Folder`}
+            </CardTitle>
             <div className="flex items-center gap-2 text-xs">
               <Switch id="boq-show-superseded" checked={showSuperseded} onCheckedChange={setShowSuperseded} />
               <Label htmlFor="boq-show-superseded" className="cursor-pointer">Show superseded revisions</Label>
             </div>
           </CardHeader>
           <CardContent>
+            <Tabs value={folder} onValueChange={(v) => setFolder(v as "all" | "MR" | "GMS")} className="mb-4">
+              <TabsList>
+                <TabsTrigger value="all">All <span className="ml-1.5 text-[10px] opacity-70">{counts.all}</span></TabsTrigger>
+                <TabsTrigger value="MR">MR Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.MR}</span></TabsTrigger>
+                <TabsTrigger value="GMS">GMS Folder <span className="ml-1.5 text-[10px] opacity-70">{counts.GMS}</span></TabsTrigger>
+              </TabsList>
+            </Tabs>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
-              rows.length === 0 ? (
-                <p className="text-muted-foreground">No BOQs yet. Open an Order and click <span className="font-medium">Generate BOQ</span>.</p>
+              visibleRows.length === 0 ? (
+                <p className="text-muted-foreground">
+                  {rows.length === 0
+                    ? <>No BOQs yet. Open an Order and click <span className="font-medium">Generate BOQ</span>.</>
+                    : `No ${folder} BOQs in this folder yet.`}
+                </p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -224,7 +264,7 @@ export default function BoqList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((b) => (
+                    {visibleRows.map((b) => (
                       <TableRow key={b.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
                         <TableCell className="font-mono font-medium">{b.boq_number}</TableCell>
                         <TableCell>
