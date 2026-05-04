@@ -990,3 +990,77 @@ function Row({ label, value, bold, highlight }: { label: string; value: number; 
     </div>
   );
 }
+
+function PiToggleNumberRow({
+  label, enabled, value, onToggle, onValue,
+}: { label: string; enabled: boolean; value: number; onToggle: (b: boolean) => void; onValue: (v: number) => void; }) {
+  return (
+    <div className="grid grid-cols-[auto_1fr_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={onToggle} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>{label}</Label>
+      <Input type="number" step="any" disabled={!enabled} value={value} onChange={(e) => onValue(+e.target.value || 0)} />
+    </div>
+  );
+}
+
+function PiModeToggleRow({
+  label, enabled, mode, amount, percent, base, onPatch, keys,
+}: {
+  label: string;
+  enabled: boolean;
+  mode: "amount" | "percent";
+  amount: number;
+  percent: number;
+  base?: "basic" | "landed";
+  onPatch: (patch: Partial<Charges>) => void;
+  keys: {
+    enabled: keyof Charges;
+    mode: keyof Charges;
+    amount: keyof Charges;
+    percent: keyof Charges;
+    base?: keyof Charges;
+  };
+}) {
+  const isPercent = mode === "percent";
+  return (
+    <div className="grid grid-cols-[auto_1fr_120px_120px_140px] items-center gap-3">
+      <Switch checked={enabled} onCheckedChange={(b) => onPatch({ [keys.enabled]: b } as Partial<Charges>)} />
+      <Label className={`text-sm ${enabled ? "" : "text-muted-foreground line-through"}`}>
+        {label} {isPercent ? "(%)" : "(₹)"}
+      </Label>
+      <Select
+        value={mode}
+        onValueChange={(v) => onPatch({ [keys.mode]: v as "amount" | "percent" } as Partial<Charges>)}
+      >
+        <SelectTrigger className="h-9" disabled={!enabled}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="amount">Flat ₹</SelectItem>
+          <SelectItem value="percent">%</SelectItem>
+        </SelectContent>
+      </Select>
+      {isPercent && keys.base ? (
+        <Select
+          value={base || "basic"}
+          onValueChange={(v) => onPatch({ [keys.base as keyof Charges]: v as "basic" | "landed" } as Partial<Charges>)}
+        >
+          <SelectTrigger className="h-9" disabled={!enabled}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="basic">on Basic</SelectItem>
+            <SelectItem value="landed">on Landed</SelectItem>
+          </SelectContent>
+        </Select>
+      ) : (
+        <div />
+      )}
+      <Input
+        type="number" step="any" disabled={!enabled}
+        value={isPercent ? percent : amount}
+        onChange={(e) => {
+          const v = +e.target.value || 0;
+          if (isPercent) onPatch({ [keys.percent]: v } as Partial<Charges>);
+          else onPatch({ [keys.amount]: v } as Partial<Charges>);
+        }}
+      />
+    </div>
+  );
+}
