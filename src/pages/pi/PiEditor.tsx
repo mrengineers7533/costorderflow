@@ -75,6 +75,29 @@ export default function PiEditor() {
     );
   }, [pi]);
 
+  // GMS landed-cost breakdown (drives the editor preview & saved net for
+  // GMS PIs whose charges have a `gms_mode` set). Mirrors the OA editor.
+  const gmsBreakdown = useMemo(() => {
+    if (!pi || pi.format !== "GMS" || !totals) return null;
+    const mode = pi.charges.gms_mode;
+    if (mode === "EXW_TURKEY") {
+      return { kind: "turkey" as const, data: calcExTurkey(totals.basic_total, pi.charges) };
+    }
+    if (mode === "EXW_MURTHAL" || pi.charges.ex_murthal_enabled) {
+      return { kind: "murthal" as const, data: calcExMurthal(totals.basic_total, pi.charges) };
+    }
+    return null;
+  }, [pi, totals]);
+
+  // The figure that flows into the saved `totals.net_payable` row and the
+  // PI list. For GMS landed-cost modes, prefer the GMS net.
+  const effectiveNet = gmsBreakdown
+    ? gmsBreakdown.data.net_payable
+    : (totals?.net_payable_pi ?? 0);
+  const effectiveGrand = gmsBreakdown
+    ? gmsBreakdown.data.grand_total
+    : (totals?.gross_invoice_total ?? 0);
+
   if (loading || !pi || !totals) {
     return <div className="p-6 text-muted-foreground">Loading PI…</div>;
   }
