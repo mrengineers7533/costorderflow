@@ -308,6 +308,22 @@ export function OrderPreview(p: Props) {
                       {!p.docMeta?.hideDefaultGrandTotal && (
                         <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={grandShown} highlight />
                       )}
+                      {p.format === "MR" && p.charges.mr_advance_enabled && (() => {
+                        const mode = p.charges.mr_advance_mode || "percent";
+                        const adv = mode === "percent"
+                          ? (grandShown * (p.charges.mr_advance_percent || 0)) / 100
+                          : (p.charges.mr_advance_amount || 0);
+                        if (adv <= 0) return null;
+                        const lbl = mode === "percent"
+                          ? `Advance Adjustment @ ${p.charges.mr_advance_percent || 0}%`
+                          : "Advance Adjustment";
+                        return (
+                          <>
+                            <TotalsRow colSpan={totalsColSpan} label={lbl} value={adv} />
+                            <TotalsRow colSpan={totalsColSpan} label="Net Payable" value={Math.max(0, grandShown - adv)} highlight />
+                          </>
+                        );
+                      })()}
                     </>
                   )
                 )}
