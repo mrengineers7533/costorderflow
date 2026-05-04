@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type React from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
