@@ -92,7 +92,7 @@ export interface DocMetaOverride {
 
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; docMeta?: DocMetaOverride },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -309,13 +309,14 @@ export async function generateOrderPDF(
   {
     const terms = opts?.terms ?? DEFAULT_MR_TERMS;
     const bank = opts?.bank ?? DEFAULT_MR_BANK;
+    const tcNote = (opts?.tcNote || (order as unknown as { tc_note?: string }).tc_note || "").trim();
     const tableW = W - M * 2;
 
     // Terms & Conditions row
     autoTable(doc, {
       startY: y,
       body: [[{
-        content: `TERMS & CONDITIONS\n${terms}`,
+        content: `TERMS & CONDITIONS\n${terms}${tcNote ? `\n\nNote: ${tcNote}` : ""}`,
         styles: { fontStyle: "normal", fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
       }]],
       theme: "plain",
@@ -397,7 +398,7 @@ const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 async function renderGmsPdf(
   doc: jsPDF,
   order: OrderRecord,
-  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; docMeta?: DocMetaOverride } | undefined,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride } | undefined,
   layout: GmsLayout,
 ) {
   const { W, H, M } = layout;
@@ -575,18 +576,34 @@ async function renderGmsPdf(
   } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
     const m = calcExMurthal(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Murthal)", value: m.base_amount });
-    if (c.pf_amount > 0 || c.pf_percent > 0) {
-      totalsRows.push({ label: `P&F${c.pf_percent ? ` @${c.pf_percent}%` : ""}`, value: m.pf });
-    }
-    if (c.freight_enabled) totalsRows.push({ label: "Freight", value: m.freight });
-    totalsRows.push({ label: "Total Amount / Landed Price", value: m.total_amount, bold: true });
     if (c.sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: m.sea_freight });
-    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
     if (c.custom_enabled) totalsRows.push({ label: "Custom Duty", value: m.custom });
     if (c.clearing_enabled) totalsRows.push({ label: "Clearing Charge / CHA & Port", value: m.clearing });
+    totalsRows.push({ label: "Landed Price", value: m.total_amount, bold: true });
+    if (c.murthal_landed_discount_enabled && m.landed_discount_amount > 0) {
+      const lbl = (c.murthal_landed_discount_mode || "percent") === "percent" && c.murthal_landed_discount_percent
+        ? `Discount @ ${c.murthal_landed_discount_percent}% on Landed`
+        : "Discount on Landed";
+      totalsRows.push({ label: lbl, value: -m.landed_discount_amount });
+      totalsRows.push({ label: "Net Landed Price", value: m.net_landed, bold: true });
+    }
+    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
+    if ((c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0) {
+      totalsRows.push({ label: "P&F", value: m.pf });
+    }
+    if ((c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0) {
+      totalsRows.push({ label: "Freight", value: m.freight });
+    }
     if (c.landed_gst_enabled) totalsRows.push({ label: "GST", value: m.gst });
+    totalsRows.push({ label: "Grand Total", value: m.grand_total, bold: true });
     if (c.landed_discount_enabled && m.discount > 0) {
       totalsRows.push({ label: "One-time Discount", value: -m.discount });
+    }
+    if (c.murthal_advance_enabled && m.advance_amount > 0) {
+      const lbl = (c.murthal_advance_mode || "percent") === "percent" && c.murthal_advance_percent
+        ? `Advance Adjustment @ ${c.murthal_advance_percent}%`
+        : "Advance Adjustment";
+      totalsRows.push({ label: lbl, value: -m.advance_amount });
     }
     totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true });
   } else {
@@ -691,6 +708,17 @@ async function renderGmsPdf(
     wrapped.forEach((w: string) => { doc.text(w, M, yT); yT += 4.5; });
     yT += 3;
   });
+
+  // Optional free-form note printed only when set.
+  const tcNote = (opts?.tcNote || (order as unknown as { tc_note?: string }).tc_note || "").trim();
+  if (tcNote) {
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("Note :", M, yT); yT += 5;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    const wrapped = doc.splitTextToSize(tcNote, W - M * 2);
+    wrapped.forEach((w: string) => { doc.text(w, M, yT); yT += 4.5; });
+    yT += 3;
+  }
 
   // When the page-1 footer was suppressed, surface the exclusions + FX line here
   if (opts?.docMeta?.hideFirstPageFooter) {

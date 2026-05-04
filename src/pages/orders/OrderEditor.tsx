@@ -73,6 +73,8 @@ export default function OrderEditor() {
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  // Optional free-form note that prints under the Terms & Conditions block.
+  const [tcNote, setTcNote] = useState<string>("");
   // Editor-only filter for the Line Items table. Does NOT affect the OA
   // format / preview / PDF — those still follow the Format dropdown above.
   const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
@@ -107,6 +109,7 @@ export default function OrderEditor() {
       // the Format dropdown would pre-fill GMS with MR's values.
       setChargesGms({ ...emptyCharges, ...(o.charges_gms || {}) });
       setNotes(o.notes || "");
+      setTcNote((o as unknown as { tc_note?: string }).tc_note || "");
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
       setIsCurrent(o.is_current ?? true);
@@ -253,6 +256,7 @@ export default function OrderEditor() {
       charges: chargesMr,
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
+      tc_note: tcNote,
     };
 
     const res = isNew
@@ -279,10 +283,11 @@ export default function OrderEditor() {
         ship_to: ship, reference, cost_sheet_number: costSheetNumber,
         order_date: orderDate, prepared_by: preparedBy, line_items: subsetItems,
         charges: sideCharges, totals: subTotals, amount_in_words: subWords, notes,
+        tc_note: tcNote,
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      const doc = await generateOrderPDF(record, { terms, bank });
+      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote });
       doc.save(filename);
       return { used: "default" as const };
     };
@@ -316,6 +321,7 @@ export default function OrderEditor() {
       charges: chargesMr,
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
+      tc_note: tcNote,
       created_at: "", updated_at: "",
       parent_order_id: parentOrderId || orderId || "",
       revision, is_current: isCurrent,
@@ -954,53 +960,229 @@ export default function OrderEditor() {
                       custom_percent: charges.custom_percent ?? 8.25,
                       clearing_percent: charges.clearing_percent ?? 1.5,
                       landed_gst_percent: charges.landed_gst_percent ?? 18,
+                      murthal_pf_percent: charges.murthal_pf_percent ?? 1.5,
+                      murthal_pf_mode: charges.murthal_pf_mode ?? "percent",
+                      murthal_advance_mode: charges.murthal_advance_mode ?? "percent",
                     })}
                   />
                 </div>
                 {charges.ex_murthal_enabled && (
                   <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
-                    <ToggleNumberRow
-                      label="P&F %"
-                      enabled={(charges.pf_percent || 0) > 0 || (charges.pf_amount || 0) > 0}
-                      value={charges.pf_percent || 0}
-                      onToggle={(b) => setCharges({
-                        ...charges,
-                        pf_percent: b ? (charges.pf_percent || 1.5) : 0,
-                        pf_amount: 0,
-                      })}
-                      onValue={(v) => setCharges({ ...charges, pf_percent: v, pf_amount: 0 })}
-                    />
-                    <ToggleNumberRow
-                      label="Sea Freight % (of Basic)" enabled={!!charges.sea_freight_enabled} value={charges.sea_freight || 0}
+                    {/* Sea Freight (₹ or %) */}
+                    <ModeToggleRow
+                      label="Sea Freight"
+                      enabled={!!charges.sea_freight_enabled}
+                      mode={charges.murthal_sea_freight_mode || "percent"}
+                      amount={charges.murthal_sea_freight_amount || 0}
+                      percent={charges.sea_freight || 0}
+                      base={charges.murthal_sea_freight_base || "basic"}
                       onToggle={(b) => setCharges({ ...charges, sea_freight_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, sea_freight: v })}
+                      onMode={(m) => setCharges({ ...charges, murthal_sea_freight_mode: m })}
+                      onAmount={(v) => setCharges({ ...charges, murthal_sea_freight_amount: v })}
+                      onPercent={(v) => setCharges({ ...charges, sea_freight: v })}
+                      onBase={(b) => setCharges({ ...charges, murthal_sea_freight_base: b })}
                     />
-                    <ToggleNumberRow
-                      label="Insurance % (of Basic)" enabled={!!charges.sea_insurance_enabled} value={charges.sea_insurance || 0}
+                    {/* Custom Duty */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch checked={!!charges.custom_enabled} onCheckedChange={(b) => setCharges({ ...charges, custom_enabled: b })} />
+                      <Label className={`text-sm ${charges.custom_enabled ? "" : "text-muted-foreground line-through"}`}>Custom Duty (%)</Label>
+                      <Select
+                        value={charges.murthal_custom_base || "basic"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_custom_base: v as "basic" | "landed" })}
+                        disabled={!charges.custom_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="basic">on Basic + Sea</SelectItem>
+                          <SelectItem value="landed">on Landed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.custom_enabled}
+                        value={charges.custom_percent ?? 8.25}
+                        onChange={(e) => setCharges({ ...charges, custom_percent: +e.target.value || 0 })}
+                      />
+                    </div>
+                    {/* Clearing (CHA & Port) */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch checked={!!charges.clearing_enabled} onCheckedChange={(b) => setCharges({ ...charges, clearing_enabled: b })} />
+                      <Label className={`text-sm ${charges.clearing_enabled ? "" : "text-muted-foreground line-through"}`}>Clearing (CHA &amp; Port) (%)</Label>
+                      <Select
+                        value={charges.murthal_clearing_base || "basic"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_clearing_base: v as "basic" | "landed" })}
+                        disabled={!charges.clearing_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="basic">on Basic + Sea</SelectItem>
+                          <SelectItem value="landed">on Landed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.clearing_enabled}
+                        value={charges.clearing_percent ?? 1.5}
+                        onChange={(e) => setCharges({ ...charges, clearing_percent: +e.target.value || 0 })}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground -mt-1">
+                      Landed Price = Base + Sea Freight + Custom + Clearing. Insurance &amp; P&amp;F below are computed on the Landed Price.
+                    </p>
+                    {/* Discount on Landed Price */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch
+                        checked={!!charges.murthal_landed_discount_enabled}
+                        onCheckedChange={(b) => setCharges({ ...charges, murthal_landed_discount_enabled: b })}
+                      />
+                      <Label className={`text-sm ${charges.murthal_landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>
+                        Discount on Landed Price
+                      </Label>
+                      <Select
+                        value={charges.murthal_landed_discount_mode || "percent"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_landed_discount_mode: v as "amount" | "percent" })}
+                        disabled={!charges.murthal_landed_discount_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">% of Landed</SelectItem>
+                          <SelectItem value="amount">Flat ₹</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.murthal_landed_discount_enabled}
+                        value={(charges.murthal_landed_discount_mode || "percent") === "percent"
+                          ? (charges.murthal_landed_discount_percent || 0)
+                          : (charges.murthal_landed_discount_amount || 0)}
+                        onChange={(e) => {
+                          const v = +e.target.value || 0;
+                          if ((charges.murthal_landed_discount_mode || "percent") === "percent") {
+                            setCharges({ ...charges, murthal_landed_discount_percent: v });
+                          } else {
+                            setCharges({ ...charges, murthal_landed_discount_amount: v });
+                          }
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground -mt-1">
+                      Net Landed Price = Landed − Discount. Insurance, P&amp;F &amp; GST below recompute on Net Landed Price.
+                    </p>
+                    {/* Insurance (on Landed) */}
+                    <ModeToggleRow
+                      label="Insurance"
+                      enabled={!!charges.sea_insurance_enabled}
+                      mode={charges.murthal_insurance_mode || "percent"}
+                      amount={charges.murthal_insurance_amount || 0}
+                      percent={charges.sea_insurance || 0}
+                      base={charges.murthal_insurance_base || "landed"}
                       onToggle={(b) => setCharges({ ...charges, sea_insurance_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, sea_insurance: v })}
+                      onMode={(m) => setCharges({ ...charges, murthal_insurance_mode: m })}
+                      onAmount={(v) => setCharges({ ...charges, murthal_insurance_amount: v })}
+                      onPercent={(v) => setCharges({ ...charges, sea_insurance: v })}
+                      onBase={(b) => setCharges({ ...charges, murthal_insurance_base: b })}
                     />
+                    {/* P&F (on Landed) */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch checked={!!charges.murthal_pf_enabled} onCheckedChange={(b) => setCharges({ ...charges, murthal_pf_enabled: b })} />
+                      <Label className={`text-sm ${charges.murthal_pf_enabled ? "" : "text-muted-foreground line-through"}`}>P&amp;F (on Landed)</Label>
+                      <Select
+                        value={charges.murthal_pf_mode || "percent"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_pf_mode: v as "amount" | "percent" })}
+                        disabled={!charges.murthal_pf_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="amount">Flat ₹</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.murthal_pf_enabled}
+                        value={(charges.murthal_pf_mode || "percent") === "percent" ? (charges.murthal_pf_percent ?? 1.5) : (charges.murthal_pf_amount || 0)}
+                        onChange={(e) => {
+                          const v = +e.target.value || 0;
+                          if ((charges.murthal_pf_mode || "percent") === "percent") {
+                            setCharges({ ...charges, murthal_pf_percent: v });
+                          } else {
+                            setCharges({ ...charges, murthal_pf_amount: v });
+                          }
+                        }}
+                      />
+                    </div>
+                    {/* Freight (flat ₹) */}
                     <ToggleNumberRow
-                      label="Custom Duty %" enabled={!!charges.custom_enabled} value={charges.custom_percent ?? 8.25}
-                      onToggle={(b) => setCharges({ ...charges, custom_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, custom_percent: v })}
+                      label="Freight (flat ₹) — joins GST base"
+                      enabled={!!charges.murthal_freight_enabled}
+                      value={charges.murthal_freight || 0}
+                      onToggle={(b) => setCharges({ ...charges, murthal_freight_enabled: b })}
+                      onValue={(v) => setCharges({ ...charges, murthal_freight: v })}
                     />
+                    {/* GST */}
                     <ToggleNumberRow
-                      label="Clearing (CHA & Port) %" enabled={!!charges.clearing_enabled} value={charges.clearing_percent ?? 1.5}
-                      onToggle={(b) => setCharges({ ...charges, clearing_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, clearing_percent: v })}
-                    />
-                    <ToggleNumberRow
-                      label="GST %" enabled={!!charges.landed_gst_enabled} value={charges.landed_gst_percent ?? 18}
+                      label="GST % (on Net Landed + Insurance + P&F + Freight)"
+                      enabled={!!charges.landed_gst_enabled} value={charges.landed_gst_percent ?? 18}
                       onToggle={(b) => setCharges({ ...charges, landed_gst_enabled: b })}
                       onValue={(v) => setCharges({ ...charges, landed_gst_percent: v })}
                     />
-                    <ToggleNumberRow
-                      label="One-time Discount % (of Grand Total)" enabled={!!charges.landed_discount_enabled} value={charges.landed_discount || 0}
-                      onToggle={(b) => setCharges({ ...charges, landed_discount_enabled: b })}
-                      onValue={(v) => setCharges({ ...charges, landed_discount: v })}
-                    />
-                    <p className="text-[10px] text-muted-foreground italic pt-1">All values are percentages — calculated amount appears in the preview &amp; PDF (no % shown there). Freight % uses the value set above.</p>
+                    {/* One-time Discount (₹ or %) */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch
+                        checked={!!charges.landed_discount_enabled}
+                        onCheckedChange={(b) => setCharges({ ...charges, landed_discount_enabled: b })}
+                      />
+                      <Label className={`text-sm ${charges.landed_discount_enabled ? "" : "text-muted-foreground line-through"}`}>One-time Discount — after GST</Label>
+                      <Select
+                        value={charges.murthal_one_time_discount_mode || "percent"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_one_time_discount_mode: v as "amount" | "percent" })}
+                        disabled={!charges.landed_discount_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">% of Grand Total</SelectItem>
+                          <SelectItem value="amount">Flat ₹</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.landed_discount_enabled}
+                        value={(charges.murthal_one_time_discount_mode || "percent") === "percent"
+                          ? (charges.landed_discount || 0)
+                          : (charges.murthal_one_time_discount_amount || 0)}
+                        onChange={(e) => {
+                          const v = +e.target.value || 0;
+                          if ((charges.murthal_one_time_discount_mode || "percent") === "percent") {
+                            setCharges({ ...charges, landed_discount: v });
+                          } else {
+                            setCharges({ ...charges, murthal_one_time_discount_amount: v });
+                          }
+                        }}
+                      />
+                    </div>
+                    {/* Advance Adjustment */}
+                    <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
+                      <Switch checked={!!charges.murthal_advance_enabled} onCheckedChange={(b) => setCharges({ ...charges, murthal_advance_enabled: b })} />
+                      <Label className={`text-sm ${charges.murthal_advance_enabled ? "" : "text-muted-foreground line-through"}`}>Advance Adjustment</Label>
+                      <Select
+                        value={charges.murthal_advance_mode || "percent"}
+                        onValueChange={(v) => setCharges({ ...charges, murthal_advance_mode: v as "amount" | "percent" })}
+                        disabled={!charges.murthal_advance_enabled}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percent">% of Grand Total</SelectItem>
+                          <SelectItem value="amount">Flat ₹</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" step="any" disabled={!charges.murthal_advance_enabled}
+                        value={(charges.murthal_advance_mode || "percent") === "percent" ? (charges.murthal_advance_percent || 0) : (charges.murthal_advance_amount || 0)}
+                        onChange={(e) => {
+                          const v = +e.target.value || 0;
+                          if ((charges.murthal_advance_mode || "percent") === "percent") {
+                            setCharges({ ...charges, murthal_advance_percent: v });
+                          } else {
+                            setCharges({ ...charges, murthal_advance_amount: v });
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1058,6 +1240,15 @@ export default function OrderEditor() {
                 <div className="mt-2 flex justify-end">
                   <Button size="sm" variant="ghost" onClick={() => setTerms(DEFAULT_MR_TERMS)}>Reset to default</Button>
                 </div>
+                <div className="mt-3">
+                  <Label>Additional Note (optional)</Label>
+                  <Textarea
+                    value={tcNote}
+                    onChange={(e) => setTcNote(e.target.value)}
+                    rows={3}
+                    placeholder="Any extra note to print under Terms & Conditions"
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -1089,6 +1280,15 @@ export default function OrderEditor() {
               <div><Label>Delivery Time</Label><Textarea rows={2} value={gmsTerms.delivery_time} onChange={(e) => setGmsTerms({ ...gmsTerms, delivery_time: e.target.value })} /></div>
               <div><Label>Payment Terms</Label><Textarea rows={2} value={gmsTerms.payment_terms} onChange={(e) => setGmsTerms({ ...gmsTerms, payment_terms: e.target.value })} /></div>
               <div><Label>General Conditions</Label><Textarea rows={2} value={gmsTerms.general_conditions} onChange={(e) => setGmsTerms({ ...gmsTerms, general_conditions: e.target.value })} /></div>
+              <div>
+                <Label>Additional Note (optional)</Label>
+                <Textarea
+                  rows={3}
+                  value={tcNote}
+                  onChange={(e) => setTcNote(e.target.value)}
+                  placeholder="Any extra note to print under Terms & Conditions"
+                />
+              </div>
               <div className="flex justify-end">
                 <Button size="sm" variant="ghost" onClick={() => setGmsTerms(DEFAULT_GMS_TERMS)}>Reset to default</Button>
               </div>

@@ -425,18 +425,30 @@ function ExMurthalBlock({
         </div>
       )}
       <Row k="Base Amount" v={m.base_amount} />
-      {(c.pf_amount > 0 || c.pf_percent > 0) && (
-        <Row k={`P&F${c.pf_percent ? ` (${c.pf_percent}%)` : ""}`} v={m.pf} sub />
-      )}
-      {c.freight_enabled && <Row k="Freight" v={m.freight} sub />}
-      <Row k="Total Amount / Landed Price" v={m.total_amount} bold />
       {c.sea_freight_enabled && <Row k="Sea Freight" v={m.sea_freight} />}
-      {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
       {c.custom_enabled && <Row k="Custom Duty" v={m.custom} />}
       {c.clearing_enabled && <Row k="Clearing Charge / CHA & Port" v={m.clearing} />}
+      <Row k="Landed Price" v={m.total_amount} bold />
+      {c.murthal_landed_discount_enabled && m.landed_discount_amount > 0 && (
+        <>
+          <Row k="Discount on Landed" v={-m.landed_discount_amount} />
+          <Row k="Net Landed Price" v={m.net_landed} bold />
+        </>
+      )}
+      {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
+      {(c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0 && (
+        <Row k="P&F" v={m.pf} />
+      )}
+      {(c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0 && (
+        <Row k="Freight" v={m.freight} />
+      )}
       {c.landed_gst_enabled && <Row k="GST" v={m.gst} />}
+      <Row k="Grand Total" v={m.grand_total} bold />
       {c.landed_discount_enabled && m.discount > 0 && (
         <Row k="One-time Discount" v={-m.discount} />
+      )}
+      {c.murthal_advance_enabled && m.advance_amount > 0 && (
+        <Row k="Advance Adjustment" v={-m.advance_amount} />
       )}
       <Row k="Net Payable" v={m.net_payable} bold />
     </div>

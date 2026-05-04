@@ -269,6 +269,7 @@ export type Database = {
           revision: number
           ship_to: Json
           status: Database["public"]["Enums"]["order_status"]
+          tc_note: string | null
           totals: Json
           updated_at: string
           user_id: string | null
@@ -295,6 +296,7 @@ export type Database = {
           revision?: number
           ship_to?: Json
           status?: Database["public"]["Enums"]["order_status"]
+          tc_note?: string | null
           totals?: Json
           updated_at?: string
           user_id?: string | null
@@ -321,6 +323,7 @@ export type Database = {
           revision?: number
           ship_to?: Json
           status?: Database["public"]["Enums"]["order_status"]
+          tc_note?: string | null
           totals?: Json
           updated_at?: string
           user_id?: string | null
