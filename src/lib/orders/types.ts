@@ -187,6 +187,9 @@ export interface OrderRecord {
   charges_gms?: Charges | null;
   amount_in_words: string | null;
   notes: string | null;
+  /** Optional free-form note shown on the PDF inside the Terms & Conditions
+   *  block (separate from the internal-only `notes` field). */
+  tc_note?: string | null;
   created_at: string;
   updated_at: string;
   /** Family root — same value across every revision of an OA. */
