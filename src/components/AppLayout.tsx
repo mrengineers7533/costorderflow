@@ -1,6 +1,9 @@
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import type { User } from "@supabase/supabase-js";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { useLocation } from "react-router-dom";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
@@ -10,7 +13,7 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/pi": { title: "Proforma Invoices", desc: "Manage PIs and revisions." },
 };
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, user }: { children: React.ReactNode; user: User }) {
   const location = useLocation();
   const meta =
     PAGE_META[location.pathname] ||
@@ -35,6 +38,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
             <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
+              <span className="hidden md:inline text-xs text-muted-foreground max-w-[180px] truncate">{user.email}</span>
+              <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
