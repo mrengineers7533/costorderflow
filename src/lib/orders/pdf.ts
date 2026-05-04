@@ -309,13 +309,14 @@ export async function generateOrderPDF(
   {
     const terms = opts?.terms ?? DEFAULT_MR_TERMS;
     const bank = opts?.bank ?? DEFAULT_MR_BANK;
+    const tcNote = (opts?.tcNote || (order as unknown as { tc_note?: string }).tc_note || "").trim();
     const tableW = W - M * 2;
 
     // Terms & Conditions row
     autoTable(doc, {
       startY: y,
       body: [[{
-        content: `TERMS & CONDITIONS\n${terms}`,
+        content: `TERMS & CONDITIONS\n${terms}${tcNote ? `\n\nNote: ${tcNote}` : ""}`,
         styles: { fontStyle: "normal", fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
       }]],
       theme: "plain",
