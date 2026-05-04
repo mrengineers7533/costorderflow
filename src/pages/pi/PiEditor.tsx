@@ -114,10 +114,10 @@ export default function PiEditor() {
         totals: {
           basic_total: totals!.basic_total,
           subtotal: totals!.subtotal,
-          grand_total: totals!.grand_total_pi,
-          net_payable: totals!.net_payable_pi,
+          grand_total: effectiveGrand,
+          net_payable: effectiveNet,
         },
-        amount_in_words: amountInWords(totals!.net_payable_pi),
+        amount_in_words: amountInWords(effectiveNet),
       }, { terms, gmsTerms });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
