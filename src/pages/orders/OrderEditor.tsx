@@ -1240,6 +1240,15 @@ export default function OrderEditor() {
                 <div className="mt-2 flex justify-end">
                   <Button size="sm" variant="ghost" onClick={() => setTerms(DEFAULT_MR_TERMS)}>Reset to default</Button>
                 </div>
+                <div className="mt-3">
+                  <Label>Additional Note (optional)</Label>
+                  <Textarea
+                    value={tcNote}
+                    onChange={(e) => setTcNote(e.target.value)}
+                    rows={3}
+                    placeholder="Any extra note to print under Terms & Conditions"
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -1271,6 +1280,15 @@ export default function OrderEditor() {
               <div><Label>Delivery Time</Label><Textarea rows={2} value={gmsTerms.delivery_time} onChange={(e) => setGmsTerms({ ...gmsTerms, delivery_time: e.target.value })} /></div>
               <div><Label>Payment Terms</Label><Textarea rows={2} value={gmsTerms.payment_terms} onChange={(e) => setGmsTerms({ ...gmsTerms, payment_terms: e.target.value })} /></div>
               <div><Label>General Conditions</Label><Textarea rows={2} value={gmsTerms.general_conditions} onChange={(e) => setGmsTerms({ ...gmsTerms, general_conditions: e.target.value })} /></div>
+              <div>
+                <Label>Additional Note (optional)</Label>
+                <Textarea
+                  rows={3}
+                  value={tcNote}
+                  onChange={(e) => setTcNote(e.target.value)}
+                  placeholder="Any extra note to print under Terms & Conditions"
+                />
+              </div>
               <div className="flex justify-end">
                 <Button size="sm" variant="ghost" onClick={() => setGmsTerms(DEFAULT_GMS_TERMS)}>Reset to default</Button>
               </div>
