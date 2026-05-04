@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import ResetPassword from "./pages/ResetPassword";
 import OrdersList from "./pages/orders/OrdersList";
 import OrderEditor from "./pages/orders/OrderEditor";
 import NewOrderChooser from "./pages/orders/NewOrderChooser";
@@ -23,24 +24,33 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthGate>
-          {(user) => <AppLayout user={user}>
-            <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/orders" element={<OrdersList />} />
-            <Route path="/orders/new" element={<NewOrderChooser />} />
-            <Route path="/orders/new/edit" element={<OrderEditor />} />
-            <Route path="/orders/:id" element={<OrderEditor />} />
-            <Route path="/boqs" element={<BoqList />} />
-            <Route path="/boqs/new" element={<BoqEditor />} />
-            <Route path="/boqs/:id" element={<BoqEditor />} />
-            <Route path="/pi" element={<PiList />} />
-            <Route path="/pi/:id" element={<PiEditor />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppLayout>}
-        </AuthGate>
+        <Routes>
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route
+            path="/*"
+            element={
+              <AuthGate>
+                {(user) => (
+                  <AppLayout user={user}>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/orders" element={<OrdersList />} />
+                      <Route path="/orders/new" element={<NewOrderChooser />} />
+                      <Route path="/orders/new/edit" element={<OrderEditor />} />
+                      <Route path="/orders/:id" element={<OrderEditor />} />
+                      <Route path="/boqs" element={<BoqList />} />
+                      <Route path="/boqs/new" element={<BoqEditor />} />
+                      <Route path="/boqs/:id" element={<BoqEditor />} />
+                      <Route path="/pi" element={<PiList />} />
+                      <Route path="/pi/:id" element={<PiEditor />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
+                )}
+              </AuthGate>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

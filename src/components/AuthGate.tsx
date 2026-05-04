@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, User as UserIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import gmsLogo from "@/assets/gms-logo.png";
 
 const FALLBACK_DOMAINS = ["fmec.in", "gmsdelhi.com", "mrengineers.com"];
@@ -75,6 +76,33 @@ function AuthForm() {
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState<string | null>(null);
+
+  async function sendReset(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotMsg(null);
+    setForgotBusy(true);
+    try {
+      const target = forgotEmail.trim();
+      if (!target) { setForgotMsg("Please enter your email."); return; }
+      const allowed = await isDomainAllowed(target);
+      if (!allowed) {
+        setForgotMsg(`The email domain "${getDomain(target) || "—"}" is not permitted.`);
+        return;
+      }
+      const { error } = await supabase.auth.resetPasswordForEmail(target, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) { setForgotMsg(error.message); return; }
+      setForgotMsg("If an account exists for that email, a reset link has been sent. Check your inbox (and spam).");
+      toast({ title: "Reset email sent", description: "Check your inbox for the password reset link." });
+    } finally {
+      setForgotBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -231,12 +259,11 @@ function AuthForm() {
               <button
                 type="button"
                 className="text-primary font-medium hover:underline"
-                onClick={() =>
-                  toast({
-                    title: "Reset your password",
-                    description: "Please contact your IT admin (it@mrengineers.com) for a password reset link.",
-                  })
-                }
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotMsg(null);
+                  setForgotOpen(true);
+                }}
               >
                 Forgot password?
               </button>
@@ -263,6 +290,45 @@ function AuthForm() {
             {mode === "signin" ? "Sign up" : "Sign in"}
           </button>
         </p>
+
+        <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset your password</DialogTitle>
+              <DialogDescription>
+                Enter the email associated with your account. We'll send you a link to set a new password.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={sendReset} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="forgotEmail">Email Address</Label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="forgotEmail"
+                    type="email"
+                    required
+                    placeholder="you@company.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="pl-9 h-11 rounded-xl bg-muted/40"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              {forgotMsg && (
+                <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/40 p-3 text-sm text-foreground">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
+                  <span>{forgotMsg}</span>
+                </div>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={forgotBusy}>{forgotBusy ? "Sending…" : "Send reset link"}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
