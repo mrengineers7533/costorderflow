@@ -576,18 +576,34 @@ async function renderGmsPdf(
   } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
     const m = calcExMurthal(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Murthal)", value: m.base_amount });
-    if (c.pf_amount > 0 || c.pf_percent > 0) {
-      totalsRows.push({ label: `P&F${c.pf_percent ? ` @${c.pf_percent}%` : ""}`, value: m.pf });
-    }
-    if (c.freight_enabled) totalsRows.push({ label: "Freight", value: m.freight });
-    totalsRows.push({ label: "Total Amount / Landed Price", value: m.total_amount, bold: true });
     if (c.sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: m.sea_freight });
-    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
     if (c.custom_enabled) totalsRows.push({ label: "Custom Duty", value: m.custom });
     if (c.clearing_enabled) totalsRows.push({ label: "Clearing Charge / CHA & Port", value: m.clearing });
+    totalsRows.push({ label: "Landed Price", value: m.total_amount, bold: true });
+    if (c.murthal_landed_discount_enabled && m.landed_discount_amount > 0) {
+      const lbl = (c.murthal_landed_discount_mode || "percent") === "percent" && c.murthal_landed_discount_percent
+        ? `Discount @ ${c.murthal_landed_discount_percent}% on Landed`
+        : "Discount on Landed";
+      totalsRows.push({ label: lbl, value: -m.landed_discount_amount });
+      totalsRows.push({ label: "Net Landed Price", value: m.net_landed, bold: true });
+    }
+    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
+    if ((c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0) {
+      totalsRows.push({ label: "P&F", value: m.pf });
+    }
+    if ((c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0) {
+      totalsRows.push({ label: "Freight", value: m.freight });
+    }
     if (c.landed_gst_enabled) totalsRows.push({ label: "GST", value: m.gst });
+    totalsRows.push({ label: "Grand Total", value: m.grand_total, bold: true });
     if (c.landed_discount_enabled && m.discount > 0) {
       totalsRows.push({ label: "One-time Discount", value: -m.discount });
+    }
+    if (c.murthal_advance_enabled && m.advance_amount > 0) {
+      const lbl = (c.murthal_advance_mode || "percent") === "percent" && c.murthal_advance_percent
+        ? `Advance Adjustment @ ${c.murthal_advance_percent}%`
+        : "Advance Adjustment";
+      totalsRows.push({ label: lbl, value: -m.advance_amount });
     }
     totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true });
   } else {
