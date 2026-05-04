@@ -45,6 +45,14 @@ export interface ExMurthalBreakdown {
   gst: number;             // 7. (base + sea + ins + custom + clearing) * gst%
   discount: number;        // 8. one-time
   net_payable: number;
+  /** Discount on Landed Price (GMS rule). 0 when disabled. */
+  landed_discount_amount: number;
+  /** Net Landed = Landed - landed_discount_amount. Equals Landed if no discount. */
+  net_landed: number;
+  /** Grand Total = Net Landed + Insurance + P&F + Freight + GST. */
+  grand_total: number;
+  /** Advance Adjustment in ₹ (% of Grand Total or flat). */
+  advance_amount: number;
 }
 
 export function calcExMurthal(
@@ -54,26 +62,126 @@ export function calcExMurthal(
   const r = (n: number) => Math.round(n * 100) / 100;
   const base = basicInInr;
   const hike = c.hike_enabled ? (c.hike_amount || 0) : 0;
-  const pf = c.pf_amount > 0 ? c.pf_amount : (base * (c.pf_percent || 0)) / 100;
-  // Freight is treated as % of Basic Total (input value = percentage)
-  const freight = c.freight_enabled ? (base * (c.freight || 0)) / 100 : 0;
-  const total = base + hike + pf + freight;
-  // Sea Freight & Insurance are % of Basic Total
-  const seaFreight = c.sea_freight_enabled ? (base * (c.sea_freight || 0)) / 100 : 0;
-  const seaInsurance = c.sea_insurance_enabled ? (base * (c.sea_insurance || 0)) / 100 : 0;
-  const customBase = base + seaFreight + seaInsurance;
-  const custom = c.custom_enabled ? (customBase * (c.custom_percent ?? 8.25)) / 100 : 0;
-  const clearing = c.clearing_enabled ? (customBase * (c.clearing_percent ?? 1.5)) / 100 : 0;
-  const gstBase = base + seaFreight + seaInsurance + custom + clearing;
+  const baseWithHike = base + hike;
+
+  // Sea Freight (₹ or %)
+  let seaFreight = 0;
+  if (c.sea_freight_enabled) {
+    const mode = c.murthal_sea_freight_mode || "percent";
+    if (mode === "amount") {
+      seaFreight = c.murthal_sea_freight_amount || 0;
+    } else {
+      // legacy `sea_freight` was already a percent of basic
+      seaFreight = (baseWithHike * (c.sea_freight || 0)) / 100;
+    }
+  }
+
+  // Custom Duty — % of (basic + sea) or % of landed
+  const customBase1 = (c.murthal_custom_base || "basic") === "landed"
+    ? baseWithHike
+    : baseWithHike + seaFreight;
+  const custom = c.custom_enabled ? (customBase1 * (c.custom_percent ?? 8.25)) / 100 : 0;
+
+  // Clearing — % of (basic + sea) or % of landed
+  const clearingBase = (c.murthal_clearing_base || "basic") === "landed"
+    ? baseWithHike
+    : baseWithHike + seaFreight;
+  const clearing = c.clearing_enabled ? (clearingBase * (c.clearing_percent ?? 1.5)) / 100 : 0;
+
+  // Landed Price = Base + Sea Freight + Custom + Clearing
+  const landed = baseWithHike + seaFreight + custom + clearing;
+
+  // Discount on Landed Price (GMS rule)
+  let landedDiscount = 0;
+  if (c.murthal_landed_discount_enabled) {
+    if ((c.murthal_landed_discount_mode || "percent") === "percent") {
+      landedDiscount = (landed * (c.murthal_landed_discount_percent || 0)) / 100;
+    } else {
+      landedDiscount = c.murthal_landed_discount_amount || 0;
+    }
+  }
+  const netLanded = Math.max(0, landed - landedDiscount);
+
+  // Insurance — on Net Landed
+  let seaInsurance = 0;
+  if (c.sea_insurance_enabled) {
+    const mode = c.murthal_insurance_mode || "percent";
+    if (mode === "amount") {
+      seaInsurance = c.murthal_insurance_amount || 0;
+    } else {
+      // legacy `sea_insurance` was a percent of basic; new behavior uses Net Landed
+      const insBase = (c.murthal_insurance_base || "basic") === "landed" ? netLanded : baseWithHike;
+      seaInsurance = (insBase * (c.sea_insurance || 0)) / 100;
+    }
+  }
+
+  // P&F — on Net Landed (or legacy basic)
+  let pf = 0;
+  if (c.murthal_pf_enabled) {
+    if ((c.murthal_pf_mode || "percent") === "percent") {
+      pf = (netLanded * (c.murthal_pf_percent ?? 1.5)) / 100;
+    } else {
+      pf = c.murthal_pf_amount || 0;
+    }
+  } else if (c.pf_amount > 0 || c.pf_percent > 0) {
+    // legacy: still read pf_amount/pf_percent against basic
+    pf = c.pf_amount > 0 ? c.pf_amount : (baseWithHike * (c.pf_percent || 0)) / 100;
+  }
+
+  // Freight — flat ₹ (new). Legacy `freight_enabled` used % of basic; honor it
+  // when the new `murthal_freight_enabled` toggle is unset.
+  let freight = 0;
+  if (c.murthal_freight_enabled) {
+    freight = c.murthal_freight || 0;
+  } else if (c.freight_enabled) {
+    freight = (baseWithHike * (c.freight || 0)) / 100;
+  }
+
+  // GST on (Net Landed + Insurance + P&F + Freight)
+  const gstBase = netLanded + seaInsurance + pf + freight;
   const gst = c.landed_gst_enabled ? (gstBase * (c.landed_gst_percent ?? 18)) / 100 : 0;
-  // One-time Discount is % of Grand Total (after GST)
-  const grandBeforeDiscount = total + seaFreight + seaInsurance + custom + clearing + gst;
-  const discount = c.landed_discount_enabled ? (grandBeforeDiscount * (c.landed_discount || 0)) / 100 : 0;
-  const net = total + seaFreight + seaInsurance + custom + clearing + gst - discount;
+
+  // Grand Total = Net Landed + Insurance + P&F + Freight + GST
+  const grand = netLanded + seaInsurance + pf + freight + gst;
+
+  // One-time Discount (after GST) — ₹ or % of Grand Total
+  let discount = 0;
+  if (c.landed_discount_enabled) {
+    if ((c.murthal_one_time_discount_mode || "percent") === "percent") {
+      discount = (grand * (c.landed_discount || 0)) / 100;
+    } else {
+      discount = c.murthal_one_time_discount_amount || 0;
+    }
+  }
+
+  // Advance Adjustment
+  let advance = 0;
+  if (c.murthal_advance_enabled) {
+    if ((c.murthal_advance_mode || "percent") === "percent") {
+      advance = ((grand - discount) * (c.murthal_advance_percent || 0)) / 100;
+    } else {
+      advance = c.murthal_advance_amount || 0;
+    }
+  }
+
+  const net = grand - discount - advance;
+
   return {
-    base_amount: r(base), hike: r(hike), pf: r(pf), freight: r(freight),
-    total_amount: r(total), sea_freight: r(seaFreight), sea_insurance: r(seaInsurance),
-    custom: r(custom), clearing: r(clearing), gst: r(gst), discount: r(discount),
+    base_amount: r(base),
+    hike: r(hike),
+    pf: r(pf),
+    freight: r(freight),
+    total_amount: r(landed),
+    sea_freight: r(seaFreight),
+    sea_insurance: r(seaInsurance),
+    custom: r(custom),
+    clearing: r(clearing),
+    gst: r(gst),
+    discount: r(discount),
+    landed_discount_amount: r(landedDiscount),
+    net_landed: r(netLanded),
+    grand_total: r(grand),
+    advance_amount: r(advance),
     net_payable: r(net),
   };
 }
