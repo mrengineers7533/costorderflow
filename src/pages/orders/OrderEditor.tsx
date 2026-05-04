@@ -73,6 +73,8 @@ export default function OrderEditor() {
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  // Optional free-form note that prints under the Terms & Conditions block.
+  const [tcNote, setTcNote] = useState<string>("");
   // Editor-only filter for the Line Items table. Does NOT affect the OA
   // format / preview / PDF — those still follow the Format dropdown above.
   const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
@@ -107,6 +109,7 @@ export default function OrderEditor() {
       // the Format dropdown would pre-fill GMS with MR's values.
       setChargesGms({ ...emptyCharges, ...(o.charges_gms || {}) });
       setNotes(o.notes || "");
+      setTcNote((o as unknown as { tc_note?: string }).tc_note || "");
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
       setIsCurrent(o.is_current ?? true);
@@ -253,6 +256,7 @@ export default function OrderEditor() {
       charges: chargesMr,
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
+      tc_note: tcNote,
     };
 
     const res = isNew
@@ -279,10 +283,11 @@ export default function OrderEditor() {
         ship_to: ship, reference, cost_sheet_number: costSheetNumber,
         order_date: orderDate, prepared_by: preparedBy, line_items: subsetItems,
         charges: sideCharges, totals: subTotals, amount_in_words: subWords, notes,
+        tc_note: tcNote,
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      const doc = await generateOrderPDF(record, { terms, bank });
+      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote });
       doc.save(filename);
       return { used: "default" as const };
     };
@@ -316,6 +321,7 @@ export default function OrderEditor() {
       charges: chargesMr,
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
+      tc_note: tcNote,
       created_at: "", updated_at: "",
       parent_order_id: parentOrderId || orderId || "",
       revision, is_current: isCurrent,
