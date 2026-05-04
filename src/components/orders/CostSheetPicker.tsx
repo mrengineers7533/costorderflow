@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles } from "lucide-react";
+import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles, ExternalLink, Plus } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 export interface ExtractedCostSheet {
   company_name?: string;
@@ -29,11 +30,13 @@ interface CostSheetRow {
   created_at: string;
 }
 
-export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow) => void; onParsingChange?: (parsing: boolean) => void }) {
+export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow, forcedFormat?: "MR" | "GMS") => void; onParsingChange?: (parsing: boolean) => void }) {
   const [sheets, setSheets] = useState<CostSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Map: cost_sheet_number → { MR?: {id, oa_number}, GMS?: {id, oa_number} }
+  const [oaIndex, setOaIndex] = useState<Record<string, Partial<Record<"MR" | "GMS", { id: string; oa_number: string }>>>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -48,6 +51,36 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
     else setSheets((data as unknown as CostSheetRow[]) || []);
     setLoading(false);
   }
+
+  // Index OAs by cost_sheet_number so each sheet row can show "MR OA / GMS OA"
+  // status (Create vs View). Refreshed whenever the sheet list changes.
+  useEffect(() => {
+    const numbers = Array.from(
+      new Set(
+        sheets
+          .map((s) => s.extracted?.cost_sheet_number)
+          .filter((n): n is string => !!n && n.trim().length > 0),
+      ),
+    );
+    if (numbers.length === 0) { setOaIndex({}); return; }
+    (async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, oa_number, format, cost_sheet_number")
+        .in("cost_sheet_number", numbers);
+      const idx: Record<string, Partial<Record<"MR" | "GMS", { id: string; oa_number: string }>>> = {};
+      for (const r of (data || []) as Array<{ id: string; oa_number: string; format: "MR" | "GMS"; cost_sheet_number: string | null }>) {
+        if (!r.cost_sheet_number) continue;
+        const slot = idx[r.cost_sheet_number] || {};
+        // Prefer the most recent — keep the first one we see (orders aren't sorted, but
+        // either record links the same OA family for the user's purposes).
+        if (!slot[r.format]) slot[r.format] = { id: r.id, oa_number: r.oa_number };
+        idx[r.cost_sheet_number] = slot;
+      }
+      setOaIndex(idx);
+    })();
+  }, [sheets]);
+
   useEffect(() => {
     refresh();
     // Realtime: live updates as edge function progresses
@@ -124,6 +157,19 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
     toast({ title: "Applied", description: sheet.original_filename });
   }
 
+  // Triggers `onApply` after stamping the chosen format onto the extracted
+  // payload. The OA chooser page reads this to decide which company's OA to
+  // pre-fill. Other consumers ignore the format and behave as before.
+  function applySheetFor(sheet: CostSheetRow, format: "MR" | "GMS") {
+    if (sheet.status !== "parsed") return parseSheet(sheet.id);
+    onApply(sheet.extracted, sheet, format);
+  }
+
+  function oaSlot(sheet: CostSheetRow, format: "MR" | "GMS") {
+    const num = sheet.extracted?.cost_sheet_number || "";
+    return num ? oaIndex[num]?.[format] : undefined;
+  }
+
   async function deleteSheet(sheet: CostSheetRow) {
     if (!confirm(`Delete ${sheet.original_filename}?`)) return;
     await supabase.storage.from("cost-sheets").remove([sheet.file_path]);
@@ -196,6 +242,24 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
                    </Button>
                    <Button size="icon" variant="ghost" disabled={isParsing} onClick={() => deleteSheet(s)}><Trash2 className="h-4 w-4" /></Button>
                  </div>
+                {s.status === "parsed" && (
+                  <div className="pl-7 pr-2 flex flex-wrap gap-2">
+                    {(["MR", "GMS"] as const).map((f) => {
+                      const existing = oaSlot(s, f);
+                      return existing ? (
+                        <Button key={f} asChild size="sm" variant="secondary" className="h-7 text-xs">
+                          <Link to={`/orders/${existing.id}`} title={existing.oa_number}>
+                            <ExternalLink className="h-3 w-3 mr-1" />View {f} OA · <span className="font-mono ml-1 truncate max-w-[160px]">{existing.oa_number}</span>
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button key={f} size="sm" variant="outline" className="h-7 text-xs" onClick={() => applySheetFor(s, f)}>
+                          <Plus className="h-3 w-3 mr-1" />Create {f} OA
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
                  {isParsing && (
                    <div className="pl-7 pr-2 space-y-1">
                      <Progress value={progress?.percent ?? 5} className="h-1.5" />

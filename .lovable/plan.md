@@ -1,105 +1,77 @@
 ## Goal
 
-The sidebar already links to `/admin`, but no admin pages or routes exist yet. Build a working Admin Panel that an admin (currently `it@mrengineers.com`) can use to:
+A single uploaded cost sheet stays available forever and can produce two completely independent document trees: one for **MR** and one for **GMS**. Finalizing on one side never blocks, hides or overwrites the other.
 
-- See all registered users with **full name**, **email**, **domain** (derived from email), **role**, **status**, and **created date**
-- **Edit** a user (full name, role, active/inactive)
-- **Reset a user's password** (admin sets a new password directly, or sends a reset email)
-- See allowed **domain details** (list of allowed sign-in domains + per-domain user counts)
+## What's already in place (no change needed)
 
-Only `it@mrengineers.com` (admin role) can access — `RequireAdmin` is already implemented.
+- `cost_sheets` table is a standalone, user-owned, persistent list. Uploading does not "consume" the sheet — it stays in the picker after Apply.
+- `CostSheetPicker` lists every uploaded sheet with realtime status; the `Apply` button can be pressed any number of times.
+- BOQs and PIs are already separate rows keyed off an OA (`order_id` / `reference_oa_id`), so two OAs from the same sheet automatically yield independent BOQ/PI families.
 
-## 1. Routes & shell
+## What's broken vs the requirement
 
-Edit `src/App.tsx` — add admin routes inside the existing `AuthGate` block, wrapped by `RequireAdmin`:
+Today the OA editor treats a cost sheet that contains **both** MR and GMS items as a single OA row with internal "split mode" — one DB record, two PDFs via a dropdown. The user wants **two distinct OA records** (separate `oa_number`, separate finalize state, separate revisions, separate BOQ/PI children) generated from the same sheet.
 
-```
-/admin                → AdminDashboard      (overview cards)
-/admin/users          → AdminUsers          (list + edit + reset password)
-/admin/domains        → AdminDomains        (allowed_domains CRUD + counts)
-```
+Also, after finalizing the MR OA there is no obvious "now make the GMS OA from the same sheet" entry point — the user has to navigate back to Orders → New → find the sheet → Apply again.
 
-Use a simple sub-nav at the top of each admin page (tabs: Dashboard · Users · Domains) — no separate AdminLayout/Sidebar needed since the main `AppSidebar` already has the "Admin" entry. This keeps scope tight.
+## Plan
 
-Create `src/components/admin/AdminTabs.tsx` — small header with title + 3 NavLink tabs.
+### 1. Add a "Format chooser" step after Apply (chooser page)
 
-## 2. New pages (`src/pages/admin/`)
+Update `src/pages/orders/NewOrderChooser.tsx`:
 
-### `AdminDashboard.tsx`
-Stat cards (real counts via Supabase):
-- Total users → `count from profiles`
-- Active users → `count from profiles where is_active = true`
-- Allowed domains → `count from allowed_domains`
-- Admins → `count from user_roles where role = 'admin'`
+- When `CostSheetPicker.onApply` fires, do **not** auto-navigate. Instead show a small inline panel:
+  - "This cost sheet contains: 4 MR items, 2 GMS items" (computed from extracted `line_items[].make` via `inferItemMake`).
+  - Two buttons: **Create MR OA** and **Create GMS OA**, both enabled regardless of detected mix (user can override).
+  - A note: "You can come back to this cost sheet anytime to create the other format."
+- Each button navigates to `/orders/new/edit` with router state `{ extracted, forcedFormat: "MR" | "GMS" }`.
 
-### `AdminUsers.tsx`
-Fetches:
-- `profiles` (id, full_name, email, is_active, created_at)
-- `user_roles` (user_id, role)
+### 2. Honor `forcedFormat` in the OA editor
 
-Joins client-side. Renders a table:
+In `src/pages/orders/OrderEditor.tsx` `applyCostSheet` + initial-state effect:
 
-| Full name | Email | Domain | Role | Status | Created | Actions |
+- Read `forcedFormat` from `location.state`. When present:
+  - Set `format` to that value and `setAutoFormat(false)`.
+  - **Filter** `data.line_items` to only items whose `make` matches `forcedFormat` (using the same `inferItemMake` rule already in the file). Items tagged `OTHER` go into MR by default but can be edited.
+  - Apply `data.charges` only into the matching slot (`chargesMr` or `chargesGms`). The other slot stays at `emptyCharges`.
+- Result: the saved `orders` row is single-format, with a clean `oa_number` from the matching counter (`next_oa_number('MR'|'GMS', fy)`), and downstream BOQ/PI inherit that format. No split-mode UI for this OA.
+- Legacy split-mode behaviour stays intact when `forcedFormat` is absent (e.g. opening an old OA that already has both makes), so existing OAs keep working unchanged.
 
-- **Search box** filters by name/email.
-- **Domain filter** dropdown populated from `allowed_domains`.
-- **Edit** button opens a Dialog with: full_name input, role select (admin/user), is_active switch. Save updates `profiles` + upserts/deletes `user_roles`.
-- **Reset password** button opens a small dialog with two options:
-  - "Set new password" → calls edge function `admin-reset-password` with `{ user_id, new_password }`
-  - "Send reset email" → calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: <origin>/reset-password })` directly (works client-side, no edge function needed)
+### 3. Make the cost sheet picker show "what's already been generated"
 
-### `AdminDomains.tsx`
-- Lists `allowed_domains` with a **user count** per domain (computed client-side from profiles).
-- Add domain (input + button) → insert into `allowed_domains`.
-- Remove button per row, disabled when `is_protected = true` (mrengineers.com) with tooltip.
+In `src/components/orders/CostSheetPicker.tsx`:
 
-## 3. Edge function: `admin-reset-password`
+- After loading sheets, run a second query: `orders.select('id, oa_number, format, cost_sheet_number, status').in('cost_sheet_number', [...])` matched on the sheet's `extracted.cost_sheet_number` (fallback: `extracted.reference`).
+- For each sheet row, render two small badges next to the Apply button:
+  - **MR OA** — either `Create MR OA` (link to chooser-with-forcedFormat) or `View MR OA · MROA/…` (link to `/orders/<id>`).
+  - **GMS OA** — same pattern.
+- This makes the dual-format workflow obvious without changing the upload/parse flow.
 
-`supabase/functions/admin-reset-password/index.ts`
+### 4. No DB schema changes
 
-- Validates the caller's JWT and confirms `has_role(user_id, 'admin')` via a service-role query.
-- Body: `{ user_id: string, new_password: string }` (zod-validated, password min 8 chars).
-- Calls `supabase.auth.admin.updateUserById(user_id, { password: new_password })` using `SUPABASE_SERVICE_ROLE_KEY`.
-- Returns `{ ok: true }` or 4xx with error.
-- CORS headers on every response. `verify_jwt = false` (we validate the JWT manually so we can read it and call admin APIs).
+`orders.cost_sheet_number` already exists and is persisted — that's how we link sheet ↔ OA. No migration required. Existing rows keep working. Backward compatible.
 
-Secrets needed: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — both already configured.
+### 5. BOQ / PI flows — verify only
 
-## 4. Database
+- `BoqEditor` already pre-fills from the parent OA and inherits its `format` (line 82 of `BoqEditor.tsx`). Two OAs → two BOQ trees automatically.
+- `proforma_invoices` is keyed by `reference_oa_id` / `format`. Same guarantee.
+- No code changes needed; only confirm in QA after step 1–3 ship.
 
-No schema changes required. All needed tables already exist:
-- `profiles` (full_name, email, is_active) ✓
-- `user_roles` (role) ✓
-- `allowed_domains` ✓
+### 6. Copy / UX
 
-RLS policies already allow admins to SELECT/UPDATE `profiles` and manage `user_roles` and `allowed_domains`. Confirmed in current schema.
+- Chooser headline updated: "Choose which company this OA is for. The cost sheet stays available so you can create the other one later."
+- Toast after finalize: "MR OA finalized. The cost sheet is still available to create a GMS OA from the Cost Sheets list."
 
-## 5. UX details
+## Files to edit
 
-- Domain column is computed: `email.split('@')[1]`.
-- Domains not in `allowed_domains` get a subtle amber "external" badge.
-- Role change to/from admin uses an upsert into `user_roles` (delete the old row, insert the new) inside a single Promise.all.
-- Password reset shows a confirmation toast and auto-closes the dialog.
-- All admin actions show toast feedback (success/error) using existing `sonner`.
-- "Send reset email" sends via Supabase auth — note to user: works with default email templates unless custom auth email templates are scaffolded.
+- `src/pages/orders/NewOrderChooser.tsx` — add format-choice step.
+- `src/pages/orders/OrderEditor.tsx` — read `forcedFormat`, filter items + charges accordingly.
+- `src/components/orders/CostSheetPicker.tsx` — show "MR OA / GMS OA" status badges per sheet.
 
-## 6. Files
+No new files, no migrations, no edge-function changes.
 
-**Create:**
-- `src/components/admin/AdminTabs.tsx`
-- `src/pages/admin/AdminDashboard.tsx`
-- `src/pages/admin/AdminUsers.tsx`
-- `src/pages/admin/AdminDomains.tsx`
-- `supabase/functions/admin-reset-password/index.ts`
+## Out of scope
 
-**Edit:**
-- `src/App.tsx` — add 3 admin routes wrapped in `RequireAdmin`.
-
-## 7. Acceptance
-
-- `it@mrengineers.com` visits `/admin` → sees stat cards.
-- `/admin/users` lists every signed-up user with name, email, domain, role, active state.
-- Admin can open Edit dialog, change name/role/status, save → table updates.
-- Admin can reset any user's password (set new directly or send email).
-- `/admin/domains` lists allowed domains with user counts; mrengineers.com cannot be deleted.
-- Non-admin visiting any `/admin/*` route is redirected to `/`.
+- Changing how AI extraction tags items (`inferItemMake` stays as-is).
+- Multi-tenant / cross-user sharing of cost sheets.
+- Removing the legacy single-OA split-mode (kept for backward compat with already-saved mixed OAs).

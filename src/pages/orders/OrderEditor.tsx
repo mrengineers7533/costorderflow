@@ -138,9 +138,16 @@ export default function OrderEditor() {
   // Pre-fill from extracted cost sheet passed via router state (from chooser page).
   useEffect(() => {
     if (!isNew) return;
-    const extracted = (location.state as { extracted?: ExtractedCostSheet } | null)?.extracted;
+    const state = location.state as { extracted?: ExtractedCostSheet; forcedFormat?: OrderFormat } | null;
+    const extracted = state?.extracted;
     if (!extracted) return;
-    applyCostSheet(extracted);
+    if (state?.forcedFormat) {
+      setFormat(state.forcedFormat);
+      setAutoFormat(false);
+      applyCostSheet(extracted, state.forcedFormat);
+    } else {
+      applyCostSheet(extracted);
+    }
     // Clear router state so refresh / back doesn't re-apply.
     navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -389,7 +396,7 @@ export default function OrderEditor() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
-  function applyCostSheet(data: ExtractedCostSheet) {
+  function applyCostSheet(data: ExtractedCostSheet, forcedFormat?: OrderFormat) {
     if (data.company_name) setCompanyName(data.company_name);
     if (data.bill_to) setBillTo({ ...emptyAddress, ...billTo, ...data.bill_to });
     if (data.ship_to && (data.ship_to.name || data.ship_to.address)) {
@@ -399,8 +406,7 @@ export default function OrderEditor() {
     if (data.cost_sheet_number) setCostSheetNumber(data.cost_sheet_number);
     if (data.reference) setReference(data.reference);
     if (data.line_items?.length) {
-      setItems(
-        data.line_items.map((it) => {
+      const mapped = data.line_items.map((it) => {
           const base = {
             description: it.description || "",
             hsn_code: it.hsn_code || "",
@@ -415,11 +421,23 @@ export default function OrderEditor() {
             amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
             make,
           };
-        })
-      );
+        });
+      // When the user picked a specific company on the chooser page, only keep
+      // items that belong to that company. "OTHER" follows MR by default so
+      // unclassified rows aren't silently dropped.
+      const filtered = forcedFormat
+        ? mapped.filter((it) => {
+            if (it.make === forcedFormat) return true;
+            if (forcedFormat === "MR" && it.make === "OTHER") return true;
+            return false;
+          }).map((it) => ({ ...it, make: forcedFormat }))
+        : mapped;
+      setItems(filtered.length ? filtered : [newItem()]);
     }
     if (data.charges) {
-      setCharges((c) => ({
+      // Apply extracted charges only into the slot for the chosen format.
+      // The other slot stays at emptyCharges so the two OAs are independent.
+      const apply = (c: Charges): Charges => ({
         ...c,
         pf_percent: data.charges?.pf_percent ?? c.pf_percent,
         pf_amount: data.charges?.pf_amount ?? c.pf_amount,
@@ -428,7 +446,10 @@ export default function OrderEditor() {
         freight_enabled: (data.charges?.freight ?? 0) > 0 ? true : c.freight_enabled,
         gst_percent: data.charges?.gst_percent ?? c.gst_percent,
         discount: data.charges?.discount ?? c.discount,
-      }));
+      });
+      if (forcedFormat === "GMS") setChargesGms((c) => apply(c));
+      else if (forcedFormat === "MR") setChargesMr((c) => apply(c));
+      else setCharges((c) => apply(c));
     }
     if (data.notes) setNotes(data.notes);
   }
@@ -558,7 +579,7 @@ export default function OrderEditor() {
         <div className="space-y-4">
           <div className="space-y-4 min-w-0">
             {isNew && location.pathname !== "/orders/new/edit" && (
-              <CostSheetPicker onApply={applyCostSheet} onParsingChange={setParsing} />
+              <CostSheetPicker onApply={(data) => applyCostSheet(data)} onParsingChange={setParsing} />
             )}
 
         <Card>
