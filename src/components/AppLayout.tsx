@@ -2,12 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { Link, useLocation } from "react-router-dom";
-import { useUserRole } from "@/hooks/useUserRole";
-import { useProfileName } from "@/hooks/useProfileName";
-import { ShieldCheck } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
   "/": { title: "Dashboard", desc: "Overview across Order Acceptances, BOQs, and Proforma Invoices." },
@@ -18,8 +13,6 @@ const PAGE_META: Record<string, { title: string; desc?: string }> = {
 
 export function AppLayout({ children, user }: { children: React.ReactNode; user: User }) {
   const location = useLocation();
-  const { isAdmin } = useUserRole(user.id);
-  const displayName = useProfileName(user);
   const meta =
     PAGE_META[location.pathname] ||
     (location.pathname.startsWith("/orders") ? { title: "Order Acceptances" } :
@@ -30,7 +23,7 @@ export function AppLayout({ children, user }: { children: React.ReactNode; user:
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
+        <AppSidebar user={user} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="min-h-14 flex items-center gap-3 border-b bg-background sticky top-0 z-40 px-4 py-2">
             {meta.title && (
@@ -43,18 +36,6 @@ export function AppLayout({ children, user }: { children: React.ReactNode; user:
             )}
             <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
-              {isAdmin && (
-                <Button asChild variant="outline" size="sm" className="gap-1.5">
-                  <Link to="/admin"><ShieldCheck className="h-4 w-4" />Admin</Link>
-                </Button>
-              )}
-              <div className="hidden md:flex flex-col items-end leading-tight max-w-[200px]">
-                <span className="text-xs font-medium truncate">{displayName}</span>
-                {displayName !== user.email && (
-                  <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
-                )}
-              </div>
-              <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
