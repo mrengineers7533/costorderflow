@@ -13,6 +13,7 @@ import BoqEditor from "./pages/boqs/BoqEditor";
 import PiList from "./pages/pi/PiList";
 import PiEditor from "./pages/pi/PiEditor";
 import { AppLayout } from "./components/AppLayout";
+import { AuthGate } from "./components/AuthGate";
 
 const queryClient = new QueryClient();
 
@@ -22,8 +23,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
+        <AuthGate>
+          {(user) => <AppLayout user={user}>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/new" element={<NewOrderChooser />} />
@@ -36,8 +38,9 @@ const App = () => (
             <Route path="/pi/:id" element={<PiEditor />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AppLayout>
+            </Routes>
+          </AppLayout>}
+        </AuthGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
