@@ -432,18 +432,23 @@ export type Database = {
       proforma_invoices: {
         Row: {
           advance_adjustment_percent: number
+          advance_amount: number
+          advance_mode: string
           amount_in_words: string | null
+          apply_discount: boolean
           base_pi_number: string
           bill_to: Json
           charges: Json
           company_name: string | null
           created_at: string
+          discount_label: string | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
           line_items: Json
           notes: string | null
           one_time_discount_percent: number
+          other_charges: number
           parent_pi_id: string | null
           pi_date: string
           pi_number: string
@@ -460,18 +465,23 @@ export type Database = {
         }
         Insert: {
           advance_adjustment_percent?: number
+          advance_amount?: number
+          advance_mode?: string
           amount_in_words?: string | null
+          apply_discount?: boolean
           base_pi_number: string
           bill_to?: Json
           charges?: Json
           company_name?: string | null
           created_at?: string
+          discount_label?: string | null
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
           line_items?: Json
           notes?: string | null
           one_time_discount_percent?: number
+          other_charges?: number
           parent_pi_id?: string | null
           pi_date?: string
           pi_number: string
@@ -488,18 +498,23 @@ export type Database = {
         }
         Update: {
           advance_adjustment_percent?: number
+          advance_amount?: number
+          advance_mode?: string
           amount_in_words?: string | null
+          apply_discount?: boolean
           base_pi_number?: string
           bill_to?: Json
           charges?: Json
           company_name?: string | null
           created_at?: string
+          discount_label?: string | null
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
           line_items?: Json
           notes?: string | null
           one_time_discount_percent?: number
+          other_charges?: number
           parent_pi_id?: string | null
           pi_date?: string
           pi_number?: string
