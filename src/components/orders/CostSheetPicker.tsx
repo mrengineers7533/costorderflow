@@ -30,7 +30,7 @@ interface CostSheetRow {
   created_at: string;
 }
 
-export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow) => void; onParsingChange?: (parsing: boolean) => void }) {
+export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: ExtractedCostSheet, sheet: CostSheetRow, forcedFormat?: "MR" | "GMS") => void; onParsingChange?: (parsing: boolean) => void }) {
   const [sheets, setSheets] = useState<CostSheetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -160,9 +160,9 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
   // Triggers `onApply` after stamping the chosen format onto the extracted
   // payload. The OA chooser page reads this to decide which company's OA to
   // pre-fill. Other consumers ignore the format and behave as before.
-  function applySheetFor(sheet: CostSheetRow, _format: "MR" | "GMS") {
+  function applySheetFor(sheet: CostSheetRow, format: "MR" | "GMS") {
     if (sheet.status !== "parsed") return parseSheet(sheet.id);
-    onApply(sheet.extracted, sheet);
+    onApply(sheet.extracted, sheet, format);
   }
 
   function oaSlot(sheet: CostSheetRow, format: "MR" | "GMS") {
