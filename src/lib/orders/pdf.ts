@@ -552,8 +552,8 @@ async function renderGmsPdf(
     it.hsn_code || "",
     String(it.quantity),
     it.unit || "Nos",
-    fmt(it.unit_rate),
-    fmt(it.amount),
+    fmtTotal(it.unit_rate),
+    fmtTotal(it.amount),
   ]);
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
@@ -671,7 +671,7 @@ async function renderGmsPdf(
     startY: y,
     head: [[
       "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "HSN CODE",
-      "QTY", "UNIT", "UNIT PRICE\n(INR)", "AMOUNT\n(INR)",
+      "QTY", "UNIT", `UNIT PRICE\n(${turkeyDisplayUSD ? turkeyCurLabel : "INR"})`, `AMOUNT\n(${turkeyDisplayUSD ? turkeyCurLabel : "INR"})`,
     ]],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
