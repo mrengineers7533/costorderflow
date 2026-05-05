@@ -481,12 +481,19 @@ function ExTurkeyBlock({
   isFX: boolean;
   basicFX: number;
 }) {
+  // Phase 1: when user picks display_currency="USD" on a GMS Turkey OA/PI
+  // and a cost-sheet $ rate is set, render the totals block in USD by
+  // dividing each INR value by the rate. The math itself stays INR-based.
+  const displayUSD = c.display_currency === "USD" && (fxRate || 0) > 0;
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const usd = (n: number) =>
+    `${fxSymbol || "$"} ${((n || 0) / (fxRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
       <div className={`px-2 py-1.5 ${bold ? "font-bold" : ""}`}>{k}</div>
-      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
+      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{fmtAmt(v)}</div>
     </div>
   );
   const insLbl = c.turkey_insurance_enabled
@@ -513,10 +520,15 @@ function ExTurkeyBlock({
     : "Discount on Landed";
   return (
     <div className="border rounded overflow-hidden text-xs">
+      {displayUSD && (
+        <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
+          Showing totals in {c.currency || "USD"} ({fxSymbol || "$"}) — converted from INR @ ₹{fxRate} (cost-sheet rate). Underlying calculation is in INR.
+        </div>
+      )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
           <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
-          <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(t.base_amount)}</div>
+          <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{fmtAmt(t.base_amount)}</div>
         </div>
       )}
       <Row k="Base Amount (EXW Turkey)" v={t.base_amount} />

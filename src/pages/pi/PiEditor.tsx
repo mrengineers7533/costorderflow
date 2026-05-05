@@ -530,6 +530,37 @@ export default function PiEditor() {
                   {pi.charges.gms_mode === "EXW_TURKEY" && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <Label className="text-xs">Cost Sheet $ Rate (₹)</Label>
+                        <Input
+                          type="number" step="any" className="h-8 w-28"
+                          value={pi.charges.fx_rate || 0}
+                          onChange={(e) => update("charges", { ...pi.charges, fx_rate: +e.target.value || 0, currency: pi.charges.currency || "USD" })}
+                        />
+                        {(pi.charges.fx_rate || 0) > 0 && (
+                          <>
+                            <Label className="text-xs ml-2">Display PI in</Label>
+                            <div className="inline-flex rounded-md border bg-background p-0.5">
+                              {(["INR", "USD"] as const).map((cur) => {
+                                const active = (pi.charges.display_currency || "INR") === cur;
+                                return (
+                                  <button
+                                    key={cur}
+                                    type="button"
+                                    onClick={() => update("charges", { ...pi.charges, display_currency: cur })}
+                                    className={`px-2.5 py-0.5 text-xs font-semibold rounded-sm transition-colors ${
+                                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    aria-pressed={active}
+                                  >
+                                    {cur === "INR" ? "₹ INR" : (pi.charges.currency || "USD")}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
                       <PiModeToggleRow
                         label="Sea Freight"
                         enabled={!!pi.charges.turkey_sea_freight_enabled}

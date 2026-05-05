@@ -534,6 +534,16 @@ async function renderGmsPdf(
   const t = order.totals;
   const fmt = (n: number) =>
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Phase 1: GMS Turkey USD/INR display toggle for the totals block.
+  const turkeyDisplayUSD =
+    c.gms_mode === "EXW_TURKEY" &&
+    c.display_currency === "USD" &&
+    (c.fx_rate || 0) > 0;
+  const turkeyFxRate = c.fx_rate || 1;
+  const turkeyCurLabel = c.currency || "USD";
+  const fmtUSD = (n: number) =>
+    (n / turkeyFxRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtTotal = (n: number) => (turkeyDisplayUSD ? fmtUSD(n) : fmt(n));
 
   const itemRows = order.line_items.map((it, i) => [
     String(i + 1),
@@ -637,13 +647,25 @@ async function renderGmsPdf(
       styles: { halign: "right" as const, fontStyle: "bold" as const },
     },
     {
-      content: fmt(r.value),
+      content: fmtTotal(r.value),
       styles: {
         halign: "right" as const,
         fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal",
       },
     },
   ]);
+
+  // When Turkey + USD display, prepend a banner row noting the conversion
+  // (PDF column header still says "AMOUNT (INR)" for the item rows).
+  if (turkeyDisplayUSD) {
+    totalsAsBody.unshift([
+      {
+        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${turkeyFxRate}`,
+        colSpan: 8,
+        styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
+      },
+    ] as never);
+  }
 
   autoTable(doc, {
     startY: y,

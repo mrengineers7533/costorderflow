@@ -164,6 +164,13 @@ export interface Charges {
   mr_advance_mode?: "amount" | "percent"; // default "percent"
   mr_advance_percent?: number;            // % of Grand Total
   mr_advance_amount?: number;             // flat ₹
+
+  /** Phase 1 — GMS Turkey USD/INR display toggle.
+   *  When set to "USD" and `fx_rate` (cost-sheet $ rate) > 0, the EXW Turkey
+   *  totals block in the live preview and PDF is rendered in USD by dividing
+   *  each INR value by `fx_rate`. The underlying calculations stay in INR so
+   *  no existing math is disturbed — this is a presentation-only switch. */
+  display_currency?: "INR" | "USD";
 }
 
 export interface Totals {
