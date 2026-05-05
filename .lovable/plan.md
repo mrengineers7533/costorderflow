@@ -1,43 +1,30 @@
-## Goal
+## Root cause
 
-Split the **Orders**, **BOQs**, and **Proforma Invoices** lists into clearly separated **MR Folder** and **GMS Folder** views (plus an "All" tab), so each company has its own folder. The underlying upload → choose format → save → reuse flow is already working end-to-end and stays unchanged.
+The error `invalid input syntax for type uuid: ""` happens in `reviseOrder()` (`src/lib/revisions/index.ts`). `OrderEditor.tsx → snapshotOrder()` builds the snapshot with `user_id: ""` (and `revised_from_id` may also be `""` on legacy rows). `reviseOrder` strips `id`/`created_at`/etc. but passes the rest straight into `supabase.from("orders").insert(...)`, where the empty string hits a `uuid` column and Postgres rejects it.
 
-## What changes
+The previous attempt didn't actually patch this — the empty `user_id` is still being sent.
 
-### 1. `src/pages/orders/OrdersList.tsx`
-- Add a Tabs control above the "All Orders" table with three tabs: **All**, **MR**, **GMS**.
-- Each tab shows a count badge (e.g. `MR · 12`, `GMS · 7`) computed from the loaded orders.
-- The table renders the rows filtered by the active tab's format. The Format column stays for clarity.
-- Persist the active tab in the URL query (`?folder=MR|GMS|all`) so deep-links and refreshes keep the view.
+## Fix
 
-### 2. `src/pages/boqs/BoqList.tsx`
-- Same Tabs control above the "All BOQs" table (All / MR / GMS) with counts.
-- Filters both the BOQ rows in the table and the OA picker dropdown so, for example, the MR tab only offers MR OAs when creating a new BOQ.
+### 1. `src/lib/revisions/index.ts` — `reviseOrder()`
 
-### 3. `src/pages/pi/PiList.tsx`
-- Same Tabs control above the "All Proforma Invoices" table (All / MR / GMS) with counts.
-- Filters both PI rows in the table and the OA list inside the "Create PI from OA" dropdown by the active tab.
+- **Sanitize the insert payload**: convert any empty-string uuid field (`user_id`, `revised_from_id`, plus a generic sweep of other `*_id` keys) to `null` before insert. This kills the crash for both fresh rows and legacy rows.
+- **Compute the revised OA number** and override it on the insert payload:
+  - Find the family's original OA number — query `orders` for the row in this family with `revision = 0` (fallback: strip a trailing `/R\d+` from `source.oa_number`).
+  - New `oa_number = ${baseNumber}/R${nextRev}` → `MROA/2026-2027/001/R1`, then `/R2`, `/R3`, … and likewise `2026-27/GMS/0007/R1`, `/R2`, …
+  - Numbering is derived purely from `nextRev` (= `max(revision) + 1` across the family, already computed), so it cannot collide and the original row is never modified.
+- The OA counter RPC (`next_oa_number`) is **not** called for revisions, so the base counter stays untouched.
 
-### 4. Visual polish
-- Use the existing shadcn `Tabs` component (already in `src/components/ui/tabs.tsx`).
-- MR tab uses the primary badge style, GMS uses secondary — matching the existing Format badges so the folders feel consistent across all three pages.
-- Empty-state copy per tab (e.g. "No MR OAs yet — upload a cost sheet and choose MR").
+### 2. `src/pages/orders/OrderEditor.tsx`
 
-## What does not change
+No change to `handleReviseOa` flow. The fix is fully inside `reviseOrder`.
 
-- Database schema, RLS, edge functions: untouched.
-- Cost-sheet upload, MR/GMS chooser, OA editor save flow, OA-numbering RPC: untouched.
-- BOQ/PI creation logic: untouched — only the source OA list is pre-filtered by the active folder tab.
-- Existing routes (`/orders`, `/boqs`, `/pi`) keep working; the tab is an additive query param.
+## Out of scope (untouched)
 
-## Files to edit
+- BOQ/PI numbering and revisioning, GMS PI work, folder tabs, format chooser, save/finalize flows, RLS, schema, edge functions, `next_oa_number` / counters, `orders_keep_single_current` trigger.
 
-- `src/pages/orders/OrdersList.tsx`
-- `src/pages/boqs/BoqList.tsx`
-- `src/pages/pi/PiList.tsx`
+## Technical notes
 
-## Out of scope
-
-- Renaming sidebar entries or splitting routes into `/orders/mr` and `/orders/gms` (the tabbed view inside each page achieves the folder feel without route churn).
-- Changing how OA / BOQ / PI numbers are generated.
-- Touching the editor pages.
+- Regex used to strip an existing suffix when the `revision = 0` row can't be located: `/\/R\d+$/`. Applied only to derive the base; the base is then re-suffixed with `/R${nextRev}`.
+- Empty-string → null sweep is defensive: iterate the payload keys; for any value `=== ""` on a key ending in `_id` or equal to `user_id`, set it to `null`.
+- Original OA row is never updated — only a new row is inserted; existing trigger marks the previous current row as superseded.

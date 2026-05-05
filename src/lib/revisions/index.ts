@@ -10,8 +10,14 @@ function stripOrderForInsert(o: OrderRecord) {
     revision: _r, is_current: _ic, parent_order_id: _p, revised_from_id: _rf,
     ...rest
   } = o as OrderRecord & Record<string, unknown>;
-  // user_id can be null in this app
-  return rest as Omit<OrderRecord, "id" | "created_at" | "updated_at" | "revision" | "is_current" | "parent_order_id" | "revised_from_id">;
+  // Sanitize empty-string uuid fields to null (Postgres rejects "" for uuid).
+  const cleaned: Record<string, unknown> = { ...rest };
+  for (const k of Object.keys(cleaned)) {
+    if (cleaned[k] === "" && (k === "user_id" || k.endsWith("_id"))) {
+      cleaned[k] = null;
+    }
+  }
+  return cleaned as Omit<OrderRecord, "id" | "created_at" | "updated_at" | "revision" | "is_current" | "parent_order_id" | "revised_from_id">;
 }
 
 /** Resolve the family root (parent_order_id). Falls back to the row's own id. */
@@ -39,14 +45,26 @@ export async function reviseOrder(
   if (famErr) throw famErr;
   const nextRev = (family?.reduce((m, r) => Math.max(m, (r as { revision: number }).revision ?? 0), 0) || 0) + 1;
 
+  // Derive the revised OA number: <baseOaNumber>/R<nextRev>.
+  // Find the family's original (revision 0) row; fall back to stripping any
+  // existing /R\d+ suffix from the source's number.
+  const { data: rootRow } = await supabase
+    .from("orders").select("oa_number")
+    .eq("parent_order_id", root).eq("revision", 0).maybeSingle();
+  const baseOaNumber =
+    (rootRow as { oa_number?: string } | null)?.oa_number ||
+    (source.oa_number || "").replace(/\/R\d+$/, "");
+  const revisedOaNumber = `${baseOaNumber}/R${nextRev}`;
+
   // Insert a new OA row carrying the same content, bumped revision.
   const base = stripOrderForInsert(source);
   const insertPayload = {
     ...base,
+    oa_number: revisedOaNumber,
     parent_order_id: root,
     revision: nextRev,
     is_current: true,
-    revised_from_id: source.id,
+    revised_from_id: source.id || null,
     status: "draft" as const, // new revision starts as a draft
   };
   const { data: newOrder, error: insErr } = await supabase
