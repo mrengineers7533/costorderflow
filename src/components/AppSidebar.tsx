@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, ShieldCheck, LogOut } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, ShieldCheck, LogOut, BarChart3 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ const items = [
   { title: "Orders",    url: "/orders",     icon: FileText },
   { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
   { title: "Proforma Invoices", url: "/pi", icon: Receipt },
+  { title: "Flow Report", url: "/reports", icon: BarChart3 },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {
