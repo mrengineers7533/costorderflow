@@ -71,6 +71,13 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
+  // Phase 1: Item-level USD display when GMS Turkey + display_currency=USD + fx_rate set.
+  const displayUSDItems = isTurkey && p.charges.display_currency === "USD" && fxRate > 0;
+  const itemCurLabel = displayUSDItems ? (p.charges.currency || "USD") : "INR";
+  const itemFmt = (n: number) =>
+    displayUSDItems
+      ? ((n || 0) / fxRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
