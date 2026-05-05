@@ -13,6 +13,7 @@ import BoqList from "./pages/boqs/BoqList";
 import BoqEditor from "./pages/boqs/BoqEditor";
 import PiList from "./pages/pi/PiList";
 import PiEditor from "./pages/pi/PiEditor";
+import FlowReport from "./pages/reports/FlowReport";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -47,6 +48,7 @@ const App = () => (
                       <Route path="/boqs/:id" element={<BoqEditor />} />
                       <Route path="/pi" element={<PiList />} />
                       <Route path="/pi/:id" element={<PiEditor />} />
+                      <Route path="/reports" element={<FlowReport />} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
