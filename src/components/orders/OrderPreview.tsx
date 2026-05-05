@@ -71,8 +71,9 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
-  // Phase 1: Item-level USD display when GMS Turkey + display_currency=USD + fx_rate set.
-  const displayUSDItems = isTurkey && p.charges.display_currency === "USD" && fxRate > 0;
+  // Phase 1: Item-level USD display when GMS (Turkey or Murthal) + display_currency=USD + fx_rate set.
+  const displayUSDItems =
+    p.format === "GMS" && p.charges.display_currency === "USD" && fxRate > 0;
   const itemCurLabel = displayUSDItems ? (p.charges.currency || "USD") : "INR";
   const itemFmt = (n: number) =>
     displayUSDItems
@@ -431,16 +432,25 @@ function ExMurthalBlock({
   isFX: boolean;
   basicFX: number;
 }) {
+  const displayUSD = c.display_currency === "USD" && (fxRate || 0) > 0;
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const usd = (n: number) =>
+    `${fxSymbol || "$"} ${((n || 0) / (fxRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold, sub }: { k: string; v: number; bold?: boolean; sub?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
       <div className={`px-2 py-1.5 ${sub ? "pl-6" : ""} ${bold ? "font-bold" : ""}`}>{k}</div>
-      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{inr(v)}</div>
+      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{fmtAmt(v)}</div>
     </div>
   );
   return (
     <div className="border rounded overflow-hidden text-xs">
+      {displayUSD && (
+        <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
+          Showing totals in {c.currency || "USD"} ({fxSymbol || "$"}) — converted from INR @ ₹{fxRate} (cost-sheet rate). Underlying calculation is in INR.
+        </div>
+      )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
           <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>

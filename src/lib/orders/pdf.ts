@@ -536,7 +536,7 @@ async function renderGmsPdf(
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   // Phase 1: GMS Turkey USD/INR display toggle for the totals block.
   const turkeyDisplayUSD =
-    c.gms_mode === "EXW_TURKEY" &&
+    order.format === "GMS" &&
     c.display_currency === "USD" &&
     (c.fx_rate || 0) > 0;
   const turkeyFxRate = c.fx_rate || 1;
