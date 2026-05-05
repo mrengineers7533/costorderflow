@@ -25,6 +25,14 @@ function rootOf(o: Pick<OrderRecord, "id" | "parent_order_id">) {
   return o.parent_order_id || o.id;
 }
 
+function baseOaNumberOf(oaNumber: string) {
+  return (oaNumber || "").replace(/\/R\d+$/, "");
+}
+
+function revisionFromOaNumber(oaNumber: string) {
+  return Number(oaNumber.match(/\/R(\d+)$/)?.[1] || 0);
+}
+
 /** Clone an OA into a new revision row (revision = max+1, is_current = true).
  *  Returns the new OrderRecord. The previous current row is auto-superseded
  *  by the DB trigger.
@@ -37,23 +45,35 @@ export async function reviseOrder(
   source: OrderRecord,
   opts: { autoReviseBoq?: boolean } = { autoReviseBoq: true },
 ): Promise<{ order: OrderRecord; boq: BoqRecord | null }> {
-  const root = rootOf(source);
+  const sourceRoot = rootOf(source);
+  const sourceBaseOaNumber = baseOaNumberOf(source.oa_number);
+
+  // Find the whole revision family by OA number first. This keeps revising
+  // legacy rows safe even if parent_order_id was not populated correctly.
+  const { data: oaFamily, error: oaFamErr } = await supabase
+    .from("orders")
+    .select("id,oa_number,revision,parent_order_id")
+    .or(`oa_number.eq.${sourceBaseOaNumber},oa_number.like.${sourceBaseOaNumber}/R%`);
+  if (oaFamErr) throw oaFamErr;
+
+  const rootRow = (oaFamily || []).find((r) => revisionFromOaNumber((r as { oa_number: string }).oa_number) === 0);
+  const root = (rootRow as { id?: string } | undefined)?.id || sourceRoot;
+  const family = (oaFamily?.length ? oaFamily : [{ id: source.id, oa_number: source.oa_number, revision: source.revision ?? revisionFromOaNumber(source.oa_number), parent_order_id: source.parent_order_id }]) as Array<{ id: string; oa_number: string; revision?: number | null; parent_order_id?: string | null }>;
 
   // Find current max revision in the family.
-  const { data: family, error: famErr } = await supabase
-    .from("orders").select("id,revision").eq("parent_order_id", root);
+  const { data: linkedFamily, error: famErr } = await supabase
+    .from("orders").select("id,oa_number,revision,parent_order_id").eq("parent_order_id", root);
   if (famErr) throw famErr;
-  const nextRev = (family?.reduce((m, r) => Math.max(m, (r as { revision: number }).revision ?? 0), 0) || 0) + 1;
+
+  const allFamilyRows = [...family, ...(linkedFamily || [])];
+  const maxRevision = allFamilyRows.reduce((m, r) => {
+    const row = r as { oa_number?: string; revision?: number | null };
+    return Math.max(m, row.revision ?? 0, revisionFromOaNumber(row.oa_number || ""));
+  }, 0);
+  const nextRev = maxRevision + 1;
 
   // Derive the revised OA number: <baseOaNumber>/R<nextRev>.
-  // Find the family's original (revision 0) row; fall back to stripping any
-  // existing /R\d+ suffix from the source's number.
-  const { data: rootRow } = await supabase
-    .from("orders").select("oa_number")
-    .eq("parent_order_id", root).eq("revision", 0).maybeSingle();
-  const baseOaNumber =
-    (rootRow as { oa_number?: string } | null)?.oa_number ||
-    (source.oa_number || "").replace(/\/R\d+$/, "");
+  const baseOaNumber = (rootRow as { oa_number?: string } | undefined)?.oa_number || sourceBaseOaNumber;
   const revisedOaNumber = `${baseOaNumber}/R${nextRev}`;
 
   // Insert a new OA row carrying the same content, bumped revision.
@@ -76,7 +96,7 @@ export async function reviseOrder(
   let newBoq: BoqRecord | null = null;
   if (opts.autoReviseBoq) {
     // Find the current BOQ tied to any order in this family.
-    const familyIds = (family || []).map((r) => (r as { id: string }).id).concat(source.id);
+    const familyIds = Array.from(new Set(allFamilyRows.map((r) => (r as { id: string }).id).concat(source.id)));
     const { data: existingBoqs } = await supabase
       .from("boqs").select("*").in("order_id", familyIds);
     const currentBoq = (existingBoqs as unknown as BoqRecord[] | null)?.find((b) => b.is_current);
