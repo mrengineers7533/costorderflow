@@ -169,6 +169,19 @@ export default function PiEditor() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="rounded-lg" onClick={downloadPdf}>
+              <Download className="mr-1 h-4 w-4" />Download PDF
+            </Button>
+            {pi.status === "draft" && (
+              <>
+                <Button className="rounded-lg" disabled={saving} onClick={() => saveInPlace(false)}>
+                  <Save className="mr-1 h-4 w-4" />Save
+                </Button>
+                <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => saveInPlace(true)}>
+                  <Save className="mr-1 h-4 w-4" />Save & Finalize
+                </Button>
+              </>
+            )}
             <Button className="rounded-lg" disabled={saving} onClick={() => setConfirmRevise(true)}>
               <GitBranch className="mr-1 h-4 w-4" />Save as new revision
             </Button>
