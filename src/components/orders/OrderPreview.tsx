@@ -71,6 +71,13 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
+  // Phase 1: Item-level USD display when GMS Turkey + display_currency=USD + fx_rate set.
+  const displayUSDItems = isTurkey && p.charges.display_currency === "USD" && fxRate > 0;
+  const itemCurLabel = displayUSDItems ? (p.charges.currency || "USD") : "INR";
+  const itemFmt = (n: number) =>
+    displayUSDItems
+      ? ((n || 0) / fxRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -236,10 +243,10 @@ export function OrderPreview(p: Props) {
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
                   <th className="border border-foreground px-1.5 py-1 w-24 text-right">
-                    {isGMS ? "UNIT PRICE (INR)" : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                    {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
                   </th>
                   <th className="border border-foreground px-1.5 py-1 w-28 text-right">
-                    {isGMS ? "AMOUNT (INR)" : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                    {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
                   </th>
                 </tr>
               </thead>
@@ -260,10 +267,10 @@ export function OrderPreview(p: Props) {
                       <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {itemFmt(it.unit_rate || 0)}
                       </td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {itemFmt(it.amount || 0)}
                       </td>
                     </tr>
                   ))
