@@ -71,9 +71,12 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
-  // Phase 1: Item-level USD display when GMS (Turkey or Murthal) + display_currency=USD + fx_rate set.
+  // Item-level USD display: only for GMS EXW Turkey + display_currency=USD + fx_rate set.
   const displayUSDItems =
-    p.format === "GMS" && p.charges.display_currency === "USD" && fxRate > 0;
+    p.format === "GMS" &&
+    p.charges.gms_mode === "EXW_TURKEY" &&
+    p.charges.display_currency === "USD" &&
+    fxRate > 0;
   const itemCurLabel = displayUSDItems ? (p.charges.currency || "USD") : "INR";
   const itemFmt = (n: number) =>
     displayUSDItems
