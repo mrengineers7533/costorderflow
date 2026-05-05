@@ -141,6 +141,48 @@ export default function PiEditor() {
     }
   }
 
+  async function saveInPlace(finalize = false) {
+    if (!pi || !totals) return;
+    setSaving(true);
+    try {
+      const patch: any = {
+        pi_date: pi.pi_date,
+        prepared_by: pi.prepared_by,
+        bill_to: pi.bill_to,
+        ship_to: pi.ship_to,
+        line_items: pi.line_items,
+        charges: pi.charges,
+        notes: pi.notes,
+        one_time_discount_percent: pi.one_time_discount_percent,
+        apply_discount: pi.apply_discount,
+        discount_label: pi.discount_label,
+        advance_mode: pi.advance_mode,
+        advance_amount: pi.advance_amount,
+        advance_adjustment_percent: pi.advance_adjustment_percent,
+        other_charges: pi.other_charges,
+        totals: {
+          basic_total: totals.basic_total,
+          subtotal: totals.subtotal,
+          grand_total: effectiveGrand,
+          net_payable: effectiveNet,
+        },
+        amount_in_words: amountInWords(effectiveNet),
+      };
+      if (finalize) patch.status = "finalized";
+      const { error } = await supabase
+        .from("proforma_invoices")
+        .update(patch)
+        .eq("id", pi.id);
+      if (error) throw error;
+      if (finalize) update("status", "finalized");
+      toast({ title: finalize ? "PI finalized" : "PI saved" });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Items handlers
   function updateItem(idx: number, patch: Partial<PiRecord["line_items"][number]>) {
     if (!pi) return;
