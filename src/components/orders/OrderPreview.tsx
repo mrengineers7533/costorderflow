@@ -243,10 +243,10 @@ export function OrderPreview(p: Props) {
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
                   <th className="border border-foreground px-1.5 py-1 w-24 text-right">
-                    {isGMS ? "UNIT PRICE (INR)" : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                    {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
                   </th>
                   <th className="border border-foreground px-1.5 py-1 w-28 text-right">
-                    {isGMS ? "AMOUNT (INR)" : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                    {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
                   </th>
                 </tr>
               </thead>
@@ -267,10 +267,10 @@ export function OrderPreview(p: Props) {
                       <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {(it.unit_rate || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {itemFmt(it.unit_rate || 0)}
                       </td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {(it.amount || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {itemFmt(it.amount || 0)}
                       </td>
                     </tr>
                   ))
