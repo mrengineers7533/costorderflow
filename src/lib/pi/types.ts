@@ -45,6 +45,11 @@ export interface PiRecord {
   /** Advance amount in ₹ (used when advance_mode === "amount"). */
   advance_amount: number;
 
+  /** PI-level discount mode: "amount" (flat) or "percent" (of OA grand total). */
+  discount_mode?: "amount" | "percent";
+  /** PI-level discount value (₹ or % depending on `discount_mode`). */
+  discount_value?: number;
+
   created_at: string;
   updated_at: string;
 }
