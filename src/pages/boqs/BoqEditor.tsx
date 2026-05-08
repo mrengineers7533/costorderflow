@@ -44,12 +44,19 @@ export default function BoqEditor() {
   const [items, setItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
   const [terms, setTerms] = useState(DEFAULT_BOQ_TERMS);
   const [notes, setNotes] = useState("");
-  const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification">("approved");
+  const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  // Track the OA owner so only that user can edit Remarks.
+  const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Description is the ONLY editable field, and only after senior approval.
-  const isLocked = verificationStatus === "pending_verification";
-  const canEditDescription = !isLocked;
+  const isOaOwner = !!currentUserId && currentUserId === oaOwnerId;
+  // Remarks is the ONLY editable field, and only by the OA creator.
+  const canEditRemarks = isOaOwner;
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
+  }, []);
 
   // Load existing BOQ or initialize from order
   useEffect(() => {
@@ -75,6 +82,7 @@ export default function BoqEditor() {
           const { data: oa } = await supabase.from("orders").select("*").eq("id", b.order_id).maybeSingle();
           if (oa) {
             const o = oa as unknown as OrderRecord;
+            setOaOwnerId(o.user_id || null);
             const prevByModel = new Map<string, BoqLineItem>();
             (b.line_items || []).forEach((it) => {
               const k = (it.model_number || "").trim().toLowerCase();
@@ -87,10 +95,13 @@ export default function BoqEditor() {
                 id: prev?.id || crypto.randomUUID(),
                 item_no: String(i + 1),
                 model_number: model,
-                description: prev?.description || it.description || "",
+                // BOQ description always comes from latest OA.
+                description: it.description || "",
                 quantity: Number(it.quantity) || 0,
                 unit: it.unit || "Nos",
                 remarks: prev?.remarks || "",
+                approval_status: prev?.approval_status,
+                approval_comment: prev?.approval_comment,
               };
             });
             setReferenceOa(o.oa_number);
@@ -120,6 +131,7 @@ export default function BoqEditor() {
       }
       const o = order as unknown as OrderRecord;
       setOrderId(o.id);
+      setOaOwnerId(o.user_id || null);
       setFormat(o.format);
       setReferenceOa(o.oa_number);
       setBoqNumber(deriveBoqNumber(o.oa_number));
@@ -219,9 +231,9 @@ export default function BoqEditor() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={uploadToBoqFolder}>Save to BOQ Folder</Button>
-            {canEditDescription && (
+            {canEditRemarks && (
               <Button size="sm" disabled={saving} onClick={() => save(true)}>
-                <Save className="mr-1 h-4 w-4" />Save Description
+                <Save className="mr-1 h-4 w-4" />Save Remarks
               </Button>
             )}
           </div>
@@ -229,10 +241,10 @@ export default function BoqEditor() {
 
         {verificationStatus === "pending_verification" && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm print:hidden">
-            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Approval — BOQ Locked</div>
+            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Approval</div>
             <p className="mt-1 text-xs text-muted-foreground">
-              This BOQ revision was auto-generated from the latest OA. All fields are locked.
-              After senior approval via the verification link, only the Description column will become editable.
+              Senior is reviewing item-wise. BOQ data is mirrored from the latest OA.
+              Only the OA creator can edit Remarks.
             </p>
             {verificationToken && (
               <div className="mt-2">
@@ -252,6 +264,16 @@ export default function BoqEditor() {
           </div>
         )}
 
+        {verificationStatus === "rejected" && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm print:hidden">
+            <div className="font-medium text-destructive">Rejected — Changes Required</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Senior rejected one or more items. Update the linked OA — saving the OA again will
+              auto-refresh this BOQ and re-send it for senior approval.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-5">
           {/* ---------- Editor ---------- */}
           <div className="space-y-4 print:hidden">
@@ -264,10 +286,7 @@ export default function BoqEditor() {
                 <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
                 <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
                 <p className="md:col-span-2 text-xs text-muted-foreground">
-                  Header & items always mirror the linked OA.
-                  {isLocked
-                    ? " BOQ is locked pending senior approval."
-                    : " After approval, only the Description column is editable."}
+                  All BOQ fields mirror the linked OA. Only Remarks are editable, and only by the OA creator.
                 </p>
               </CardContent>
             </Card>
@@ -276,30 +295,36 @@ export default function BoqEditor() {
               <CardHeader>
                 <CardTitle>Items</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Synced from OA.
-                  {isLocked
-                    ? " Locked pending senior approval."
-                    : " Only Description is editable."}
+                  Synced from OA. Only Remarks editable (OA creator only). Senior approval is item-wise.
                 </p>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div>
+                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
                 </div>
                 {items.map((it) => (
-                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 items-start">
+                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
                     <Input value={it.item_no} readOnly className="h-9" />
                     <Input value={it.model_number} readOnly className="h-9" />
+                    <Textarea value={it.description} readOnly className="min-h-9" rows={1} />
+                    <Input type="number" value={it.quantity} readOnly className="h-9" />
+                    <Input value={it.unit} readOnly className="h-9" />
                     <Textarea
-                      value={it.description}
-                      onChange={(e) => updateItem(it.id, { description: e.target.value })}
-                      readOnly={!canEditDescription}
+                      value={it.remarks}
+                      onChange={(e) => updateItem(it.id, { remarks: e.target.value })}
+                      readOnly={!canEditRemarks}
                       className="min-h-9"
                       rows={1}
                     />
-                    <Input type="number" value={it.quantity} readOnly className="h-9" />
-                    <Input value={it.unit} readOnly className="h-9" />
-                    <Textarea value={it.remarks} readOnly className="min-h-9" rows={1} />
+                    <div className="text-[11px] pt-2">
+                      {it.approval_status === "approved" ? (
+                        <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
+                      ) : it.approval_status === "rejected" ? (
+                        <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 font-medium" title={it.approval_comment || ""}>Rejected</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </CardContent>
