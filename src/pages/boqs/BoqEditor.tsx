@@ -47,6 +47,10 @@ export default function BoqEditor() {
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
+  // Description is the ONLY editable field, and only after senior approval.
+  const isLocked = verificationStatus === "pending_verification";
+  const canEditDescription = !isLocked;
+
   // Load existing BOQ or initialize from order
   useEffect(() => {
     (async () => {
@@ -93,6 +97,8 @@ export default function BoqEditor() {
             setProjectNumber(o.cost_sheet_number || o.reference || b.project_number || "");
             setClientName(o.company_name || o.bill_to?.name || b.client_name || "");
             setFormat(o.format);
+            // BOQ number always mirrors the latest OA revision.
+            setBoqNumber(deriveBoqNumber(o.oa_number));
           }
         }
         setItems(nextItems.length ? nextItems : [newBoqItem(1)]);
@@ -213,17 +219,20 @@ export default function BoqEditor() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={uploadToBoqFolder}>Save to BOQ Folder</Button>
-            <Button variant="secondary" size="sm" disabled={saving} onClick={() => save(false)}><Save className="mr-1 h-4 w-4" />Save Draft</Button>
-            <Button size="sm" disabled={saving} onClick={() => save(true)}>Finalize</Button>
+            {canEditDescription && (
+              <Button size="sm" disabled={saving} onClick={() => save(true)}>
+                <Save className="mr-1 h-4 w-4" />Save Description
+              </Button>
+            )}
           </div>
         </div>
 
         {verificationStatus === "pending_verification" && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm print:hidden">
-            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Verification</div>
+            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Approval — BOQ Locked</div>
             <p className="mt-1 text-xs text-muted-foreground">
-              This BOQ revision was auto-generated from the latest OA and is awaiting senior approval.
-              It becomes the active BOQ once approved via the verification link.
+              This BOQ revision was auto-generated from the latest OA. All fields are locked.
+              After senior approval via the verification link, only the Description column will become editable.
             </p>
             {verificationToken && (
               <div className="mt-2">
@@ -250,12 +259,15 @@ export default function BoqEditor() {
               <CardHeader><CardTitle>Header</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-2 gap-3">
                 <div><Label>BOQ Number</Label><Input value={boqNumber} readOnly /></div>
-                <div><Label>Date</Label><Input type="date" value={boqDate} onChange={(e) => setBoqDate(e.target.value)} /></div>
+                <div><Label>Date</Label><Input type="date" value={boqDate} readOnly /></div>
                 <div><Label>Reference OA Number</Label><Input value={referenceOa} readOnly /></div>
                 <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
                 <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
                 <p className="md:col-span-2 text-xs text-muted-foreground">
-                  Header & items mirror the linked OA. Only Description (per item) is editable.
+                  Header & items always mirror the linked OA.
+                  {isLocked
+                    ? " BOQ is locked pending senior approval."
+                    : " After approval, only the Description column is editable."}
                 </p>
               </CardContent>
             </Card>
@@ -264,7 +276,10 @@ export default function BoqEditor() {
               <CardHeader>
                 <CardTitle>Items</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Synced from OA. Only Description is editable.
+                  Synced from OA.
+                  {isLocked
+                    ? " Locked pending senior approval."
+                    : " Only Description is editable."}
                 </p>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -275,10 +290,16 @@ export default function BoqEditor() {
                   <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 items-start">
                     <Input value={it.item_no} readOnly className="h-9" />
                     <Input value={it.model_number} readOnly className="h-9" />
-                    <Textarea value={it.description} onChange={(e) => updateItem(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
+                    <Textarea
+                      value={it.description}
+                      onChange={(e) => updateItem(it.id, { description: e.target.value })}
+                      readOnly={!canEditDescription}
+                      className="min-h-9"
+                      rows={1}
+                    />
                     <Input type="number" value={it.quantity} readOnly className="h-9" />
                     <Input value={it.unit} readOnly className="h-9" />
-                    <Textarea value={it.remarks} onChange={(e) => updateItem(it.id, { remarks: e.target.value })} className="min-h-9" rows={1} />
+                    <Textarea value={it.remarks} readOnly className="min-h-9" rows={1} />
                   </div>
                 ))}
               </CardContent>
@@ -287,14 +308,14 @@ export default function BoqEditor() {
             <Card>
               <CardHeader><CardTitle>Terms & Conditions</CardTitle></CardHeader>
               <CardContent>
-                <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} rows={8} />
+                <Textarea value={terms} readOnly rows={8} />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
               <CardContent>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+                <Textarea value={notes} readOnly rows={3} />
               </CardContent>
             </Card>
           </div>

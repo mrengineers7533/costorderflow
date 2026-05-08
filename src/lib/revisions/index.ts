@@ -247,6 +247,7 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
     });
     await supabase.from("boqs").update({
       line_items: items,
+      boq_number: deriveBoqNumber(order.oa_number),
       reference_oa_number: order.oa_number,
       project_number: order.cost_sheet_number || order.reference || raw.project_number,
       client_name: order.company_name || order.bill_to?.name || raw.client_name,
