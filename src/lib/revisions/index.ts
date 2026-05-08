@@ -209,7 +209,23 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
   // ---- Sync BOQs ----
   const { data: boqs } = await supabase
     .from("boqs").select("*").in("order_id", familyIds);
-  for (const raw of (boqs || []) as unknown as BoqRecord[]) {
+  const allBoqs = (boqs || []) as unknown as BoqRecord[];
+  // Suppress sync if a pending verification BOQ already exists for this family;
+  // the senior must approve (or it must be deleted) before another revision is queued.
+  const hasPending = allBoqs.some((b) => b.verification_status === "pending_verification");
+  // Decide whether the OA bumped past the current BOQ revision → new pending row.
+  const currentBoq = allBoqs.find((b) => b.is_current && b.verification_status !== "pending_verification") || null;
+  const oaRev = order.revision ?? 0;
+  const shouldCreatePending =
+    !hasPending && !!currentBoq && (currentBoq.revision ?? 0) < oaRev;
+
+  if (shouldCreatePending) {
+    await createPendingBoqRevision(order, currentBoq);
+  }
+
+  // In-place sync for every existing BOQ row (current + already pending)
+  // so descriptions/remarks etc. stay aligned with the latest OA data.
+  for (const raw of allBoqs) {
     const prevByModel = new Map<string, BoqLineItem>();
     (raw.line_items || []).forEach((it) => {
       const k = `${(it.model_number || "").trim().toLowerCase()}`;
@@ -292,4 +308,77 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
       amount_in_words: amountInWords(savedNet),
     } as never).eq("id", raw.id);
   }
+}
+
+/** Insert a new BOQ revision row in 'pending_verification' state.
+ *  The previous current BOQ stays current until the senior approves the new
+ *  revision via the verification link. */
+export async function createPendingBoqRevision(
+  orderRev: OrderRecord,
+  prevBoq: BoqRecord,
+): Promise<BoqRecord | null> {
+  const prevByModel = new Map<string, BoqLineItem>();
+  (prevBoq.line_items || []).forEach((it) => {
+    const k = (it.model_number || "").trim().toLowerCase();
+    if (k) prevByModel.set(k, it);
+  });
+  const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
+    const model = it.hsn_code || "";
+    const prev = prevByModel.get(model.trim().toLowerCase());
+    return {
+      id: crypto.randomUUID(),
+      item_no: String(i + 1),
+      model_number: model,
+      description: prev?.description || it.description || "",
+      quantity: Number(it.quantity) || 0,
+      unit: it.unit || "Nos",
+      remarks: prev?.remarks || "",
+    };
+  });
+  const token = crypto.randomUUID();
+  const payload = {
+    order_id: orderRev.id,
+    source_order_id: orderRev.id,
+    revised_from_id: prevBoq.id,
+    user_id: orderRev.user_id ?? null,
+    boq_number: prevBoq.boq_number || deriveBoqNumber(orderRev.oa_number),
+    version: 1,
+    revision: orderRev.revision ?? 0,
+    is_current: false, // pending — previous BOQ stays active until approval
+    format: orderRev.format,
+    status: "draft" as const,
+    prepared_by: orderRev.prepared_by || prevBoq.prepared_by || null,
+    boq_date: new Date().toISOString().slice(0, 10),
+    reference_oa_number: orderRev.oa_number,
+    project_number: orderRev.cost_sheet_number || orderRev.reference || prevBoq.project_number || null,
+    client_name: orderRev.company_name || orderRev.bill_to?.name || prevBoq.client_name || null,
+    line_items: items,
+    terms: prevBoq.terms || DEFAULT_BOQ_TERMS,
+    notes: prevBoq.notes || orderRev.notes || null,
+    verification_status: "pending_verification",
+    verification_token: token,
+    verification_requested_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
+  if (error) {
+    console.warn("Failed to create pending BOQ revision", error);
+    return null;
+  }
+  const newBoq = data as unknown as BoqRecord;
+  // Fire-and-forget verification email (no-op if recipient not configured).
+  try {
+    const verificationUrl = `${window.location.origin}/boq-verify/${token}`;
+    await supabase.functions.invoke("send-boq-verification", {
+      body: {
+        boq_id: newBoq.id,
+        boq_number: newBoq.boq_number,
+        oa_number: orderRev.oa_number,
+        revision: newBoq.revision,
+        verification_url: verificationUrl,
+      },
+    });
+  } catch (e) {
+    console.warn("send-boq-verification invoke failed", e);
+  }
+  return newBoq;
 }
