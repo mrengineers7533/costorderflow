@@ -821,16 +821,40 @@ export default function OrderEditor() {
                       value={charges.cif_pu_dollar_rate || 0}
                       onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
                     />
-                    <NumberField
-                      label="Sea Freight ($)"
-                      value={charges.cif_sea_freight_usd || 0}
-                      onChange={(v) => setCharges({ ...charges, cif_sea_freight_usd: v })}
-                    />
+                    <div>
+                      <Label className="text-xs">Sea Freight</Label>
+                      <div className="flex gap-2">
+                        <Select
+                          value={charges.cif_sea_freight_mode || "amount"}
+                          onValueChange={(v) => setCharges({ ...charges, cif_sea_freight_mode: v as "amount" | "percent" })}
+                        >
+                          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="amount">Fixed $</SelectItem>
+                            <SelectItem value="percent">% of Basic</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number" step="any"
+                          value={(charges.cif_sea_freight_mode || "amount") === "percent"
+                            ? (charges.cif_sea_freight_percent || 0)
+                            : (charges.cif_sea_freight_usd || 0)}
+                          onChange={(e) => {
+                            const v = +e.target.value || 0;
+                            if ((charges.cif_sea_freight_mode || "amount") === "percent") {
+                              setCharges({ ...charges, cif_sea_freight_percent: v });
+                            } else {
+                              setCharges({ ...charges, cif_sea_freight_usd: v });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                   {(charges.cif_pu_dollar_rate || 0) > 0 && (
                     <div className="text-[11px] text-muted-foreground">
                       Basic Total (USD) = ₹ Item Total ÷ {charges.cif_pu_dollar_rate}.
-                      Grand Total (USD) = Basic + Sea Freight.
+                      EX Work Port (USD) = Basic + Sea Freight.
                     </div>
                   )}
                 </div>
