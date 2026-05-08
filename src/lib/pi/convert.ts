@@ -196,7 +196,10 @@ export async function createPiRevision(
     } else if (c.gms_mode === "EXW_CIF_PORT") {
       const rate = c.cif_pu_dollar_rate || 0;
       const basicUsd = rate > 0 ? totals.basic_total / rate : 0;
-      const grandUsd = basicUsd + (c.cif_sea_freight_usd || 0);
+      const seaUsd = (c.cif_sea_freight_mode || "amount") === "percent"
+        ? (basicUsd * (c.cif_sea_freight_percent || 0)) / 100
+        : (c.cif_sea_freight_usd || 0);
+      const grandUsd = basicUsd + seaUsd;
       // Persist INR-equivalent so the PI list / reports show consistent values.
       const grandInr = grandUsd * (rate || 1);
       savedGrand = grandInr;
