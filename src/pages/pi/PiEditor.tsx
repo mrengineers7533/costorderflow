@@ -237,9 +237,6 @@ export default function PiEditor() {
                 </Button>
               </>
             )}
-            <Button className="rounded-lg" disabled={saving} onClick={() => setConfirmRevise(true)}>
-              <GitBranch className="mr-1 h-4 w-4" />Save as new revision
-            </Button>
           </div>
         </div>
 
@@ -1102,24 +1099,6 @@ export default function PiEditor() {
         </section>
       </div>
 
-      <AlertDialog open={confirmRevise} onOpenChange={setConfirmRevise}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Save as a new revised copy?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Any change in this PI will create a revised copy. The original
-              <span className="font-mono mx-1">{pi.pi_number}</span> stays unchanged.
-              The new revision will be numbered automatically (e.g. /R{(family[family.length - 1]?.revision || pi.revision) + 1}).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={reviseSave} disabled={saving}>
-              <Save className="mr-1 h-4 w-4" />Create revision
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
