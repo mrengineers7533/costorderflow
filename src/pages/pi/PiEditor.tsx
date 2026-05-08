@@ -612,27 +612,9 @@ export default function PiEditor() {
                           onChange={(e) => update("charges", { ...pi.charges, fx_rate: +e.target.value || 0, currency: pi.charges.currency || "USD" })}
                         />
                         {(pi.charges.fx_rate || 0) > 0 && (
-                          <>
-                            <Label className="text-xs ml-2">Display PI in</Label>
-                            <div className="inline-flex rounded-md border bg-background p-0.5">
-                              {(["INR", "USD"] as const).map((cur) => {
-                                const active = (pi.charges.display_currency || "INR") === cur;
-                                return (
-                                  <button
-                                    key={cur}
-                                    type="button"
-                                    onClick={() => update("charges", { ...pi.charges, display_currency: cur })}
-                                    className={`px-2.5 py-0.5 text-xs font-semibold rounded-sm transition-colors ${
-                                      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                                    }`}
-                                    aria-pressed={active}
-                                  >
-                                    {cur === "INR" ? "₹ INR" : (pi.charges.currency || "USD")}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
+                          <span className="text-[11px] text-muted-foreground ml-2">
+                            EXW Turkey is always shown in USD ($) using cost-sheet $ rate (₹{pi.charges.fx_rate}).
+                          </span>
                         )}
                       </div>
                       <PiModeToggleRow
