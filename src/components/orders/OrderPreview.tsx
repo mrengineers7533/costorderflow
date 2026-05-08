@@ -300,12 +300,12 @@ export function OrderPreview(p: Props) {
                 {!isFX && !isMurthal && !isTurkey && !isCifPort && (
                   isGMS ? (
                     <>
-                      <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
+                      <TotalsRow colSpan={totalsColSpan} label={gmsUsd ? "Basic Total" : "Ex-works Murthal Price"} value={p.totals.basic_total} format={totalFmt} />
                       {p.docMeta?.extraTotalsRows?.map((r, i) => (
-                        <TotalsRow key={`xg${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} />
+                        <TotalsRow key={`xg${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} format={totalFmt} />
                       ))}
                       {!p.docMeta?.hideDefaultGrandTotal && (
-                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight />
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight format={totalFmt} />
                       )}
                     </>
                   ) : (
