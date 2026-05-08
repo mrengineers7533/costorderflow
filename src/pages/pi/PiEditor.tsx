@@ -914,6 +914,7 @@ export default function PiEditor() {
                       </div>
                     </div>
                   )}
+                </fieldset>
                 </CardContent>
               </Card>
             )}
