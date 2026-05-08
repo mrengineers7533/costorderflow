@@ -74,20 +74,20 @@ export function OrderPreview(p: Props) {
   // EXW CIF Port — USD-only; Basic (USD) + Local Freight (USD) = EX Work CIF Port (USD).
   const isCifPort = p.format === "GMS" && p.charges.gms_mode === "EXW_CIF_PORT";
   const cifRate = p.charges.cif_pu_dollar_rate || 0;
-  // Global GMS USD switch: any GMS mode renders in $ when PU Dollar Rate > 0.
-  const gmsUsd = p.format === "GMS" && cifRate > 0;
+  // Global GMS USD switch via PU Dollar Rate. Excludes EXW Turkey, which is
+  // always USD via its own cost-sheet $ rate (fx_rate) — PU Dollar Rate does
+  // not apply to Turkey.
+  const gmsUsd = p.format === "GMS" && cifRate > 0 && p.charges.gms_mode !== "EXW_TURKEY";
   const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
   const cifSeaUSD = (p.charges.cif_sea_freight_mode || "amount") === "percent"
     ? (cifBasicUSD * (p.charges.cif_sea_freight_percent || 0)) / 100
     : (p.charges.cif_sea_freight_usd || 0);
   const cifGrandUSD = cifBasicUSD + cifSeaUSD;
-  // Item-level USD display: GMS Turkey USD toggle, OR any GMS mode with PU Dollar Rate > 0.
-  const displayUSDItems =
-    (p.format === "GMS" &&
-      p.charges.gms_mode === "EXW_TURKEY" &&
-      p.charges.display_currency === "USD" &&
-      fxRate > 0) ||
-    gmsUsd;
+  // Item-level USD display: EXW Turkey is always USD when fx_rate set,
+  // OR any other GMS mode with PU Dollar Rate > 0.
+  const turkeyAlwaysUSD =
+    p.format === "GMS" && p.charges.gms_mode === "EXW_TURKEY" && fxRate > 0;
+  const displayUSDItems = turkeyAlwaysUSD || gmsUsd;
   const itemUsdRate = gmsUsd ? cifRate : fxRate;
   const itemCurLabel = displayUSDItems ? "USD" : "INR";
   // Currency-aware totals formatter for the unified items+totals table.
