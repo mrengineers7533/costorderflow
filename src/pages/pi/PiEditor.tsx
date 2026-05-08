@@ -307,44 +307,14 @@ export default function PiEditor() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader><CardTitle className="text-base">PI adjustments</CardTitle></CardHeader>
+          <Card>
+              <CardHeader>
+                <CardTitle className="text-base">PI adjustments</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Charges, discount, taxes mirror the OA. Only Advance Adjustment is editable.
+                </p>
+              </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
-                <div className="col-span-2 flex items-center gap-3">
-                  <input
-                    id="pi-apply-discount"
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={pi.apply_discount ?? false}
-                    onChange={(e) => update("apply_discount", e.target.checked)}
-                  />
-                  <Label htmlFor="pi-apply-discount" className="cursor-pointer">
-                    Apply discount
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    (hidden from PDF when off)
-                  </span>
-                </div>
-                {pi.apply_discount && (
-                  <>
-                    <div>
-                      <Label>Discount label</Label>
-                      <Input
-                        placeholder="One Time Very Special Discount"
-                        value={pi.discount_label || ""}
-                        onChange={(e) => update("discount_label", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label>Discount % <span className="text-muted-foreground text-xs">(on Basic Amount only)</span></Label>
-                      <Input
-                        type="number" step="0.01" min={0} max={100}
-                        value={pi.one_time_discount_percent}
-                        onChange={(e) => update("one_time_discount_percent", Number(e.target.value))}
-                      />
-                    </div>
-                  </>
-                )}
                 <div>
                   <Label>
                     Advance Adjustment{" "}
@@ -373,32 +343,6 @@ export default function PiEditor() {
                       />
                     )}
                   </div>
-                </div>
-                <div>
-                  <Label>GST %</Label>
-                  <Input type="number" step="0.01" value={pi.charges.gst_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, gst_percent: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <Label>Freight (₹)</Label>
-                  <Input type="number" value={pi.charges.freight || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, freight: Number(e.target.value), freight_enabled: Number(e.target.value) > 0 })} />
-                </div>
-                <div>
-                  <Label>P&amp;F % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
-                  <Input type="number" step="0.01" value={pi.charges.pf_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, pf_percent: Number(e.target.value), pf_amount: 0 })} />
-                </div>
-                <div>
-                  <Label>Insurance % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
-                  <Input type="number" step="0.01" value={pi.charges.insurance_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, insurance_percent: Number(e.target.value), insurance: 0 })} />
-                </div>
-                <div className="col-span-2">
-                  <Label>Other Charges (₹)</Label>
-                  <Input type="number" step="0.01" min={0}
-                    value={pi.other_charges || 0}
-                    onChange={(e) => update("other_charges", Number(e.target.value))} />
                 </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
