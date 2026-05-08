@@ -406,7 +406,7 @@ export function OrderPreview(p: Props) {
           )}
           </>
         ) : isTurkey && turkey ? (
-          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} />
+          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} forceUsdRate={gmsUsd ? cifRate : 0} />
         ) : isMurthal && murthal ? (
           <ExMurthalBlock
             m={murthal}
@@ -415,6 +415,7 @@ export function OrderPreview(p: Props) {
             fxRate={fxRate}
             isFX={isFX}
             basicFX={p.totals.basic_total}
+            forceUsdRate={gmsUsd ? cifRate : 0}
           />
         ) : isFX ? (
           <div className="border rounded overflow-hidden text-xs">
@@ -480,7 +481,7 @@ export function OrderPreview(p: Props) {
 }
 
 function ExMurthalBlock({
-  m, c, fxSymbol, fxRate, isFX, basicFX,
+  m, c, fxSymbol, fxRate, isFX, basicFX, forceUsdRate = 0,
 }: {
   m: ReturnType<typeof calcExMurthal>;
   c: Charges;
@@ -488,12 +489,15 @@ function ExMurthalBlock({
   fxRate: number;
   isFX: boolean;
   basicFX: number;
+  forceUsdRate?: number;
 }) {
-  const displayUSD = c.display_currency === "USD" && (fxRate || 0) > 0;
+  const displayUSD = forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
+  const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
+  const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usd = (n: number) =>
-    `${fxSymbol || "$"} ${((n || 0) / (fxRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold, sub }: { k: string; v: number; bold?: boolean; sub?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
@@ -546,7 +550,7 @@ function ExMurthalBlock({
 }
 
 function ExTurkeyBlock({
-  t, c, fxSymbol, fxRate, isFX, basicFX,
+  t, c, fxSymbol, fxRate, isFX, basicFX, forceUsdRate = 0,
 }: {
   t: ReturnType<typeof calcExTurkey>;
   c: Charges;
@@ -554,15 +558,18 @@ function ExTurkeyBlock({
   fxRate: number;
   isFX: boolean;
   basicFX: number;
+  forceUsdRate?: number;
 }) {
   // Phase 1: when user picks display_currency="USD" on a GMS Turkey OA/PI
   // and a cost-sheet $ rate is set, render the totals block in USD by
   // dividing each INR value by the rate. The math itself stays INR-based.
-  const displayUSD = c.display_currency === "USD" && (fxRate || 0) > 0;
+  const displayUSD = forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
+  const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
+  const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usd = (n: number) =>
-    `${fxSymbol || "$"} ${((n || 0) / (fxRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
