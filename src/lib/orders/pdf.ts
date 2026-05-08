@@ -674,25 +674,7 @@ async function renderGmsPdf(
     },
   ]);
 
-  // When Turkey + USD display, prepend a banner row noting the conversion
-  // (PDF column header still says "AMOUNT (INR)" for the item rows).
-  if (turkeyAlwaysUSD) {
-    totalsAsBody.unshift([
-      {
-        content: `EXW Turkey — values in USD @ cost-sheet $ rate ₹${c.fx_rate || 0}`,
-        colSpan: 8,
-        styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
-      },
-    ] as never);
-  } else if (isCifPort && cifRate > 0) {
-    totalsAsBody.unshift([
-      {
-        content: `EXW CIF Port — values in USD @ PU Dollar Rate ₹${cifRate}. No GST / taxes applied.`,
-        colSpan: 8,
-        styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
-      },
-    ] as never);
-  }
+  // (Conversion banners intentionally omitted from print/PDF view per spec.)
 
   autoTable(doc, {
     startY: y,
