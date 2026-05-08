@@ -561,15 +561,7 @@ export default function PiEditor() {
                       <p className="text-[11px] text-muted-foreground -mt-1">
                         Basic Total (USD) + Local Freight (USD) = EX Work CIF Port (USD). No GST / taxes / extras.
                       </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs">PU Dollar Rate (₹ per $)</Label>
-                          <Input
-                            type="number" step="any" className="h-8"
-                            value={pi.charges.cif_pu_dollar_rate || 0}
-                            onChange={(e) => update("charges", { ...pi.charges, cif_pu_dollar_rate: +e.target.value || 0 })}
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 gap-3">
                         <div>
                           <Label className="text-xs">Local Freight</Label>
                           <div className="flex gap-2">
