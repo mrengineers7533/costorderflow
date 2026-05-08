@@ -20,6 +20,8 @@ import { RequireAdmin } from "./components/RequireAdmin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDomains from "./pages/admin/AdminDomains";
+import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
+import BoqVerify from "./pages/boqs/BoqVerify";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +33,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/boq-verify/:token" element={<BoqVerify />} />
           <Route
             path="/*"
             element={
@@ -60,6 +63,10 @@ const App = () => (
                       <Route
                         path="/admin/domains"
                         element={<RequireAdmin user={user}><AdminDomains /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/boq-verification"
+                        element={<RequireAdmin user={user}><AdminBoqSettings /></RequireAdmin>}
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
