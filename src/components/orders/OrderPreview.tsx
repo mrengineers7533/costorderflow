@@ -74,20 +74,27 @@ export function OrderPreview(p: Props) {
   // EXW CIF Port — USD-only; Basic (USD) + Local Freight (USD) = EX Work CIF Port (USD).
   const isCifPort = p.format === "GMS" && p.charges.gms_mode === "EXW_CIF_PORT";
   const cifRate = p.charges.cif_pu_dollar_rate || 0;
+  // Global GMS USD switch: any GMS mode renders in $ when PU Dollar Rate > 0.
+  const gmsUsd = p.format === "GMS" && cifRate > 0;
   const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
   const cifSeaUSD = (p.charges.cif_sea_freight_mode || "amount") === "percent"
     ? (cifBasicUSD * (p.charges.cif_sea_freight_percent || 0)) / 100
     : (p.charges.cif_sea_freight_usd || 0);
   const cifGrandUSD = cifBasicUSD + cifSeaUSD;
-  // Item-level USD display: only for GMS EXW Turkey + display_currency=USD + fx_rate set.
+  // Item-level USD display: GMS Turkey USD toggle, OR any GMS mode with PU Dollar Rate > 0.
   const displayUSDItems =
     (p.format === "GMS" &&
       p.charges.gms_mode === "EXW_TURKEY" &&
       p.charges.display_currency === "USD" &&
       fxRate > 0) ||
-    (isCifPort && cifRate > 0);
-  const itemUsdRate = isCifPort ? cifRate : fxRate;
+    gmsUsd;
+  const itemUsdRate = gmsUsd ? cifRate : fxRate;
   const itemCurLabel = displayUSDItems ? "USD" : "INR";
+  // Currency-aware totals formatter for the unified items+totals table.
+  const totalFmt = (n: number) =>
+    gmsUsd
+      ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const itemFmt = (n: number) =>
     displayUSDItems
       ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
