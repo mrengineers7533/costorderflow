@@ -71,7 +71,7 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
-  // EXW CIF Port — USD-only; Basic (USD) + Sea Freight (USD) = Grand Total (USD).
+  // EXW CIF Port — USD-only; Basic (USD) + Local Freight (USD) = EX Work CIF Port (USD).
   const isCifPort = p.format === "GMS" && p.charges.gms_mode === "EXW_CIF_PORT";
   const cifRate = p.charges.cif_pu_dollar_rate || 0;
   const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
@@ -372,7 +372,7 @@ export function OrderPreview(p: Props) {
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">
-                Sea Freight{(p.charges.cif_sea_freight_mode || "amount") === "percent"
+                Local Freight{(p.charges.cif_sea_freight_mode || "amount") === "percent"
                   ? ` @ ${p.charges.cif_sea_freight_percent || 0}%`
                   : ""}
               </div>
@@ -381,7 +381,7 @@ export function OrderPreview(p: Props) {
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
-              <div className="px-2 py-1.5 text-right font-bold">EX Work Port</div>
+              <div className="px-2 py-1.5 text-right font-bold">EX Work CIF Port</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
                 $ {cifGrandUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
