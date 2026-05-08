@@ -361,6 +361,28 @@ export default function PiEditor() {
                     )}
                   </div>
                 </div>
+                <div>
+                  <Label>
+                    Discount{" "}
+                    <span className="text-muted-foreground text-xs">(deducted at the end)</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                      value={pi.discount_mode || "percent"}
+                      onChange={(e) => update("discount_mode", e.target.value as "amount" | "percent")}
+                    >
+                      <option value="percent">% of Gross</option>
+                      <option value="amount">₹ Amount</option>
+                    </select>
+                    <Input
+                      type="number" step="0.01" min={0}
+                      max={(pi.discount_mode || "percent") === "percent" ? 100 : undefined}
+                      value={pi.discount_value || 0}
+                      onChange={(e) => update("discount_value", Number(e.target.value))}
+                    />
+                  </div>
+                </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
                 {(() => {
