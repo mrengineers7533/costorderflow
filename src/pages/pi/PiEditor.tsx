@@ -540,17 +540,19 @@ export default function PiEditor() {
                         <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Local Freight)</SelectItem>
                       </SelectContent>
                     </Select>
-                    <div className="mt-3">
-                      <Label className="text-xs">PU Dollar Rate (₹ per $) — leave 0/blank to keep INR</Label>
-                      <Input
-                        type="number" step="any" className="h-8"
-                        value={pi.charges.cif_pu_dollar_rate || 0}
-                        onChange={(e) => update("charges", { ...pi.charges, cif_pu_dollar_rate: +e.target.value || 0 })}
-                      />
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        When &gt; 0, every GMS amount (items, totals, GST, freight, PDF) is shown in USD as INR ÷ this rate. When 0/blank, GMS stays in ₹.
-                      </p>
-                    </div>
+                    {pi.charges.gms_mode !== "EXW_TURKEY" && (
+                      <div className="mt-3">
+                        <Label className="text-xs">PU Dollar Rate (₹ per $) — leave 0/blank to keep INR</Label>
+                        <Input
+                          type="number" step="any" className="h-8"
+                          value={pi.charges.cif_pu_dollar_rate || 0}
+                          onChange={(e) => update("charges", { ...pi.charges, cif_pu_dollar_rate: +e.target.value || 0 })}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          When &gt; 0, every GMS amount is shown in USD as INR ÷ this rate. When 0/blank, GMS stays in ₹. Not applicable to EXW Turkey.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {pi.charges.gms_mode === "EXW_CIF_PORT" && (
