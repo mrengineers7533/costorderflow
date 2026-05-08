@@ -411,3 +411,23 @@ export function amountInWords(num: number): string {
   if (rest) parts.push(threeDigit(rest));
   return "INR " + parts.join(" ").trim() + " Only";
 }
+
+/** USD amount in words using the international (short-scale) numbering
+ *  system: Billion / Million / Thousand. Includes cents when fractional. */
+export function amountInWordsUSD(num: number): string {
+  const whole = Math.floor(num);
+  const cents = Math.round((num - whole) * 100);
+  if (whole === 0 && cents === 0) return "US Dollar Zero Only";
+  const billion = Math.floor(whole / 1_000_000_000);
+  const million = Math.floor((whole % 1_000_000_000) / 1_000_000);
+  const thousand = Math.floor((whole % 1_000_000) / 1000);
+  const rest = whole % 1000;
+  const parts: string[] = [];
+  if (billion) parts.push(threeDigit(billion) + " Billion");
+  if (million) parts.push(threeDigit(million) + " Million");
+  if (thousand) parts.push(threeDigit(thousand) + " Thousand");
+  if (rest) parts.push(threeDigit(rest));
+  let s = "US Dollar " + (parts.join(" ").trim() || "Zero");
+  if (cents > 0) s += " and " + twoDigit(cents) + " Cents";
+  return s + " Only";
+}
