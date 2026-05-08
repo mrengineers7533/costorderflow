@@ -799,14 +799,14 @@ function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
   );
 }
 
-function TotalsRow({ label, value, highlight, colSpan = 6 }: { label: string; value: number; highlight?: boolean; colSpan?: number }) {
+function TotalsRow({ label, value, highlight, colSpan = 6, format }: { label: string; value: number; highlight?: boolean; colSpan?: number; format?: (n: number) => string }) {
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
       <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
         {label}
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right tabular-nums ${highlight ? "font-bold" : ""}`}>
-        {value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </td>
     </tr>
   );
