@@ -72,7 +72,9 @@ export interface Charges {
    *  `cif_pu_dollar_rate` is the user-entered "PU Dollar Rate" used to
    *  convert the INR cost-sheet item totals to USD for display & PDF. */
   cif_pu_dollar_rate?: number;     // 1 USD = X INR
-  cif_sea_freight_usd?: number;    // entered directly in USD
+  cif_sea_freight_usd?: number;    // entered directly in USD (when mode = "amount")
+  cif_sea_freight_mode?: "amount" | "percent"; // default "amount"
+  cif_sea_freight_percent?: number;            // % of Basic Total (USD)
 
   /** EXW-Turkey landed-cost rows (each toggle hides the line).
    *  Sea Freight & Insurance are flat INR. Custom is a % applied to
