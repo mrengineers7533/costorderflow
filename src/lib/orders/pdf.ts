@@ -548,7 +548,7 @@ async function renderGmsPdf(
   const usdRate = turkeyAlwaysUSD ? (c.fx_rate || 1) : (gmsUsd ? cifRate : (c.fx_rate || 1));
   const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
-    (n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    `$ ${(n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtTotal = (n: number) => (usdDisplay ? fmtUSD(n) : fmt(n));
 
   const itemRows = order.line_items.map((it, i) => [
@@ -583,7 +583,6 @@ async function renderGmsPdf(
     totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
     if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
     if (c.turkey_custom_enabled) totalsRows.push({ label: `Custom Duty${c.turkey_custom_percent ? ` @ ${c.turkey_custom_percent}%` : ""}`, value: tk.custom });
-    totalsRows.push({ label: "Landed Price", value: tk.total_amount, bold: true });
     if (c.turkey_landed_discount_enabled && tk.landed_discount > 0) {
       const lbl = (c.turkey_landed_discount_mode || "percent") === "percent" && c.turkey_landed_discount_percent
         ? `Discount @ ${c.turkey_landed_discount_percent}% on Landed`
@@ -605,7 +604,6 @@ async function renderGmsPdf(
     }
     if (c.turkey_freight_enabled && tk.freight > 0) totalsRows.push({ label: "Freight", value: tk.freight });
     if (c.turkey_gst_enabled) totalsRows.push({ label: `GST${c.turkey_gst_percent ? ` @ ${c.turkey_gst_percent}%` : ""}`, value: tk.gst });
-    totalsRows.push({ label: "Grand Total", value: tk.grand_total, bold: true });
     if (c.turkey_discount_enabled && tk.discount > 0) {
       totalsRows.push({ label: "One-time Discount", value: -tk.discount });
     }
