@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2, Download, Printer, Save } from "lucide-react";
+import { ArrowLeft, Download, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
@@ -60,7 +60,38 @@ export default function BoqEditor() {
         setFormat(b.format); setStatus(b.status); setPreparedBy(b.prepared_by || "");
         setBoqDate(b.boq_date); setReferenceOa(b.reference_oa_number || "");
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
-        setItems(b.line_items?.length ? b.line_items : [newBoqItem(1)]);
+        // OA-driven model: refresh items from latest OA. Preserve any
+        // user-edited Description/Remarks matched by model number.
+        let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
+        if (b.order_id) {
+          const { data: oa } = await supabase.from("orders").select("*").eq("id", b.order_id).maybeSingle();
+          if (oa) {
+            const o = oa as unknown as OrderRecord;
+            const prevByModel = new Map<string, BoqLineItem>();
+            (b.line_items || []).forEach((it) => {
+              const k = (it.model_number || "").trim().toLowerCase();
+              if (k) prevByModel.set(k, it);
+            });
+            nextItems = (o.line_items || []).map((it, i) => {
+              const model = it.hsn_code || "";
+              const prev = prevByModel.get(model.trim().toLowerCase());
+              return {
+                id: prev?.id || crypto.randomUUID(),
+                item_no: String(i + 1),
+                model_number: model,
+                description: prev?.description || it.description || "",
+                quantity: Number(it.quantity) || 0,
+                unit: it.unit || "Nos",
+                remarks: prev?.remarks || "",
+              };
+            });
+            setReferenceOa(o.oa_number);
+            setProjectNumber(o.cost_sheet_number || o.reference || b.project_number || "");
+            setClientName(o.company_name || o.bill_to?.name || b.client_name || "");
+            setFormat(o.format);
+          }
+        }
+        setItems(nextItems.length ? nextItems : [newBoqItem(1)]);
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");
         setLoading(false);
         return;
