@@ -654,6 +654,43 @@ export type Database = {
         }
         Returns: string
       }
+      verify_boq_items_with_token: {
+        Args: { _items: Json; _token: string; _verifier_email: string }
+        Returns: {
+          boq_date: string
+          boq_number: string
+          client_name: string | null
+          created_at: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          is_current: boolean
+          line_items: Json
+          notes: string | null
+          order_id: string
+          prepared_by: string | null
+          project_number: string | null
+          reference_oa_number: string | null
+          revised_from_id: string | null
+          revision: number
+          source_order_id: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          terms: string | null
+          updated_at: string
+          user_id: string | null
+          verification_requested_at: string | null
+          verification_status: string
+          verification_token: string | null
+          verified_at: string | null
+          verified_by_email: string | null
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "boqs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       verify_boq_with_token: {
         Args: { _token: string; _verifier_email: string }
         Returns: {
