@@ -220,36 +220,36 @@ export default function BoqEditor() {
             <Card>
               <CardHeader><CardTitle>Header</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-2 gap-3">
-                <div><Label>BOQ Number</Label><Input value={boqNumber} onChange={(e) => setBoqNumber(e.target.value)} /></div>
+                <div><Label>BOQ Number</Label><Input value={boqNumber} readOnly /></div>
                 <div><Label>Date</Label><Input type="date" value={boqDate} onChange={(e) => setBoqDate(e.target.value)} /></div>
-                <div><Label>Reference OA Number</Label><Input value={referenceOa} onChange={(e) => setReferenceOa(e.target.value)} /></div>
-                <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} onChange={(e) => setProjectNumber(e.target.value)} /></div>
-                <div><Label>Prepared By</Label><Input value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} /></div>
+                <div><Label>Reference OA Number</Label><Input value={referenceOa} readOnly /></div>
+                <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
+                <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
+                <p className="md:col-span-2 text-xs text-muted-foreground">
+                  Header & items mirror the linked OA. Only Description (per item) is editable.
+                </p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader>
                 <CardTitle>Items</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, newBoqItem(p.length + 1)])}>
-                  <Plus className="mr-1 h-4 w-4" />Add Row
-                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Synced from OA. Only Description is editable.
+                </p>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_36px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div></div>
+                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div>
                 </div>
                 {items.map((it) => (
-                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_36px] gap-1.5 items-start">
-                    <Input value={it.item_no} onChange={(e) => updateItem(it.id, { item_no: e.target.value })} className="h-9" />
-                    <Input value={it.model_number} onChange={(e) => updateItem(it.id, { model_number: e.target.value })} className="h-9" />
+                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 items-start">
+                    <Input value={it.item_no} readOnly className="h-9" />
+                    <Input value={it.model_number} readOnly className="h-9" />
                     <Textarea value={it.description} onChange={(e) => updateItem(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
-                    <Input type="number" value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })} className="h-9" />
-                    <Input value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} className="h-9" />
+                    <Input type="number" value={it.quantity} readOnly className="h-9" />
+                    <Input value={it.unit} readOnly className="h-9" />
                     <Textarea value={it.remarks} onChange={(e) => updateItem(it.id, { remarks: e.target.value })} className="min-h-9" rows={1} />
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeItem(it.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
                   </div>
                 ))}
               </CardContent>
