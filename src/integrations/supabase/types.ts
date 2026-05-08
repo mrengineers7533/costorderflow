@@ -517,6 +517,8 @@ export type Database = {
           company_name: string | null
           created_at: string
           discount_label: string | null
+          discount_mode: string
+          discount_value: number
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -550,6 +552,8 @@ export type Database = {
           company_name?: string | null
           created_at?: string
           discount_label?: string | null
+          discount_mode?: string
+          discount_value?: number
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -583,6 +587,8 @@ export type Database = {
           company_name?: string | null
           created_at?: string
           discount_label?: string | null
+          discount_mode?: string
+          discount_value?: number
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
