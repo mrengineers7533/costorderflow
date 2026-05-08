@@ -44,6 +44,8 @@ export default function BoqEditor() {
   const [items, setItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
   const [terms, setTerms] = useState(DEFAULT_BOQ_TERMS);
   const [notes, setNotes] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification">("approved");
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
   // Load existing BOQ or initialize from order
   useEffect(() => {
@@ -60,6 +62,8 @@ export default function BoqEditor() {
         setFormat(b.format); setStatus(b.status); setPreparedBy(b.prepared_by || "");
         setBoqDate(b.boq_date); setReferenceOa(b.reference_oa_number || "");
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
+        setVerificationStatus(b.verification_status || "approved");
+        setVerificationToken(b.verification_token || null);
         // OA-driven model: refresh items from latest OA. Preserve any
         // user-edited Description/Remarks matched by model number.
         let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
