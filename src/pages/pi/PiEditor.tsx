@@ -724,7 +724,7 @@ export default function PiEditor() {
                         />
                       </div>
                       <PiToggleNumberRow
-                        label="Freight (flat ₹) — joins GST base"
+                        label="Local Freight (flat ₹) — joins GST base"
                         enabled={!!pi.charges.turkey_freight_enabled}
                         value={pi.charges.turkey_freight || 0}
                         onToggle={(b) => update("charges", { ...pi.charges, turkey_freight_enabled: b })}
@@ -895,7 +895,7 @@ export default function PiEditor() {
                         />
                       </div>
                       <PiToggleNumberRow
-                        label="Freight (flat ₹) — joins GST base"
+                        label="Local Freight (flat ₹) — joins GST base"
                         enabled={!!pi.charges.murthal_freight_enabled}
                         value={pi.charges.murthal_freight || 0}
                         onToggle={(b) => update("charges", { ...pi.charges, murthal_freight_enabled: b })}
