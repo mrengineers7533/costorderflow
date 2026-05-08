@@ -520,7 +520,10 @@ export default function PiEditor() {
                           ...pi.charges,
                           gms_mode: mode,
                           ex_murthal_enabled:
-                            mode === "EXW_MURTHAL" ? true : (mode === "EXW_TURKEY" ? false : pi.charges.ex_murthal_enabled),
+                            mode === "EXW_MURTHAL" ? true
+                            : mode === "EXW_TURKEY" || mode === "EXW_CIF_PORT" ? false
+                            : pi.charges.ex_murthal_enabled,
+                          display_currency: mode === "EXW_CIF_PORT" ? undefined : pi.charges.display_currency,
                           turkey_custom_percent: pi.charges.turkey_custom_percent ?? 10,
                           turkey_gst_percent: pi.charges.turkey_gst_percent ?? 18,
                           turkey_pf_percent: pi.charges.turkey_pf_percent ?? 1.5,
