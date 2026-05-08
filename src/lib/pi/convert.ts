@@ -168,8 +168,12 @@ export async function createPiFromOaItems(
 export async function createPiFromOa(oa: OrderRecord): Promise<PiRecord> {
   const status = await fetchOaItemPiStatus(oa.id);
   const pendingIds = (oa.line_items || [])
-    .map((it) => it.id)
-    .filter((id) => id && !status[id]?.done);
+    .filter((it) => {
+      const oaQty = Number(it.quantity) || 0;
+      const alreadyQty = status[it.id]?.pi_qty || 0;
+      return it.id && oaQty - alreadyQty > 0;
+    })
+    .map((it) => it.id);
   if (pendingIds.length === 0) {
     throw new Error("All items on this OA already have a PI generated.");
   }
