@@ -2,6 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { OrderRecord, LineItem } from "@/lib/orders/types";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
 import { deriveBoqNumber, DEFAULT_BOQ_TERMS } from "@/lib/boq/types";
+import { calcPiTotals } from "@/lib/pi/calc";
+import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
+import type { PiRecord } from "@/lib/pi/types";
 
 /** Strip an OrderRecord down to a payload safe for inserting a fresh revision row. */
 function stripOrderForInsert(o: OrderRecord) {
@@ -186,4 +189,107 @@ export async function fetchBoqsForFamily(orderIds: string[]) {
     .order("revision", { ascending: false });
   if (error) throw error;
   return (data as unknown as BoqRecord[]) || [];
+}
+
+/** New OA-driven model: when an OA is saved, every linked BOQ and PI in
+ *  its revision family must auto-update. BOQs keep manually edited
+ *  Description (and Remarks); PIs preserve their Advance Adjustment fields
+ *  but recompute everything else from the OA. */
+export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> {
+  // Resolve family ids (root + all revisions).
+  const root = order.parent_order_id || order.id;
+  const { data: famRows } = await supabase
+    .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+  const familyIds = Array.from(new Set([
+    order.id,
+    root,
+    ...((famRows || []) as Array<{ id: string }>).map((r) => r.id),
+  ].filter(Boolean)));
+
+  // ---- Sync BOQs ----
+  const { data: boqs } = await supabase
+    .from("boqs").select("*").in("order_id", familyIds);
+  for (const raw of (boqs || []) as unknown as BoqRecord[]) {
+    const prevByModel = new Map<string, BoqLineItem>();
+    (raw.line_items || []).forEach((it) => {
+      const k = `${(it.model_number || "").trim().toLowerCase()}`;
+      if (k) prevByModel.set(k, it);
+    });
+    const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => {
+      const model = it.hsn_code || "";
+      const prev = prevByModel.get(model.trim().toLowerCase());
+      return {
+        id: prev?.id || crypto.randomUUID(),
+        item_no: String(i + 1),
+        model_number: model,
+        // OA description always wins unless the user edited the BOQ description.
+        description: prev?.description || it.description || "",
+        quantity: Number(it.quantity) || 0,
+        unit: it.unit || "Nos",
+        remarks: prev?.remarks || "",
+      };
+    });
+    await supabase.from("boqs").update({
+      line_items: items,
+      reference_oa_number: order.oa_number,
+      project_number: order.cost_sheet_number || order.reference || raw.project_number,
+      client_name: order.company_name || order.bill_to?.name || raw.client_name,
+      format: order.format,
+    } as never).eq("id", raw.id);
+  }
+
+  // ---- Sync PIs (current rows only) ----
+  const { data: pis } = await supabase
+    .from("proforma_invoices").select("*")
+    .in("reference_oa_id", familyIds)
+    .eq("is_current", true);
+  for (const raw of (pis || []) as unknown as PiRecord[]) {
+    // Keep only the OA items that this PI originally selected (match by id).
+    const wanted = new Set((raw.line_items || []).map((it) => it.id).filter(Boolean));
+    const items: LineItem[] = (order.line_items || [])
+      .filter((it) => wanted.has(it.id))
+      // Fallback: if no ids matched (legacy PI), keep PI's own items.
+      .map((it) => ({ ...it }));
+    const finalItems = items.length ? items : raw.line_items;
+    const charges = order.charges; // mirror OA charges exactly
+
+    const advMode = raw.advance_mode || "percent";
+    const advValue = advMode === "amount"
+      ? (raw.advance_amount || 0)
+      : (raw.advance_adjustment_percent || 0);
+    const totals = calcPiTotals(
+      finalItems,
+      charges,
+      raw.one_time_discount_percent || 0,
+      { mode: advMode, value: advValue },
+      raw.other_charges || 0,
+    );
+    let savedGrand = totals.grand_total_pi;
+    let savedNet = totals.net_payable_pi;
+    if (order.format === "GMS") {
+      if (charges.gms_mode === "EXW_TURKEY") {
+        const tk = calcExTurkey(totals.basic_total, charges);
+        savedGrand = tk.grand_total; savedNet = tk.net_payable;
+      } else if (charges.gms_mode === "EXW_MURTHAL" || charges.ex_murthal_enabled) {
+        const m = calcExMurthal(totals.basic_total, charges);
+        savedGrand = m.grand_total; savedNet = m.net_payable;
+      }
+    }
+    await supabase.from("proforma_invoices").update({
+      line_items: finalItems,
+      charges,
+      reference_oa_number: order.oa_number,
+      bill_to: order.bill_to,
+      ship_to: order.ship_to,
+      company_name: order.company_name,
+      format: order.format,
+      totals: {
+        basic_total: totals.basic_total,
+        subtotal: totals.subtotal,
+        grand_total: savedGrand,
+        net_payable: savedNet,
+      },
+      amount_in_words: amountInWords(savedNet),
+    } as never).eq("id", raw.id);
+  }
 }
