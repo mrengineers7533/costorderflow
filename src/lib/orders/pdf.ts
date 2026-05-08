@@ -543,8 +543,10 @@ async function renderGmsPdf(
   // EXW CIF Port — always USD using PU Dollar Rate.
   const isCifPort = order.format === "GMS" && c.gms_mode === "EXW_CIF_PORT";
   const cifRate = c.cif_pu_dollar_rate || 0;
-  const usdDisplay = turkeyDisplayUSD || (isCifPort && cifRate > 0);
-  const usdRate = isCifPort ? (cifRate || 1) : (c.fx_rate || 1);
+  // Global GMS USD switch: any GMS pricing mode renders in $ when PU Dollar Rate > 0.
+  const gmsUsd = order.format === "GMS" && cifRate > 0;
+  const usdDisplay = turkeyDisplayUSD || gmsUsd;
+  const usdRate = gmsUsd ? cifRate : (c.fx_rate || 1);
   const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
     (n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
