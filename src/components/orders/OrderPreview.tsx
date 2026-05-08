@@ -71,16 +71,24 @@ export function OrderPreview(p: Props) {
   const murthal = isMurthal ? calcExMurthal(inrAmount, p.charges) : null;
   const isTurkey = p.charges.gms_mode === "EXW_TURKEY" && p.format === "GMS";
   const turkey = isTurkey ? calcExTurkey(inrAmount, p.charges) : null;
+  // EXW CIF Port — USD-only; Basic (USD) + Sea Freight (USD) = Grand Total (USD).
+  const isCifPort = p.format === "GMS" && p.charges.gms_mode === "EXW_CIF_PORT";
+  const cifRate = p.charges.cif_pu_dollar_rate || 0;
+  const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
+  const cifSeaUSD = p.charges.cif_sea_freight_usd || 0;
+  const cifGrandUSD = cifBasicUSD + cifSeaUSD;
   // Item-level USD display: only for GMS EXW Turkey + display_currency=USD + fx_rate set.
   const displayUSDItems =
-    p.format === "GMS" &&
-    p.charges.gms_mode === "EXW_TURKEY" &&
-    p.charges.display_currency === "USD" &&
-    fxRate > 0;
-  const itemCurLabel = displayUSDItems ? (p.charges.currency || "USD") : "INR";
+    (p.format === "GMS" &&
+      p.charges.gms_mode === "EXW_TURKEY" &&
+      p.charges.display_currency === "USD" &&
+      fxRate > 0) ||
+    (isCifPort && cifRate > 0);
+  const itemUsdRate = isCifPort ? cifRate : fxRate;
+  const itemCurLabel = displayUSDItems ? "USD" : "INR";
   const itemFmt = (n: number) =>
     displayUSDItems
-      ? ((n || 0) / fxRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
@@ -280,7 +288,7 @@ export function OrderPreview(p: Props) {
                   ))
                 )}
                 {/* Inline totals rows (only for non-FX, non-Murthal — matches reference format) */}
-                {!isFX && !isMurthal && !isTurkey && (
+                {!isFX && !isMurthal && !isTurkey && !isCifPort && (
                   isGMS ? (
                     <>
                       <TotalsRow colSpan={totalsColSpan} label="Ex-works Murthal Price" value={p.totals.basic_total} />
@@ -344,14 +352,40 @@ export function OrderPreview(p: Props) {
         })()}
 
         {/* Amount in words — sits between table and post sections (matches template) */}
-        {!isFX && !isMurthal && !isTurkey && p.amountInWords && p.totals.net_payable > 0 && (
+        {!isFX && !isMurthal && !isTurkey && !isCifPort && p.amountInWords && p.totals.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
 
         {/* Specialised totals layouts (Ex-works Murthal & Ex-works FX) */}
-        {isTurkey && turkey ? (
+        {isCifPort ? (
+          <div className="border rounded overflow-hidden text-xs">
+            <div className="grid grid-cols-[1fr_auto] items-center border-b">
+              <div className="px-2 py-1.5 text-right font-bold">Basic Total</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
+                $ {cifBasicUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_auto] items-center border-b">
+              <div className="px-2 py-1.5 text-right font-bold">Sea Freight</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
+                $ {cifSeaUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
+              <div className="px-2 py-1.5 text-right font-bold">Grand Total</div>
+              <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
+                $ {cifGrandUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            {cifRate > 0 && (
+              <div className="px-2 py-1 text-[10px] text-muted-foreground italic border-t">
+                USD values converted from INR @ PU Dollar Rate ₹{cifRate}.
+              </div>
+            )}
+          </div>
+        ) : isTurkey && turkey ? (
           <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} />
         ) : isMurthal && murthal ? (
           <ExMurthalBlock
