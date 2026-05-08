@@ -270,7 +270,9 @@ export default function BoqList() {
                         <TableCell>
                           <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                             <span className="px-1.5 py-0.5 rounded bg-muted">R{b.revision ?? 0}</span>
-                            {b.is_current
+                            {b.verification_status === "pending_verification"
+                              ? <Badge variant="outline" className="text-[9px] uppercase border-amber-500/50 text-amber-700 dark:text-amber-400">Pending</Badge>
+                              : b.is_current
                               ? <Badge variant="default" className="text-[9px] uppercase">Current</Badge>
                               : <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>}
                           </span>
