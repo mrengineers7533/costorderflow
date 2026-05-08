@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
-import { calcExMurthal, calcExTurkey } from "@/lib/orders/calc";
+import { calcExMurthal, calcExTurkey, amountInWordsUSD } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
@@ -75,7 +75,9 @@ export function OrderPreview(p: Props) {
   const isCifPort = p.format === "GMS" && p.charges.gms_mode === "EXW_CIF_PORT";
   const cifRate = p.charges.cif_pu_dollar_rate || 0;
   const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
-  const cifSeaUSD = p.charges.cif_sea_freight_usd || 0;
+  const cifSeaUSD = (p.charges.cif_sea_freight_mode || "amount") === "percent"
+    ? (cifBasicUSD * (p.charges.cif_sea_freight_percent || 0)) / 100
+    : (p.charges.cif_sea_freight_usd || 0);
   const cifGrandUSD = cifBasicUSD + cifSeaUSD;
   // Item-level USD display: only for GMS EXW Turkey + display_currency=USD + fx_rate set.
   const displayUSDItems =
