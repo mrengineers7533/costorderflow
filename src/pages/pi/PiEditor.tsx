@@ -590,7 +590,7 @@ export default function PiEditor() {
                     </div>
                   )}
 
-                  {pi.charges.gms_mode === "EXW_TURKEY" && (
+                  {false && pi.charges.gms_mode === "EXW_TURKEY" && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
                       <div className="flex items-center gap-3 flex-wrap">
