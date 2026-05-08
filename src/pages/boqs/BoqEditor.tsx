@@ -289,12 +289,8 @@ export default function BoqEditor() {
   function updateItem(idv: string, patch: Partial<BoqLineItem>) {
     setItems((p) => p.map((it) => it.id === idv ? { ...it, ...patch } : it));
   }
-  function removeItem(idv: string) {
-    setItems((p) => {
-      const next = p.filter((it) => it.id !== idv);
-      return next.length ? next : [newBoqItem(1)];
-    });
-  }
+  // Item rows can no longer be added/removed manually — they always
+  // come from the linked OA. Helper kept for future use.
 }
 
 /* -------- BOQ document-style preview — mirrors generated PDF 1:1 --------
