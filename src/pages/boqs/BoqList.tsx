@@ -73,7 +73,10 @@ export default function BoqList() {
   useEffect(() => {
     setLoading(true);
     let q = supabase.from("boqs").select("*").order("created_at", { ascending: false });
-    if (!showSuperseded) q = q.eq("is_current", true);
+    if (!showSuperseded) {
+      // Show current rows AND pending verification rows so seniors/users can see them.
+      q = q.or("is_current.eq.true,verification_status.eq.pending_verification");
+    }
     q.then(({ data, error }) => {
       if (error) toast({ title: "Failed to load BOQs", description: error.message, variant: "destructive" });
       else setRows((data as unknown as BoqRecord[]) || []);
