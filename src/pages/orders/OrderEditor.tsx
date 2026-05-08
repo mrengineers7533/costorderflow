@@ -987,7 +987,7 @@ export default function OrderEditor() {
                   </div>
                   {/* Freight (flat ₹) */}
                   <ToggleNumberRow
-                    label="Freight (flat ₹) — joins GST base"
+                    label="Local Freight (flat ₹) — joins GST base"
                     enabled={!!charges.turkey_freight_enabled}
                     value={charges.turkey_freight || 0}
                     onToggle={(b) => setCharges({ ...charges, turkey_freight_enabled: b })}
@@ -1247,7 +1247,7 @@ export default function OrderEditor() {
                     </div>
                     {/* Freight (flat ₹) */}
                     <ToggleNumberRow
-                      label="Freight (flat ₹) — joins GST base"
+                      label="Local Freight (flat ₹) — joins GST base"
                       enabled={!!charges.murthal_freight_enabled}
                       value={charges.murthal_freight || 0}
                       onToggle={(b) => setCharges({ ...charges, murthal_freight_enabled: b })}
