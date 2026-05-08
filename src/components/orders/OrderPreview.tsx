@@ -362,6 +362,7 @@ export function OrderPreview(p: Props) {
 
         {/* Specialised totals layouts (Ex-works Murthal & Ex-works FX) */}
         {isCifPort ? (
+          <>
           <div className="border rounded overflow-hidden text-xs">
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Basic Total</div>
@@ -370,13 +371,17 @@ export function OrderPreview(p: Props) {
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
-              <div className="px-2 py-1.5 text-right font-bold">Sea Freight</div>
+              <div className="px-2 py-1.5 text-right font-bold">
+                Sea Freight{(p.charges.cif_sea_freight_mode || "amount") === "percent"
+                  ? ` @ ${p.charges.cif_sea_freight_percent || 0}%`
+                  : ""}
+              </div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
                 $ {cifSeaUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
-              <div className="px-2 py-1.5 text-right font-bold">Grand Total</div>
+              <div className="px-2 py-1.5 text-right font-bold">EX Work Port</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
                 $ {cifGrandUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
@@ -387,6 +392,12 @@ export function OrderPreview(p: Props) {
               </div>
             )}
           </div>
+          {cifGrandUSD > 0 && (
+            <div className="text-[11px] font-semibold uppercase tracking-wide">
+              AMOUNT (IN WORDS): {amountInWordsUSD(cifGrandUSD)}
+            </div>
+          )}
+          </>
         ) : isTurkey && turkey ? (
           <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} />
         ) : isMurthal && murthal ? (
