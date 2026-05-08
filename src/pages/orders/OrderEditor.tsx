@@ -835,12 +835,7 @@ export default function OrderEditor() {
                     Calculation: Basic Total (USD) + Local Freight (USD) = EX Work CIF Port (USD).
                     No GST, taxes or other charges apply in this mode.
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <NumberField
-                      label="PU Dollar Rate (₹ per $)"
-                      value={charges.cif_pu_dollar_rate || 0}
-                      onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
-                    />
+                  <div className="grid grid-cols-1 gap-3">
                     <div>
                       <Label className="text-xs">Local Freight</Label>
                       <div className="flex gap-2">
