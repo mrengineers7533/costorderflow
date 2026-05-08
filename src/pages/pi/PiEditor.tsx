@@ -555,12 +555,33 @@ export default function PiEditor() {
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Sea Freight ($)</Label>
-                          <Input
-                            type="number" step="any" className="h-8"
-                            value={pi.charges.cif_sea_freight_usd || 0}
-                            onChange={(e) => update("charges", { ...pi.charges, cif_sea_freight_usd: +e.target.value || 0 })}
-                          />
+                          <Label className="text-xs">Sea Freight</Label>
+                          <div className="flex gap-2">
+                            <Select
+                              value={pi.charges.cif_sea_freight_mode || "amount"}
+                              onValueChange={(v) => update("charges", { ...pi.charges, cif_sea_freight_mode: v as "amount" | "percent" })}
+                            >
+                              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="amount">Fixed $</SelectItem>
+                                <SelectItem value="percent">% of Basic</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number" step="any" className="h-8"
+                              value={(pi.charges.cif_sea_freight_mode || "amount") === "percent"
+                                ? (pi.charges.cif_sea_freight_percent || 0)
+                                : (pi.charges.cif_sea_freight_usd || 0)}
+                              onChange={(e) => {
+                                const v = +e.target.value || 0;
+                                if ((pi.charges.cif_sea_freight_mode || "amount") === "percent") {
+                                  update("charges", { ...pi.charges, cif_sea_freight_percent: v });
+                                } else {
+                                  update("charges", { ...pi.charges, cif_sea_freight_usd: v });
+                                }
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
