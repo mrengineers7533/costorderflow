@@ -1025,7 +1025,7 @@ export default function OrderEditor() {
                   </div>
                 </div>
               )}
-              {format === "GMS" && (
+              {format === "GMS" && charges.gms_mode !== "EXW_CIF_PORT" && charges.gms_mode !== "EXW_MURTHAL" && (
               <div className="pt-2 border-t">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Foreign Currency (Ex-works)</Label>
                 <p className="text-[11px] text-muted-foreground mb-2">For GMS imports (e.g. Ex-works Turkey in USD). Leave currency blank or "INR" for domestic orders.</p>
@@ -1076,7 +1076,7 @@ export default function OrderEditor() {
                 )}
               </div>
               )}
-              {format === "GMS" && (
+              {format === "GMS" && charges.gms_mode !== "EXW_TURKEY" && charges.gms_mode !== "EXW_CIF_PORT" && (
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <div>
