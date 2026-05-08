@@ -729,6 +729,22 @@ async function renderGmsPdf(
   // @ts-expect-error lastAutoTable runtime
   let yEnd = doc.lastAutoTable.finalY + 6;
 
+  // EXW CIF Port — print USD amount in words below the totals table.
+  if (isCifPort && cifRate > 0) {
+    const basicUsd = t.basic_total / cifRate;
+    const seaUsd = (c.cif_sea_freight_mode || "amount") === "percent"
+      ? (basicUsd * (c.cif_sea_freight_percent || 0)) / 100
+      : (c.cif_sea_freight_usd || 0);
+    const grandUsd = basicUsd + seaUsd;
+    if (grandUsd > 0) {
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+      const words = `AMOUNT (IN WORDS): ${amountInWordsUSD(grandUsd)}`;
+      const wrapped = doc.splitTextToSize(words, W - M * 2);
+      wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+      yEnd += 3;
+    }
+  }
+
   if (!opts?.docMeta?.hideFirstPageFooter) {
     // If footer block won't fit on the current page, push to a new one
     if (yEnd + GMS_FOOTER_RESERVED > H - M) {
