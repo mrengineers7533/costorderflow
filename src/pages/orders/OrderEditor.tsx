@@ -803,7 +803,7 @@ export default function OrderEditor() {
                       <SelectItem value="NONE">Legacy (current behavior)</SelectItem>
                       <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
                       <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
-                      <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Sea Freight)</SelectItem>
+                      <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Local Freight)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -812,7 +812,7 @@ export default function OrderEditor() {
                 <div className="mt-3 space-y-3 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW CIF Port (USD only)</div>
                   <p className="text-[11px] text-muted-foreground -mt-1">
-                    Calculation: Basic Total (USD) + Sea Freight (USD) = Grand Total (USD).
+                    Calculation: Basic Total (USD) + Local Freight (USD) = EX Work CIF Port (USD).
                     No GST, taxes or other charges apply in this mode.
                   </p>
                   <div className="grid grid-cols-2 gap-3">
@@ -822,7 +822,7 @@ export default function OrderEditor() {
                       onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
                     />
                     <div>
-                      <Label className="text-xs">Sea Freight</Label>
+                      <Label className="text-xs">Local Freight</Label>
                       <div className="flex gap-2">
                         <Select
                           value={charges.cif_sea_freight_mode || "amount"}
@@ -854,7 +854,7 @@ export default function OrderEditor() {
                   {(charges.cif_pu_dollar_rate || 0) > 0 && (
                     <div className="text-[11px] text-muted-foreground">
                       Basic Total (USD) = ₹ Item Total ÷ {charges.cif_pu_dollar_rate}.
-                      EX Work Port (USD) = Basic + Sea Freight.
+                      EX Work CIF Port (USD) = Basic + Local Freight.
                     </div>
                   )}
                 </div>
