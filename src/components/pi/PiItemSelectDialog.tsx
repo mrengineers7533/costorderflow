@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -31,12 +32,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   const nav = useNavigate();
   const [statusMap, setStatusMap] = useState<Record<string, OaItemPiStatus>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [qtyMap, setQtyMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (!open || !oa) return;
     setSelected(new Set());
+    setQtyMap({});
     setLoading(true);
     fetchOaItemPiStatus(oa.id)
       .then((m) => setStatusMap(m))
@@ -51,8 +54,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   }, [open, oa]);
 
   const items = oa?.line_items || [];
+  function balanceFor(it: { id: string; quantity: number }) {
+    const oaQty = Number(it.quantity) || 0;
+    const already = statusMap[it.id]?.pi_qty || 0;
+    return Math.max(0, oaQty - already);
+  }
   const pendingItems = useMemo(
-    () => items.filter((it) => !statusMap[it.id]?.done),
+    () => items.filter((it) => balanceFor(it) > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, statusMap],
   );
   const doneCount = items.length - pendingItems.length;
@@ -77,14 +86,29 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     });
   }
 
+  function piQtyFor(it: { id: string; quantity: number }) {
+    const raw = qtyMap[it.id];
+    if (raw === undefined || raw === "") return balanceFor(it);
+    const n = Number(raw);
+    return isNaN(n) ? 0 : n;
+  }
   const selectedItems = items.filter((it) => selected.has(it.id));
-  const selectedTotal = selectedItems.reduce((sum, it) => sum + (it.amount || 0), 0);
+  const selectedTotal = selectedItems.reduce(
+    (sum, it) => sum + piQtyFor(it) * (it.unit_rate || 0),
+    0,
+  );
+  const hasInvalidQty = selectedItems.some((it) => {
+    const q = piQtyFor(it);
+    return !(q > 0) || q > balanceFor(it) + 1e-9;
+  });
 
   async function handleGenerate() {
     if (!oa || selected.size === 0) return;
     setGenerating(true);
     try {
-      const pi = await createPiFromOaItems(oa, Array.from(selected));
+      const overrides: Record<string, number> = {};
+      for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
+      const pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
       toast({
         title: `PI ${pi.pi_number} created`,
         description: `${selectedItems.length} item(s) included.`,
