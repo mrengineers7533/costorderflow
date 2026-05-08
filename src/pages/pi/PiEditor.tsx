@@ -919,7 +919,8 @@ export default function PiEditor() {
               </Card>
             )}
 
-            {/* Revision history */}
+            {/* Revision history (legacy — kept read-only) */}
+            {family.length > 1 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Revision history</CardTitle></CardHeader>
               <CardContent>
@@ -949,6 +950,7 @@ export default function PiEditor() {
                 </Table>
               </CardContent>
             </Card>
+            )}
 
             {/* Terms & Conditions */}
             {pi.format === "MR" ? (
