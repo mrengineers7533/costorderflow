@@ -64,7 +64,15 @@ export interface Charges {
   /** GMS pricing mode. When set, the GMS preview/PDF uses the
    *  EXW-Turkey or EXW-Murthal landed-cost layout. Leave undefined
    *  to keep the legacy GMS totals (Ex-works Murthal Price + P&F + GST). */
-  gms_mode?: "EXW_TURKEY" | "EXW_MURTHAL";
+  gms_mode?: "EXW_TURKEY" | "EXW_MURTHAL" | "EXW_CIF_PORT";
+
+  /** EXW CIF Port (GMS only). USD-only flow.
+   *  Calculation: Basic Total (USD) + Sea Freight (USD) = Grand Total (USD).
+   *  No GST / P&F / insurance / freight / discount / advance.
+   *  `cif_pu_dollar_rate` is the user-entered "PU Dollar Rate" used to
+   *  convert the INR cost-sheet item totals to USD for display & PDF. */
+  cif_pu_dollar_rate?: number;     // 1 USD = X INR
+  cif_sea_freight_usd?: number;    // entered directly in USD
 
   /** EXW-Turkey landed-cost rows (each toggle hides the line).
    *  Sea Freight & Insurance are flat INR. Custom is a % applied to
