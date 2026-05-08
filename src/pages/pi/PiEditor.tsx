@@ -6,17 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, GitBranch, Save } from "lucide-react";
+import { ArrowLeft, Download, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PiRecord } from "@/lib/pi/types";
 import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
-import { createPiRevision, fetchPiFamily } from "@/lib/pi/convert";
+import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { Charges } from "@/lib/orders/types";
@@ -38,7 +34,6 @@ export default function PiEditor() {
   const [pi, setPi] = useState<PiRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [confirmRevise, setConfirmRevise] = useState(false);
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
@@ -53,7 +48,29 @@ export default function PiEditor() {
           nav("/pi"); return;
         }
         const rec = data as unknown as PiRecord;
-        setPi(rec);
+        // OA-driven model: mirror line items + charges from the latest OA in
+        // this PI's family. Only Advance Adjustment stays editable.
+        let mirrored = rec;
+        if (rec.reference_oa_id) {
+          const { data: oaRow } = await supabase
+            .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
+          if (oaRow) {
+            const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
+            const wanted = new Set((rec.line_items || []).map((it) => it.id).filter(Boolean));
+            const items = (oa.line_items || []).filter((it) => wanted.has(it.id));
+            mirrored = {
+              ...rec,
+              charges: oa.charges,
+              line_items: items.length ? items : rec.line_items,
+              bill_to: oa.bill_to,
+              ship_to: oa.ship_to,
+              company_name: oa.company_name,
+              format: oa.format,
+              reference_oa_number: oa.oa_number,
+            };
+          }
+        }
+        setPi(mirrored);
         const fam = await fetchPiFamily(rec.parent_pi_id || rec.id);
         setFamily(fam);
         setLoading(false);
@@ -134,21 +151,6 @@ export default function PiEditor() {
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
       toast({ title: "Download failed", description: e?.message || String(e), variant: "destructive" });
-    }
-  }
-
-  async function reviseSave() {
-    if (!pi) return;
-    setSaving(true);
-    try {
-      const newRev = await createPiRevision(pi, {});
-      toast({ title: `Created ${newRev.pi_number}` });
-      nav(`/pi/${newRev.id}`);
-    } catch (e: any) {
-      toast({ title: "Save failed", description: e?.message || String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-      setConfirmRevise(false);
     }
   }
 
@@ -235,9 +237,6 @@ export default function PiEditor() {
                 </Button>
               </>
             )}
-            <Button className="rounded-lg" disabled={saving} onClick={() => setConfirmRevise(true)}>
-              <GitBranch className="mr-1 h-4 w-4" />Save as new revision
-            </Button>
           </div>
         </div>
 
@@ -266,8 +265,14 @@ export default function PiEditor() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base">Line items</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Line items</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Mirrored from OA <span className="font-mono">{pi.reference_oa_number}</span> — read-only.
+                </p>
+              </CardHeader>
               <CardContent>
+                <fieldset disabled className="contents">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -298,47 +303,18 @@ export default function PiEditor() {
                     ))}
                   </TableBody>
                 </Table>
+                </fieldset>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader><CardTitle className="text-base">PI adjustments</CardTitle></CardHeader>
+          <Card>
+              <CardHeader>
+                <CardTitle className="text-base">PI adjustments</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Charges, discount, taxes mirror the OA. Only Advance Adjustment is editable.
+                </p>
+              </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
-                <div className="col-span-2 flex items-center gap-3">
-                  <input
-                    id="pi-apply-discount"
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={pi.apply_discount ?? false}
-                    onChange={(e) => update("apply_discount", e.target.checked)}
-                  />
-                  <Label htmlFor="pi-apply-discount" className="cursor-pointer">
-                    Apply discount
-                  </Label>
-                  <span className="text-xs text-muted-foreground">
-                    (hidden from PDF when off)
-                  </span>
-                </div>
-                {pi.apply_discount && (
-                  <>
-                    <div>
-                      <Label>Discount label</Label>
-                      <Input
-                        placeholder="One Time Very Special Discount"
-                        value={pi.discount_label || ""}
-                        onChange={(e) => update("discount_label", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label>Discount % <span className="text-muted-foreground text-xs">(on Basic Amount only)</span></Label>
-                      <Input
-                        type="number" step="0.01" min={0} max={100}
-                        value={pi.one_time_discount_percent}
-                        onChange={(e) => update("one_time_discount_percent", Number(e.target.value))}
-                      />
-                    </div>
-                  </>
-                )}
                 <div>
                   <Label>
                     Advance Adjustment{" "}
@@ -367,32 +343,6 @@ export default function PiEditor() {
                       />
                     )}
                   </div>
-                </div>
-                <div>
-                  <Label>GST %</Label>
-                  <Input type="number" step="0.01" value={pi.charges.gst_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, gst_percent: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <Label>Freight (₹)</Label>
-                  <Input type="number" value={pi.charges.freight || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, freight: Number(e.target.value), freight_enabled: Number(e.target.value) > 0 })} />
-                </div>
-                <div>
-                  <Label>P&amp;F % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
-                  <Input type="number" step="0.01" value={pi.charges.pf_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, pf_percent: Number(e.target.value), pf_amount: 0 })} />
-                </div>
-                <div>
-                  <Label>Insurance % <span className="text-muted-foreground text-xs">(on Basic After Discount)</span></Label>
-                  <Input type="number" step="0.01" value={pi.charges.insurance_percent || 0}
-                    onChange={(e) => update("charges", { ...pi.charges, insurance_percent: Number(e.target.value), insurance: 0 })} />
-                </div>
-                <div className="col-span-2">
-                  <Label>Other Charges (₹)</Label>
-                  <Input type="number" step="0.01" min={0}
-                    value={pi.other_charges || 0}
-                    onChange={(e) => update("other_charges", Number(e.target.value))} />
                 </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
@@ -504,8 +454,12 @@ export default function PiEditor() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">GMS Charges</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Mirrored from OA — read-only.
+                  </p>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
+                <fieldset disabled className="contents">
                   <div>
                     {/* Single global PU Dollar Rate — controls INR→USD across all GMS modes. */}
                     {pi.charges.gms_mode !== "EXW_TURKEY" && (
@@ -960,11 +914,13 @@ export default function PiEditor() {
                       </div>
                     </div>
                   )}
+                </fieldset>
                 </CardContent>
               </Card>
             )}
 
-            {/* Revision history */}
+            {/* Revision history (legacy — kept read-only) */}
+            {family.length > 1 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Revision history</CardTitle></CardHeader>
               <CardContent>
@@ -994,6 +950,7 @@ export default function PiEditor() {
                 </Table>
               </CardContent>
             </Card>
+            )}
 
             {/* Terms & Conditions */}
             {pi.format === "MR" ? (
@@ -1100,24 +1057,6 @@ export default function PiEditor() {
         </section>
       </div>
 
-      <AlertDialog open={confirmRevise} onOpenChange={setConfirmRevise}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Save as a new revised copy?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Any change in this PI will create a revised copy. The original
-              <span className="font-mono mx-1">{pi.pi_number}</span> stays unchanged.
-              The new revision will be numbered automatically (e.g. /R{(family[family.length - 1]?.revision || pi.revision) + 1}).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={reviseSave} disabled={saving}>
-              <Save className="mr-1 h-4 w-4" />Create revision
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

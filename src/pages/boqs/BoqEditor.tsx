@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2, Download, Printer, Save } from "lucide-react";
+import { ArrowLeft, Download, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
@@ -60,7 +60,38 @@ export default function BoqEditor() {
         setFormat(b.format); setStatus(b.status); setPreparedBy(b.prepared_by || "");
         setBoqDate(b.boq_date); setReferenceOa(b.reference_oa_number || "");
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
-        setItems(b.line_items?.length ? b.line_items : [newBoqItem(1)]);
+        // OA-driven model: refresh items from latest OA. Preserve any
+        // user-edited Description/Remarks matched by model number.
+        let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
+        if (b.order_id) {
+          const { data: oa } = await supabase.from("orders").select("*").eq("id", b.order_id).maybeSingle();
+          if (oa) {
+            const o = oa as unknown as OrderRecord;
+            const prevByModel = new Map<string, BoqLineItem>();
+            (b.line_items || []).forEach((it) => {
+              const k = (it.model_number || "").trim().toLowerCase();
+              if (k) prevByModel.set(k, it);
+            });
+            nextItems = (o.line_items || []).map((it, i) => {
+              const model = it.hsn_code || "";
+              const prev = prevByModel.get(model.trim().toLowerCase());
+              return {
+                id: prev?.id || crypto.randomUUID(),
+                item_no: String(i + 1),
+                model_number: model,
+                description: prev?.description || it.description || "",
+                quantity: Number(it.quantity) || 0,
+                unit: it.unit || "Nos",
+                remarks: prev?.remarks || "",
+              };
+            });
+            setReferenceOa(o.oa_number);
+            setProjectNumber(o.cost_sheet_number || o.reference || b.project_number || "");
+            setClientName(o.company_name || o.bill_to?.name || b.client_name || "");
+            setFormat(o.format);
+          }
+        }
+        setItems(nextItems.length ? nextItems : [newBoqItem(1)]);
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");
         setLoading(false);
         return;
@@ -189,36 +220,36 @@ export default function BoqEditor() {
             <Card>
               <CardHeader><CardTitle>Header</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-2 gap-3">
-                <div><Label>BOQ Number</Label><Input value={boqNumber} onChange={(e) => setBoqNumber(e.target.value)} /></div>
+                <div><Label>BOQ Number</Label><Input value={boqNumber} readOnly /></div>
                 <div><Label>Date</Label><Input type="date" value={boqDate} onChange={(e) => setBoqDate(e.target.value)} /></div>
-                <div><Label>Reference OA Number</Label><Input value={referenceOa} onChange={(e) => setReferenceOa(e.target.value)} /></div>
-                <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} onChange={(e) => setProjectNumber(e.target.value)} /></div>
-                <div><Label>Prepared By</Label><Input value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} /></div>
+                <div><Label>Reference OA Number</Label><Input value={referenceOa} readOnly /></div>
+                <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
+                <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
+                <p className="md:col-span-2 text-xs text-muted-foreground">
+                  Header & items mirror the linked OA. Only Description (per item) is editable.
+                </p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader>
                 <CardTitle>Items</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => setItems((p) => [...p, newBoqItem(p.length + 1)])}>
-                  <Plus className="mr-1 h-4 w-4" />Add Row
-                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Synced from OA. Only Description is editable.
+                </p>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_36px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div></div>
+                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div>
                 </div>
                 {items.map((it) => (
-                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_36px] gap-1.5 items-start">
-                    <Input value={it.item_no} onChange={(e) => updateItem(it.id, { item_no: e.target.value })} className="h-9" />
-                    <Input value={it.model_number} onChange={(e) => updateItem(it.id, { model_number: e.target.value })} className="h-9" />
+                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)] gap-1.5 items-start">
+                    <Input value={it.item_no} readOnly className="h-9" />
+                    <Input value={it.model_number} readOnly className="h-9" />
                     <Textarea value={it.description} onChange={(e) => updateItem(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
-                    <Input type="number" value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })} className="h-9" />
-                    <Input value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} className="h-9" />
+                    <Input type="number" value={it.quantity} readOnly className="h-9" />
+                    <Input value={it.unit} readOnly className="h-9" />
                     <Textarea value={it.remarks} onChange={(e) => updateItem(it.id, { remarks: e.target.value })} className="min-h-9" rows={1} />
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => removeItem(it.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
                   </div>
                 ))}
               </CardContent>
@@ -258,12 +289,8 @@ export default function BoqEditor() {
   function updateItem(idv: string, patch: Partial<BoqLineItem>) {
     setItems((p) => p.map((it) => it.id === idv ? { ...it, ...patch } : it));
   }
-  function removeItem(idv: string) {
-    setItems((p) => {
-      const next = p.filter((it) => it.id !== idv);
-      return next.length ? next : [newBoqItem(1)];
-    });
-  }
+  // Item rows can no longer be added/removed manually — they always
+  // come from the linked OA. Helper kept for future use.
 }
 
 /* -------- BOQ document-style preview — mirrors generated PDF 1:1 --------
