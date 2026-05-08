@@ -534,19 +534,18 @@ async function renderGmsPdf(
   const t = order.totals;
   const fmt = (n: number) =>
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // Phase 1: GMS Turkey USD/INR display toggle for the totals block.
-  const turkeyDisplayUSD =
-    order.format === "GMS" &&
-    c.gms_mode === "EXW_TURKEY" &&
-    c.display_currency === "USD" &&
-    (c.fx_rate || 0) > 0;
+  // EXW Turkey is always USD via cost-sheet $ rate (fx_rate). PU Dollar Rate
+  // does not apply to Turkey.
+  const turkeyAlwaysUSD =
+    order.format === "GMS" && c.gms_mode === "EXW_TURKEY" && (c.fx_rate || 0) > 0;
   // EXW CIF Port — always USD using PU Dollar Rate.
   const isCifPort = order.format === "GMS" && c.gms_mode === "EXW_CIF_PORT";
   const cifRate = c.cif_pu_dollar_rate || 0;
-  // Global GMS USD switch: any GMS pricing mode renders in $ when PU Dollar Rate > 0.
-  const gmsUsd = order.format === "GMS" && cifRate > 0;
-  const usdDisplay = turkeyDisplayUSD || gmsUsd;
-  const usdRate = gmsUsd ? cifRate : (c.fx_rate || 1);
+  // Global GMS USD switch via PU Dollar Rate (excludes Turkey).
+  const gmsUsd =
+    order.format === "GMS" && cifRate > 0 && c.gms_mode !== "EXW_TURKEY";
+  const usdDisplay = turkeyAlwaysUSD || gmsUsd;
+  const usdRate = turkeyAlwaysUSD ? (c.fx_rate || 1) : (gmsUsd ? cifRate : (c.fx_rate || 1));
   const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
     (n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -679,10 +678,10 @@ async function renderGmsPdf(
 
   // When Turkey + USD display, prepend a banner row noting the conversion
   // (PDF column header still says "AMOUNT (INR)" for the item rows).
-  if (turkeyDisplayUSD) {
+  if (turkeyAlwaysUSD) {
     totalsAsBody.unshift([
       {
-        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${c.fx_rate || 0}`,
+        content: `EXW Turkey — values in USD @ cost-sheet $ rate ₹${c.fx_rate || 0}`,
         colSpan: 8,
         styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
       },
