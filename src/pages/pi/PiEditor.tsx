@@ -89,7 +89,9 @@ export default function PiEditor() {
     if (mode === "EXW_CIF_PORT") {
       const rate = pi.charges.cif_pu_dollar_rate || 0;
       const basicUsd = rate > 0 ? totals.basic_total / rate : 0;
-      const seaUsd = pi.charges.cif_sea_freight_usd || 0;
+      const seaUsd = (pi.charges.cif_sea_freight_mode || "amount") === "percent"
+        ? (basicUsd * (pi.charges.cif_sea_freight_percent || 0)) / 100
+        : (pi.charges.cif_sea_freight_usd || 0);
       const grandUsd = basicUsd + seaUsd;
       // grand/net stored back in INR equivalent so existing list/reports keep working.
       const grandInr = grandUsd * (rate || 1);
