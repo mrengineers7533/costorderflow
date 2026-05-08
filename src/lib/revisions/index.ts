@@ -210,14 +210,19 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
   const { data: boqs } = await supabase
     .from("boqs").select("*").in("order_id", familyIds);
   const allBoqs = (boqs || []) as unknown as BoqRecord[];
-  // Suppress sync if a pending verification BOQ already exists for this family;
-  // the senior must approve (or it must be deleted) before another revision is queued.
-  const hasPending = allBoqs.some((b) => b.verification_status === "pending_verification");
+  // A pending or rejected BOQ blocks new revision creation. Pending = senior
+  // is still reviewing. Rejected = user is correcting OA, BOQ will be reset
+  // back to pending (in-place below) instead of inserting another revision.
+  const hasOpen = allBoqs.some(
+    (b) =>
+      b.verification_status === "pending_verification" ||
+      b.verification_status === "rejected",
+  );
   // Decide whether the OA bumped past the current BOQ revision → new pending row.
   const currentBoq = allBoqs.find((b) => b.is_current && b.verification_status !== "pending_verification") || null;
   const oaRev = order.revision ?? 0;
   const shouldCreatePending =
-    !hasPending && !!currentBoq && (currentBoq.revision ?? 0) < oaRev;
+    !hasOpen && !!currentBoq && (currentBoq.revision ?? 0) < oaRev;
 
   if (shouldCreatePending) {
     await createPendingBoqRevision(order, currentBoq);
@@ -231,6 +236,9 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
       const k = `${(it.model_number || "").trim().toLowerCase()}`;
       if (k) prevByModel.set(k, it);
     });
+    const isOpen =
+      raw.verification_status === "pending_verification" ||
+      raw.verification_status === "rejected";
     const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => {
       const model = it.hsn_code || "";
       const prev = prevByModel.get(model.trim().toLowerCase());
@@ -238,21 +246,52 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
         id: prev?.id || crypto.randomUUID(),
         item_no: String(i + 1),
         model_number: model,
-        // OA description always wins unless the user edited the BOQ description.
-        description: prev?.description || it.description || "",
+        // BOQ data always comes from latest OA (no manual description edits).
+        description: it.description || "",
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
         remarks: prev?.remarks || "",
+        // Reset per-item approval whenever OA changes (sync resets review).
+        approval_status: isOpen ? "pending" : prev?.approval_status,
+        approval_comment: isOpen ? "" : prev?.approval_comment,
       };
     });
-    await supabase.from("boqs").update({
+    const update: Record<string, unknown> = {
       line_items: items,
       boq_number: deriveBoqNumber(order.oa_number),
       reference_oa_number: order.oa_number,
       project_number: order.cost_sheet_number || order.reference || raw.project_number,
       client_name: order.company_name || order.bill_to?.name || raw.client_name,
       format: order.format,
-    } as never).eq("id", raw.id);
+    };
+    let resentToken: string | null = null;
+    // If the BOQ was rejected and the user is re-saving the OA at the same
+    // revision, treat it as a correction: flip back to pending + new token
+    // and re-fire the verification email.
+    if (raw.verification_status === "rejected") {
+      resentToken = crypto.randomUUID();
+      update.verification_status = "pending_verification";
+      update.verification_token = resentToken;
+      update.verification_requested_at = new Date().toISOString();
+      update.verified_at = null;
+    }
+    await supabase.from("boqs").update(update as never).eq("id", raw.id);
+    if (resentToken) {
+      try {
+        const verificationUrl = `${window.location.origin}/boq-verify/${resentToken}`;
+        await supabase.functions.invoke("send-boq-verification", {
+          body: {
+            boq_id: raw.id,
+            boq_number: deriveBoqNumber(order.oa_number),
+            oa_number: order.oa_number,
+            revision: raw.revision,
+            verification_url: verificationUrl,
+          },
+        });
+      } catch (e) {
+        console.warn("send-boq-verification (re-submit) invoke failed", e);
+      }
+    }
   }
 
   // ---- Sync PIs (current rows only) ----

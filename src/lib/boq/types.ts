@@ -8,6 +8,9 @@ export interface BoqLineItem {
   quantity: number;
   unit: string;
   remarks: string;
+  /** Senior approval state per line item. */
+  approval_status?: "pending" | "approved" | "rejected";
+  approval_comment?: string;
 }
 
 export interface BoqRecord {
@@ -35,8 +38,8 @@ export interface BoqRecord {
   /** The exact OA revision id this BOQ was generated from. */
   source_order_id?: string | null;
   revised_from_id?: string | null;
-  /** 'approved' (default) or 'pending_verification'. */
-  verification_status?: "approved" | "pending_verification";
+  /** 'approved' (default), 'pending_verification', or 'rejected'. */
+  verification_status?: "approved" | "pending_verification" | "rejected";
   verification_token?: string | null;
   verification_requested_at?: string | null;
   verified_at?: string | null;

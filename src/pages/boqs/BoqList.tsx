@@ -74,8 +74,8 @@ export default function BoqList() {
     setLoading(true);
     let q = supabase.from("boqs").select("*").order("created_at", { ascending: false });
     if (!showSuperseded) {
-      // Show current rows AND pending verification rows so seniors/users can see them.
-      q = q.or("is_current.eq.true,verification_status.eq.pending_verification");
+      // Show current rows AND pending/rejected rows so seniors/users can see them.
+      q = q.or("is_current.eq.true,verification_status.eq.pending_verification,verification_status.eq.rejected");
     }
     q.then(({ data, error }) => {
       if (error) toast({ title: "Failed to load BOQs", description: error.message, variant: "destructive" });
@@ -275,6 +275,8 @@ export default function BoqList() {
                             <span className="px-1.5 py-0.5 rounded bg-muted">R{b.revision ?? 0}</span>
                             {b.verification_status === "pending_verification"
                               ? <Badge variant="outline" className="text-[9px] uppercase border-amber-500/50 text-amber-700 dark:text-amber-400">Pending</Badge>
+                              : b.verification_status === "rejected"
+                              ? <Badge variant="destructive" className="text-[9px] uppercase">Rejected</Badge>
                               : b.is_current
                               ? <Badge variant="default" className="text-[9px] uppercase">Current</Badge>
                               : <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>}
