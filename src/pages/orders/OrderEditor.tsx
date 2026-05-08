@@ -788,7 +788,15 @@ export default function OrderEditor() {
                       setCharges({
                         ...charges,
                         gms_mode: mode,
-                        ex_murthal_enabled: mode === "EXW_MURTHAL" ? true : (mode === "EXW_TURKEY" ? false : charges.ex_murthal_enabled),
+                        // Hard-reset ex_murthal_enabled when leaving the Murthal/Legacy
+                        // path so hidden Murthal values can't sneak into CIF / Turkey totals.
+                        ex_murthal_enabled:
+                          mode === "EXW_MURTHAL" ? true
+                          : mode === "EXW_TURKEY" || mode === "EXW_CIF_PORT" ? false
+                          : charges.ex_murthal_enabled,
+                        // Drop Turkey display toggle when switching to CIF / Murthal — CIF
+                        // is USD-only via its own PU Dollar Rate.
+                        display_currency: mode === "EXW_CIF_PORT" ? undefined : charges.display_currency,
                         // sensible defaults on first enable of EXW Turkey
                         turkey_custom_percent: charges.turkey_custom_percent ?? 10,
                         turkey_gst_percent: charges.turkey_gst_percent ?? 18,
@@ -1025,7 +1033,7 @@ export default function OrderEditor() {
                   </div>
                 </div>
               )}
-              {format === "GMS" && (
+              {format === "GMS" && charges.gms_mode !== "EXW_CIF_PORT" && charges.gms_mode !== "EXW_MURTHAL" && (
               <div className="pt-2 border-t">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Foreign Currency (Ex-works)</Label>
                 <p className="text-[11px] text-muted-foreground mb-2">For GMS imports (e.g. Ex-works Turkey in USD). Leave currency blank or "INR" for domestic orders.</p>
@@ -1076,7 +1084,7 @@ export default function OrderEditor() {
                 )}
               </div>
               )}
-              {format === "GMS" && (
+              {format === "GMS" && charges.gms_mode !== "EXW_TURKEY" && charges.gms_mode !== "EXW_CIF_PORT" && (
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <div>
