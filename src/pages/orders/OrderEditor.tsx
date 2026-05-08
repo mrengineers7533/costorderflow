@@ -867,7 +867,7 @@ export default function OrderEditor() {
                   )}
                 </div>
               )}
-              {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
+              {false && format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
                 <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
                   <ModeToggleRow
