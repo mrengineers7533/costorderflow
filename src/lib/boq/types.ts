@@ -35,6 +35,12 @@ export interface BoqRecord {
   /** The exact OA revision id this BOQ was generated from. */
   source_order_id?: string | null;
   revised_from_id?: string | null;
+  /** 'approved' (default) or 'pending_verification'. */
+  verification_status?: "approved" | "pending_verification";
+  verification_token?: string | null;
+  verification_requested_at?: string | null;
+  verified_at?: string | null;
+  verified_by_email?: string | null;
 }
 
 /** Derive BOQ number from an OA number.

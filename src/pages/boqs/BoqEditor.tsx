@@ -44,6 +44,8 @@ export default function BoqEditor() {
   const [items, setItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
   const [terms, setTerms] = useState(DEFAULT_BOQ_TERMS);
   const [notes, setNotes] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification">("approved");
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
   // Load existing BOQ or initialize from order
   useEffect(() => {
@@ -60,6 +62,8 @@ export default function BoqEditor() {
         setFormat(b.format); setStatus(b.status); setPreparedBy(b.prepared_by || "");
         setBoqDate(b.boq_date); setReferenceOa(b.reference_oa_number || "");
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
+        setVerificationStatus(b.verification_status || "approved");
+        setVerificationToken(b.verification_token || null);
         // OA-driven model: refresh items from latest OA. Preserve any
         // user-edited Description/Remarks matched by model number.
         let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
@@ -213,6 +217,31 @@ export default function BoqEditor() {
             <Button size="sm" disabled={saving} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
+
+        {verificationStatus === "pending_verification" && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm print:hidden">
+            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Verification</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This BOQ revision was auto-generated from the latest OA and is awaiting senior approval.
+              It becomes the active BOQ once approved via the verification link.
+            </p>
+            {verificationToken && (
+              <div className="mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const url = `${window.location.origin}/boq-verify/${verificationToken}`;
+                    navigator.clipboard.writeText(url);
+                    toast({ title: "Verification link copied" });
+                  }}
+                >
+                  Copy verification link
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-5">
           {/* ---------- Editor ---------- */}

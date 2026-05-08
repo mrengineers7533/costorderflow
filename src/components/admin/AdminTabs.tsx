@@ -5,6 +5,7 @@ const tabs = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/users", label: "Users" },
   { to: "/admin/domains", label: "Domains" },
+  { to: "/admin/boq-verification", label: "BOQ Verification" },
 ];
 
 export function AdminTabs({ title, description }: { title: string; description?: string }) {

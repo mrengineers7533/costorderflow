@@ -73,7 +73,10 @@ export default function BoqList() {
   useEffect(() => {
     setLoading(true);
     let q = supabase.from("boqs").select("*").order("created_at", { ascending: false });
-    if (!showSuperseded) q = q.eq("is_current", true);
+    if (!showSuperseded) {
+      // Show current rows AND pending verification rows so seniors/users can see them.
+      q = q.or("is_current.eq.true,verification_status.eq.pending_verification");
+    }
     q.then(({ data, error }) => {
       if (error) toast({ title: "Failed to load BOQs", description: error.message, variant: "destructive" });
       else setRows((data as unknown as BoqRecord[]) || []);
@@ -270,7 +273,9 @@ export default function BoqList() {
                         <TableCell>
                           <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                             <span className="px-1.5 py-0.5 rounded bg-muted">R{b.revision ?? 0}</span>
-                            {b.is_current
+                            {b.verification_status === "pending_verification"
+                              ? <Badge variant="outline" className="text-[9px] uppercase border-amber-500/50 text-amber-700 dark:text-amber-400">Pending</Badge>
+                              : b.is_current
                               ? <Badge variant="default" className="text-[9px] uppercase">Current</Badge>
                               : <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>}
                           </span>
