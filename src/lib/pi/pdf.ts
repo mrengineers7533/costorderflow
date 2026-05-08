@@ -50,6 +50,17 @@ export async function generatePiPDF(
     { mode: advMode, value: advValue },
     pi.other_charges || 0,
   );
+  // PI-level overrides applied on TOP of the OA grand total (mirrors editor).
+  const grandForPi = t.gross_invoice_total;
+  const piAdvOnGrand = advMode === "amount"
+    ? Math.max(0, pi.advance_amount || 0)
+    : Math.max(0, (grandForPi * (pi.advance_adjustment_percent || 0)) / 100);
+  const piDiscMode = pi.discount_mode || "percent";
+  const piDiscValue = pi.discount_value || 0;
+  const piDiscAmt = piDiscMode === "amount"
+    ? Math.max(0, piDiscValue)
+    : Math.max(0, (grandForPi * piDiscValue) / 100);
+  const piNet = Math.max(0, grandForPi - piAdvOnGrand - piDiscAmt);
 
   const extraTotalsRows: ExtraTotalsRow[] = [];
   const isCifPort = pi.format === "GMS" && pi.charges.gms_mode === "EXW_CIF_PORT";
@@ -88,12 +99,20 @@ export async function generatePiPDF(
   if (t.other_charges_amount > 0) {
     extraTotalsRows.push({ label: "Other Charges", value: t.other_charges_amount });
   }
-  if (t.advance_adjustment_amount > 0) {
+  if (piDiscAmt > 0) {
+    const dLabel = piDiscMode === "amount"
+      ? "Discount"
+      : `Discount @ ${piDiscValue}%`;
+    extraTotalsRows.push({ label: dLabel, value: piDiscAmt });
+  }
+  if (piAdvOnGrand > 0) {
     const advLabel = advMode === "amount"
       ? "Advance Adjustment"
       : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`;
-    extraTotalsRows.push({ label: advLabel, value: t.advance_adjustment_amount });
-    extraTotalsRows.push({ label: "Net Payable", value: t.net_payable_pi, bold: true });
+    extraTotalsRows.push({ label: advLabel, value: piAdvOnGrand });
+  }
+  if (piAdvOnGrand > 0 || piDiscAmt > 0) {
+    extraTotalsRows.push({ label: "Net Payable", value: piNet, bold: true });
   }
 
   return generateOrderPDF(orderLike, {
