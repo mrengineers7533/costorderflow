@@ -259,7 +259,7 @@ export default function BoqEditor() {
               <CardHeader><CardTitle>Header</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-2 gap-3">
                 <div><Label>BOQ Number</Label><Input value={boqNumber} readOnly /></div>
-                <div><Label>Date</Label><Input type="date" value={boqDate} onChange={(e) => setBoqDate(e.target.value)} /></div>
+                <div><Label>Date</Label><Input type="date" value={boqDate} readOnly /></div>
                 <div><Label>Reference OA Number</Label><Input value={referenceOa} readOnly /></div>
                 <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
                 <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
