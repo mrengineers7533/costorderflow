@@ -359,27 +359,8 @@ export default function OrderEditor() {
     }
   }
 
-  async function handleCreateOrReviseBoq() {
-    if (!orderId) return;
-    // If no BOQ exists at all in this family, just open the editor in "new" mode
-    // pointing at this OA — same flow as the existing "Generate BOQ" button.
-    if (!currentBoq) {
-      navigate(`/boqs/new?orderId=${orderId}`);
-      return;
-    }
-    // Already has a current BOQ — create a new BOQ revision pulling fresh OA data.
-    setSaving(true);
-    try {
-      const newBoq = await reviseBoqFromOrder(snapshotOrder(), currentBoq);
-      toast({ title: `BOQ Rev ${newBoq.revision} created` });
-      navigate(`/boqs/${newBoq.id}`);
-    } catch (e) {
-      toast({ title: "Revise BOQ failed", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-      setConfirmReviseBoq(false);
-    }
-  }
+  // BOQ revisions are no longer supported. BOQs auto-sync from the current OA
+  // whenever the OA is saved (see syncBoqsAndPisForOrder in save()).
 
   async function downloadCurrentBoqPdf() {
     if (!currentBoq) return;
@@ -491,18 +472,7 @@ export default function OrderEditor() {
                   >
                     <ClipboardList className="mr-1 h-4 w-4" />Create BOQ from this OA
                   </Button>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="rounded-lg"
-                      onClick={() => setConfirmReviseBoq(true)}
-                      title="Create a new BOQ revision from the latest OA data"
-                    >
-                      <GitBranch className="mr-1 h-4 w-4" />Revise BOQ
-                    </Button>
-                  </>
-                )}
+                ) : null}
                 <Button
                   variant="outline"
                   className="rounded-lg"
@@ -566,21 +536,7 @@ export default function OrderEditor() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={confirmReviseBoq} onOpenChange={setConfirmReviseBoq}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Create new BOQ revision?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will create a new BOQ revision copy and keep the previous revision saved.
-                The new BOQ will pull the latest item data from this OA, while keeping your earlier Remarks and Terms where possible. Do you want to continue?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleCreateOrReviseBoq}>Create revision</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* BOQ revision dialog removed — BOQs auto-sync from current OA on save. */}
 
         <div className="space-y-4">
           <div className="space-y-4 min-w-0">
