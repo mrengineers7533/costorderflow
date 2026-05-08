@@ -8,6 +8,10 @@ export interface OaItemPiStatus {
   done: boolean;
   pi_number?: string;
   pi_id?: string;
+  /** Sum of quantities for this OA line item across all current PIs. */
+  pi_qty: number;
+  /** All PI numbers that include this item (most recent first not guaranteed). */
+  pi_numbers: string[];
 }
 
 /**
@@ -36,8 +40,21 @@ export async function fetchOaItemPiStatus(
     if ((pi.status as string) === "cancelled") continue;
     for (const item of pi.line_items || []) {
       if (!item?.id) continue;
-      if (!map[item.id]) {
-        map[item.id] = { done: true, pi_number: pi.pi_number, pi_id: pi.id };
+      const qty = Number(item.quantity) || 0;
+      const existing = map[item.id];
+      if (!existing) {
+        map[item.id] = {
+          done: true,
+          pi_number: pi.pi_number,
+          pi_id: pi.id,
+          pi_qty: qty,
+          pi_numbers: [pi.pi_number],
+        };
+      } else {
+        existing.pi_qty += qty;
+        if (!existing.pi_numbers.includes(pi.pi_number)) {
+          existing.pi_numbers.push(pi.pi_number);
+        }
       }
     }
   }
@@ -52,22 +69,40 @@ export async function fetchOaItemPiStatus(
 export async function createPiFromOaItems(
   oa: OrderRecord,
   selectedItemIds: string[],
+  /** Optional partial quantities keyed by line item id. Defaults to the
+   *  remaining balance qty for each selected item. */
+  qtyOverrides?: Record<string, number>,
 ): Promise<PiRecord> {
   if (!selectedItemIds || selectedItemIds.length === 0) {
     throw new Error("Select at least one item to generate a PI.");
   }
 
-  // Re-check status server-side to prevent races / duplicates.
+  // Re-check status server-side to validate balance per item.
   const status = await fetchOaItemPiStatus(oa.id);
-  const conflict = selectedItemIds.find((id) => status[id]?.done);
-  if (conflict) {
-    throw new Error(
-      `Item is already part of PI ${status[conflict]?.pi_number}. Refresh and try again.`,
-    );
-  }
 
   const wantedIds = new Set(selectedItemIds);
-  const filteredItems = (oa.line_items || []).filter((it) => wantedIds.has(it.id));
+  const sourceItems = (oa.line_items || []).filter((it) => wantedIds.has(it.id));
+  const filteredItems: LineItem[] = sourceItems.map((it) => {
+    const oaQty = Number(it.quantity) || 0;
+    const alreadyQty = status[it.id]?.pi_qty || 0;
+    const balance = Math.max(0, oaQty - alreadyQty);
+    const requested = qtyOverrides?.[it.id];
+    const piQty = requested == null ? balance : Number(requested);
+    if (!(piQty > 0)) {
+      throw new Error(`Invalid PI quantity for "${it.description}".`);
+    }
+    if (piQty > balance + 1e-9) {
+      throw new Error(
+        `PI qty ${piQty} exceeds balance ${balance} for "${it.description}".`,
+      );
+    }
+    const rate = Number(it.unit_rate) || 0;
+    return {
+      ...it,
+      quantity: piQty,
+      amount: piQty * rate,
+    };
+  });
   if (filteredItems.length === 0) {
     throw new Error("Selected items were not found on this OA.");
   }
