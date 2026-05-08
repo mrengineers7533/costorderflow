@@ -19,7 +19,7 @@ import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/Co
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
-import { reviseOrder, reviseBoqFromOrder } from "@/lib/revisions";
+import { reviseOrder, syncBoqsAndPisForOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
@@ -272,6 +272,12 @@ export default function OrderEditor() {
 
     setSaving(false);
     if (res.error) return toast({ title: "Save failed", description: res.error.message, variant: "destructive" });
+    // OA-driven model: push fresh data into linked BOQs & PIs.
+    try {
+      await syncBoqsAndPisForOrder(res.data as never);
+    } catch (e) {
+      console.warn("BOQ/PI auto-sync failed", e);
+    }
     toast({ title: "Saved", description: `OA ${oa}` });
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
