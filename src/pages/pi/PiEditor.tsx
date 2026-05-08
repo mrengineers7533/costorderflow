@@ -6,17 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, GitBranch, Save } from "lucide-react";
+import { ArrowLeft, Download, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PiRecord } from "@/lib/pi/types";
 import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
-import { createPiRevision, fetchPiFamily } from "@/lib/pi/convert";
+import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { Charges } from "@/lib/orders/types";
@@ -38,7 +34,6 @@ export default function PiEditor() {
   const [pi, setPi] = useState<PiRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [confirmRevise, setConfirmRevise] = useState(false);
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
@@ -53,7 +48,29 @@ export default function PiEditor() {
           nav("/pi"); return;
         }
         const rec = data as unknown as PiRecord;
-        setPi(rec);
+        // OA-driven model: mirror line items + charges from the latest OA in
+        // this PI's family. Only Advance Adjustment stays editable.
+        let mirrored = rec;
+        if (rec.reference_oa_id) {
+          const { data: oaRow } = await supabase
+            .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
+          if (oaRow) {
+            const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
+            const wanted = new Set((rec.line_items || []).map((it) => it.id).filter(Boolean));
+            const items = (oa.line_items || []).filter((it) => wanted.has(it.id));
+            mirrored = {
+              ...rec,
+              charges: oa.charges,
+              line_items: items.length ? items : rec.line_items,
+              bill_to: oa.bill_to,
+              ship_to: oa.ship_to,
+              company_name: oa.company_name,
+              format: oa.format,
+              reference_oa_number: oa.oa_number,
+            };
+          }
+        }
+        setPi(mirrored);
         const fam = await fetchPiFamily(rec.parent_pi_id || rec.id);
         setFamily(fam);
         setLoading(false);
@@ -134,21 +151,6 @@ export default function PiEditor() {
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
       toast({ title: "Download failed", description: e?.message || String(e), variant: "destructive" });
-    }
-  }
-
-  async function reviseSave() {
-    if (!pi) return;
-    setSaving(true);
-    try {
-      const newRev = await createPiRevision(pi, {});
-      toast({ title: `Created ${newRev.pi_number}` });
-      nav(`/pi/${newRev.id}`);
-    } catch (e: any) {
-      toast({ title: "Save failed", description: e?.message || String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-      setConfirmRevise(false);
     }
   }
 
