@@ -43,13 +43,27 @@ export interface BoqRecord {
   verified_by_email?: string | null;
 }
 
-/** Derive BOQ number from an OA number.
- *  MROA/2025-26/0036 -> BOQ-0036
- *  2025-26/GMS/0024  -> BOQ-0024
- *  Falls back to BOQ-<oa> when no trailing number found. */
+/** Derive BOQ number from an OA number. The BOQ number always mirrors
+ *  the OA's revision suffix so OA Rn ⇒ BOQ Rn.
+ *
+ *  MROA/2026-27/0008/R4  -> MRBOQ/26-27/0008/R4
+ *  MROA/2026-27/0008     -> MRBOQ/26-27/0008
+ *  2025-26/GMS/0024/R2   -> 25-26/GMSBOQ/0024/R2
+ *  2025-26/GMS/0024      -> 25-26/GMSBOQ/0024
+ *  Fallback: BOQ-<trailing-digits>[/Rn]. */
 export function deriveBoqNumber(oaNumber: string): string {
-  const m = oaNumber.match(/(\d+)\s*$/);
-  return m ? `BOQ-${m[1]}` : `BOQ-${oaNumber}`;
+  if (!oaNumber) return "BOQ";
+  const revMatch = oaNumber.match(/\/R(\d+)$/);
+  const revSuffix = revMatch ? `/R${revMatch[1]}` : "";
+  const base = oaNumber.replace(/\/R\d+$/, "");
+  // MR: MROA/2026-27/0008 -> MRBOQ/26-27/0008
+  let m = base.match(/^MROA\/(\d{2})(\d{2})-(\d{2})\/(.+)$/);
+  if (m) return `MRBOQ/${m[2]}-${m[3]}/${m[4]}${revSuffix}`;
+  // GMS: 2025-26/GMS/0024 -> 25-26/GMSBOQ/0024
+  m = base.match(/^(\d{2})(\d{2})-(\d{2})\/GMS\/(.+)$/);
+  if (m) return `${m[2]}-${m[3]}/GMSBOQ/${m[4]}${revSuffix}`;
+  const num = base.match(/(\d+)\s*$/);
+  return num ? `BOQ-${num[1]}${revSuffix}` : `BOQ-${base}${revSuffix}`;
 }
 
 export const DEFAULT_BOQ_TERMS = `1. Payment: 40% advance & balance against proforma invoice prior to dispatch.
