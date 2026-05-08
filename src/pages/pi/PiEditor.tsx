@@ -265,8 +265,14 @@ export default function PiEditor() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base">Line items</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Line items</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Mirrored from OA <span className="font-mono">{pi.reference_oa_number}</span> — read-only.
+                </p>
+              </CardHeader>
               <CardContent>
+                <fieldset disabled className="contents">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -297,6 +303,7 @@ export default function PiEditor() {
                     ))}
                   </TableBody>
                 </Table>
+                </fieldset>
               </CardContent>
             </Card>
 
