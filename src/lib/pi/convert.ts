@@ -22,10 +22,25 @@ export interface OaItemPiStatus {
 export async function fetchOaItemPiStatus(
   oaId: string,
 ): Promise<Record<string, OaItemPiStatus>> {
+  // Resolve OA family (root + all revisions) so PI quantities created
+  // against earlier revisions are carried forward when the OA is revised.
+  const { data: oaRow } = await supabase
+    .from("orders")
+    .select("id, parent_order_id")
+    .eq("id", oaId)
+    .maybeSingle();
+  const root = (oaRow?.parent_order_id as string | null) || oaId;
+  const { data: family } = await supabase
+    .from("orders")
+    .select("id")
+    .or(`id.eq.${root},parent_order_id.eq.${root}`);
+  const familyIds = ((family || []) as { id: string }[]).map((r) => r.id);
+  if (familyIds.length === 0) familyIds.push(oaId);
+
   const { data, error } = await supabase
     .from("proforma_invoices")
     .select("id, pi_number, line_items, status")
-    .eq("reference_oa_id", oaId)
+    .in("reference_oa_id", familyIds)
     .eq("is_current", true);
   if (error) throw error;
   const map: Record<string, OaItemPiStatus> = {};

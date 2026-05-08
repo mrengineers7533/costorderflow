@@ -213,6 +213,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                   const balance = balanceFor(it);
                   const done = balance <= 0;
                   const partial = !done && alreadyQty > 0;
+                  const overage = alreadyQty > (Number(it.quantity) || 0);
                   const isSelected = selected.has(it.id);
                   const piQty = piQtyFor(it);
                   const rate = it.unit_rate || 0;
@@ -280,6 +281,15 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                       </TableCell>
                       <TableCell>
                         {done ? (
+                          overage ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] uppercase border-destructive text-destructive"
+                              title="Already PI quantity is greater than revised OA quantity. Please review."
+                            >
+                              Review ({alreadyQty}/{it.quantity})
+                            </Badge>
+                          ) : (
                           <Badge
                             variant="default"
                             className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] uppercase"
@@ -287,6 +297,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             PI Done
                           </Badge>
+                          )
                         ) : partial ? (
                           <Badge
                             variant="outline"
