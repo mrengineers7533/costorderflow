@@ -784,7 +784,7 @@ export default function OrderEditor() {
                   <Select
                     value={charges.gms_mode || "NONE"}
                     onValueChange={(v) => {
-                      const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL");
+                      const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL" | "EXW_CIF_PORT");
                       setCharges({
                         ...charges,
                         gms_mode: mode,
@@ -803,8 +803,36 @@ export default function OrderEditor() {
                       <SelectItem value="NONE">Legacy (current behavior)</SelectItem>
                       <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
                       <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
+                      <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Sea Freight)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {format === "GMS" && charges.gms_mode === "EXW_CIF_PORT" && (
+                <div className="mt-3 space-y-3 rounded-md border p-3 bg-muted/20">
+                  <div className="text-xs font-semibold uppercase tracking-wide">EXW CIF Port (USD only)</div>
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    Calculation: Basic Total (USD) + Sea Freight (USD) = Grand Total (USD).
+                    No GST, taxes or other charges apply in this mode.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <NumberField
+                      label="PU Dollar Rate (₹ per $)"
+                      value={charges.cif_pu_dollar_rate || 0}
+                      onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
+                    />
+                    <NumberField
+                      label="Sea Freight ($)"
+                      value={charges.cif_sea_freight_usd || 0}
+                      onChange={(v) => setCharges({ ...charges, cif_sea_freight_usd: v })}
+                    />
+                  </div>
+                  {(charges.cif_pu_dollar_rate || 0) > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      Basic Total (USD) = ₹ Item Total ÷ {charges.cif_pu_dollar_rate}.
+                      Grand Total (USD) = Basic + Sea Freight.
+                    </div>
+                  )}
                 </div>
               )}
               {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (

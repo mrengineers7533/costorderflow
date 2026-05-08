@@ -540,11 +540,15 @@ async function renderGmsPdf(
     c.gms_mode === "EXW_TURKEY" &&
     c.display_currency === "USD" &&
     (c.fx_rate || 0) > 0;
-  const turkeyFxRate = c.fx_rate || 1;
-  const turkeyCurLabel = c.currency || "USD";
+  // EXW CIF Port — always USD using PU Dollar Rate.
+  const isCifPort = order.format === "GMS" && c.gms_mode === "EXW_CIF_PORT";
+  const cifRate = c.cif_pu_dollar_rate || 0;
+  const usdDisplay = turkeyDisplayUSD || (isCifPort && cifRate > 0);
+  const usdRate = isCifPort ? (cifRate || 1) : (c.fx_rate || 1);
+  const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
-    (n / turkeyFxRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtTotal = (n: number) => (turkeyDisplayUSD ? fmtUSD(n) : fmt(n));
+    (n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtTotal = (n: number) => (usdDisplay ? fmtUSD(n) : fmt(n));
 
   const itemRows = order.line_items.map((it, i) => [
     String(i + 1),
@@ -558,7 +562,17 @@ async function renderGmsPdf(
   ]);
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
-  if (c.gms_mode === "EXW_TURKEY") {
+  if (isCifPort) {
+    // USD-only CIF Port: Basic Total + Sea Freight = Grand Total. No taxes/extras.
+    const basicUsd = cifRate > 0 ? t.basic_total / cifRate : 0;
+    const seaUsd = c.cif_sea_freight_usd || 0;
+    const grandUsd = basicUsd + seaUsd;
+    // These rows go through fmtTotal which divides by usdRate — so we pass
+    // INR-equivalent values (multiplying USD by usdRate) to keep one code path.
+    totalsRows.push({ label: "Basic Total", value: basicUsd * usdRate });
+    totalsRows.push({ label: "Sea Freight", value: seaUsd * usdRate });
+    totalsRows.push({ label: "Grand Total", value: grandUsd * usdRate, bold: true });
+  } else if (c.gms_mode === "EXW_TURKEY") {
     const tk = calcExTurkey(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
     if (c.turkey_sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: tk.sea_freight });
@@ -635,7 +649,7 @@ async function renderGmsPdf(
   totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
   totalsRows.push({ label: "Grand Total", value: t.basic_total, bold: true });
   }
-  if (opts?.docMeta?.extraTotalsRows?.length) {
+  if (!isCifPort && opts?.docMeta?.extraTotalsRows?.length) {
     for (const er of opts.docMeta.extraTotalsRows) {
       totalsRows.push({ label: er.label, value: er.value, bold: !!er.bold });
     }
@@ -661,7 +675,15 @@ async function renderGmsPdf(
   if (turkeyDisplayUSD) {
     totalsAsBody.unshift([
       {
-        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${turkeyFxRate}`,
+        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${c.fx_rate || 0}`,
+        colSpan: 8,
+        styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
+      },
+    ] as never);
+  } else if (isCifPort && cifRate > 0) {
+    totalsAsBody.unshift([
+      {
+        content: `EXW CIF Port — values in USD @ PU Dollar Rate ₹${cifRate}. No GST / taxes applied.`,
         colSpan: 8,
         styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
       },
@@ -672,7 +694,7 @@ async function renderGmsPdf(
     startY: y,
     head: [[
       "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "HSN CODE",
-      "QTY", "UNIT", `UNIT PRICE\n(${turkeyDisplayUSD ? turkeyCurLabel : "INR"})`, `AMOUNT\n(${turkeyDisplayUSD ? turkeyCurLabel : "INR"})`,
+      "QTY", "UNIT", `UNIT PRICE\n(${usdDisplay ? "USD" : "INR"})`, `AMOUNT\n(${usdDisplay ? "USD" : "INR"})`,
     ]],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",

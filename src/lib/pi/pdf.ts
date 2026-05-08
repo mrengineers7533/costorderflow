@@ -52,6 +52,24 @@ export async function generatePiPDF(
   );
 
   const extraTotalsRows: ExtraTotalsRow[] = [];
+  const isCifPort = pi.format === "GMS" && pi.charges.gms_mode === "EXW_CIF_PORT";
+  // EXW CIF Port shows USD-only totals from the OA-PDF branch — skip discount/advance/other rows.
+  if (isCifPort) {
+    return generateOrderPDF(orderLike, {
+      terms: opts?.terms,
+      bank: opts?.bank,
+      gmsTerms: opts?.gmsTerms ?? DEFAULT_GMS_TERMS,
+      docMeta: {
+        title: "Proforma Invoice",
+        numberLabel: "PI No.",
+        numberValue: pi.pi_number,
+        refLabel: "Ref. OA No.",
+        refValue: pi.reference_oa_number || "-",
+        extraTotalsRows: [],
+        hideFirstPageFooter: true,
+      },
+    });
+  }
   const showDiscount =
     (pi.apply_discount ?? (pi.one_time_discount_percent > 0)) &&
     t.one_time_discount_amount > 0;

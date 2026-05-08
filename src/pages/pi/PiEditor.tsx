@@ -86,6 +86,15 @@ export default function PiEditor() {
     if (mode === "EXW_MURTHAL" || pi.charges.ex_murthal_enabled) {
       return { kind: "murthal" as const, data: calcExMurthal(totals.basic_total, pi.charges) };
     }
+    if (mode === "EXW_CIF_PORT") {
+      const rate = pi.charges.cif_pu_dollar_rate || 0;
+      const basicUsd = rate > 0 ? totals.basic_total / rate : 0;
+      const seaUsd = pi.charges.cif_sea_freight_usd || 0;
+      const grandUsd = basicUsd + seaUsd;
+      // grand/net stored back in INR equivalent so existing list/reports keep working.
+      const grandInr = grandUsd * (rate || 1);
+      return { kind: "cif" as const, data: { grand_total: grandInr, net_payable: grandInr } };
+    }
     return null;
   }, [pi, totals]);
 
@@ -504,7 +513,7 @@ export default function PiEditor() {
                     <Select
                       value={pi.charges.gms_mode || "NONE"}
                       onValueChange={(v) => {
-                        const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL");
+                        const mode = v === "NONE" ? undefined : (v as "EXW_TURKEY" | "EXW_MURTHAL" | "EXW_CIF_PORT");
                         update("charges", {
                           ...pi.charges,
                           gms_mode: mode,
@@ -523,9 +532,37 @@ export default function PiEditor() {
                         <SelectItem value="NONE">Legacy (use simple PI charges above)</SelectItem>
                         <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
                         <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
+                        <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Sea Freight)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {pi.charges.gms_mode === "EXW_CIF_PORT" && (
+                    <div className="space-y-3 rounded-md border p-3 bg-muted/20">
+                      <div className="text-xs font-semibold uppercase tracking-wide">EXW CIF Port (USD only)</div>
+                      <p className="text-[11px] text-muted-foreground -mt-1">
+                        Basic Total (USD) + Sea Freight (USD) = Grand Total (USD). No GST / taxes / extras.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs">PU Dollar Rate (₹ per $)</Label>
+                          <Input
+                            type="number" step="any" className="h-8"
+                            value={pi.charges.cif_pu_dollar_rate || 0}
+                            onChange={(e) => update("charges", { ...pi.charges, cif_pu_dollar_rate: +e.target.value || 0 })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Sea Freight ($)</Label>
+                          <Input
+                            type="number" step="any" className="h-8"
+                            value={pi.charges.cif_sea_freight_usd || 0}
+                            onChange={(e) => update("charges", { ...pi.charges, cif_sea_freight_usd: +e.target.value || 0 })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {pi.charges.gms_mode === "EXW_TURKEY" && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
