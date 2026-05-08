@@ -454,8 +454,12 @@ export default function PiEditor() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">GMS Charges</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Mirrored from OA — read-only.
+                  </p>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
+                <fieldset disabled className="contents">
                   <div>
                     {/* Single global PU Dollar Rate — controls INR→USD across all GMS modes. */}
                     {pi.charges.gms_mode !== "EXW_TURKEY" && (
