@@ -119,12 +119,27 @@ export default function PiEditor() {
 
   // The figure that flows into the saved `totals.net_payable` row and the
   // PI list. For GMS landed-cost modes, prefer the GMS net.
-  const effectiveNet = gmsBreakdown
-    ? gmsBreakdown.data.net_payable
-    : (totals?.net_payable_pi ?? 0);
   const effectiveGrand = gmsBreakdown
     ? gmsBreakdown.data.grand_total
     : (totals?.gross_invoice_total ?? 0);
+
+  // PI-level overrides (apply on TOP of the OA-mirrored grand total so the
+  // PI math matches OA exactly, then layers Advance + Discount that the user
+  // edits directly on the PI). Works for MR + every GMS pricing mode.
+  const piAdvanceAmt = (() => {
+    if (!pi) return 0;
+    const mode = pi.advance_mode || "percent";
+    if (mode === "amount") return Math.max(0, pi.advance_amount || 0);
+    return Math.max(0, (effectiveGrand * (pi.advance_adjustment_percent || 0)) / 100);
+  })();
+  const piDiscountAmt = (() => {
+    if (!pi) return 0;
+    const mode = pi.discount_mode || "percent";
+    const v = pi.discount_value || 0;
+    if (mode === "amount") return Math.max(0, v);
+    return Math.max(0, (effectiveGrand * v) / 100);
+  })();
+  const effectiveNet = Math.max(0, effectiveGrand - piAdvanceAmt - piDiscountAmt);
 
   if (loading || !pi || !totals) {
     return <div className="p-6 text-muted-foreground">Loading PI…</div>;
@@ -172,6 +187,8 @@ export default function PiEditor() {
         advance_mode: pi.advance_mode,
         advance_amount: pi.advance_amount,
         advance_adjustment_percent: pi.advance_adjustment_percent,
+        discount_mode: pi.discount_mode || "percent",
+        discount_value: pi.discount_value || 0,
         other_charges: pi.other_charges,
         totals: {
           basic_total: totals.basic_total,
