@@ -678,10 +678,10 @@ async function renderGmsPdf(
 
   // When Turkey + USD display, prepend a banner row noting the conversion
   // (PDF column header still says "AMOUNT (INR)" for the item rows).
-  if (turkeyDisplayUSD) {
+  if (turkeyAlwaysUSD) {
     totalsAsBody.unshift([
       {
-        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${c.fx_rate || 0}`,
+        content: `EXW Turkey — values in USD @ cost-sheet $ rate ₹${c.fx_rate || 0}`,
         colSpan: 8,
         styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
       },
