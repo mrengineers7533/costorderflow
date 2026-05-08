@@ -1067,30 +1067,9 @@ export default function OrderEditor() {
                   <NumberField label="Advance %" value={charges.advance_percent ?? 40} onChange={(v) => setCharges({ ...charges, advance_percent: v })} />
                 </div>
                 {charges.gms_mode === "EXW_TURKEY" && (charges.fx_rate || 0) > 0 && (
-                  <div className="mt-3">
-                    <Label className="text-xs">Display OA in</Label>
-                    <div className="inline-flex rounded-md border bg-background p-0.5 ml-2 align-middle">
-                      {(["INR", "USD"] as const).map((cur) => {
-                        const active = (charges.display_currency || "INR") === cur;
-                        return (
-                          <button
-                            key={cur}
-                            type="button"
-                            onClick={() => setCharges({ ...charges, display_currency: cur })}
-                            className={`px-2.5 py-0.5 text-xs font-semibold rounded-sm transition-colors ${
-                              active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                            }`}
-                            aria-pressed={active}
-                          >
-                            {cur === "INR" ? "₹ INR" : `${charges.currency || "USD"}`}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Toggle the EXW Turkey totals view between INR and {charges.currency || "USD"} using the cost-sheet $ rate ({charges.fx_rate}). Calculations stay in INR.
-                    </p>
-                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-3">
+                    EXW Turkey is always shown in USD ($) using the cost-sheet $ rate (₹{charges.fx_rate}). PU Dollar Rate does not apply here.
+                  </p>
                 )}
               </div>
               )}
