@@ -304,11 +304,11 @@ export default function BoqEditor() {
                 </div>
                 {items.map((it) => (
                   <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
-                    <Input value={it.item_no} readOnly className="h-9" />
-                    <Input value={it.model_number} readOnly className="h-9" />
-                    <Textarea value={it.description} readOnly className="min-h-9" rows={1} />
-                    <Input type="number" value={it.quantity} readOnly className="h-9" />
-                    <Input value={it.unit} readOnly className="h-9" />
+                    <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
+                    <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+                    <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
+                    <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
+                    <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
                     <Textarea
                       value={it.remarks}
                       onChange={(e) => updateItem(it.id, { remarks: e.target.value })}
