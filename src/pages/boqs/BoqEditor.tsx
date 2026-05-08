@@ -218,6 +218,31 @@ export default function BoqEditor() {
           </div>
         </div>
 
+        {verificationStatus === "pending_verification" && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm print:hidden">
+            <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Verification</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This BOQ revision was auto-generated from the latest OA and is awaiting senior approval.
+              It becomes the active BOQ once approved via the verification link.
+            </p>
+            {verificationToken && (
+              <div className="mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const url = `${window.location.origin}/boq-verify/${verificationToken}`;
+                    navigator.clipboard.writeText(url);
+                    toast({ title: "Verification link copied" });
+                  }}
+                >
+                  Copy verification link
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="space-y-5">
           {/* ---------- Editor ---------- */}
           <div className="space-y-4 print:hidden">
