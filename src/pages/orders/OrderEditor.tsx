@@ -54,7 +54,7 @@ export default function OrderEditor() {
   const [currentBoq, setCurrentBoq] = useState<BoqRecord | null>(null);
   // Confirmation dialogs
   const [confirmReviseOa, setConfirmReviseOa] = useState(false);
-  const [confirmReviseBoq, setConfirmReviseBoq] = useState(false);
+  // BOQ revisions removed — BOQ auto-syncs from current OA on save.
   const [format, setFormat] = useState<OrderFormat>("MR");
   const [autoFormat, setAutoFormat] = useState(true);
   const [companyName, setCompanyName] = useState("");
