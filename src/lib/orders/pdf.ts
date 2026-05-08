@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
-import { calcExTurkey, calcExMurthal } from "./calc";
+import { calcExTurkey, calcExMurthal, amountInWordsUSD } from "./calc";
 import {
   DEFAULT_MR_BANK,
   DEFAULT_MR_TERMS,
@@ -565,13 +565,18 @@ async function renderGmsPdf(
   if (isCifPort) {
     // USD-only CIF Port: Basic Total + Sea Freight = Grand Total. No taxes/extras.
     const basicUsd = cifRate > 0 ? t.basic_total / cifRate : 0;
-    const seaUsd = c.cif_sea_freight_usd || 0;
+    const seaUsd = (c.cif_sea_freight_mode || "amount") === "percent"
+      ? (basicUsd * (c.cif_sea_freight_percent || 0)) / 100
+      : (c.cif_sea_freight_usd || 0);
     const grandUsd = basicUsd + seaUsd;
+    const seaLabel = (c.cif_sea_freight_mode || "amount") === "percent"
+      ? `Sea Freight @ ${c.cif_sea_freight_percent || 0}%`
+      : "Sea Freight";
     // These rows go through fmtTotal which divides by usdRate — so we pass
     // INR-equivalent values (multiplying USD by usdRate) to keep one code path.
     totalsRows.push({ label: "Basic Total", value: basicUsd * usdRate });
-    totalsRows.push({ label: "Sea Freight", value: seaUsd * usdRate });
-    totalsRows.push({ label: "Grand Total", value: grandUsd * usdRate, bold: true });
+    totalsRows.push({ label: seaLabel, value: seaUsd * usdRate });
+    totalsRows.push({ label: "EX Work Port", value: grandUsd * usdRate, bold: true });
   } else if (c.gms_mode === "EXW_TURKEY") {
     const tk = calcExTurkey(t.basic_total, c);
     totalsRows.push({ label: "Base Amount (EXW Turkey)", value: tk.base_amount });
