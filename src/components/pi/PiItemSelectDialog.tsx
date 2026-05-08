@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -31,12 +32,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   const nav = useNavigate();
   const [statusMap, setStatusMap] = useState<Record<string, OaItemPiStatus>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [qtyMap, setQtyMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (!open || !oa) return;
     setSelected(new Set());
+    setQtyMap({});
     setLoading(true);
     fetchOaItemPiStatus(oa.id)
       .then((m) => setStatusMap(m))
@@ -51,8 +54,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   }, [open, oa]);
 
   const items = oa?.line_items || [];
+  function balanceFor(it: { id: string; quantity: number }) {
+    const oaQty = Number(it.quantity) || 0;
+    const already = statusMap[it.id]?.pi_qty || 0;
+    return Math.max(0, oaQty - already);
+  }
   const pendingItems = useMemo(
-    () => items.filter((it) => !statusMap[it.id]?.done),
+    () => items.filter((it) => balanceFor(it) > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, statusMap],
   );
   const doneCount = items.length - pendingItems.length;
@@ -77,14 +86,29 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     });
   }
 
+  function piQtyFor(it: { id: string; quantity: number }) {
+    const raw = qtyMap[it.id];
+    if (raw === undefined || raw === "") return balanceFor(it);
+    const n = Number(raw);
+    return isNaN(n) ? 0 : n;
+  }
   const selectedItems = items.filter((it) => selected.has(it.id));
-  const selectedTotal = selectedItems.reduce((sum, it) => sum + (it.amount || 0), 0);
+  const selectedTotal = selectedItems.reduce(
+    (sum, it) => sum + piQtyFor(it) * (it.unit_rate || 0),
+    0,
+  );
+  const hasInvalidQty = selectedItems.some((it) => {
+    const q = piQtyFor(it);
+    return !(q > 0) || q > balanceFor(it) + 1e-9;
+  });
 
   async function handleGenerate() {
     if (!oa || selected.size === 0) return;
     setGenerating(true);
     try {
-      const pi = await createPiFromOaItems(oa, Array.from(selected));
+      const overrides: Record<string, number> = {};
+      for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
+      const pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
       toast({
         title: `PI ${pi.pi_number} created`,
         description: `${selectedItems.length} item(s) included.`,
@@ -146,10 +170,19 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                   Qty
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Already PI Qty
+                </TableHead>
+                <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Balance Qty
+                </TableHead>
+                <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
+                  PI Qty
+                </TableHead>
+                <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
                   Rate
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Amount
+                  PI Amount
                 </TableHead>
                 <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   PI Status
@@ -162,21 +195,30 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="inline h-4 w-4 mr-2 animate-spin" />
                     Checking PI status for items…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     This OA has no line items.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map((it, idx) => {
                   const st = statusMap[it.id];
-                  const done = !!st?.done;
+                  const alreadyQty = st?.pi_qty || 0;
+                  const balance = balanceFor(it);
+                  const done = balance <= 0;
+                  const partial = !done && alreadyQty > 0;
+                  const isSelected = selected.has(it.id);
+                  const piQty = piQtyFor(it);
+                  const rate = it.unit_rate || 0;
+                  const piAmount = piQty * rate;
+                  const invalid =
+                    isSelected && (!(piQty > 0) || piQty > balance + 1e-9);
                   return (
                     <TableRow
                       key={it.id}
@@ -184,7 +226,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                     >
                       <TableCell>
                         <Checkbox
-                          checked={selected.has(it.id)}
+                          checked={isSelected}
                           onCheckedChange={() => toggleOne(it.id)}
                           disabled={done}
                           aria-label={`Select item ${idx + 1}`}
@@ -201,11 +243,40 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                       <TableCell className="text-right tabular-nums">
                         {it.quantity} {it.unit || "Nos"}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {alreadyQty}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        ₹ {(it.unit_rate || 0).toLocaleString("en-IN")}
+                        {balance}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums w-28">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={balance}
+                          step="any"
+                          value={
+                            qtyMap[it.id] !== undefined
+                              ? qtyMap[it.id]
+                              : isSelected
+                              ? String(balance)
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
+                          }
+                          disabled={done || !isSelected}
+                          className={`h-8 text-right ${
+                            invalid ? "border-destructive" : ""
+                          }`}
+                          placeholder={done ? "—" : String(balance)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        ₹ {rate.toLocaleString("en-IN")}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        ₹ {(it.amount || 0).toLocaleString("en-IN")}
+                        ₹ {(isSelected ? piAmount : 0).toLocaleString("en-IN")}
                       </TableCell>
                       <TableCell>
                         {done ? (
@@ -216,6 +287,13 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             PI Done
                           </Badge>
+                        ) : partial ? (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] uppercase border-amber-500 text-amber-700"
+                          >
+                            Partial ({alreadyQty}/{it.quantity})
+                          </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] uppercase">
                             Pending PI
@@ -223,7 +301,9 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {st?.pi_number || "—"}
+                        {st?.pi_numbers?.length
+                          ? st.pi_numbers.join(", ")
+                          : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -245,7 +325,10 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={generating}>
               Cancel
             </Button>
-            <Button onClick={handleGenerate} disabled={generating || selected.size === 0}>
+            <Button
+              onClick={handleGenerate}
+              disabled={generating || selected.size === 0 || hasInvalidQty}
+            >
               {generating ? (
                 <>
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
