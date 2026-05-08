@@ -675,7 +675,7 @@ async function renderGmsPdf(
   if (turkeyDisplayUSD) {
     totalsAsBody.unshift([
       {
-        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${turkeyFxRate}`,
+        content: `Totals shown in ${turkeyCurLabel} — converted from INR @ cost-sheet rate ₹${c.fx_rate || 0}`,
         colSpan: 8,
         styles: { halign: "center" as const, fontStyle: "italic" as const, fillColor: [240, 240, 240] as [number, number, number] },
       },
