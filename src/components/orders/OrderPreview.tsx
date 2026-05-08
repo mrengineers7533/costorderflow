@@ -563,9 +563,10 @@ function ExTurkeyBlock({
   // Phase 1: when user picks display_currency="USD" on a GMS Turkey OA/PI
   // and a cost-sheet $ rate is set, render the totals block in USD by
   // dividing each INR value by the rate. The math itself stays INR-based.
-  const displayUSD = forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
-  const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
-  const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
+  // EXW Turkey block: always USD when fx_rate set; forceUsdRate only used for non-Turkey.
+  const displayUSD = (fxRate || 0) > 0 || forceUsdRate > 0;
+  const usdRate = (fxRate || 0) > 0 ? fxRate : (forceUsdRate || 1);
+  const usdSym = "$";
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usd = (n: number) =>
