@@ -403,21 +403,7 @@ export default function PiEditor() {
                         {t.pf > 0 && <Row label="P&F" value={t.pf} />}
                         {t.freight > 0 && <Row label="Freight" value={t.freight} />}
                         {t.gst > 0 && <Row label={`GST @ ${c.turkey_gst_percent ?? 18}%`} value={t.gst} />}
-                        <Row label="Grand Total" value={t.grand_total} bold highlight={t.advance_amount === 0 && t.discount === 0} />
-                        {t.discount > 0 && <Row label="One-time Discount" value={t.discount} />}
-                        {t.advance_amount > 0 && (
-                          <Row
-                            label={
-                              (c.turkey_advance_mode || "percent") === "amount"
-                                ? "Advance Adjustment"
-                                : `Advance Adjustment @ ${c.turkey_advance_percent || 0}%`
-                            }
-                            value={t.advance_amount}
-                          />
-                        )}
-                        {(t.advance_amount > 0 || t.discount > 0) && (
-                          <Row label="Net Payable" value={t.net_payable} bold highlight />
-                        )}
+                        <Row label="Grand Total" value={t.grand_total} bold highlight={piAdvanceAmt === 0 && piDiscountAmt === 0} />
                       </>
                     );
                   }
@@ -438,21 +424,7 @@ export default function PiEditor() {
                         {m.pf > 0 && <Row label="P&F" value={m.pf} />}
                         {m.freight > 0 && <Row label="Freight" value={m.freight} />}
                         {m.gst > 0 && <Row label={`GST @ ${c.landed_gst_percent ?? 18}%`} value={m.gst} />}
-                        <Row label="Grand Total" value={m.grand_total} bold highlight={m.advance_amount === 0 && m.discount === 0} />
-                        {m.discount > 0 && <Row label="One-time Discount" value={m.discount} />}
-                        {m.advance_amount > 0 && (
-                          <Row
-                            label={
-                              (c.murthal_advance_mode || "percent") === "amount"
-                                ? "Advance Adjustment"
-                                : `Advance Adjustment @ ${c.murthal_advance_percent || 0}%`
-                            }
-                            value={m.advance_amount}
-                          />
-                        )}
-                        {(m.advance_amount > 0 || m.discount > 0) && (
-                          <Row label="Net Payable" value={m.net_payable} bold highlight />
-                        )}
+                        <Row label="Grand Total" value={m.grand_total} bold highlight={piAdvanceAmt === 0 && piDiscountAmt === 0} />
                       </>
                     );
                   }
@@ -468,23 +440,35 @@ export default function PiEditor() {
                       {totals.freight_amount > 0 && <Row label="Freight" value={totals.freight_amount} />}
                       {totals.other_charges_amount > 0 && <Row label="Other Charges" value={totals.other_charges_amount} />}
                       <Row label={`GST @ ${pi.charges.gst_percent}%`} value={totals.gst_amount} />
-                      <Row label="Grand Total" value={totals.gross_invoice_total} bold highlight={totals.advance_adjustment_amount === 0} />
-                      {totals.advance_adjustment_amount > 0 && (
-                        <>
-                          <Row
-                            label={
-                              (pi.advance_mode || "percent") === "amount"
-                                ? "Advance Adjustment"
-                                : `Advance Adjustment @ ${pi.advance_adjustment_percent}%`
-                            }
-                            value={totals.advance_adjustment_amount}
-                          />
-                          <Row label="Net Payable" value={totals.net_payable_pi} bold highlight />
-                        </>
-                      )}
+                      <Row label="Grand Total" value={totals.gross_invoice_total} bold highlight={piAdvanceAmt === 0 && piDiscountAmt === 0} />
                     </>
                   );
                 })()}
+                {(piAdvanceAmt > 0 || piDiscountAmt > 0) && (
+                  <>
+                    {piDiscountAmt > 0 && (
+                      <Row
+                        label={
+                          (pi.discount_mode || "percent") === "amount"
+                            ? "Discount"
+                            : `Discount @ ${pi.discount_value || 0}%`
+                        }
+                        value={piDiscountAmt}
+                      />
+                    )}
+                    {piAdvanceAmt > 0 && (
+                      <Row
+                        label={
+                          (pi.advance_mode || "percent") === "amount"
+                            ? "Advance Adjustment"
+                            : `Advance Adjustment @ ${pi.advance_adjustment_percent || 0}%`
+                        }
+                        value={piAdvanceAmt}
+                      />
+                    )}
+                    <Row label="Net Payable" value={effectiveNet} bold highlight />
+                  </>
+                )}
               </CardContent>
             </Card>
 
