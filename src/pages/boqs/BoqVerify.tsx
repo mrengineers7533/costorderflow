@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, ShieldCheck, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CheckCircle2, ShieldCheck, Loader2, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { BoqRecord } from "@/lib/boq/types";
+import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
+
+type Decision = { status: "pending" | "approved" | "rejected"; comment: string };
 
 export default function BoqVerify() {
   const { token = "" } = useParams<{ token: string }>();
@@ -17,7 +20,8 @@ export default function BoqVerify() {
   const [error, setError] = useState<string | null>(null);
   const [verifierEmail, setVerifierEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [approved, setApproved] = useState(false);
+  const [doneStatus, setDoneStatus] = useState<"approved" | "rejected" | "pending_verification" | null>(null);
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
 
   useEffect(() => {
     (async () => {
@@ -25,9 +29,20 @@ export default function BoqVerify() {
         .from("boqs").select("*")
         .eq("verification_token", token)
         .maybeSingle();
-      if (error || !data) setError("This verification link is invalid or has already been used.");
-      else setBoq(data as unknown as BoqRecord);
-      // Pre-fill the configured verifier email if available.
+      if (error || !data) {
+        setError("This verification link is invalid or has already been used.");
+      } else {
+        const b = data as unknown as BoqRecord;
+        setBoq(b);
+        const init: Record<string, Decision> = {};
+        (b.line_items || []).forEach((it) => {
+          init[it.id] = {
+            status: (it.approval_status as Decision["status"]) || "pending",
+            comment: it.approval_comment || "",
+          };
+        });
+        setDecisions(init);
+      }
       const { data: cfg } = await supabase
         .from("app_settings").select("value").eq("key", "boq_verifier").maybeSingle();
       const email = (cfg?.value as { email?: string } | null)?.email || "";
@@ -36,27 +51,57 @@ export default function BoqVerify() {
     })();
   }, [token]);
 
-  async function handleApprove() {
+  function setDecision(id: string, patch: Partial<Decision>) {
+    setDecisions((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
+  }
+
+  async function submit() {
+    if (!boq) return;
     if (!verifierEmail.trim()) {
       toast({ title: "Enter your email to confirm", variant: "destructive" });
       return;
     }
+    const items = (boq.line_items || []).map((it) => ({
+      id: it.id,
+      status: decisions[it.id]?.status || "pending",
+      comment: decisions[it.id]?.comment || "",
+    }));
+    const allApproved = items.every((i) => i.status === "approved");
+    const anyRejected = items.some((i) => i.status === "rejected");
+    if (!allApproved && !anyRejected) {
+      toast({
+        title: "Decide on every item",
+        description: "Approve all items to finalize, or reject at least one to send back.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (anyRejected) {
+      const missing = items.find((i) => i.status === "rejected" && !i.comment.trim());
+      if (missing) {
+        toast({ title: "Add a reason for rejected items", variant: "destructive" });
+        return;
+      }
+    }
     setSubmitting(true);
-    const { error } = await supabase.rpc("verify_boq_with_token", {
+    const { data, error } = await supabase.rpc("verify_boq_items_with_token", {
       _token: token,
       _verifier_email: verifierEmail.trim(),
+      _items: items,
     });
     setSubmitting(false);
     if (error) {
-      toast({ title: "Approval failed", description: error.message, variant: "destructive" });
+      toast({ title: "Submission failed", description: error.message, variant: "destructive" });
       return;
     }
-    setApproved(true);
+    const next = (data as { verification_status?: string } | null)?.verification_status as
+      | "approved" | "rejected" | "pending_verification" | undefined;
+    setDoneStatus(next || (allApproved ? "approved" : "rejected"));
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-muted/20">
-      <Card className="w-full max-w-xl">
+    <div className="min-h-screen flex items-start justify-center p-6 bg-muted/20">
+      <Card className="w-full max-w-3xl my-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
@@ -66,11 +111,19 @@ export default function BoqVerify() {
         <CardContent className="space-y-4">
           {loading ? (
             <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-          ) : approved ? (
+          ) : doneStatus === "approved" ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 className="h-12 w-12 text-primary" />
-              <p className="font-medium">BOQ approved.</p>
-              <p className="text-sm text-muted-foreground">This revision is now the active BOQ for the linked OA.</p>
+              <p className="font-medium">BOQ fully approved.</p>
+              <p className="text-sm text-muted-foreground">All items are approved. This revision is now the active BOQ.</p>
+            </div>
+          ) : doneStatus === "rejected" ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <XCircle className="h-12 w-12 text-destructive" />
+              <p className="font-medium">Sent back for changes.</p>
+              <p className="text-sm text-muted-foreground">
+                The OA creator will correct the OA. A fresh approval link is sent automatically once the OA is updated.
+              </p>
             </div>
           ) : error ? (
             <p className="text-sm text-destructive">{error}</p>
@@ -85,14 +138,69 @@ export default function BoqVerify() {
                 <div className="text-xs text-muted-foreground">{boq.line_items?.length || 0} line item(s)</div>
                 <div className="text-xs text-muted-foreground">Client: {boq.client_name || "—"}</div>
               </div>
+
+              <div className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item-wise approval</div>
+                {(boq.line_items || []).map((it: BoqLineItem) => {
+                  const d = decisions[it.id] || { status: "pending", comment: "" };
+                  return (
+                    <div key={it.id} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] text-muted-foreground">Item {it.item_no} · {it.model_number || "—"}</div>
+                          <div className="text-sm font-medium whitespace-pre-wrap">{it.description}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Qty: {it.quantity} {it.unit}{it.remarks ? ` · Remarks: ${it.remarks}` : ""}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={d.status === "approved" ? "default" : "outline"}
+                            onClick={() => setDecision(it.id, { status: "approved" })}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Approve
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={d.status === "rejected" ? "destructive" : "outline"}
+                            onClick={() => setDecision(it.id, { status: "rejected" })}
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-1" />Reject
+                          </Button>
+                        </div>
+                      </div>
+                      {d.status === "rejected" && (
+                        <Textarea
+                          value={d.comment}
+                          onChange={(e) => setDecision(it.id, { comment: e.target.value })}
+                          placeholder="Reason for rejection (required)"
+                          rows={2}
+                        />
+                      )}
+                      {d.status === "approved" && (
+                        <Textarea
+                          value={d.comment}
+                          onChange={(e) => setDecision(it.id, { comment: e.target.value })}
+                          placeholder="Approval comment (optional)"
+                          rows={2}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="verifier-email">Your email</Label>
                 <Input id="verifier-email" type="email" value={verifierEmail} onChange={(e) => setVerifierEmail(e.target.value)} placeholder="senior@company.com" />
-                <p className="text-[11px] text-muted-foreground">Recorded for audit when you approve this revision.</p>
+                <p className="text-[11px] text-muted-foreground">Recorded for audit when you submit.</p>
               </div>
-              <Button onClick={handleApprove} disabled={submitting} className="w-full">
+              <Button onClick={submit} disabled={submitting} className="w-full">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                Approve BOQ R{boq.revision ?? 0}
+                Submit decisions
               </Button>
             </>
           ) : null}
