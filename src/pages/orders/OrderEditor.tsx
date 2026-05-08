@@ -814,16 +814,18 @@ export default function OrderEditor() {
                       <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Local Freight)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="mt-3">
-                    <NumberField
-                      label="PU Dollar Rate (₹ per $) — leave 0/blank to keep INR"
-                      value={charges.cif_pu_dollar_rate || 0}
-                      onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      When &gt; 0, every GMS amount (items, totals, GST, freight, PDF) is shown in USD as INR ÷ this rate. When 0/blank, GMS stays in ₹.
-                    </p>
-                  </div>
+                  {charges.gms_mode !== "EXW_TURKEY" && (
+                    <div className="mt-3">
+                      <NumberField
+                        label="PU Dollar Rate (₹ per $) — leave 0/blank to keep INR"
+                        value={charges.cif_pu_dollar_rate || 0}
+                        onChange={(v) => setCharges({ ...charges, cif_pu_dollar_rate: v })}
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        When &gt; 0, every GMS amount (items, totals, GST, freight, PDF) is shown in USD as INR ÷ this rate. When 0/blank, GMS stays in ₹. Not applicable to EXW Turkey.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               {format === "GMS" && charges.gms_mode === "EXW_CIF_PORT" && (
