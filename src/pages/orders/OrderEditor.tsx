@@ -321,6 +321,38 @@ export default function OrderEditor() {
     toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
+  async function downloadClientCopy() {
+    const baseName = (oaNumber || "OA").replace(/[/\\]/g, "_");
+    const ship = sameAsBill ? billTo : shipTo;
+
+    const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
+      const summarized = buildClientCopyItems(subsetItems);
+      const subTotals = calcTotals(summarized, sideCharges);
+      const subWords = amountInWords(subTotals.net_payable);
+      const record: OrderRecord = {
+        id: orderId || "preview", user_id: "", oa_number: oaNumber || "PREVIEW",
+        format: fmt, status: "draft", company_name: companyName, bill_to: billTo,
+        ship_to: ship, reference, cost_sheet_number: costSheetNumber,
+        order_date: orderDate, prepared_by: preparedBy, line_items: summarized,
+        charges: sideCharges, totals: subTotals, amount_in_words: subWords, notes,
+        tc_note: tcNote,
+        created_at: "", updated_at: "",
+      };
+      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote });
+      doc.save(`${baseName}-CLIENT-COPY${suffix}.pdf`);
+    };
+
+    if (splitMode) {
+      const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
+      const subset = format === "MR" ? mr : gms;
+      const sideCharges = format === "MR" ? chargesMr : chargesGms;
+      await renderOne(format, subset, `-${format}`, sideCharges);
+    } else {
+      await renderOne(format, itemsWithAmounts, "", format === "GMS" ? chargesGms : chargesMr);
+    }
+    toast({ title: "Client Copy generated", description: "Summarized PDF downloaded" });
+  }
+
   /** Build an in-memory snapshot of the currently-loaded order (with whatever
    *  unsaved edits exist) — used for revising. */
   function snapshotOrder(): OrderRecord {
