@@ -90,14 +90,12 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     .filter((g) => groups[g].amount > 0 || groups[g].qty > 0)
     .map((g, idx) => {
     const totalAmt = groups[g].amount;
-    // Group 4 (Spouting bucket) is shown as Qty 1 per spec.
-    const qty = g === "SPOUTING" ? 1 : groups[g].qty;
-    const rate = qty > 0 ? totalAmt / qty : totalAmt;
+    const rate = totalAmt;
     return {
       id: `client-copy-${g.toLowerCase()}-${idx}`,
       description: GROUP_LABEL[g],
-      quantity: qty,
-      unit: g === "SPOUTING" ? "Lot" : (groups[g].unit || "Nos"),
+      quantity: 1,
+      unit: "Set",
       unit_rate: rate,
       amount: totalAmt,
     };
