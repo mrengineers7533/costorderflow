@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, FilePlus2, Search, Pencil, Download, Trash2, Printer, FileSpreadsheet } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus2, Search, Pencil, Download, Trash2, Printer, FileSpreadsheet, History } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -49,6 +49,10 @@ export default function BoqList() {
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  // Map: order family root id -> list of all BOQ rows for that family (any rev).
+  const [familyBoqs, setFamilyBoqs] = useState<Record<string, BoqRecord[]>>({});
+  const [openFamily, setOpenFamily] = useState<Record<string, boolean>>({});
+  const [loadingFamily, setLoadingFamily] = useState<Record<string, boolean>>({});
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
@@ -84,6 +88,38 @@ export default function BoqList() {
       setLoading(false);
     });
   }, [showSuperseded, refreshTick]);
+
+  /** Lazy-load every BOQ revision tied to the same OA family as `b`. */
+  async function loadFamilyFor(b: BoqRecord) {
+    setLoadingFamily((s) => ({ ...s, [b.id]: true }));
+    try {
+      // Find the OA family for this BOQ.
+      const { data: oaRow } = await supabase
+        .from("orders").select("id,parent_order_id").eq("id", b.order_id).maybeSingle();
+      const root = (oaRow as { parent_order_id?: string | null; id?: string } | null)?.parent_order_id
+        || (oaRow as { id?: string } | null)?.id
+        || b.order_id;
+      const { data: famRows } = await supabase
+        .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+      const ids = Array.from(new Set([
+        b.order_id, root,
+        ...(((famRows || []) as Array<{ id: string }>).map((r) => r.id)),
+      ].filter(Boolean)));
+      const { data: boqs } = await supabase
+        .from("boqs").select("*").in("order_id", ids).order("revision", { ascending: true });
+      setFamilyBoqs((s) => ({ ...s, [b.id]: (boqs as unknown as BoqRecord[]) || [] }));
+    } catch (e) {
+      toast({ title: "Failed to load revisions", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoadingFamily((s) => ({ ...s, [b.id]: false }));
+    }
+  }
+
+  function toggleFamily(b: BoqRecord) {
+    const willOpen = !openFamily[b.id];
+    setOpenFamily((s) => ({ ...s, [b.id]: willOpen }));
+    if (willOpen && !familyBoqs[b.id]) loadFamilyFor(b);
+  }
 
   async function handleDelete() {
     if (!confirmDelete) return;
