@@ -1,72 +1,42 @@
-# BOQ Auto-Revision With Senior Verification
+## Goal
+Add a "Create Client Copy" action to the OA editor that generates a customer-facing PDF where certain item categories are collapsed into single summary rows. The original OA, BOQ, PI, calculations, drafts, and finalization flow remain untouched.
 
-## Rule
-When an OA is revised (e.g. R3 → R4), the linked BOQ is automatically revised to the same revision number, but the new BOQ row stays in **Pending Verification** state. The previous (R3) BOQ remains the current/active one until a senior opens a verification link and approves the new revision. Approval flips the new R4 BOQ to current and supersedes R3.
+## Scope
+- UI only (button + PDF generation). No DB schema changes, no edits to existing OAs/BOQs/PIs.
+- Reuse `generateOrderPDF` so the Client Copy looks identical to the OA (header, bill-to, ship-to, terms, taxes, totals, format MR/GMS) — only the line-items array is transformed before rendering.
 
-BOQ can never be revised manually anymore. BOQ revision number always equals the OA revision number. BOQ template/UI is unchanged.
+## Item grouping rules (Client Copy only)
+Apply category detection on each `LineItem.description` (case-insensitive, word-boundary regex). Each item belongs to **at most one** group; first match wins in this priority order so a "Fan Accessories" line goes to group 4 (not group 3):
 
-## Data model
+1. **Material Handling Equipments** — keywords: `elevator`, `conveyor`, `vmc`
+   → Description: `Material Handling Equipments (Conveyors, Elevators, VMC's) - approx*`
+   → Quantity: Σ qty, Total Amount: Σ amount
+2. **Magnets** — keyword: `magnet`
+   → Description: `Magnets (J. K.)`
+   → Quantity: Σ qty, Total Amount: Σ amount
+3. **Centrifugal Fans** — keyword: `fan` (but NOT `fan accessor`/`accessories`)
+   → Description: `Centrifugal Fans (Ferrari)`
+   → Quantity: Σ qty, Total Amount: Σ amount
+4. **Spouting / Ducting / Manifold / Fan Accessories** — keywords: `spouting`, `aspiration ducting`, `pneumatic manifold`, `ducting`, `manifold`, `fan accessor`
+   → Description: `Spouting, Aspiration Ducting & Pneumatic Manifold - approx*`
+   → Quantity: **1** (per spec), Total Amount: Σ amount
+5. **All others** — passed through unchanged.
 
-Add columns to `boqs`:
-- `verification_status text` — `approved` (default for legacy & post-approval) or `pending_verification`
-- `verification_token uuid` — random; used in email link
-- `verification_requested_at timestamptz`
-- `verified_at timestamptz`
-- `verified_by_email text`
+For each group row the synthesized `LineItem` keeps `unit_rate = total_amount / quantity` so the existing PDF renderer (which prints rate × qty = amount) still shows a coherent amount column. `unit = "Lot"` for group 4, otherwise the unit from the first matched item.
 
-Add `app_settings` row `boq_verifier` with shape `{ email: string|null }` (admin-editable; email sending is wired later).
+Charges (P&F, GST, freight, discounts, etc.) and totals are recomputed via the existing `calcTotals(transformedItems, charges)` so subtotal/GST/grand total continue to match because Σ(qty × rate) per group = Σ(original amounts).
 
-`is_current` semantics tightened:
-- New pending BOQ row is inserted with `is_current = false`, `verification_status = 'pending_verification'`.
-- Existing current BOQ stays `is_current = true` until approval.
-- On approval the pending row is set `is_current = true`, `verification_status = 'approved'`; the previous one is auto-superseded by the existing `boqs_keep_single_current` trigger.
-
-A `verify_boq_with_token(token uuid, verifier_email text)` SECURITY DEFINER RPC handles approval so the verification page works without auth (link recipients may not be logged in).
-
-## OA → BOQ flow (`syncBoqsAndPisForOrder`)
-
-When an OA save occurs:
-1. Resolve the OA family root + all revisions as today.
-2. Find the **current** BOQ for the family (only one).
-3. If the current BOQ already matches `order.revision`, run the existing in-place sync (description/remarks preserved). No new revision.
-4. Else (OA bumped to a higher revision than current BOQ): insert a **new** pending BOQ row from the latest OA data, carrying over user-edited Description/Remarks from the current BOQ. Set `revision = order.revision`, `is_current = false`, `verification_status = 'pending_verification'`, fresh `verification_token`. Trigger email send (no-op if not configured).
-
-PI sync is unchanged.
-
-## Verification
-
-- New public route `/boq-verify/:token` (no auth gate) — page calls the RPC with the token and a verifier email pulled from `app_settings.boq_verifier` (read-only display) plus an optional name field. Shows pending BOQ summary (number, OA ref, items count) and an Approve button.
-- RPC `verify_boq_with_token`:
-  - Looks up boq by token + status `pending_verification`.
-  - Marks it `approved`, `is_current = true`, sets `verified_at`, `verified_by_email`, clears token.
-  - Trigger handles superseding the previous current BOQ.
-
-## Email (configurable, stub now)
-
-- New edge function `send-boq-verification` (verify_jwt = false) takes `{ boq_id, verification_url }`, reads `app_settings.boq_verifier.email`, and:
-  - If empty → returns `{ skipped: true }` (no provider yet).
-  - If set → currently logs the payload; clearly marked TODO for real sending. This keeps the recipient configurable from the admin UI without requiring a provider today.
-- Sync code calls this function fire-and-forget after inserting the pending BOQ.
-
-## UI changes
-
-- **BoqList**: add a "Pending Verification" badge for rows with `verification_status = 'pending_verification'`. Show both rows when family has a pending revision.
-- **BoqEditor**: if the open BOQ is `pending_verification`, show a banner ("Awaiting senior verification — link sent to <email>"), keep description editing locked.
-- **RevisionsPanel**: render pending BOQ rows with the new badge and a "Copy verification link" button for admins.
-- **Admin settings**: small card under existing admin pages letting admins set the verifier email (writes to `app_settings.boq_verifier`).
-- **OrderEditor**: after save, surface a toast when a pending BOQ revision was created ("BOQ R4 prepared — awaiting senior verification").
+## UI
+- Add a `Create Client Copy` button in the action button row in `OrderEditor.tsx` (next to "Convert to PI"), icon `Users` from lucide-react. Visible only when `!isNew` (same as the other revision actions).
+- On click: build the transformed line-items, call `generateOrderPDF` with the same `{ terms, bank, gmsTerms, tcNote }` options used by the existing `downloadPDF`, save as `{OA_NUMBER}-CLIENT-COPY.pdf`. Show a toast.
+- For mixed-make (split) OAs, follow the same pattern as `downloadPDF`: use the currently selected `format` and that side's items + charges, then apply grouping.
 
 ## Files touched
+- **New:** `src/lib/orders/clientCopy.ts` — pure function `buildClientCopyItems(items: LineItem[]): LineItem[]` plus the regex/keyword config. Unit-tested via a small Vitest spec.
+- **New:** `src/test/clientCopy.test.ts` — covers grouping priority, sums, group-4 quantity-of-1, untouched passthrough.
+- **Edit:** `src/pages/orders/OrderEditor.tsx` — import the helper, add `downloadClientCopy()` mirroring `downloadPDF`, add the button.
 
-- `supabase/migrations/<new>.sql` — new columns, RPC, settings seed.
-- `supabase/functions/send-boq-verification/index.ts` — stub sender (configurable).
-- `src/lib/revisions/index.ts` — branch in `syncBoqsAndPisForOrder` to insert pending revision; new helper `createPendingBoqRevision`.
-- `src/lib/boq/types.ts` — extend `BoqRecord` with verification fields.
-- `src/pages/boqs/BoqList.tsx`, `src/pages/boqs/BoqEditor.tsx`, `src/components/orders/RevisionsPanel.tsx` — surface pending state.
-- `src/pages/boqs/BoqVerify.tsx` (new) + route in `src/App.tsx`.
-- `src/pages/admin/AdminBoqSettings.tsx` (or extend existing admin tabs) — verifier email field.
-- `src/pages/orders/OrderEditor.tsx` — toast when pending revision created.
-
-## Out of scope (for now)
-- Actual email provider wiring. Function is in place and recipient is configurable; switching to Lovable Email or another provider is a follow-up.
-- Token expiry / single-use enforcement beyond status check (can add later).
+## Out of scope
+- No header label like "CLIENT COPY" watermark on the PDF (spec says it should look like the existing OA document). Easy to add later if requested.
+- No DB persistence of client copies — generated on-demand.
+- No changes to OA preview screen, BOQ, PI, or calculation logic.
