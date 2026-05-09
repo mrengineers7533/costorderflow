@@ -16,6 +16,7 @@ import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
+import { saveClientCopy } from "@/lib/orders/clientCopies";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
@@ -339,7 +340,36 @@ export default function OrderEditor() {
         created_at: "", updated_at: "",
       };
       const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote });
-      doc.save(`${baseName}-CLIENT-COPY${suffix}.pdf`);
+      const fileName = `${baseName}-CLIENT-COPY${suffix}.pdf`;
+      doc.save(fileName);
+      // Persist a copy so it shows up in the OA Version History.
+      if (orderId && parentOrderId) {
+        try {
+          const blob = doc.output("blob");
+          await saveClientCopy({
+            rootOrderId: parentOrderId,
+            orderId,
+            format: fmt,
+            oaNumber: oaNumber || "OA",
+            pdfBlob: blob,
+            lineItems: summarized,
+            charges: sideCharges,
+            totals: subTotals,
+            snapshot: {
+              oa_number: oaNumber, company_name: companyName,
+              bill_to: billTo, ship_to: ship, reference,
+              cost_sheet_number: costSheetNumber, order_date: orderDate,
+              prepared_by: preparedBy, amount_in_words: subWords,
+              notes, tc_note: tcNote, terms,
+              bank, gmsTerms,
+            },
+          });
+          setRevisionsKey((k) => k + 1);
+        } catch (e) {
+          console.warn("Save Client Copy failed", e);
+          toast({ title: "Saved PDF locally only", description: (e as Error).message, variant: "destructive" });
+        }
+      }
     };
 
     if (splitMode) {
@@ -350,7 +380,7 @@ export default function OrderEditor() {
     } else {
       await renderOne(format, itemsWithAmounts, "", format === "GMS" ? chargesGms : chargesMr);
     }
-    toast({ title: "Client Copy generated", description: "Summarized PDF downloaded" });
+    toast({ title: "Client Copy generated", description: "Saved to OA version history" });
   }
 
   /** Build an in-memory snapshot of the currently-loaded order (with whatever

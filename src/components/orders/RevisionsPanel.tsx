@@ -3,11 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
+import { Eye, ClipboardList, ChevronDown, ChevronRight, Users, Printer, FileDown, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { fetchOrderFamily, fetchBoqsForFamily } from "@/lib/revisions";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import {
+  fetchClientCopiesForOrderIds,
+  getClientCopySignedUrl,
+  downloadClientCopyBlob,
+  type ClientCopyRecord,
+} from "@/lib/orders/clientCopies";
+import { buildClientCopyXlsx } from "@/lib/orders/clientCopyExcel";
 
 interface Props {
   rootOrderId: string;
@@ -19,6 +26,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
   const nav = useNavigate();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
+  const [clientCopies, setClientCopies] = useState<ClientCopyRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -27,8 +35,13 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
     try {
       const ords = await fetchOrderFamily(rootOrderId);
       setOrders(ords);
-      const boqs = await fetchBoqsForFamily(ords.map((o) => o.id));
+      const ids = ords.map((o) => o.id);
+      const [boqs, copies] = await Promise.all([
+        fetchBoqsForFamily(ids),
+        fetchClientCopiesForOrderIds(ids),
+      ]);
       setBoqs(boqs);
+      setClientCopies(copies);
     } catch (e) {
       toast({ title: "Could not load revisions", description: (e as Error).message, variant: "destructive" });
     } finally {
@@ -47,6 +60,69 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
     arr.push(b);
     boqsBySourceOrder.set(k, arr);
   });
+
+  const copiesByOrder = new Map<string, ClientCopyRecord[]>();
+  clientCopies.forEach((c) => {
+    const arr = copiesByOrder.get(c.order_id) || [];
+    arr.push(c);
+    copiesByOrder.set(c.order_id, arr);
+  });
+
+  async function viewCopy(c: ClientCopyRecord) {
+    try {
+      const url = await getClientCopySignedUrl(c.file_path);
+      window.open(url, "_blank", "noopener");
+    } catch (e) {
+      toast({ title: "Open failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function printCopy(c: ClientCopyRecord) {
+    try {
+      const url = await getClientCopySignedUrl(c.file_path);
+      const w = window.open(url, "_blank", "noopener");
+      if (w) {
+        // Best effort — many browsers block scripted print on cross-origin docs.
+        setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 1200);
+      }
+    } catch (e) {
+      toast({ title: "Print failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function downloadPdf(c: ClientCopyRecord) {
+    try {
+      const blob = await downloadClientCopyBlob(c.file_path);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = c.file_name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      toast({ title: "Download failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  function downloadXlsx(c: ClientCopyRecord) {
+    try {
+      const blob = buildClientCopyXlsx(
+        {
+          oa_number: c.snapshot?.oa_number || "",
+          format: c.format,
+          version_label: c.version_label,
+          company_name: c.snapshot?.company_name,
+          order_date: c.snapshot?.order_date,
+        },
+        c.line_items,
+        c.totals,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = c.file_name.replace(/\.pdf$/i, ".xlsx");
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      toast({ title: "Excel export failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
 
   return (
     <Card>
@@ -74,6 +150,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
           ) : null}
           {orders.map((o) => {
             const linkedBoqs = boqsBySourceOrder.get(o.id) || [];
+            const linkedCopies = copiesByOrder.get(o.id) || [];
             return (
               <div key={o.id} className="rounded-lg border bg-card overflow-hidden">
                 {/* OA row */}
@@ -121,6 +198,37 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                   </div>
                 ) : (
                   <div className="pl-8 pr-3 py-1.5 text-[11px] text-muted-foreground border-t italic">No BOQ generated for this OA revision.</div>
+                )}
+                {/* Linked Client Copies */}
+                {linkedCopies.length > 0 && (
+                  <div className="divide-y border-t">
+                    {linkedCopies.map((c) => (
+                      <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-1.5">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <Badge variant="outline" className="text-[10px]">{c.version_label}</Badge>
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Client Copy</span>
+                          <span className="font-mono text-xs font-semibold truncate">{c.file_name}</span>
+                          <span className="text-[11px] text-muted-foreground">· {c.format}</span>
+                          <span className="text-[11px] text-muted-foreground">· {new Date(c.created_at).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => viewCopy(c)}>
+                            <Eye className="h-3.5 w-3.5 mr-1" />View
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => printCopy(c)}>
+                            <Printer className="h-3.5 w-3.5 mr-1" />Print
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => downloadPdf(c)}>
+                            <FileDown className="h-3.5 w-3.5 mr-1" />PDF
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => downloadXlsx(c)}>
+                            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );
