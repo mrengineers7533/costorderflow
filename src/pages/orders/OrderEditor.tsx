@@ -14,6 +14,7 @@ import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye, Recei
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
+import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { saveClientCopy } from "@/lib/orders/clientCopies";
@@ -1373,20 +1374,32 @@ export default function OrderEditor() {
                 const taxable = baseAfter + pf + ins + frt;
                 const gst = (taxable * (charges.gst_percent || 0)) / 100;
                 const grand = taxable + gst;
+                // EXW Murthal USD display: convert all sidebar values to USD
+                // when GMS + EXW Murthal mode + PU Dollar Rate > 0. Underlying
+                // calc stays in INR — this only changes display/format.
+                const isMurthalUSD =
+                  format === "GMS"
+                  && (charges.gms_mode === "EXW_MURTHAL" || charges.ex_murthal_enabled)
+                  && (charges.cif_pu_dollar_rate || 0) > 0;
+                const usdR = charges.cif_pu_dollar_rate || 1;
+                const fmtAmt = isMurthalUSD
+                  ? (n: number) => `$ ${((n || 0) / usdR).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : undefined;
+                const grandFinal = showDisc ? grand : totals.grand_total;
+                const wordsLine = isMurthalUSD ? amountInWordsUSD(grandFinal / usdR) : words;
                 return (
                   <>
-                    <Row k={showDisc ? "Sub Total" : "Basic Total"} v={totals.basic_total} />
-                    {showDisc && <Row k={discLbl} v={rawDisc} />}
-                    {showDisc && <Row k="After Discount" v={baseAfter} />}
-                    {pf > 0 && <Row k={`P&F${charges.pf_percent ? ` @ ${charges.pf_percent}%` : ""}`} v={pf} />}
-                    {ins > 0 && <Row k={`Insurance${charges.insurance_percent ? ` @ ${charges.insurance_percent}%` : ""}`} v={ins} />}
-                    {frt > 0 && <Row k="Freight" v={frt} />}
-                    {!showDisc && <Row k="Subtotal" v={totals.subtotal} />}
-                    <Row k={`GST @ ${charges.gst_percent || 0}%`} v={gst} />
-                    <Row k="Grand Total" v={showDisc ? grand : totals.grand_total} bold />
+                    <Row k={showDisc ? "Sub Total" : "Basic Total"} v={totals.basic_total} fmt={fmtAmt} />
+                    {showDisc && <Row k={discLbl} v={rawDisc} fmt={fmtAmt} />}
+                    {showDisc && <Row k="After Discount" v={baseAfter} fmt={fmtAmt} />}
+                    {pf > 0 && <Row k={`P&F${charges.pf_percent ? ` @ ${charges.pf_percent}%` : ""}`} v={pf} fmt={fmtAmt} />}
+                    {ins > 0 && <Row k={`Insurance${charges.insurance_percent ? ` @ ${charges.insurance_percent}%` : ""}`} v={ins} fmt={fmtAmt} />}
+                    {frt > 0 && <Row k="Freight" v={frt} fmt={fmtAmt} />}
+                    {!showDisc && <Row k="Subtotal" v={totals.subtotal} fmt={fmtAmt} />}
+                    <Row k={`GST @ ${charges.gst_percent || 0}%`} v={gst} fmt={fmtAmt} />
+                    <Row k="Grand Total" v={grandFinal} bold fmt={fmtAmt} />
                     {(() => {
                       if (format !== "MR" || !charges.mr_advance_enabled) return null;
-                      const grandFinal = showDisc ? grand : totals.grand_total;
                       const mode = charges.mr_advance_mode || "percent";
                       const adv = mode === "percent"
                         ? (grandFinal * (charges.mr_advance_percent || 0)) / 100
@@ -1397,12 +1410,12 @@ export default function OrderEditor() {
                         : "Advance Adjustment";
                       return (
                         <>
-                          <Row k={lbl} v={adv} />
-                          <Row k="Net Payable" v={Math.max(0, grandFinal - adv)} bold />
+                          <Row k={lbl} v={adv} fmt={fmtAmt} />
+                          <Row k="Net Payable" v={Math.max(0, grandFinal - adv)} bold fmt={fmtAmt} />
                         </>
                       );
                     })()}
-                    <div className="pt-2 text-sm text-muted-foreground italic">{words}</div>
+                    <div className="pt-2 text-sm text-muted-foreground italic">{wordsLine}</div>
                   </>
                 );
               })()}
@@ -1618,6 +1631,7 @@ function ModeToggleRow({
     </div>
   );
 }
-function Row({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
-  return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>₹ {v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>;
+function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: (n: number) => string }) {
+  const text = fmt ? fmt(v) : `₹ ${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>{text}</span></div>;
 }
