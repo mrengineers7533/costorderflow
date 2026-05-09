@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, ChevronRight, FilePlus2, Search, Pencil, Download, Trash2, Printer, FileSpreadsheet, History } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus2, Search, Pencil, Download, Trash2, Printer, FileSpreadsheet, History, GitCompare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -26,6 +26,7 @@ import {
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
+import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
 
 type OaOption = {
   id: string;
@@ -53,6 +54,7 @@ export default function BoqList() {
   const [familyBoqs, setFamilyBoqs] = useState<Record<string, BoqRecord[]>>({});
   const [openFamily, setOpenFamily] = useState<Record<string, boolean>>({});
   const [loadingFamily, setLoadingFamily] = useState<Record<string, boolean>>({});
+  const [compare, setCompare] = useState<{ from: BoqRecord; to: BoqRecord } | null>(null);
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
@@ -411,6 +413,8 @@ export default function BoqList() {
                                    {(familyBoqs[b.id] || []).map((rev) => {
                                      const r = rev.revision ?? 0;
                                      const label = r === 0 ? "BOQ Original" : `BOQ R${r}`;
+                                     const current = (familyBoqs[b.id] || []).find((x) => x.is_current) || null;
+                                     const canCompare = !!current && current.id !== rev.id;
                                      return (
                                        <div key={rev.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-1.5 ${rev.is_current ? "border-primary/40" : ""}`}>
                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -429,6 +433,11 @@ export default function BoqList() {
                                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => nav(`/boqs/${rev.id}`)}>
                                              <Pencil className="h-3.5 w-3.5 mr-1" />View
                                            </Button>
+                                           {canCompare && (
+                                             <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setCompare({ from: rev, to: current! })} title="Compare with current revision">
+                                               <GitCompare className="h-3.5 w-3.5 mr-1" />Compare
+                                             </Button>
+                                           )}
                                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handlePrint(rev)} title="Print">
                                              <Printer className="h-3.5 w-3.5 mr-1" />Print
                                            </Button>
@@ -478,6 +487,13 @@ export default function BoqList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BoqCompareDialog
+        open={!!compare}
+        onOpenChange={(o) => { if (!o) setCompare(null); }}
+        from={compare?.from || null}
+        to={compare?.to || null}
+      />
     </div>
   );
 }
