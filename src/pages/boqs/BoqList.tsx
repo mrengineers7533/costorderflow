@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -331,7 +331,7 @@ export default function BoqList() {
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map((b) => (
-                      <FragmentRow key={b.id}>
+                      <Fragment key={b.id}>
                        <TableRow className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
                          <TableCell className="w-8 p-1" onClick={(e) => { e.stopPropagation(); toggleFamily(b); }}>
                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Show all revisions">
@@ -448,7 +448,7 @@ export default function BoqList() {
                            </TableCell>
                          </TableRow>
                        )}
-                      </FragmentRow>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>
