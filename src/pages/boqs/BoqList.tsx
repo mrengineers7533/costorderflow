@@ -331,8 +331,8 @@ export default function BoqList() {
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map((b) => (
-                      <>
-                       <TableRow key={b.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
+                      <FragmentRow key={b.id}>
+                       <TableRow className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
                          <TableCell className="w-8 p-1" onClick={(e) => { e.stopPropagation(); toggleFamily(b); }}>
                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Show all revisions">
                              {openFamily[b.id]
@@ -448,7 +448,7 @@ export default function BoqList() {
                            </TableCell>
                          </TableRow>
                        )}
-                      </>
+                      </FragmentRow>
                     ))}
                   </TableBody>
                 </Table>
