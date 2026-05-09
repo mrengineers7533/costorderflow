@@ -112,6 +112,7 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
         },
         c.line_items,
         c.totals,
+        c.charges,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
