@@ -1,95 +1,106 @@
-## Goal
-Extend the Client Copy feature with (1) duplicate item consolidation, (2) persistent storage of generated Client Copy PDFs against the OA, and (3) a unified Version History section showing every OA revision and every saved Client Copy with View / Print / Download PDF / Download Excel actions.
+# Auto BOQ for MR + Editable Remarks + BOQ Revision History
 
-Original OA, BOQ, PI, calculation, draft, and finalization flows remain untouched. All Client Copy logic stays isolated in `src/lib/orders/clientCopy.ts` and the OA editor.
+## Goals
 
----
+1. When an MR OA is created/finalized, auto-create its linked BOQ — same way as GMS, with no extra clicks. When the MR OA is revised, auto-revise the linked BOQ (already works for any format via `reviseOrder({ autoReviseBoq: true })`, just needs the initial BOQ to exist).
+2. BOQ Remarks must be editable for both MR and GMS BOQs by the OA owner, and saved remarks must show in BOQ preview, PDF, and Excel.
+3. Show full BOQ revision history (Original → R1 → R2 → …) inside the BOQ Folder, with View / Print / Download PDF / Download Excel on every row. Old revisions stay in the database — never overwritten.
 
-## Part 1 — Duplicate Item Consolidation (Client Copy only)
+## Scope (what stays untouched)
 
-Update `buildClientCopyItems` in `src/lib/orders/clientCopy.ts`:
-
-- Before building summary group rows, walk through all items and split them into:
-  - **passthrough items** (no group match) → consolidate by exact `description` (case-insensitive, trimmed). For each duplicate group: sum `quantity`, sum `amount`, and compute `unit_rate = totalAmount / totalQty` if rates differ; otherwise keep the shared rate. Keep the first occurrence's `unit`. Preserve original first-seen order so the OA item sequence is respected.
-  - **group items** (MHE / MAGNET / FAN / SPOUTING) → existing summary logic (already sums qty/amount, so duplicates are naturally consolidated).
-- Output stays: `[...consolidatedPassthrough, ...summarizedGroups]` with summary rows in fixed order MHE → FAN → MAGNET → SPOUTING.
-- Add unit tests covering: two identical descriptions with same rate, two with different rates (effective rate = total/qty), case/whitespace normalization, mixed with grouped items.
-
-No change to OA, BOQ, PI, or calc.
+- OA logic, PI logic, Client Copy logic — unchanged.
+- Existing GMS BOQ data flow (mapping, calculations, save) — reused as-is for MR.
+- Existing `RevisionsPanel` inside OrderEditor — unchanged.
+- Existing per-item approval / verification flow — unchanged.
 
 ---
 
-## Part 2 — Save Client Copy PDF against the OA
+## 1. Auto-create BOQ on OA save (both MR and GMS)
 
-### Database (new table)
+Today, `OrderEditor.save()` calls `syncBoqsAndPisForOrder(order)` after saving the OA. That function only updates BOQs that already exist; it does not create the first one. We will add a one-shot creation step so that — for any format — saving an OA without a linked BOQ inserts an initial BOQ row using the same mapping the manual "Create BOQ from this OA" button uses.
 
-Create `public.client_copies` to store every generated Client Copy linked to its OA:
+### Changes
 
-| column | type | notes |
-|---|---|---|
-| id | uuid pk | |
-| order_id | uuid | the OA revision this copy was generated from |
-| user_id | uuid | creator |
-| version_label | text | e.g. `Original`, `R1`, `R2` (computed at insert time = count of existing rows for this OA family) |
-| file_path | text | path in `oa-documents` storage bucket (reuse existing bucket) |
-| file_name | text | display name, e.g. `{OA_NUMBER}-CLIENT-COPY-R1.pdf` |
-| line_items | jsonb | snapshot of the summarized line items (used for Excel export and re-preview) |
-| charges | jsonb | snapshot |
-| totals | jsonb | snapshot |
-| format | order_format | MR or GMS |
-| snapshot | jsonb | header / bill_to / ship_to / terms etc. used to render the PDF |
-| created_at | timestamptz default now() |
+- `src/lib/revisions/index.ts`
+  - Add `createInitialBoqForOrder(order: OrderRecord): Promise<BoqRecord | null>`:
+    - Looks up the OA family (root + revisions) and checks `boqs` for any row in the family.
+    - If any BOQ exists → return null (no-op; revision sync handles updates).
+    - Otherwise insert one BOQ row using exactly the same mapping as `BoqEditor`'s "new from order" branch:
+      - `boq_number = deriveBoqNumber(order.oa_number)`
+      - `format = order.format`
+      - `revision = order.revision ?? 0`, `is_current = true`
+      - `prepared_by`, `reference_oa_number`, `project_number`, `client_name` from the OA
+      - `line_items` mapped from `order.line_items` (same mapping currently used in `BoqEditor.tsx` lines 147–155 and `reviseBoqFromOrder`)
+      - `terms = DEFAULT_BOQ_TERMS`, `notes = order.notes || null`
+      - `status = "draft"`, `verification_status = "approved"` (default)
+      - `user_id = order.user_id` (matches RLS)
+- `src/pages/orders/OrderEditor.tsx`
+  - In `save()` after `syncBoqsAndPisForOrder(...)`, call `createInitialBoqForOrder(savedOrder)`. Wrap in try/catch with a `console.warn` so an auto-create failure never blocks the OA save.
 
-RLS: same pattern as `boqs` — owner-or-admin for select/insert/update/delete.
+### Why this matches "the same conditions as GMS"
 
-### OA editor change (`src/pages/orders/OrderEditor.tsx`)
-
-- After `generateOrderPDF(...)` produces the blob in `downloadClientCopy`, additionally:
-  1. Upload the PDF to storage bucket `oa-documents` under `client-copies/{rootOrderId}/{filename}`.
-  2. Insert a `client_copies` row referencing the current OA `id`, with the snapshot needed to re-render later.
-- Trigger an event so the Revision History panel reloads.
+The mapping above is the same one used everywhere else (BoqEditor for new BOQs, `reviseBoqFromOrder` for revisions). It is format-agnostic — no GMS-specific code paths. So MR will behave identically: BOQ row appears in the BOQ folder/list immediately after the OA is saved, then revision sync (`syncBoqsAndPisForOrder`) and `reviseOrder({ autoReviseBoq: true })` keep it in lockstep with future OA revisions.
 
 ---
 
-## Part 3 — Unified Version History
+## 2. Editable Remarks for both MR and GMS BOQs
 
-Extend `RevisionsPanel.tsx` (already shown on the OA page) so it also fetches Client Copy rows for the OA family and renders them grouped under each OA revision (matching by `order_id`). Keep BOQ rows where they are. Add a new visual block:
+`BoqEditor` already gates Remarks editing on `canEditRemarks = isOaOwner` with no format check, so MR and GMS already share the same rule. We will:
 
+- Audit `BoqEditor.tsx` to confirm the Remarks `<Input>`/`<Textarea>` for every line item uses `disabled={!canEditRemarks}` (not `format !== "GMS"` or similar). Fix any format-specific gating if found.
+- Confirm Remarks are persisted on Save (already part of `items` in payload) and round-tripped on reload.
+- Confirm Remarks render in:
+  - BOQ preview (BoqEditor on-screen list) — already shown.
+  - PDF — `src/lib/boq/pdf.ts` already prints the `Remarks` column.
+  - Excel — `src/lib/boq/excel.ts` already writes `it.remarks` in the 6th column.
+
+No data-model changes; this is a guard-rail audit + any small UI fix to make sure MR users see the same editable Remarks field.
+
+---
+
+## 3. BOQ Revision History in the BOQ Folder
+
+`RevisionsPanel` already shows OA + linked BOQ revisions with View / Print / PDF / Excel inside the OA editor, and old BOQ rows are already preserved in the DB (`is_current=false`, never deleted by the trigger). We will surface the same history directly in the BOQ Folder list so users can find and download old revisions without going through the OA.
+
+### Changes (`src/pages/boqs/BoqList.tsx`)
+
+- Group rows by OA family (key = `parent_order_id` of the linked OA, fallback to `order_id`). Render one parent row per family showing the **current** BOQ.
+- Add an expand/collapse chevron on each row. When opened, show all revisions of that BOQ family ordered by `revision` ascending:
+  - Label: `BOQ Original` for `revision = 0`, otherwise `BOQ R{revision}`.
+  - Columns: BOQ number, Rev, Status (Current / Superseded / Pending / Rejected), Date, Prepared by.
+  - Actions per row: **View** (`/boqs/:id`), **Print**, **Download PDF**, **Download Excel** — reusing the existing `handleDownload` / `handlePrint` / `handleExcel` helpers (which take a `BoqRecord`, so they work for any revision).
+- Loading: fetch BOQ rows for a family only when its row is expanded (lazy load), mirroring the pattern in `RevisionsPanel`. For the parent row counts/badges we can reuse the already-loaded `rows`.
+- Keep the existing "Show superseded" toggle for the flat view; the expanded family view always shows every revision regardless of toggle.
+
+### Database
+
+- No schema changes. Old BOQ revisions are already preserved (only `is_current` flips). The `boq-documents` storage bucket also keeps a per-revision history snapshot via `snapshotPreviousBoqPdf` for legacy lookups; we do not need to touch storage.
+
+---
+
+## Technical notes
+
+```text
+OA save (MR or GMS)
+   │
+   ├─► supabase.from("orders").insert/update
+   │
+   ├─► syncBoqsAndPisForOrder(order)        ← updates existing BOQs/PIs in family
+   │
+   └─► createInitialBoqForOrder(order)      ← NEW: inserts first BOQ if none in family
+
+OA revise
+   │
+   └─► reviseOrder(source, { autoReviseBoq: true })
+          └─► reviseBoqFromOrder(newOA, currentBoq)   ← already exists; works for both formats
 ```
-OA R3 (Current)
-  └── BOQ R1
-  └── Client Copy Original   [View] [Print] [Download PDF] [Download Excel]
-  └── Client Copy R1         [View] [Print] [Download PDF] [Download Excel]
-```
 
-`version_label` is computed when the row is created (count of prior client copies for this OA `order_id` → 0 = `Original`, 1 = `R1`, …).
-
-### Action handlers
-
-- **View** — open a new tab with a signed URL from `oa-documents` bucket (same pattern as `BoqList`).
-- **Print** — open the signed URL in a new tab; the browser PDF viewer's print button is the standard UX (reuse signed URL).
-- **Download PDF** — fetch the signed URL and `saveAs(blob, file_name)`.
-- **Download Excel** — generate `.xlsx` on the fly from the stored `line_items` + `totals` snapshot using `xlsx` (already a dep — verify; if missing add `xlsx`). Columns: `S.No, Description, Qty, Unit, Rate, Amount`, then a totals block.
-
-A small helper module `src/lib/orders/clientCopyExcel.ts` builds the workbook from the snapshot.
-
----
-
-## Part 4 — Files touched
-
-- **Migration** — create `client_copies` table + RLS.
-- **Edit** `src/lib/orders/clientCopy.ts` — duplicate consolidation.
-- **New** `src/test/clientCopy.test.ts` — extended cases for duplicates.
-- **Edit** `src/pages/orders/OrderEditor.tsx` — `downloadClientCopy` now uploads + inserts row, then notifies the revisions panel via a `reloadKey` bump (already wired).
-- **Edit** `src/components/orders/RevisionsPanel.tsx` — fetch client copies for the OA family, render rows with View / Print / Download PDF / Download Excel buttons.
-- **New** `src/lib/orders/clientCopyExcel.ts` — build .xlsx workbook from a Client Copy snapshot.
-- **Possibly new dep** `xlsx` (check `package.json`).
-
----
+- `createInitialBoqForOrder` is idempotent: it checks the family before inserting. Safe to call on every OA save (draft or finalize).
+- All BOQ rows continue to be inserted via the existing RLS-friendly `boqs` policies (`user_id = order.user_id`).
+- No changes to `OrderEditor`'s "Create BOQ from this OA" button — it still works for legacy OAs that somehow lost their BOQ.
 
 ## Out of scope
 
-- Editing Client Copy after it is saved (snapshots are immutable per user spec "must not overwrite old versions").
-- Watermarking the PDF.
-- Changes to OA / BOQ / PI / calc logic.
-- Auto-generating a Client Copy on every OA revise — the user must click "Create Client Copy" to produce a new version (matches current UX).
+- Email notifications, verification flow, BOQ approval UI — unchanged.
+- PI / Client Copy / OA PDFs — unchanged.
+- Any GMS-specific calculation, charges, or pricing logic — unchanged.
