@@ -17,7 +17,10 @@ function detectGroup(desc: string): GroupKey | null {
   if (/fan\s*accessor/.test(d)) return "SPOUTING";
   if (/\b(elevator|conveyor|vmc)\b/.test(d)) return "MHE";
   if (/\bmagnet/.test(d)) return "MAGNET";
-  if (/\bfan\b/.test(d)) return "FAN";
+  // FAN: only true Ferrari-style centrifugal fans. Match "fan" as a whole word
+  // but explicitly exclude accessories / fan-cooled / fan-out style mentions.
+  // Common forms: "Fan complete w/o ...", "HP Fan complete ...", "Centrifugal Fan ...".
+  if (/\bfans?\b/.test(d) && !/fan\s*(accessor|cooled|guard|cowl)/.test(d)) return "FAN";
   return null;
 }
 
@@ -62,7 +65,10 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
       continue;
     }
     const qty = Number(it.quantity) || 0;
-    const amt = Number(it.amount) || qty * (Number(it.unit_rate) || 0);
+    // Always recompute from qty × rate so a stale `amount` field can never
+    // inflate (or under-count) the grouped Client Copy total.
+    const rate = Number(it.unit_rate) || 0;
+    const amt = qty * rate;
     groups[g].qty += qty;
     groups[g].amount += amt;
     if (!groups[g].unit) groups[g].unit = it.unit;
@@ -90,13 +96,14 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     .filter((g) => groups[g].amount > 0 || groups[g].qty > 0)
     .map((g, idx) => {
     const totalAmt = groups[g].amount;
-    const rate = totalAmt;
     return {
       id: `client-copy-${g.toLowerCase()}-${idx}`,
       description: GROUP_LABEL[g],
       quantity: 1,
       unit: "Set",
-      unit_rate: rate,
+      // qty = 1 Set, so unit_rate equals the grouped total. Keeps
+      // qty × rate === amount consistent for any downstream re-calc.
+      unit_rate: totalAmt,
       amount: totalAmt,
     };
   });
