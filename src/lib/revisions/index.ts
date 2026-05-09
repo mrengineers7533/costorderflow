@@ -466,3 +466,65 @@ export async function createPendingBoqRevision(
   }
   return newBoq;
 }
+
+/** Auto-create the initial BOQ for an OA if none exists in its revision family.
+ *  Used so that saving an OA (MR or GMS) automatically produces a matching BOQ
+ *  row in the BOQ folder — same mapping the manual "Create BOQ from this OA"
+ *  button uses. Idempotent: if any BOQ already exists in the family, no-op. */
+export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqRecord | null> {
+  // Resolve family ids (root + all revisions).
+  const root = order.parent_order_id || order.id;
+  const { data: famRows } = await supabase
+    .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+  const familyIds = Array.from(new Set([
+    order.id,
+    root,
+    ...((famRows || []) as Array<{ id: string }>).map((r) => r.id),
+  ].filter(Boolean)));
+
+  const { data: existing } = await supabase
+    .from("boqs").select("id").in("order_id", familyIds).limit(1);
+  if ((existing || []).length > 0) return null;
+
+  let ownerId: string | null = order.user_id ?? null;
+  if (!ownerId) {
+    const { data: auth } = await supabase.auth.getUser();
+    ownerId = auth.user?.id ?? null;
+  }
+
+  const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => ({
+    id: crypto.randomUUID(),
+    item_no: String(i + 1),
+    model_number: it.hsn_code || "",
+    description: it.description || "",
+    quantity: Number(it.quantity) || 0,
+    unit: it.unit || "Nos",
+    remarks: "",
+  }));
+
+  const payload = {
+    order_id: order.id,
+    source_order_id: order.id,
+    user_id: ownerId,
+    boq_number: deriveBoqNumber(order.oa_number),
+    version: 1,
+    revision: order.revision ?? 0,
+    is_current: true,
+    format: order.format,
+    status: "draft" as const,
+    prepared_by: order.prepared_by || null,
+    boq_date: new Date().toISOString().slice(0, 10),
+    reference_oa_number: order.oa_number,
+    project_number: order.cost_sheet_number || order.reference || null,
+    client_name: order.company_name || order.bill_to?.name || null,
+    line_items: items,
+    terms: DEFAULT_BOQ_TERMS,
+    notes: order.notes || null,
+  };
+  const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
+  if (error) {
+    console.warn("createInitialBoqForOrder failed", error);
+    return null;
+  }
+  return data as unknown as BoqRecord;
+}
