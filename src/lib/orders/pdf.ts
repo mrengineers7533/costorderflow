@@ -175,9 +175,6 @@ export async function generateOrderPDF(
 
   // Bill To / Ship To
   const boxW = (W - M * 2 - 4) / 2;
-  doc.setDrawColor(...accent).setLineWidth(0.3);
-  doc.rect(M, y, boxW, 28);
-  doc.rect(M + boxW + 4, y, boxW, 28);
   doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(...accent);
   doc.text("BILL TO", M + 2, y + 5);
   doc.text("SHIP TO", M + boxW + 6, y + 5);
@@ -194,9 +191,26 @@ export async function generateOrderPDF(
     order.ship_to.gstin ? `GSTIN: ${order.ship_to.gstin}` : "",
     order.ship_to.state ? `State: ${order.ship_to.state}` : "",
   ].filter(Boolean);
-  billLines.forEach((l, i) => doc.text(doc.splitTextToSize(l, boxW - 4), M + 2, y + 10 + i * 4));
-  shipLines.forEach((l, i) => doc.text(doc.splitTextToSize(l, boxW - 4), M + boxW + 6, y + 10 + i * 4));
-  y += 32;
+  const drawWrapped = (lines: string[], x: number) => {
+    let row = 0;
+    lines.forEach((l) => {
+      const wrapped = doc.splitTextToSize(l, boxW - 4) as string[];
+      wrapped.forEach((w) => {
+        doc.text(w, x, y + 10 + row * 4);
+        row += 1;
+      });
+    });
+    return row;
+  };
+  const billRows = drawWrapped(billLines, M + 2);
+  const shipRows = drawWrapped(shipLines, M + boxW + 6);
+  const maxRows = Math.max(billRows, shipRows, 4);
+  const boxH = 10 + maxRows * 4;
+  // Redraw boxes to fit content height
+  doc.setDrawColor(...accent).setLineWidth(0.3);
+  doc.rect(M, y, boxW, boxH);
+  doc.rect(M + boxW + 4, y, boxW, boxH);
+  y += boxH + 4;
 
   // Unified Items + Totals table (matches reference template structure)
   const c = order.charges;
