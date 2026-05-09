@@ -9,13 +9,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt } from "lucide-react";
+import { Upload, FilePlus2, Sparkles, ArrowRight, Pencil, Trash2, Download, ClipboardList, Receipt, Printer, FileSpreadsheet } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { OrderRecord } from "@/lib/orders/types";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { buildOrderXlsx } from "@/lib/orders/excel";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -122,6 +123,31 @@ export default function OrdersList() {
       toast({ title: "OA PDF downloaded", description: o.oa_number });
     } catch (err) {
       toast({ title: "Download failed", description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function printOrderPdf(o: OrderRecord) {
+    try {
+      const doc = await generateOrderPDF(o);
+      const blobUrl = doc.output("bloburl") as unknown as string;
+      const w = window.open(blobUrl, "_blank", "noopener");
+      if (w) setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 1000);
+    } catch (err) {
+      toast({ title: "Print failed", description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  function downloadOrderXlsx(o: OrderRecord) {
+    try {
+      const blob = buildOrderXlsx(o);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      a.href = url; a.download = `${safe}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      toast({ title: "Excel export failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -239,6 +265,26 @@ export default function OrdersList() {
                             aria-label={`Download ${o.oa_number}`}
                           >
                             <Download className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={(e) => { e.stopPropagation(); downloadOrderXlsx(o); }}
+                            aria-label={`Excel ${o.oa_number}`}
+                            title="Download Excel"
+                          >
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={(e) => { e.stopPropagation(); printOrderPdf(o); }}
+                            aria-label={`Print ${o.oa_number}`}
+                            title="Print"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
