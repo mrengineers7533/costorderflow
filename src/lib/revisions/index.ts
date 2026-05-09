@@ -122,6 +122,15 @@ export async function reviseBoqFromOrder(
   // Determine next BOQ revision number — match the OA revision number.
   const nextRev = orderRev.revision ?? 0;
 
+  // Resolve the user_id we will stamp on the new BOQ row. RLS requires this
+  // to match the authenticated user (or be inserted by an admin); otherwise
+  // the new BOQ won't show up in the user's BOQ list.
+  let ownerId: string | null = orderRev.user_id ?? prevBoq?.user_id ?? null;
+  if (!ownerId) {
+    const { data: auth } = await supabase.auth.getUser();
+    ownerId = auth.user?.id ?? null;
+  }
+
   // Build items from the OA revision; preserve Remarks from prevBoq when the
   // description+model line up (case-insensitive, trimmed match).
   const prevByKey = new Map<string, BoqLineItem>();
@@ -150,7 +159,7 @@ export async function reviseBoqFromOrder(
     order_id: orderRev.id,
     source_order_id: orderRev.id,
     revised_from_id: prevBoq?.id || null,
-    user_id: orderRev.user_id ?? prevBoq?.user_id ?? null,
+    user_id: ownerId,
     boq_number: prevBoq?.boq_number || deriveBoqNumber(orderRev.oa_number),
     version: 1, // legacy column; we use revision for ordering now
     revision: nextRev,
