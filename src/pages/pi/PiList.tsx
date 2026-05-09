@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { PiRecord } from "@/lib/pi/types";
 import { generatePiPDF } from "@/lib/pi/pdf";
+import { buildPiXlsx } from "@/lib/pi/excel";
 import type { OrderRecord } from "@/lib/orders/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 
@@ -151,6 +152,24 @@ export default function PiList() {
     }
   }
 
+  function handleDownloadXlsx(p: PiRecord) {
+    try {
+      const blob = buildPiXlsx(p);
+      const safe = (p.pi_number || "PI").replace(/[/\\]/g, "_");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safe}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "PI Excel downloaded" });
+    } catch (e: any) {
+      toast({ title: "Excel download failed", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
+
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -277,6 +296,9 @@ export default function PiList() {
                             </Button>
                             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleDownload(p)}>
                               <Download className="h-3.5 w-3.5 mr-1" />PDF
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleDownloadXlsx(p)}>
+                              <Download className="h-3.5 w-3.5 mr-1" />Excel
                             </Button>
                             <Button
                               variant="ghost"
