@@ -725,6 +725,18 @@ async function renderGmsPdf(
       yEnd += 3;
     }
   }
+  // EXW Murthal — print USD amount in words when PU Dollar Rate set.
+  if (gmsUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && cifRate > 0) {
+    const m = calcExMurthal(t.basic_total, c);
+    const np = m.net_payable / cifRate;
+    if (np > 0) {
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+      const words = `AMOUNT (IN WORDS): ${amountInWordsUSD(np)}`;
+      const wrapped = doc.splitTextToSize(words, W - M * 2);
+      wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+      yEnd += 3;
+    }
+  }
 
   if (!opts?.docMeta?.hideFirstPageFooter) {
     // If footer block won't fit on the current page, push to a new one
