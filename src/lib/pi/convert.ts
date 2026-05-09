@@ -131,6 +131,34 @@ export async function createPiFromOaItems(
 
   const totals = calcPiTotals(filteredItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
 
+  // GMS landed-cost overrides — when the OA uses an EXW Turkey/Murthal/CIF
+  // breakdown, the PI must carry the exact same calculation chain & totals
+  // from the selected OA revision (incl. USD for EXW CIF Port).
+  let savedGrand = totals.grand_total_pi;
+  let savedNet = totals.net_payable_pi;
+  if (oa.format === "GMS") {
+    const c = oa.charges;
+    if (c.gms_mode === "EXW_TURKEY") {
+      const tk = calcExTurkey(totals.basic_total, c);
+      savedGrand = tk.grand_total;
+      savedNet = tk.net_payable;
+    } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
+      const m = calcExMurthal(totals.basic_total, c);
+      savedGrand = m.grand_total;
+      savedNet = m.net_payable;
+    } else if (c.gms_mode === "EXW_CIF_PORT") {
+      const rate = c.cif_pu_dollar_rate || 0;
+      const basicUsd = rate > 0 ? totals.basic_total / rate : 0;
+      const seaUsd = (c.cif_sea_freight_mode || "amount") === "percent"
+        ? (basicUsd * (c.cif_sea_freight_percent || 0)) / 100
+        : (c.cif_sea_freight_usd || 0);
+      const grandUsd = basicUsd + seaUsd;
+      const grandInr = grandUsd * (rate || 1);
+      savedGrand = grandInr;
+      savedNet = grandInr;
+    }
+  }
+
   const insertRow = {
     pi_number: piNum as string,
     base_pi_number: piNum as string,
@@ -152,10 +180,10 @@ export async function createPiFromOaItems(
     totals: {
       basic_total: totals.basic_total,
       subtotal: totals.subtotal,
-      grand_total: totals.grand_total_pi,
-      net_payable: totals.net_payable_pi,
+      grand_total: savedGrand,
+      net_payable: savedNet,
     },
-    amount_in_words: amountInWords(totals.net_payable_pi),
+    amount_in_words: amountInWords(savedNet),
     notes: oa.notes,
     one_time_discount_percent: 0,
     advance_adjustment_percent: 0,
