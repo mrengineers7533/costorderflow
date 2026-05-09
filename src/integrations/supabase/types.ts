@@ -165,6 +165,51 @@ export type Database = {
           },
         ]
       }
+      client_copies: {
+        Row: {
+          charges: Json
+          created_at: string
+          file_name: string
+          file_path: string
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          line_items: Json
+          order_id: string
+          snapshot: Json
+          totals: Json
+          user_id: string | null
+          version_label: string
+        }
+        Insert: {
+          charges?: Json
+          created_at?: string
+          file_name: string
+          file_path: string
+          format: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          order_id: string
+          snapshot?: Json
+          totals?: Json
+          user_id?: string | null
+          version_label: string
+        }
+        Update: {
+          charges?: Json
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          format?: Database["public"]["Enums"]["order_format"]
+          id?: string
+          line_items?: Json
+          order_id?: string
+          snapshot?: Json
+          totals?: Json
+          user_id?: string | null
+          version_label?: string
+        }
+        Relationships: []
+      }
       cost_sheets: {
         Row: {
           created_at: string
