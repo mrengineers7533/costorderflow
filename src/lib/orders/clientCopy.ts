@@ -33,12 +33,32 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     FAN: { qty: 0, amount: 0 },
     SPOUTING: { qty: 0, amount: 0 },
   };
-  const passthrough: LineItem[] = [];
+  // Consolidate non-grouped duplicates by normalized description.
+  // Preserve first-seen order so the OA item sequence is respected.
+  const passOrder: string[] = [];
+  const passMap = new Map<string, {
+    first: LineItem;
+    qty: number;
+    amount: number;
+    rates: Set<number>;
+  }>();
 
   for (const it of items) {
     const g = detectGroup(it.description);
     if (!g) {
-      passthrough.push(it);
+      const key = (it.description || "").trim().toLowerCase();
+      const qty = Number(it.quantity) || 0;
+      const rate = Number(it.unit_rate) || 0;
+      const amt = Number(it.amount) || qty * rate;
+      let bucket = passMap.get(key);
+      if (!bucket) {
+        bucket = { first: it, qty: 0, amount: 0, rates: new Set() };
+        passMap.set(key, bucket);
+        passOrder.push(key);
+      }
+      bucket.qty += qty;
+      bucket.amount += amt;
+      bucket.rates.add(rate);
       continue;
     }
     const qty = Number(it.quantity) || 0;
@@ -47,6 +67,22 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     groups[g].amount += amt;
     if (!groups[g].unit) groups[g].unit = it.unit;
   }
+
+  const passthrough: LineItem[] = passOrder.map((key) => {
+    const b = passMap.get(key)!;
+    // If every contributing row had the same rate, keep that rate.
+    // Otherwise show effective rate = totalAmount / totalQty.
+    const sameRate = b.rates.size === 1;
+    const effectiveRate = sameRate
+      ? [...b.rates][0]
+      : (b.qty > 0 ? b.amount / b.qty : 0);
+    return {
+      ...b.first,
+      quantity: b.qty,
+      unit_rate: effectiveRate,
+      amount: b.amount,
+    };
+  });
 
   // Fixed display order for Client Copy summary rows (spec).
   const FIXED_ORDER: GroupKey[] = ["MHE", "FAN", "MAGNET", "SPOUTING"];
