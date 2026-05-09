@@ -487,6 +487,13 @@ export default function BoqList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BoqCompareDialog
+        open={!!compare}
+        onOpenChange={(o) => { if (!o) setCompare(null); }}
+        from={compare?.from || null}
+        to={compare?.to || null}
+      />
     </div>
   );
 }
