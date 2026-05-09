@@ -203,13 +203,34 @@ export default function BoqEditor() {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return toast({ title: "Upload failed", description: "Please sign in again.", variant: "destructive" });
+    // Persist the BOQ record first so it appears in the BOQ folder list.
+    const payload = {
+      order_id: orderId,
+      boq_number: boqNumber || deriveBoqNumber(referenceOa),
+      version, format,
+      status,
+      prepared_by: preparedBy || null, boq_date: boqDate,
+      reference_oa_number: referenceOa || null, project_number: projectNumber || null,
+      client_name: clientName || null, line_items: items, terms, notes,
+    };
+    let savedId = boqId;
+    if (!savedId) {
+      const ins = await supabase.from("boqs").insert(payload as never).select().single();
+      if (ins.error) return toast({ title: "Save failed", description: ins.error.message, variant: "destructive" });
+      savedId = (ins.data as { id: string }).id;
+      setBoqId(savedId);
+    } else {
+      const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
+      if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
+    }
     const doc = await generateBoqPDF(buildRecord());
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
     const { error } = await supabase.storage.from("boq-documents").upload(path, blob, { upsert: true, contentType: "application/pdf" });
     if (error) return toast({ title: "Upload failed", description: error.message, variant: "destructive" });
-    toast({ title: "Saved to BOQ folder", description: path });
+    toast({ title: "Saved to BOQ folder", description: boqNumber || payload.boq_number });
+    if (isNew && savedId) navigate(`/boqs/${savedId}`, { replace: true });
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
