@@ -1631,6 +1631,7 @@ function ModeToggleRow({
     </div>
   );
 }
-function Row({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
-  return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>₹ {v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>;
+function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: (n: number) => string }) {
+  const text = fmt ? fmt(v) : `₹ ${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>{text}</span></div>;
 }
