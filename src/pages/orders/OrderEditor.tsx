@@ -14,6 +14,7 @@ import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye, Recei
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
+import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { saveClientCopy } from "@/lib/orders/clientCopies";
