@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, FilePlus2, Search, Pencil, Download, Trash2 } from "lucide-react";
+import { ChevronDown, FilePlus2, Search, Pencil, Download, Trash2, Printer, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
+import { buildBoqXlsx } from "@/lib/boq/excel";
 
 type OaOption = {
   id: string;
@@ -142,6 +143,31 @@ export default function BoqList() {
       toast({ title: "BOQ PDF downloaded" });
     } catch (e: any) {
       toast({ title: "Download failed", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
+
+  async function handlePrint(b: BoqRecord) {
+    try {
+      const doc = await generateBoqPDF(b);
+      const blobUrl = doc.output("bloburl") as unknown as string;
+      const w = window.open(blobUrl, "_blank", "noopener");
+      if (w) setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 1000);
+    } catch (e: any) {
+      toast({ title: "Print failed", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
+
+  function handleExcel(b: BoqRecord) {
+    try {
+      const blob = buildBoqXlsx(b);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safe = (b.boq_number || "BOQ").replace(/[/\\]/g, "_");
+      a.href = url; a.download = `${safe}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e: any) {
+      toast({ title: "Excel export failed", description: e?.message || String(e), variant: "destructive" });
     }
   }
 
@@ -298,6 +324,12 @@ export default function BoqList() {
                             </Button>
                             <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleDownload(b)}>
                               <Download className="h-3.5 w-3.5 mr-1" />PDF
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => handleExcel(b)} title="Download Excel">
+                              <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => handlePrint(b)} title="Print">
+                              <Printer className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"

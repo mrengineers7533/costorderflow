@@ -8,6 +8,10 @@ import { toast } from "@/hooks/use-toast";
 import { fetchOrderFamily, fetchBoqsForFamily } from "@/lib/revisions";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import { generateOrderPDF } from "@/lib/orders/pdf";
+import { buildOrderXlsx } from "@/lib/orders/excel";
+import { generateBoqPDF } from "@/lib/boq/pdf";
+import { buildBoqXlsx } from "@/lib/boq/excel";
 import {
   fetchClientCopiesForOrderIds,
   getClientCopySignedUrl,
@@ -125,6 +129,71 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
     }
   }
 
+  async function downloadOaPdf(o: OrderRecord) {
+    try {
+      const doc = await generateOrderPDF(o);
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      doc.save(`${safe}.pdf`);
+    } catch (e) {
+      toast({ title: "Download failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function printOa(o: OrderRecord) {
+    try {
+      const doc = await generateOrderPDF(o);
+      const url = doc.output("bloburl") as unknown as string;
+      const w = window.open(url, "_blank", "noopener");
+      if (w) setTimeout(() => { try { w.print(); } catch { /* */ } }, 1000);
+    } catch (e) {
+      toast({ title: "Print failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  function downloadOaXlsx(o: OrderRecord) {
+    try {
+      const blob = buildOrderXlsx(o);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      a.href = url; a.download = `${safe}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      toast({ title: "Excel export failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function downloadBoqPdf(b: BoqRecord) {
+    try {
+      const doc = await generateBoqPDF(b);
+      const safe = (b.boq_number || "BOQ").replace(/[/\\]/g, "_");
+      doc.save(`${safe}.pdf`);
+    } catch (e) {
+      toast({ title: "Download failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  async function printBoq(b: BoqRecord) {
+    try {
+      const doc = await generateBoqPDF(b);
+      const url = doc.output("bloburl") as unknown as string;
+      const w = window.open(url, "_blank", "noopener");
+      if (w) setTimeout(() => { try { w.print(); } catch { /* */ } }, 1000);
+    } catch (e) {
+      toast({ title: "Print failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+  function downloadBoqXlsx(b: BoqRecord) {
+    try {
+      const blob = buildBoqXlsx(b);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safe = (b.boq_number || "BOQ").replace(/[/\\]/g, "_");
+      a.href = url; a.download = `${safe}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      toast({ title: "Excel export failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
   return (
     <Card>
       <CardHeader
@@ -171,6 +240,15 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                     <Button size="sm" variant="ghost" onClick={() => nav(`/orders/${o.id}`)}>
                       <Eye className="h-3.5 w-3.5 mr-1" />View
                     </Button>
+                    <Button size="sm" variant="ghost" onClick={() => printOa(o)} title="Print">
+                      <Printer className="h-3.5 w-3.5 mr-1" />Print
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadOaPdf(o)} title="Download PDF">
+                      <FileDown className="h-3.5 w-3.5 mr-1" />PDF
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadOaXlsx(o)} title="Download Excel">
+                      <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
+                    </Button>
                   </div>
                 </div>
                 {/* Linked BOQs (indented) */}
@@ -192,6 +270,15 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
                         <div className="flex items-center gap-1">
                           <Button size="sm" variant="ghost" onClick={() => nav(`/boqs/${b.id}`)}>
                             <Eye className="h-3.5 w-3.5 mr-1" />View
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => printBoq(b)} title="Print">
+                            <Printer className="h-3.5 w-3.5 mr-1" />Print
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => downloadBoqPdf(b)} title="Download PDF">
+                            <FileDown className="h-3.5 w-3.5 mr-1" />PDF
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => downloadBoqXlsx(b)} title="Download Excel">
+                            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
                           </Button>
                         </div>
                       </div>
