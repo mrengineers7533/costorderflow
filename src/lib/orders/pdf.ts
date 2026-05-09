@@ -175,9 +175,6 @@ export async function generateOrderPDF(
 
   // Bill To / Ship To
   const boxW = (W - M * 2 - 4) / 2;
-  doc.setDrawColor(...accent).setLineWidth(0.3);
-  doc.rect(M, y, boxW, 28);
-  doc.rect(M + boxW + 4, y, boxW, 28);
   doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(...accent);
   doc.text("BILL TO", M + 2, y + 5);
   doc.text("SHIP TO", M + boxW + 6, y + 5);
