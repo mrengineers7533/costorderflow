@@ -515,3 +515,143 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
     </Card>
   );
 }
+
+/* -------- PDF History tab: lists all snapshots for this OA -------- */
+type HistoryEntry = {
+  path: string;
+  name: string;
+  label: string;
+  revision: number | null;
+  isCurrent: boolean;
+  updatedAt: string | null;
+};
+
+function parseRevisionFromName(name: string): number | null {
+  const m = name.match(/-R(\d+)-/i) || name.match(/-v(\d+)\.pdf$/i);
+  return m ? Number(m[1]) : null;
+}
+
+function BoqPdfHistory({ orderId, currentBoqNumber }: { orderId: string; currentBoqNumber: string }) {
+  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [busyPath, setBusyPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orderId) { setLoading(false); return; }
+    (async () => {
+      setLoading(true);
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) { setLoading(false); return; }
+
+      const baseDir = `${uid}/${orderId}`;
+      const [curList, histList] = await Promise.all([
+        supabase.storage.from("boq-documents").list(baseDir, { limit: 100, sortBy: { column: "updated_at", order: "desc" } }),
+        supabase.storage.from("boq-documents").list(`${baseDir}/history`, { limit: 200, sortBy: { column: "updated_at", order: "desc" } }),
+      ]);
+
+      const out: HistoryEntry[] = [];
+      (curList.data || []).forEach((f) => {
+        if (!f.name?.toLowerCase().endsWith(".pdf")) return;
+        const rev = parseRevisionFromName(f.name);
+        out.push({
+          path: `${baseDir}/${f.name}`,
+          name: f.name,
+          label: `${currentBoqNumber || f.name.replace(/\.pdf$/i, "")} (Current)`,
+          revision: rev,
+          isCurrent: true,
+          updatedAt: (f as { updated_at?: string }).updated_at || null,
+        });
+      });
+      (histList.data || []).forEach((f) => {
+        if (!f.name?.toLowerCase().endsWith(".pdf")) return;
+        const rev = parseRevisionFromName(f.name);
+        const base = f.name.replace(/-\d{8,}.*\.pdf$/i, "").replace(/\.pdf$/i, "");
+        out.push({
+          path: `${baseDir}/history/${f.name}`,
+          name: f.name,
+          label: rev === 0 ? `${base} (Original)` : `${base}`,
+          revision: rev,
+          isCurrent: false,
+          updatedAt: (f as { updated_at?: string }).updated_at || null,
+        });
+      });
+
+      out.sort((a, b) => {
+        if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
+        const ar = a.revision ?? -1, br = b.revision ?? -1;
+        return br - ar;
+      });
+      setEntries(out);
+      setLoading(false);
+    })();
+  }, [orderId, currentBoqNumber]);
+
+  async function openOrDownload(entry: HistoryEntry, mode: "view" | "download") {
+    setBusyPath(entry.path);
+    try {
+      const { data, error } = await supabase.storage.from("boq-documents").createSignedUrl(entry.path, 60 * 10, mode === "download" ? { download: entry.name } : undefined);
+      if (error || !data?.signedUrl) throw error || new Error("Failed to get URL");
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: mode === "view" ? "View failed" : "Download failed", description: msg, variant: "destructive" });
+    } finally {
+      setBusyPath(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">BOQ PDF History</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Every saved snapshot for this OA — Original, R1, R2, R3 and the current version.
+          Old PDFs are preserved automatically when the linked OA is revised.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading history…</p>
+        ) : entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No saved BOQ PDFs yet. Use <span className="font-medium">Save to BOQ Folder</span> to store the current PDF.
+          </p>
+        ) : (
+          <div className="divide-y rounded-md border">
+            {entries.map((e) => (
+              <div key={e.path} className="flex items-center justify-between gap-3 p-3">
+                <div className="min-w-0">
+                  <div className="font-mono text-sm truncate flex items-center gap-2">
+                    {e.label}
+                    {e.revision !== null && (
+                      <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider">
+                        R{e.revision}
+                      </span>
+                    )}
+                    {e.isCurrent && (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-medium uppercase">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {e.name}{e.updatedAt ? ` • ${new Date(e.updatedAt).toLocaleString("en-IN")}` : ""}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" disabled={busyPath === e.path} onClick={() => openOrDownload(e, "view")}>
+                    <Eye className="h-3.5 w-3.5 mr-1" />View
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={busyPath === e.path} onClick={() => openOrDownload(e, "download")}>
+                    <Download className="h-3.5 w-3.5 mr-1" />PDF
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
