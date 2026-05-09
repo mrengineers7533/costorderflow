@@ -43,7 +43,7 @@ export default function BoqList() {
     folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [rows, setRows] = useState<BoqRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showSuperseded, setShowSuperseded] = useState(false);
+  const [showSuperseded, setShowSuperseded] = useState(true);
   const [oas, setOas] = useState<OaOption[]>([]);
   const [oaSearch, setOaSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);
@@ -294,8 +294,14 @@ export default function BoqList() {
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map((b) => (
-                      <TableRow key={b.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
-                        <TableCell className="font-mono font-medium">{b.boq_number}</TableCell>
+                       <TableRow key={b.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
+                         <TableCell className="font-mono font-medium">
+                           {(() => {
+                             const base = (b.boq_number || "").replace(/\/R\d+$/i, "");
+                             const rev = b.revision ?? 0;
+                             return rev > 0 ? `${base}/R${rev}` : base;
+                           })()}
+                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                             <span className="px-1.5 py-0.5 rounded bg-muted">R{b.revision ?? 0}</span>
