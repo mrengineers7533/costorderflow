@@ -200,10 +200,13 @@ export default function BoqEditor() {
   }
 
   async function uploadToBoqFolder() {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return toast({ title: "Upload failed", description: "Please sign in again.", variant: "destructive" });
     const doc = await generateBoqPDF(buildRecord());
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
-    const path = `${orderId}/${safe}-v${version}.pdf`;
+    const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
     const { error } = await supabase.storage.from("boq-documents").upload(path, blob, { upsert: true, contentType: "application/pdf" });
     if (error) return toast({ title: "Upload failed", description: error.message, variant: "destructive" });
     toast({ title: "Saved to BOQ folder", description: path });
