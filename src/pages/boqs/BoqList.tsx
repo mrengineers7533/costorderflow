@@ -319,6 +319,7 @@ export default function BoqList() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-8" />
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">BOQ No.</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Rev</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Format</TableHead>
@@ -330,7 +331,15 @@ export default function BoqList() {
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map((b) => (
+                      <>
                        <TableRow key={b.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/boqs/${b.id}`)}>
+                         <TableCell className="w-8 p-1" onClick={(e) => { e.stopPropagation(); toggleFamily(b); }}>
+                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Show all revisions">
+                             {openFamily[b.id]
+                               ? <ChevronDown className="h-4 w-4" />
+                               : <ChevronRight className="h-4 w-4" />}
+                           </Button>
+                         </TableCell>
                          <TableCell className="font-mono font-medium">
                            {(() => {
                              const base = (b.boq_number || "").replace(/\/R\d+$/i, "");
@@ -385,6 +394,61 @@ export default function BoqList() {
                           </div>
                         </TableCell>
                       </TableRow>
+                       {openFamily[b.id] && (
+                         <TableRow className="bg-muted/20 hover:bg-muted/20">
+                           <TableCell colSpan={8} className="p-0">
+                             <div className="px-4 py-3">
+                               <div className="flex items-center gap-2 mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                                 <History className="h-3.5 w-3.5" />
+                                 BOQ Revision History
+                               </div>
+                               {loadingFamily[b.id] ? (
+                                 <div className="text-xs text-muted-foreground py-2">Loading revisions…</div>
+                               ) : (familyBoqs[b.id] || []).length === 0 ? (
+                                 <div className="text-xs text-muted-foreground py-2">No revisions found.</div>
+                               ) : (
+                                 <div className="space-y-1">
+                                   {(familyBoqs[b.id] || []).map((rev) => {
+                                     const r = rev.revision ?? 0;
+                                     const label = r === 0 ? "BOQ Original" : `BOQ R${r}`;
+                                     return (
+                                       <div key={rev.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-1.5 ${rev.is_current ? "border-primary/40" : ""}`}>
+                                         <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                           <Badge variant={rev.is_current ? "default" : "outline"} className="text-[10px] uppercase">
+                                             {label}
+                                           </Badge>
+                                           <span className="font-mono text-xs font-semibold truncate">{rev.boq_number}</span>
+                                           <Badge variant={rev.format === "MR" ? "default" : "secondary"} className="text-[9px]">{rev.format}</Badge>
+                                           <span className="text-[11px] text-muted-foreground">· {new Date(rev.boq_date).toLocaleDateString("en-IN")}</span>
+                                           {rev.prepared_by && <span className="text-[11px] text-muted-foreground">· by {rev.prepared_by}</span>}
+                                           {rev.is_current
+                                             ? <Badge variant="default" className="text-[9px] uppercase">Current</Badge>
+                                             : <Badge variant="outline" className="text-[9px] uppercase">Superseded</Badge>}
+                                         </div>
+                                         <div className="flex items-center gap-1">
+                                           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => nav(`/boqs/${rev.id}`)}>
+                                             <Pencil className="h-3.5 w-3.5 mr-1" />View
+                                           </Button>
+                                           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handlePrint(rev)} title="Print">
+                                             <Printer className="h-3.5 w-3.5 mr-1" />Print
+                                           </Button>
+                                           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleDownload(rev)} title="Download PDF">
+                                             <Download className="h-3.5 w-3.5 mr-1" />PDF
+                                           </Button>
+                                           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleExcel(rev)} title="Download Excel">
+                                             <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
+                                           </Button>
+                                         </div>
+                                       </div>
+                                     );
+                                   })}
+                                 </div>
+                               )}
+                             </div>
+                           </TableCell>
+                         </TableRow>
+                       )}
+                      </>
                     ))}
                   </TableBody>
                 </Table>
