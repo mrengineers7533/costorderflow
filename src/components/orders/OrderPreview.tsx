@@ -515,7 +515,7 @@ function ExMurthalBlock({
     <div className="border rounded overflow-hidden text-xs">
       {displayUSD && (
         <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
-          Showing totals in {c.currency || "USD"} ({fxSymbol || "$"}) — converted from INR @ ₹{fxRate} (cost-sheet rate). Underlying calculation is in INR.
+          Showing totals in USD ({usdSym}) — converted from INR @ ₹{usdRate} (PU Dollar Rate). Underlying calculation is in INR.
         </div>
       )}
       {isFX && (
@@ -610,7 +610,7 @@ function ExTurkeyBlock({
     <div className="border rounded overflow-hidden text-xs">
       {displayUSD && (
         <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
-          Showing totals in {c.currency || "USD"} ({fxSymbol || "$"}) — converted from INR @ ₹{fxRate} (cost-sheet rate). Underlying calculation is in INR.
+          Showing totals in USD ({usdSym}) — converted from INR @ ₹{usdRate} ({forceUsdRate > 0 ? "PU Dollar Rate" : "cost-sheet rate"}). Underlying calculation is in INR.
         </div>
       )}
       {isFX && (
