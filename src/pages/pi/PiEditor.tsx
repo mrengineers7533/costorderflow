@@ -56,8 +56,24 @@ export default function PiEditor() {
             .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
           if (oaRow) {
             const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
-            const wanted = new Set((rec.line_items || []).map((it) => it.id).filter(Boolean));
-            const items = (oa.line_items || []).filter((it) => wanted.has(it.id));
+            // Preserve PI-level partial quantities & amounts. We mirror OA
+            // metadata (description/rate/HSN/etc.) but keep the qty stored
+            // on the PI so partial conversions (e.g. PI qty 1 of OA qty 2)
+            // don't get rewritten back to the full OA quantity.
+            const oaById = new Map(
+              (oa.line_items || []).map((it) => [it.id, it] as const),
+            );
+            const items = (rec.line_items || []).map((piIt) => {
+              const oaIt = piIt.id ? oaById.get(piIt.id) : undefined;
+              if (!oaIt) return piIt;
+              const qty = Number(piIt.quantity) || 0;
+              const rate = Number(oaIt.unit_rate) || 0;
+              return {
+                ...oaIt,
+                quantity: qty,
+                amount: qty * rate,
+              };
+            });
             mirrored = {
               ...rec,
               charges: oa.charges,
