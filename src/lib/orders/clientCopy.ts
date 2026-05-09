@@ -33,7 +33,6 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     FAN: { qty: 0, amount: 0 },
     SPOUTING: { qty: 0, amount: 0 },
   };
-  const order: GroupKey[] = [];
   const passthrough: LineItem[] = [];
 
   for (const it of items) {
@@ -42,7 +41,6 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
       passthrough.push(it);
       continue;
     }
-    if (!order.includes(g)) order.push(g);
     const qty = Number(it.quantity) || 0;
     const amt = Number(it.amount) || qty * (Number(it.unit_rate) || 0);
     groups[g].qty += qty;
@@ -50,7 +48,11 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     if (!groups[g].unit) groups[g].unit = it.unit;
   }
 
-  const summarized: LineItem[] = order.map((g, idx) => {
+  // Fixed display order for Client Copy summary rows (spec).
+  const FIXED_ORDER: GroupKey[] = ["MHE", "FAN", "MAGNET", "SPOUTING"];
+  const summarized: LineItem[] = FIXED_ORDER
+    .filter((g) => groups[g].amount > 0 || groups[g].qty > 0)
+    .map((g, idx) => {
     const totalAmt = groups[g].amount;
     // Group 4 (Spouting bucket) is shown as Qty 1 per spec.
     const qty = g === "SPOUTING" ? 1 : groups[g].qty;
@@ -65,5 +67,6 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     };
   });
 
-  return [...summarized, ...passthrough];
+  // Non-grouped items first (original sequence), then summarized rows.
+  return [...passthrough, ...summarized];
 }
