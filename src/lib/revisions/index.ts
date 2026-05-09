@@ -5,6 +5,32 @@ import { deriveBoqNumber, DEFAULT_BOQ_TERMS } from "@/lib/boq/types";
 import { calcPiTotals } from "@/lib/pi/calc";
 import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { PiRecord } from "@/lib/pi/types";
+import { generateBoqPDF } from "@/lib/boq/pdf";
+
+/** Snapshot the given BOQ as a PDF in the `boq-documents` bucket under a
+ *  history/ prefix so it is never overwritten by future revisions. Best
+ *  effort — failures are logged but never break the revision flow. */
+async function snapshotPreviousBoqPdf(prevBoq: BoqRecord): Promise<void> {
+  try {
+    let uid: string | null = prevBoq.user_id ?? null;
+    if (!uid) {
+      const { data: auth } = await supabase.auth.getUser();
+      uid = auth.user?.id ?? null;
+    }
+    if (!uid) return; // no owner -> RLS would reject; skip silently
+    const doc = await generateBoqPDF(prevBoq);
+    const blob = doc.output("blob");
+    const safe = (prevBoq.boq_number || "BOQ").replace(/[/\\]/g, "_");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const path = `${uid}/${prevBoq.order_id}/history/${safe}-R${prevBoq.revision ?? 0}-${stamp}.pdf`;
+    const { error } = await supabase.storage
+      .from("boq-documents")
+      .upload(path, blob, { upsert: false, contentType: "application/pdf" });
+    if (error) console.warn("Snapshot previous BOQ PDF failed", error);
+  } catch (e) {
+    console.warn("Snapshot previous BOQ PDF threw", e);
+  }
+}
 
 /** Strip an OrderRecord down to a payload safe for inserting a fresh revision row. */
 function stripOrderForInsert(o: OrderRecord) {
@@ -119,6 +145,10 @@ export async function reviseBoqFromOrder(
   orderRev: OrderRecord,
   prevBoq: BoqRecord | null,
 ): Promise<BoqRecord> {
+  // Preserve the previous BOQ PDF as a history snapshot BEFORE we create
+  // the new revision row, so the old document is never lost/overwritten.
+  if (prevBoq) await snapshotPreviousBoqPdf(prevBoq);
+
   // Determine next BOQ revision number — match the OA revision number.
   const nextRev = orderRev.revision ?? 0;
 
@@ -367,6 +397,10 @@ export async function createPendingBoqRevision(
   orderRev: OrderRecord,
   prevBoq: BoqRecord,
 ): Promise<BoqRecord | null> {
+  // Snapshot the current BOQ PDF before creating a new pending revision so
+  // the prior document remains downloadable from history.
+  await snapshotPreviousBoqPdf(prevBoq);
+
   const prevByModel = new Map<string, BoqLineItem>();
   (prevBoq.line_items || []).forEach((it) => {
     const k = (it.model_number || "").trim().toLowerCase();
