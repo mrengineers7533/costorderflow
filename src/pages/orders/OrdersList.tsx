@@ -26,7 +26,7 @@ export default function OrdersList() {
     folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showSuperseded, setShowSuperseded] = useState(false);
+  const [showSuperseded, setShowSuperseded] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<{ order: OrderRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -225,7 +225,13 @@ export default function OrdersList() {
                 <TableBody>
                   {visibleOrders.map((o) => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
-                      <TableCell className="font-mono font-medium">{o.oa_number}</TableCell>
+                      <TableCell className="font-mono font-medium">
+                        {(() => {
+                          const base = (o.oa_number || "").replace(/\/R\d+$/i, "");
+                          const rev = o.revision ?? 0;
+                          return rev > 0 ? `${base}/R${rev}` : base;
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                           <span className="px-1.5 py-0.5 rounded bg-muted">R{o.revision ?? 0}</span>
