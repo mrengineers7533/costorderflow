@@ -523,6 +523,14 @@ export default function OrderEditor() {
                 >
                   <Receipt className="mr-1 h-4 w-4" />Convert to PI
                 </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-lg"
+                  onClick={downloadClientCopy}
+                  title="Generate a customer-facing PDF with summarized item groups"
+                >
+                  <Users className="mr-1 h-4 w-4" />Create Client Copy
+                </Button>
               </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
