@@ -367,9 +367,9 @@ export function OrderPreview(p: Props) {
           </div>
         )}
         {/* EXW Murthal USD amount in words */}
-        {isMurthal && gmsUsd && cifRate > 0 && p.totals.net_payable > 0 && (
+        {isMurthal && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {amountInWordsUSD(p.totals.net_payable / cifRate)}
+            AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable / cifRate)}
           </div>
         )}
 
