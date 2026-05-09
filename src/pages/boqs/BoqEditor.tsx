@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Download, Printer, Save } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Download, Eye, History, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
@@ -298,8 +299,13 @@ export default function BoqEditor() {
           </div>
         )}
 
-        <div className="space-y-5">
-          {/* ---------- Editor ---------- */}
+        <Tabs defaultValue="document" className="space-y-5">
+          <TabsList className="print:hidden">
+            <TabsTrigger value="document">Document</TabsTrigger>
+            <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />PDF History</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="document" className="space-y-5 mt-0">
           <div className="space-y-4 print:hidden">
             <Card>
               <CardHeader><CardTitle>Header</CardTitle></CardHeader>
@@ -380,7 +386,12 @@ export default function BoqEditor() {
             </div>
             <BoqDocPreview rec={buildRecord()} />
           </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-0">
+            <BoqPdfHistory orderId={orderId} currentBoqNumber={boqNumber} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
