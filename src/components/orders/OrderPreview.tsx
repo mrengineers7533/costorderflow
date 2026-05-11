@@ -64,6 +64,10 @@ export function OrderPreview(p: Props) {
   const isFX = !!p.charges.currency && p.charges.currency !== "INR" && (p.charges.fx_rate || 0) > 0;
   const fxSymbol = p.charges.currency_symbol || CURRENCY_SYMBOLS[p.charges.currency || "INR"] || p.charges.currency || "";
   const fxRate = p.charges.fx_rate || 0;
+  // EXW Turkey override: independent PU Dollar Rate beats cost-sheet fx_rate.
+  const turkeyRate = (p.charges.turkey_pu_dollar_rate || 0) > 0
+    ? (p.charges.turkey_pu_dollar_rate as number)
+    : fxRate;
   const advancePct = p.charges.advance_percent ?? 40;
   const inrAmount = isFX ? p.totals.basic_total * fxRate : p.totals.basic_total;
   const advanceAmount = (inrAmount * advancePct) / 100;
@@ -86,9 +90,9 @@ export function OrderPreview(p: Props) {
   // Item-level USD display: EXW Turkey is always USD when fx_rate set,
   // OR any other GMS mode with PU Dollar Rate > 0.
   const turkeyAlwaysUSD =
-    p.format === "GMS" && p.charges.gms_mode === "EXW_TURKEY" && fxRate > 0;
+    p.format === "GMS" && p.charges.gms_mode === "EXW_TURKEY" && turkeyRate > 0;
   const displayUSDItems = turkeyAlwaysUSD || gmsUsd;
-  const itemUsdRate = gmsUsd ? cifRate : fxRate;
+  const itemUsdRate = gmsUsd ? cifRate : (turkeyAlwaysUSD ? turkeyRate : fxRate);
   const itemCurLabel = displayUSDItems ? "USD" : "INR";
   // Currency-aware totals formatter for the unified items+totals table.
   const totalFmt = (n: number) =>
