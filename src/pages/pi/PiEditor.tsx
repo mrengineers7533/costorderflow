@@ -594,6 +594,21 @@ export default function PiEditor() {
                     </div>
                   )}
 
+                  {pi.charges.gms_mode === "EXW_TURKEY" && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                      <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey</div>
+                      <Label className="text-xs">PU Dollar Rate (₹ per $)</Label>
+                      <Input
+                        type="number" step="any" className="h-8 w-40"
+                        value={pi.charges.turkey_pu_dollar_rate || 0}
+                        onChange={(e) => update("charges", { ...pi.charges, turkey_pu_dollar_rate: +e.target.value || 0 })}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Used only for EXW Turkey. When &gt; 0, overrides the cost-sheet $ rate for INR→USD display.
+                      </p>
+                    </div>
+                  )}
+
                   {false && pi.charges.gms_mode === "EXW_TURKEY" && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
