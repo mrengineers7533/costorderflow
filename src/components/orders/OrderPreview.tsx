@@ -385,7 +385,7 @@ export function OrderPreview(p: Props) {
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">
-                Local Freight{(p.charges.cif_sea_freight_mode || "amount") === "percent"
+                Sea Freight{(p.charges.cif_sea_freight_mode || "amount") === "percent"
                   ? ` @ ${p.charges.cif_sea_freight_percent || 0}%`
                   : ""}
               </div>
