@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
-import { calcExMurthal, calcExTurkey, amountInWordsUSD } from "@/lib/orders/calc";
+import { calcExMurthal, calcExTurkey, amountInWordsUSD, displayMake } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
@@ -284,7 +284,7 @@ export function OrderPreview(p: Props) {
                       <td className="border border-foreground px-1.5 py-1">
                         {it.description || <Placeholder text="(blank)" />}
                       </td>
-                      <td className="border border-foreground px-1.5 py-1 text-center">{it.make_label || ""}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center">{displayMake(it)}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">

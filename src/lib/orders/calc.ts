@@ -364,6 +364,18 @@ export function inferItemMake(it: { description?: string; hsn_code?: string }): 
   return "OTHER";
 }
 
+/** Display label for the OA "Make" column. Prefers the verbatim string
+ *  captured from the cost sheet (e.g. "GMS (Ugur)", "M.R. Engg. (Halmark)").
+ *  Falls back to a friendly default derived from the MR/GMS routing enum so
+ *  pre-existing items don't render an empty cell. */
+export function displayMake(it: { make_label?: string; make?: "MR" | "GMS" | "OTHER" }): string {
+  const lbl = (it.make_label || "").trim();
+  if (lbl) return lbl;
+  if (it.make === "MR") return "M.R. Engineers";
+  if (it.make === "GMS") return "GMS";
+  return "";
+}
+
 /** Split a flat item list into the two OA buckets (MR vs GMS).
  *  "OTHER" items are attached to whichever bucket the caller treats as
  *  primary; default is MR so nothing silently disappears. Returns empty

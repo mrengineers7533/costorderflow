@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { OrderRecord } from "./types";
+import { displayMake } from "./calc";
 
 /** Build a simple .xlsx workbook (as a Blob) for an OA revision.
  *  Mirrors the layout used by the Client Copy Excel — header meta + items
@@ -18,7 +19,7 @@ export function buildOrderXlsx(o: OrderRecord): Blob {
   const body = (o.line_items || []).map((it, i) => [
     i + 1,
     it.description || "",
-    it.make_label || "",
+    displayMake(it),
     Number(it.quantity) || 0,
     it.unit || "",
     Number(it.unit_rate) || 0,
