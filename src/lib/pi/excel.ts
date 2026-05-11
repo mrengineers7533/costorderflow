@@ -16,14 +16,17 @@ export function buildPiXlsx(pi: PiRecord): Blob {
   const basic = Number(t.basic_total) || 0;
 
   // Currency display rules — mirror src/lib/orders/pdf.ts (GMS branch).
+  const turkeyRate = (c.turkey_pu_dollar_rate || 0) > 0
+    ? (c.turkey_pu_dollar_rate as number)
+    : (c.fx_rate || 0);
   const turkeyAlwaysUSD =
-    pi.format === "GMS" && c.gms_mode === "EXW_TURKEY" && (c.fx_rate || 0) > 0;
+    pi.format === "GMS" && c.gms_mode === "EXW_TURKEY" && turkeyRate > 0;
   const isCifPort = pi.format === "GMS" && c.gms_mode === "EXW_CIF_PORT";
   const cifRate = c.cif_pu_dollar_rate || 0;
   const gmsUsd =
     pi.format === "GMS" && cifRate > 0 && c.gms_mode !== "EXW_TURKEY";
   const usdDisplay = turkeyAlwaysUSD || gmsUsd;
-  const usdRate = turkeyAlwaysUSD ? (c.fx_rate || 1) : (gmsUsd ? cifRate : 1);
+  const usdRate = turkeyAlwaysUSD ? (turkeyRate || 1) : (gmsUsd ? cifRate : 1);
   const cur = usdDisplay ? "USD" : "INR";
   const sym = usdDisplay ? "$" : "₹";
   const toDisplay = (inr: number) => (usdDisplay ? inr / usdRate : inr);
