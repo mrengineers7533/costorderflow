@@ -13,7 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Trash2, Plus, Download, ArrowLeft, ClipboardList, GitBranch, Eye, Receipt, Users } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib/orders/types";
-import { amountInWords, calcLineAmount, calcTotals, detectFormat, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
+import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -131,6 +131,63 @@ export default function OrderEditor() {
       setCurrentBoq((data as unknown as BoqRecord) || null);
     })();
   }, [parentOrderId, revisionsKey]);
+
+  // Auto-backfill `make_label` from the linked cost sheet for OAs saved
+  // before the Make column was captured. Read-only state hydration: matches
+  // by description (case-insensitive) with index fallback for duplicates.
+  // Does NOT auto-save and does NOT touch any numeric fields.
+  useEffect(() => {
+    if (isNew || loading) return;
+    if (!costSheetNumber) return;
+    if (!items.some((it) => !(it.make_label || "").trim())) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("cost_sheets")
+        .select("extracted, created_at")
+        .eq("status", "parsed")
+        .order("created_at", { ascending: false });
+      if (cancelled || !data) return;
+      const match = (data as Array<{ extracted: { cost_sheet_number?: string; line_items?: Array<{ description?: string; make_label?: string }> } }>)
+        .find((r) => (r.extracted?.cost_sheet_number || "").trim() === costSheetNumber.trim());
+      const csItems = match?.extracted?.line_items || [];
+      if (!csItems.length) return;
+      const norm = (s: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+      // Build a multimap so duplicate descriptions get consumed in order.
+      const buckets = new Map<string, string[]>();
+      csItems.forEach((ci) => {
+        const key = norm(ci.description || "");
+        const lbl = (ci.make_label || "").trim();
+        if (!lbl) return;
+        const arr = buckets.get(key) || [];
+        arr.push(lbl);
+        buckets.set(key, arr);
+      });
+      setItems((prev) => {
+        const consumed = new Map<string, number>();
+        let changed = false;
+        const next = prev.map((it, idx) => {
+          if ((it.make_label || "").trim()) return it;
+          const key = norm(it.description || "");
+          const arr = buckets.get(key);
+          let lbl: string | undefined;
+          if (arr && arr.length) {
+            const used = consumed.get(key) || 0;
+            lbl = arr[used];
+            consumed.set(key, used + 1);
+          } else if (csItems[idx]) {
+            // Index fallback when description doesn't match
+            lbl = (csItems[idx].make_label || "").trim() || undefined;
+          }
+          if (!lbl) return it;
+          changed = true;
+          return { ...it, make_label: lbl };
+        });
+        return changed ? next : prev;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [isNew, loading, costSheetNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto format from company name AND line items (any "GMS" mention → GMS).
   useEffect(() => {
@@ -718,7 +775,7 @@ export default function OrderEditor() {
               {editorItems.map((it) => (
                 <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
-                  <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder="Make" />
+                  <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
                   <Input className="col-span-1" value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
                   <Input className="col-span-2" type="number" step="any" value={it.unit_rate} onChange={(e) => updateItemById(it.id, { unit_rate: +e.target.value })} />
