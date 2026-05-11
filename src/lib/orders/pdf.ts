@@ -219,7 +219,7 @@ export async function generateOrderPDF(
   const itemRows = order.line_items.map((it, i) => [
     String(i + 1),
     it.description,
-    it.make_label || "",
+    displayMake(it),
     String(it.quantity),
     it.unit || "Nos",
     fmt(it.unit_rate),
@@ -569,7 +569,7 @@ async function renderGmsPdf(
     String(i + 1),
     "", // model number — not stored separately; left blank
     it.description,
-    it.make_label || "",
+    displayMake(it),
     String(it.quantity),
     it.unit || "Nos",
     fmtTotal(it.unit_rate),

@@ -39,7 +39,7 @@ export function buildClientCopyXlsx(
   const body = items.map((it, i) => [
     i + 1,
     it.description || "",
-    it.make_label || "",
+    displayMake(it),
     Number(it.quantity) || 0,
     it.unit || "",
     conv(Number(it.unit_rate) || 0),
