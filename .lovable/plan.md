@@ -1,46 +1,44 @@
 ## Diagnosis
 
-The HSN→Make column swap is already in place (editor, preview, PDF, Excel). The reason **no Make value is appearing** for items is:
+I checked the database for the OA you're viewing (`/orders/41de2f76…`):
 
-1. The cost sheet for the OA you're editing was parsed **before** the AI prompt was updated to capture `make_label`. The stored `extracted` JSON has `make: "MR"|"GMS"|"OTHER"` (the routing enum) but **no `make_label` string**. Verified in DB — every row's `make_labels` array is empty.
-2. Existing OA records saved their line items without `make_label` (the field didn't exist yet).
+- The cost sheet HAS been re-parsed and now contains the verbatim Make values like `"M.R.Engg (Fowler Westrup)"` and `"M.R. Engg"` for every item.
+- **But the OA's own `line_items` still have `make_label: null`** because the OA was saved before re-parsing, and you haven't re-applied the cost sheet to push the new Make values into this OA.
 
-So the column is empty for everything that was parsed/saved before this change. New uploads from this point forward will have it, but old data needs a path to backfill.
+So the Make input column in the editor renders empty (placeholder "Make") and the OA preview / PDF / Excel show empty Make cells.
 
-## Fix
+The previous fix added a **Re-parse → Apply** flow, but Apply overwrites the entire item list, which loses any manual edits and feels heavy. We need an automatic, non-destructive backfill.
 
-### 1. Force re-parse for already-parsed cost sheets
-`src/components/orders/CostSheetPicker.tsx`
-- Add a small **Re-parse** button next to the existing **Apply** button for sheets in `parsed` state. It calls the same `parseSheet(id)` flow, which will re-invoke `parse-cost-sheet` and overwrite `extracted` with the new schema (now including `make_label`).
-- After re-parse completes, the user clicks **Apply** to push the refreshed items (with Make values) into the OA editor.
+## Fix (frontend only — zero calculation changes)
 
-### 2. Display fallback for items that still have no `make_label`
-For OAs whose cost sheet was never re-parsed (or items entered manually), show a sensible default derived from the existing `make` enum so the column isn't blank:
-- `make_label` set → use it verbatim
-- else if `make === "MR"` → "M.R. Engineers"
-- else if `make === "GMS"` → "GMS"
-- else → "" (blank)
+### 1. Auto-backfill `make_label` on OA load
 
-Centralize this in a tiny helper `displayMake(item)` in `src/lib/orders/calc.ts` and use it in:
-- `src/components/orders/OrderPreview.tsx` (Make cell)
-- `src/lib/orders/pdf.ts` (MR + GMS row builder)
-- `src/lib/orders/excel.ts` and `src/lib/orders/clientCopyExcel.ts`
+`src/pages/orders/OrderEditor.tsx`
+- After loading the OA, if any item has empty `make_label` AND the OA has a `cost_sheet_number`, fetch that cost sheet's `extracted.line_items` once and merge `make_label` into local state by matching on `description` (case-insensitive, trimmed) — falling back to row index when descriptions are duplicated.
+- This is read-only state hydration. It does NOT modify quantity, rate, amount, charges, totals, GST, format split, or anything else. It does NOT auto-save — the user sees Make populated immediately, and the values persist the next time they hit "Save".
+- If no matching cost sheet row is found for an item, leave `make_label` empty and the existing `displayMake()` fallback (`"M.R. Engineers"` / `"GMS"`) takes over in preview / PDF / Excel.
 
-The editor input still binds directly to `make_label` (raw, editable).
+### 2. Show fallback in the editor input itself
 
-### 3. AI prompt tightening (small)
-`supabase/functions/parse-cost-sheet/index.ts`
-- Reinforce the rule so the model always returns `make_label` when a Make column is present in the detail table — including phrasing like "GMS (Ugur)", "M.R. Engg. (Halmark)". Today's prompt mentions it but list it as a hard requirement alongside `description` / `quantity`.
+`src/pages/orders/OrderEditor.tsx`
+- Today the Make `<Input>` binds raw to `it.make_label` and shows blank when null.
+- Change it to show `displayMake(it)` as the displayed value when `make_label` is empty (rendered through a small wrapper: keep the underlying `make_label` in state, but display the friendly fallback as ghost/value when empty).
+- Simplest implementation: bind the input to `it.make_label ?? ""` but set the input's `placeholder` to `displayMake(it)` so the user sees "M.R. Engineers" / "GMS" hint instead of the literal word "Make".
+- Editing still writes to `make_label` directly. No calculation impact.
 
-## What this does NOT change
+### 3. (No changes) Preview / PDF / Excel already use `displayMake`
 
-- No DB schema change.
-- No calculation, total, GST, BOQ, PI, template, layout, or workflow change.
-- The MR/GMS routing enum (`make`) and the OA-format split are untouched.
-- Existing `hsn_code` data stays in the DB but is not displayed in the OA item table (already done).
+Verified `OrderPreview.tsx`, `pdf.ts`, `excel.ts`, `clientCopyExcel.ts` already render via `displayMake()`. Once step 1 hydrates `make_label`, every Make column will show the verbatim cost-sheet value automatically.
 
-## User-facing flow after this change
+## What is NOT changed
 
-1. Open the OA → click **Re-parse** on the cost sheet card → wait for parse → click **Apply**. Make column now shows "GMS (Ugur)", "M.R. Engg. (Halmark)" etc. for every item, exactly as in the PDF.
-2. Newly uploaded cost sheets get Make automatically without any extra step.
-3. OAs that never re-parse still show a sensible "M.R. Engineers" / "GMS" fallback per item instead of a blank column.
+- No DB schema, no migration.
+- No change to amount / qty / unit / rate / PF / freight / insurance / custom / clearing / GST / discount / advance / totals / formulas.
+- No change to BOQ, PI, Cost Order Flow, or workflow.
+- No change to the MR/GMS routing enum or OA-format split.
+- HSN field stays in the data model (used by search & inference); it is just not displayed in the OA item table.
+- Existing `Re-parse` / `Apply` buttons stay as-is for the cases where you want to re-pull headers, charges, etc.
+
+## Result
+
+Open the OA at `/orders/41de2f76…` → the Make column instantly shows `"M.R.Engg (Fowler Westrup)"`, `"M.R. Engg"`, `"GMS (Ugur)"`, etc. for each row, exactly as printed in the cost sheet PDF. Hit Save when convenient to persist. No numbers move.
