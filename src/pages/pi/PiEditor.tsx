@@ -549,7 +549,7 @@ export default function PiEditor() {
                         <SelectItem value="NONE">Legacy (use simple PI charges above)</SelectItem>
                         <SelectItem value="EXW_TURKEY">EXW Turkey (charges as extras)</SelectItem>
                         <SelectItem value="EXW_MURTHAL">EXW Murthal (full landed cost)</SelectItem>
-                        <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Local Freight)</SelectItem>
+                        <SelectItem value="EXW_CIF_PORT">EXW CIF Port (USD only — Basic + Sea Freight)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -558,11 +558,11 @@ export default function PiEditor() {
                     <div className="space-y-3 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW CIF Port (USD only)</div>
                       <p className="text-[11px] text-muted-foreground -mt-1">
-                        Basic Total (USD) + Local Freight (USD) = EX Work CIF Port (USD). No GST / taxes / extras.
+                        Basic Total (USD) + Sea Freight (USD) = EX Work CIF Port (USD). No GST / taxes / extras.
                       </p>
                       <div className="grid grid-cols-1 gap-3">
                         <div>
-                          <Label className="text-xs">Local Freight</Label>
+                          <Label className="text-xs">Sea Freight</Label>
                           <div className="flex gap-2">
                             <Select
                               value={pi.charges.cif_sea_freight_mode || "amount"}

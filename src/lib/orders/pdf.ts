@@ -585,8 +585,8 @@ async function renderGmsPdf(
       : (c.cif_sea_freight_usd || 0);
     const grandUsd = basicUsd + seaUsd;
     const seaLabel = (c.cif_sea_freight_mode || "amount") === "percent"
-      ? `Local Freight @ ${c.cif_sea_freight_percent || 0}%`
-      : "Local Freight";
+      ? `Sea Freight @ ${c.cif_sea_freight_percent || 0}%`
+      : "Sea Freight";
     // These rows go through fmtTotal which divides by usdRate — so we pass
     // INR-equivalent values (multiplying USD by usdRate) to keep one code path.
     totalsRows.push({ label: "Basic Total", value: basicUsd * usdRate });
