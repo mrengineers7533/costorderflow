@@ -982,6 +982,20 @@ export default function OrderEditor() {
                   )}
                 </div>
               )}
+              {format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
+                <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
+                  <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey</div>
+                  <Label className="text-xs">PU Dollar Rate (₹ per $)</Label>
+                  <Input
+                    type="number" step="any" className="h-9 w-40"
+                    value={charges.turkey_pu_dollar_rate || 0}
+                    onChange={(e) => setCharges({ ...charges, turkey_pu_dollar_rate: +e.target.value || 0 })}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Used only for EXW Turkey. When &gt; 0, overrides the cost-sheet $ rate for INR→USD display.
+                  </p>
+                </div>
+              )}
               {false && format === "GMS" && charges.gms_mode === "EXW_TURKEY" && (
                 <div className="mt-3 space-y-2 rounded-md border p-3 bg-muted/20">
                   <div className="text-xs font-semibold uppercase tracking-wide">EXW Turkey Charges</div>
