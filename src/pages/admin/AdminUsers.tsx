@@ -14,10 +14,14 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { KeyRound, Pencil, Search } from "lucide-react";
+import { KeyRound, Pencil, Search, Trash2 } from "lucide-react";
 
 type Profile = {
   id: string;
@@ -45,6 +49,13 @@ export default function AdminUsers() {
 
   const [editing, setEditing] = useState<Row | null>(null);
   const [resetting, setResetting] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   async function refresh() {
     setLoading(true);
@@ -157,6 +168,16 @@ export default function AdminUsers() {
                       <Button size="sm" variant="ghost" onClick={() => setResetting(r)}>
                         <KeyRound className="h-4 w-4 mr-1" /> Reset
                       </Button>
+                      {r.id !== currentUserId && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleting(r)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -178,6 +199,47 @@ export default function AdminUsers() {
           row={resetting}
           onClose={() => setResetting(null)}
         />
+      )}
+      {deleting && (
+        <AlertDialog open onOpenChange={(o) => !o && !deleteBusy && setDeleting(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete user permanently?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Permanently delete <strong>{deleting.email}</strong>? This removes their
+                login, profile, and all role access. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteBusy}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!deleting) return;
+                  setDeleteBusy(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+                      body: { user_id: deleting.id },
+                    });
+                    if (error) throw error;
+                    if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+                    toast.success("User deleted");
+                    setDeleting(null);
+                    refresh();
+                  } catch (err) {
+                    toast.error((err as Error).message || "Failed to delete user");
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                {deleteBusy ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
