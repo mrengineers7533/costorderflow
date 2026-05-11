@@ -416,7 +416,7 @@ export function OrderPreview(p: Props) {
           )}
           </>
         ) : isTurkey && turkey ? (
-          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={fxRate} isFX={isFX} basicFX={p.totals.basic_total} forceUsdRate={gmsUsd ? cifRate : 0} />
+          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={turkeyRate} isFX={isFX} basicFX={p.totals.basic_total} forceUsdRate={gmsUsd ? cifRate : 0} />
         ) : isMurthal && murthal ? (
           <ExMurthalBlock
             m={murthal}
