@@ -1,62 +1,46 @@
-## Goal
+## Diagnosis
 
-Replace the **HSN** column with **Make** in the OA item table everywhere it's shown to the user (editor, on-screen preview, PDF, Excel, client copy). Carry the literal Make string from the Cost Sheet PDF (e.g. `M.R. Engineers`, `GMS (Ugur)`, `M.R. Engg. (Halmark)`) into each line item.
+The HSN→Make column swap is already in place (editor, preview, PDF, Excel). The reason **no Make value is appearing** for items is:
 
-No changes to BOQ, PI, calculations, totals, charges, templates outside the items table, DB schema, search, or revisions logic.
+1. The cost sheet for the OA you're editing was parsed **before** the AI prompt was updated to capture `make_label`. The stored `extracted` JSON has `make: "MR"|"GMS"|"OTHER"` (the routing enum) but **no `make_label` string**. Verified in DB — every row's `make_labels` array is empty.
+2. Existing OA records saved their line items without `make_label` (the field didn't exist yet).
 
-## Scope of changes
+So the column is empty for everything that was parsed/saved before this change. New uploads from this point forward will have it, but old data needs a path to backfill.
 
-### 1. AI extraction — capture the raw Make string
+## Fix
+
+### 1. Force re-parse for already-parsed cost sheets
+`src/components/orders/CostSheetPicker.tsx`
+- Add a small **Re-parse** button next to the existing **Apply** button for sheets in `parsed` state. It calls the same `parseSheet(id)` flow, which will re-invoke `parse-cost-sheet` and overwrite `extracted` with the new schema (now including `make_label`).
+- After re-parse completes, the user clicks **Apply** to push the refreshed items (with Make values) into the OA editor.
+
+### 2. Display fallback for items that still have no `make_label`
+For OAs whose cost sheet was never re-parsed (or items entered manually), show a sensible default derived from the existing `make` enum so the column isn't blank:
+- `make_label` set → use it verbatim
+- else if `make === "MR"` → "M.R. Engineers"
+- else if `make === "GMS"` → "GMS"
+- else → "" (blank)
+
+Centralize this in a tiny helper `displayMake(item)` in `src/lib/orders/calc.ts` and use it in:
+- `src/components/orders/OrderPreview.tsx` (Make cell)
+- `src/lib/orders/pdf.ts` (MR + GMS row builder)
+- `src/lib/orders/excel.ts` and `src/lib/orders/clientCopyExcel.ts`
+
+The editor input still binds directly to `make_label` (raw, editable).
+
+### 3. AI prompt tightening (small)
 `supabase/functions/parse-cost-sheet/index.ts`
-- Add a new schema field `make_label: { type: "string" }` on each line item (alongside the existing `make` enum and `hsn_code`).
-- Update the system prompt: extract the **verbatim** "Make" cell from the cost sheet detail table into `make_label` (e.g. "M.R. Engineers", "GMS (Ugur)", "M.R. Engg. (Halmark)"). The existing `make` MR/GMS/OTHER enum stays — it still drives MR-vs-GMS OA splitting.
-- Stop appending `(M.R.Engg / Fowler Westrup)` etc. to the description (rule 3 in the prompt) since Make now has its own column.
+- Reinforce the rule so the model always returns `make_label` when a Make column is present in the detail table — including phrasing like "GMS (Ugur)", "M.R. Engg. (Halmark)". Today's prompt mentions it but list it as a hard requirement alongside `description` / `quantity`.
 
-### 2. Type — add `make_label` to `LineItem`
-`src/lib/orders/types.ts`
-- Add `make_label?: string` to `LineItem`. Keep `hsn_code?: string` untouched (revisions/search still read it; it just won't be displayed in the OA item table).
+## What this does NOT change
 
-### 3. Carry `make_label` through extraction → editor
-- `src/components/orders/CostSheetPicker.tsx` — add `make_label?: string` to the `ExtractedCostSheet.line_items` shape.
-- `src/components/orders/QuickOrderPanel.tsx` — copy `make_label` when mapping extracted items into `LineItem`s.
-- `src/pages/orders/OrderEditor.tsx` — when seeding from `extracted` (around line 470) include `make_label: it.make_label || ""`. New blank rows (line 90) default `make_label: ""`.
+- No DB schema change.
+- No calculation, total, GST, BOQ, PI, template, layout, or workflow change.
+- The MR/GMS routing enum (`make`) and the OA-format split are untouched.
+- Existing `hsn_code` data stays in the DB but is not displayed in the OA item table (already done).
 
-### 4. Editor item table (replace HSN cell)
-`src/pages/orders/OrderEditor.tsx`
-- Header `<div className="col-span-2">HSN</div>` → `Make`.
-- Input bound to `it.hsn_code` → bound to `it.make_label`, placeholder `"Make"`.
-- Leaves all other columns (Description / Qty / Unit / Rate / Amount / Make-classification dropdown) untouched.
+## User-facing flow after this change
 
-### 5. On-screen preview (replace HSN column)
-`src/components/orders/OrderPreview.tsx`
-- Header cell currently rendering `"HSN CODE" / "HSN Code"` → `"Make"`.
-- Body cell `it.hsn_code` → `it.make_label || ""`.
-
-### 6. PDF (MR + GMS templates)
-`src/lib/orders/pdf.ts`
-- MR table (line 310): header `"HSN Code"` → `"Make"`; row value `it.hsn_code` → `it.make_label || ""`. Widen column slightly (e.g. `cellWidth: 28`) to fit longer Make strings; reduce description's `auto` accordingly via no change (auto absorbs the difference).
-- GMS table (lines 568, 572, 696): header `"HSN CODE"` → `"MAKE"`; row value `it.hsn_code` → `it.make_label || ""`; bump column width (e.g. `cellWidth: 30`).
-- No change to totals rows, calculations, header/footer artwork, or any other field.
-
-### 7. Excel exports
-- `src/lib/orders/excel.ts` — header `"HSN/Model"` → `"Make"`; row `it.hsn_code` → `it.make_label || ""`.
-- `src/lib/orders/clientCopyExcel.ts` — header `"HSN"` → `"Make"`; row `it.hsn_code` → `it.make_label || ""`.
-
-## Out of scope (explicitly unchanged)
-
-- `supabase/functions/parse-cost-sheet` still extracts `hsn_code` and the `make` MR/GMS/OTHER enum — both are still needed by revisions, search, and OA splitting.
-- `src/lib/orders/calc.ts` `inferItemMake` / `detectFormat` keep using description + `hsn_code`. No formula or totals change.
-- `src/lib/orders/pdf.ts` totals block, charges, GST, advance, Turkey/Murthal logic — untouched.
-- `src/lib/revisions/index.ts`, `src/components/GlobalSearch.tsx`, `src/lib/pi/*`, `src/lib/boq/*`, `src/pages/pi/PiEditor.tsx`, `src/pages/boqs/BoqEditor.tsx` — untouched (HSN/model usage there is intentional).
-- DB schema unchanged (line items live in `orders.line_items` JSONB; new `make_label` slots in without migration).
-- For OAs created before this change, the Make column simply renders blank since `make_label` wasn't captured — no backfill.
-
-## Result
-
-OA item table everywhere reads:
-
-```text
-S.No | Description | Make | Qty | Unit | Rate | Amount
-```
-
-with `Make` populated per item from the uploaded Cost Sheet (e.g. `M.R. Engineers`, `GMS (Ugur)`, `M.R. Engg. (Halmark)`).
+1. Open the OA → click **Re-parse** on the cost sheet card → wait for parse → click **Apply**. Make column now shows "GMS (Ugur)", "M.R. Engg. (Halmark)" etc. for every item, exactly as in the PDF.
+2. Newly uploaded cost sheets get Make automatically without any extra step.
+3. OAs that never re-parse still show a sensible "M.R. Engineers" / "GMS" fallback per item instead of a blank column.
