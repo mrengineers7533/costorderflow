@@ -129,14 +129,12 @@ export default function AdminUsers() {
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
             ) : filtered.map((r) => {
-              const external = !allowedDomains.includes(r.domain);
               return (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">{r.full_name || "—"}</TableCell>
                   <TableCell>{r.email}</TableCell>
                   <TableCell>
                     <span className="text-sm">{r.domain}</span>
-                    {external && <Badge variant="outline" className="ml-2 text-amber-600 border-amber-300">external</Badge>}
                   </TableCell>
                   <TableCell>
                     <Badge variant={r.role === "admin" ? "default" : "secondary"}>
