@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles, ExternalLink, Plus } from "lucide-react";
+import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles, ExternalLink, Plus, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
@@ -235,6 +235,17 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
                      )}
                    </div>
                    <StatusBadge status={s.status} />
+                    {s.status === "parsed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isParsing}
+                        onClick={() => parseSheet(s.id)}
+                        title="Re-run AI extraction (use this to refresh Make values from the cost sheet)"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />Re-parse
+                      </Button>
+                    )}
                    <Button size="sm" variant="default" disabled={isParsing} onClick={() => applySheet(s)}>
                      {isParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
                       s.status === "parsed" ? <><Wand2 className="h-3.5 w-3.5 mr-1" />Apply</> :
