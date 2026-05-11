@@ -2,11 +2,21 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminTabs } from "@/components/admin/AdminTabs";
-import { Users as UsersIcon, UserCheck, Globe, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, UserCheck, Globe, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, domains: 0, admins: 0 });
   const [loading, setLoading] = useState(true);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -33,6 +43,25 @@ export default function AdminDashboard() {
     { label: "Admins", value: stats.admins, icon: ShieldCheck },
   ];
 
+  const runReset = async () => {
+    setResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-reset-cof-data");
+      if (error) throw error;
+      const c = (data as { counts?: Record<string, number> })?.counts || {};
+      toast({
+        title: "Cost Order Flow data cleared",
+        description: `Removed: ${c.orders ?? 0} OAs, ${c.boqs ?? 0} BOQs, ${c.proforma_invoices ?? 0} PIs, ${c.client_copies ?? 0} client copies, ${c.cost_sheets ?? 0} SOT sheets, ${c.filesRemoved ?? 0} files.`,
+      });
+      setResetOpen(false);
+      setConfirmText("");
+    } catch (e) {
+      toast({ title: "Reset failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <AdminTabs title="Admin Dashboard" description="Overview of users, domains, and access" />
@@ -49,6 +78,57 @@ export default function AdminDashboard() {
           </Card>
         ))}
       </div>
+
+      <Card className="mt-8 border-destructive/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            Danger Zone — Reset Generated Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Permanently delete all generated Cost Order Flow data (uploaded SOT sheets, OAs, BOQs, PIs,
+            revisions, and linked documents). Calculation templates, formulas, app settings, and master
+            data will not be touched.
+          </p>
+          <Button variant="destructive" onClick={() => setResetOpen(true)}>
+            Reset Generated Data
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={resetOpen} onOpenChange={(o) => { setResetOpen(o); if (!o) setConfirmText(""); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Cost Order Flow data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all generated Cost Order Flow data including uploaded SOT sheets, BOQ, OA, PI,
+              revision copies, and linked generated documents. Calculation templates, formulas, app settings,
+              and master data will not be changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm">Type <span className="font-mono font-semibold">DELETE</span> to confirm:</p>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="DELETE"
+              autoFocus
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmText !== "DELETE" || resetting}
+              onClick={(e) => { e.preventDefault(); runReset(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {resetting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : "Delete everything"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

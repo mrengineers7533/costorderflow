@@ -1,106 +1,61 @@
-# Auto BOQ for MR + Editable Remarks + BOQ Revision History
+## Goal
 
-## Goals
+Add an admin-only "Reset Cost Order Flow Data" action that wipes all generated transactional data (OAs, BOQs, PIs, client copies, cost sheets, revisions, and their linked storage files) while leaving app settings, templates, master data, formulas, numbering counters logic, users, and UI completely untouched.
 
-1. When an MR OA is created/finalized, auto-create its linked BOQ — same way as GMS, with no extra clicks. When the MR OA is revised, auto-revise the linked BOQ (already works for any format via `reviseOrder({ autoReviseBoq: true })`, just needs the initial BOQ to exist).
-2. BOQ Remarks must be editable for both MR and GMS BOQs by the OA owner, and saved remarks must show in BOQ preview, PDF, and Excel.
-3. Show full BOQ revision history (Original → R1 → R2 → …) inside the BOQ Folder, with View / Print / Download PDF / Download Excel on every row. Old revisions stay in the database — never overwritten.
+## Where it lives
 
-## Scope (what stays untouched)
+New section in **Admin Dashboard** (`src/pages/admin/AdminDashboard.tsx`) called **"Danger Zone — Reset Generated Data"**, gated by `RequireAdmin`. Single red button → `AlertDialog` confirmation with the exact message the user specified, plus a typed confirmation ("DELETE") to prevent accidental clicks.
 
-- OA logic, PI logic, Client Copy logic — unchanged.
-- Existing GMS BOQ data flow (mapping, calculations, save) — reused as-is for MR.
-- Existing `RevisionsPanel` inside OrderEditor — unchanged.
-- Existing per-item approval / verification flow — unchanged.
+## What gets deleted
 
----
+Database tables (data only, schema preserved):
+- `client_copies`
+- `proforma_invoice_documents`
+- `proforma_invoices`
+- `boqs`
+- `orders`
+- `cost_sheets`
 
-## 1. Auto-create BOQ on OA save (both MR and GMS)
+Storage buckets (all objects):
+- `cost-sheets`
+- `oa-documents`
+- `boq-documents`
+- `pi-documents`
 
-Today, `OrderEditor.save()` calls `syncBoqsAndPisForOrder(order)` after saving the OA. That function only updates BOQs that already exist; it does not create the first one. We will add a one-shot creation step so that — for any format — saving an OA without a linked BOQ inserts an initial BOQ row using the same mapping the manual "Create BOQ from this OA" button uses.
+## What is preserved (explicitly untouched)
 
-### Changes
+- `app_settings`, `order_templates`, `allowed_domains`
+- `profiles`, `user_roles`, `auth.users`
+- `oa_counters`, `pi_counters` (numbering settings stay; if user wants counters reset too, that's a follow-up — confirming below)
+- `order-templates` storage bucket
+- All calculation code in `src/lib/**` (clientCopy, calc, pdf, excel, etc.)
+- All UI, routes, and workflow
 
-- `src/lib/revisions/index.ts`
-  - Add `createInitialBoqForOrder(order: OrderRecord): Promise<BoqRecord | null>`:
-    - Looks up the OA family (root + revisions) and checks `boqs` for any row in the family.
-    - If any BOQ exists → return null (no-op; revision sync handles updates).
-    - Otherwise insert one BOQ row using exactly the same mapping as `BoqEditor`'s "new from order" branch:
-      - `boq_number = deriveBoqNumber(order.oa_number)`
-      - `format = order.format`
-      - `revision = order.revision ?? 0`, `is_current = true`
-      - `prepared_by`, `reference_oa_number`, `project_number`, `client_name` from the OA
-      - `line_items` mapped from `order.line_items` (same mapping currently used in `BoqEditor.tsx` lines 147–155 and `reviseBoqFromOrder`)
-      - `terms = DEFAULT_BOQ_TERMS`, `notes = order.notes || null`
-      - `status = "draft"`, `verification_status = "approved"` (default)
-      - `user_id = order.user_id` (matches RLS)
-- `src/pages/orders/OrderEditor.tsx`
-  - In `save()` after `syncBoqsAndPisForOrder(...)`, call `createInitialBoqForOrder(savedOrder)`. Wrap in try/catch with a `console.warn` so an auto-create failure never blocks the OA save.
+## Implementation
 
-### Why this matches "the same conditions as GMS"
+1. **New edge function** `supabase/functions/admin-reset-cof-data/index.ts`:
+   - Verifies caller via JWT → looks up `user_roles` with service-role key → requires `admin`.
+   - Lists and removes all objects in the four buckets (`storage.from(bucket).list()` recursively, then `.remove(paths)`).
+   - Deletes rows from the six tables in FK-safe order (children first).
+   - Returns counts: `{ orders: N, boqs: N, pis: N, clientCopies: N, costSheets: N, piDocs: N, filesRemoved: N }`.
+   - `verify_jwt = true` (default).
 
-The mapping above is the same one used everywhere else (BoqEditor for new BOQs, `reviseBoqFromOrder` for revisions). It is format-agnostic — no GMS-specific code paths. So MR will behave identically: BOQ row appears in the BOQ folder/list immediately after the OA is saved, then revision sync (`syncBoqsAndPisForOrder`) and `reviseOrder({ autoReviseBoq: true })` keep it in lockstep with future OA revisions.
+2. **Admin UI** (`AdminDashboard.tsx`):
+   - New `Card` "Danger Zone" with destructive border.
+   - Button "Reset Generated Data" → opens `AlertDialog`.
+   - Dialog body shows the exact required message.
+   - Input field requiring user to type `DELETE` before the confirm button enables.
+   - On confirm: `supabase.functions.invoke('admin-reset-cof-data')`, show toast with returned counts, then no navigation change.
 
----
-
-## 2. Editable Remarks for both MR and GMS BOQs
-
-`BoqEditor` already gates Remarks editing on `canEditRemarks = isOaOwner` with no format check, so MR and GMS already share the same rule. We will:
-
-- Audit `BoqEditor.tsx` to confirm the Remarks `<Input>`/`<Textarea>` for every line item uses `disabled={!canEditRemarks}` (not `format !== "GMS"` or similar). Fix any format-specific gating if found.
-- Confirm Remarks are persisted on Save (already part of `items` in payload) and round-tripped on reload.
-- Confirm Remarks render in:
-  - BOQ preview (BoqEditor on-screen list) — already shown.
-  - PDF — `src/lib/boq/pdf.ts` already prints the `Remarks` column.
-  - Excel — `src/lib/boq/excel.ts` already writes `it.remarks` in the 6th column.
-
-No data-model changes; this is a guard-rail audit + any small UI fix to make sure MR users see the same editable Remarks field.
-
----
-
-## 3. BOQ Revision History in the BOQ Folder
-
-`RevisionsPanel` already shows OA + linked BOQ revisions with View / Print / PDF / Excel inside the OA editor, and old BOQ rows are already preserved in the DB (`is_current=false`, never deleted by the trigger). We will surface the same history directly in the BOQ Folder list so users can find and download old revisions without going through the OA.
-
-### Changes (`src/pages/boqs/BoqList.tsx`)
-
-- Group rows by OA family (key = `parent_order_id` of the linked OA, fallback to `order_id`). Render one parent row per family showing the **current** BOQ.
-- Add an expand/collapse chevron on each row. When opened, show all revisions of that BOQ family ordered by `revision` ascending:
-  - Label: `BOQ Original` for `revision = 0`, otherwise `BOQ R{revision}`.
-  - Columns: BOQ number, Rev, Status (Current / Superseded / Pending / Rejected), Date, Prepared by.
-  - Actions per row: **View** (`/boqs/:id`), **Print**, **Download PDF**, **Download Excel** — reusing the existing `handleDownload` / `handlePrint` / `handleExcel` helpers (which take a `BoqRecord`, so they work for any revision).
-- Loading: fetch BOQ rows for a family only when its row is expanded (lazy load), mirroring the pattern in `RevisionsPanel`. For the parent row counts/badges we can reuse the already-loaded `rows`.
-- Keep the existing "Show superseded" toggle for the flat view; the expanded family view always shows every revision regardless of toggle.
-
-### Database
-
-- No schema changes. Old BOQ revisions are already preserved (only `is_current` flips). The `boq-documents` storage bucket also keeps a per-revision history snapshot via `snapshotPreviousBoqPdf` for legacy lookups; we do not need to touch storage.
-
----
+3. **No DB migration needed** — pure data delete via edge function with service role.
 
 ## Technical notes
 
-```text
-OA save (MR or GMS)
-   │
-   ├─► supabase.from("orders").insert/update
-   │
-   ├─► syncBoqsAndPisForOrder(order)        ← updates existing BOQs/PIs in family
-   │
-   └─► createInitialBoqForOrder(order)      ← NEW: inserts first BOQ if none in family
+- Storage purge loops through `list({ limit: 1000 })` until empty (Supabase storage paginates).
+- Table deletes use `delete().neq('id', '00000000-0000-0000-0000-000000000000')` to satisfy PostgREST's "no filter" guard.
+- Function returns 403 if the caller isn't admin.
+- No changes to `src/lib/**`, `src/integrations/supabase/**`, or any editor pages.
 
-OA revise
-   │
-   └─► reviseOrder(source, { autoReviseBoq: true })
-          └─► reviseBoqFromOrder(newOA, currentBoq)   ← already exists; works for both formats
-```
+## One open question
 
-- `createInitialBoqForOrder` is idempotent: it checks the family before inserting. Safe to call on every OA save (draft or finalize).
-- All BOQ rows continue to be inserted via the existing RLS-friendly `boqs` policies (`user_id = order.user_id`).
-- No changes to `OrderEditor`'s "Create BOQ from this OA" button — it still works for legacy OAs that somehow lost their BOQ.
-
-## Out of scope
-
-- Email notifications, verification flow, BOQ approval UI — unchanged.
-- PI / Client Copy / OA PDFs — unchanged.
-- Any GMS-specific calculation, charges, or pricing logic — unchanged.
+The OA/PI numbering counters (`oa_counters`, `pi_counters`) determine whether the next new OA after cleanup is `…/0001` or continues from where you left off (e.g. `…/0042`). The user said "numbering settings must remain unchanged" — I'll interpret that as **keep counters as-is** (next OA continues incrementing) unless they say otherwise. If they want truly "fresh from 0001", we can add a checkbox in the dialog later.
