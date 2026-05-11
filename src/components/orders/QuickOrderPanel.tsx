@@ -58,6 +58,7 @@ export function QuickOrderPanel() {
           id: crypto.randomUUID(),
           description: it.description || "",
           hsn_code: it.hsn_code || "",
+          make_label: it.make_label || "",
           quantity: Number(it.quantity) || 0,
           unit_rate: Number(it.unit_rate) || 0,
           amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),

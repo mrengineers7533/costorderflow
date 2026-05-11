@@ -219,7 +219,7 @@ export async function generateOrderPDF(
   const itemRows = order.line_items.map((it, i) => [
     String(i + 1),
     it.description,
-    it.hsn_code || "",
+    it.make_label || "",
     String(it.quantity),
     it.unit || "Nos",
     fmt(it.unit_rate),
@@ -307,7 +307,7 @@ export async function generateOrderPDF(
 
   autoTable(doc, {
     startY: y,
-    head: [["S. No.", "Item Description", "HSN Code", "Qty.", "Unit", "Rate", "Amount"]],
+    head: [["S. No.", "Item Description", "Make", "Qty.", "Unit", "Rate", "Amount"]],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
@@ -315,7 +315,7 @@ export async function generateOrderPDF(
     columnStyles: {
       0: { cellWidth: 12, halign: "center" },
       1: { cellWidth: "auto" },
-      2: { cellWidth: 18, halign: "center" },
+      2: { cellWidth: 28, halign: "center" },
       3: { cellWidth: 12, halign: "center" },
       4: { cellWidth: 12, halign: "center" },
       5: { cellWidth: 24, halign: "right" },
@@ -569,7 +569,7 @@ async function renderGmsPdf(
     String(i + 1),
     "", // model number — not stored separately; left blank
     it.description,
-    it.hsn_code || "",
+    it.make_label || "",
     String(it.quantity),
     it.unit || "Nos",
     fmtTotal(it.unit_rate),
@@ -693,7 +693,7 @@ async function renderGmsPdf(
   autoTable(doc, {
     startY: y,
     head: [[
-      "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "HSN CODE",
+      "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "MAKE",
       "QTY", "UNIT", `UNIT PRICE\n(${usdDisplay ? "USD" : "INR"})`, `AMOUNT\n(${usdDisplay ? "USD" : "INR"})`,
     ]],
     body: [...itemRows, ...totalsAsBody as never[]],
@@ -711,7 +711,7 @@ async function renderGmsPdf(
       0: { cellWidth: 14, halign: "center" },
       1: { cellWidth: 24, halign: "left" },
       2: { cellWidth: "auto", halign: "left" },
-      3: { cellWidth: 18, halign: "center" },
+      3: { cellWidth: 30, halign: "center" },
       4: { cellWidth: 12, halign: "center" },
       5: { cellWidth: 12, halign: "center" },
       6: { cellWidth: 24, halign: "right" },

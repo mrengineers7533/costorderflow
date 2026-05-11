@@ -34,7 +34,7 @@ CRITICAL EXTRACTION RULES:
    b. If the section has NO detail page / sub-table — it is just a single named line on the cost-of-project / other-charges page (e.g. Consultancy Charge, Pulley, Erection, Installation, Freight, Commissioning, Civil Work, Electrical Work, any one-line direct charge) — return ONE line item using the section name as the description and the section total as the amount (qty 1, unit_rate = amount). Tag make per the same MR/GMS/OTHER rules.
    c. CLIENT SCOPE items must be EXCLUDED entirely. Do not return any line item that appears under a "Client Scope" / "Customer Scope" / "By Client" / "In Client Scope" heading or column. The user will add them manually if needed.
 2. For the description, use the FIRST line of the "Machine / Description" cell (the model name like "Pre-Cleaner Separator -MRSP- SD-15 (F)"). Do NOT include the bullet-point characteristics that follow.
-3. Append the Make (e.g. "M.R.Engg (Fowler Westrup)") to the description in parentheses if present, e.g. "Pre-Cleaner Separator -MRSP- SD-15 (F) (M.R.Engg / Fowler Westrup)".
+3. Capture the verbatim "Make" cell from the detail table into the `make_label` field on the line item (e.g. "M.R. Engineers", "GMS (Ugur)", "M.R. Engg. (Halmark)", "M.R.Engg / Fowler Westrup"). Do NOT append the make to the description — keep description clean (just the model name).
 4. Quantity = the Qty column. Amount = the Price column (strip "Rs.", commas). If unit_rate is not printed, set unit_rate = amount / quantity.
 5. If a row's price is blank/missing, still include the item with quantity from the table and amount = 0 (the user will fill it in manually).
 6. Process EVERY section (Pre-Cleaning, Cleaning, Milling/Grinding, Packing, GMS, Bagging, Other Charges, Cost of Project, etc.) and EVERY machine in each section that has a detail table; for sections without a detail table, follow rule 1b. Do not skip pages. Do not return Client Scope items (rule 1c).
@@ -182,6 +182,7 @@ Deno.serve(async (req) => {
                 properties: {
                   description: { type: "string" },
                   hsn_code: { type: "string" },
+                  make_label: { type: "string", description: "Verbatim 'Make' value from the cost sheet detail table, e.g. 'M.R. Engineers', 'GMS (Ugur)', 'M.R. Engg. (Halmark)'." },
                   quantity: { type: "number" },
                   unit_rate: { type: "number" },
                   amount: { type: "number" },

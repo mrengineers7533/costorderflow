@@ -14,7 +14,7 @@ export interface ExtractedCostSheet {
   ship_to?: { name?: string; address?: string; gstin?: string; state?: string };
   cost_sheet_number?: string;
   reference?: string;
-  line_items?: Array<{ description: string; hsn_code?: string; quantity: number; unit_rate: number; amount: number }>;
+  line_items?: Array<{ description: string; hsn_code?: string; make_label?: string; quantity: number; unit_rate: number; amount: number }>;
   charges?: { pf_percent?: number; pf_amount?: number; insurance?: number; freight?: number; gst_percent?: number; discount?: number };
   notes?: string;
   _progress?: { stage: string; percent: number; message: string };

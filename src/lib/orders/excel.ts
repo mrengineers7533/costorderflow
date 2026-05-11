@@ -13,12 +13,12 @@ export function buildOrderXlsx(o: OrderRecord): Blob {
     [`Date: ${o.order_date || ""}`],
     [`Prepared By: ${o.prepared_by || ""}`],
     [],
-    ["S.No", "Description", "HSN/Model", "Qty", "Unit", "Rate (₹)", "Amount (₹)"],
+    ["S.No", "Description", "Make", "Qty", "Unit", "Rate (₹)", "Amount (₹)"],
   ];
   const body = (o.line_items || []).map((it, i) => [
     i + 1,
     it.description || "",
-    it.hsn_code || "",
+    it.make_label || "",
     Number(it.quantity) || 0,
     it.unit || "",
     Number(it.unit_rate) || 0,
