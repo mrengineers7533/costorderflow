@@ -1,44 +1,58 @@
-## Diagnosis
+## Goal
 
-I checked the database for the OA you're viewing (`/orders/41de2f76…`):
+Add a new **PU Dollar Rate (₹ per $)** input inside the EXW Turkey window of the PI editor (and matching OA editor), independent of the existing cost-sheet `fx_rate`. When this new rate is > 0, it overrides `fx_rate` for INR→USD conversion in the Turkey flow. Otherwise behavior is unchanged.
 
-- The cost sheet HAS been re-parsed and now contains the verbatim Make values like `"M.R.Engg (Fowler Westrup)"` and `"M.R. Engg"` for every item.
-- **But the OA's own `line_items` still have `make_label: null`** because the OA was saved before re-parsing, and you haven't re-applied the cost sheet to push the new Make values into this OA.
+## Scope
 
-So the Make input column in the editor renders empty (placeholder "Make") and the OA preview / PDF / Excel show empty Make cells.
+PI editor only is required by the screenshot, but to keep PI/OA in sync (PI pre-fills from OA) the same field must also appear in the OA editor's EXW Turkey block. Calculations stay otherwise untouched.
 
-The previous fix added a **Re-parse → Apply** flow, but Apply overwrites the entire item list, which loses any manual edits and feels heavy. We need an automatic, non-destructive backfill.
+## Changes
 
-## Fix (frontend only — zero calculation changes)
+### 1. New charge field
 
-### 1. Auto-backfill `make_label` on OA load
+`src/lib/orders/types.ts` (`Charges`)
+- Add `turkey_pu_dollar_rate?: number` — independent ₹-per-$ rate used only by EXW Turkey. Documented as overriding `fx_rate` when > 0.
+- No DB migration needed (charges is jsonb).
+
+### 2. PI editor — show the field inside the Turkey window
+
+`src/pages/pi/PiEditor.tsx`
+- The current EXW Turkey block (`gms_mode === "EXW_TURKEY"`) is hidden behind `{false && …}` at line 597. Replace that gate with a real `gms_mode === "EXW_TURKEY"` render so the section actually appears, and inside it add a single input:
+  - Label: **PU Dollar Rate (₹ per $)**
+  - Bound to `charges.turkey_pu_dollar_rate`
+  - Helper text: "Used only for EXW Turkey. When > 0, overrides the cost-sheet $ rate for INR→USD display."
+- Keep the existing `fx_rate` input visible alongside it (as it does today), so the user can still see / set the cost-sheet rate.
+
+### 3. OA editor — same field in the Turkey block
 
 `src/pages/orders/OrderEditor.tsx`
-- After loading the OA, if any item has empty `make_label` AND the OA has a `cost_sheet_number`, fetch that cost sheet's `extracted.line_items` once and merge `make_label` into local state by matching on `description` (case-insensitive, trimmed) — falling back to row index when descriptions are duplicated.
-- This is read-only state hydration. It does NOT modify quantity, rate, amount, charges, totals, GST, format split, or anything else. It does NOT auto-save — the user sees Make populated immediately, and the values persist the next time they hit "Save".
-- If no matching cost sheet row is found for an item, leave `make_label` empty and the existing `displayMake()` fallback (`"M.R. Engineers"` / `"GMS"`) takes over in preview / PDF / Excel.
+- Mirror the same input inside the OA's EXW Turkey window so PI inherits the value via the existing pre-fill flow.
 
-### 2. Show fallback in the editor input itself
+### 4. Conversion uses the new rate when present
 
-`src/pages/orders/OrderEditor.tsx`
-- Today the Make `<Input>` binds raw to `it.make_label` and shows blank when null.
-- Change it to show `displayMake(it)` as the displayed value when `make_label` is empty (rendered through a small wrapper: keep the underlying `make_label` in state, but display the friendly fallback as ghost/value when empty).
-- Simplest implementation: bind the input to `it.make_label ?? ""` but set the input's `placeholder` to `displayMake(it)` so the user sees "M.R. Engineers" / "GMS" hint instead of the literal word "Make".
-- Editing still writes to `make_label` directly. No calculation impact.
+The existing rule "EXW Turkey is always USD via `fx_rate`" becomes "EXW Turkey is always USD via `turkey_pu_dollar_rate` if > 0, else `fx_rate`". Implemented as a tiny helper:
 
-### 3. (No changes) Preview / PDF / Excel already use `displayMake`
+```ts
+const turkeyUsdRate = (c) => (c.turkey_pu_dollar_rate || 0) > 0
+  ? c.turkey_pu_dollar_rate!
+  : (c.fx_rate || 0);
+```
 
-Verified `OrderPreview.tsx`, `pdf.ts`, `excel.ts`, `clientCopyExcel.ts` already render via `displayMake()`. Once step 1 hydrates `make_label`, every Make column will show the verbatim cost-sheet value automatically.
+Apply this helper in the existing Turkey USD branches only:
+- `src/components/orders/OrderPreview.tsx` (`fxRate`/`turkeyAlwaysUSD` paths)
+- `src/lib/orders/pdf.ts` (Turkey USD section)
+- `src/lib/pi/excel.ts` (Turkey USD section)
+- `src/lib/pi/convert.ts` (PI carry-over from OA, Turkey branch)
 
-## What is NOT changed
+No formula, total, GST, custom, freight, insurance, P&F, advance or discount logic changes — only which `₹ per $` divisor is used.
 
-- No DB schema, no migration.
-- No change to amount / qty / unit / rate / PF / freight / insurance / custom / clearing / GST / discount / advance / totals / formulas.
-- No change to BOQ, PI, Cost Order Flow, or workflow.
-- No change to the MR/GMS routing enum or OA-format split.
-- HSN field stays in the data model (used by search & inference); it is just not displayed in the OA item table.
-- Existing `Re-parse` / `Apply` buttons stay as-is for the cases where you want to re-pull headers, charges, etc.
+### 5. Out of scope
+
+- No change to `cif_pu_dollar_rate` (used by other GMS modes).
+- No change to EXW Murthal, EXW CIF Port, MR flow, BOQ, or cost-sheet upload.
+- No change to PDF layout, totals, or "amount in words".
+- No DB migration.
 
 ## Result
 
-Open the OA at `/orders/41de2f76…` → the Make column instantly shows `"M.R.Engg (Fowler Westrup)"`, `"M.R. Engg"`, `"GMS (Ugur)"`, etc. for each row, exactly as printed in the cost sheet PDF. Hit Save when convenient to persist. No numbers move.
+In the GMS Charges card, when EXW Turkey is selected, a new "PU Dollar Rate (₹ per $)" input appears below the mode dropdown. Enter a value (e.g. 88.5) and every USD figure in the Turkey preview / PDF / Excel uses that rate instead of the cost-sheet `fx_rate`. Leave it blank/0 to keep current behavior.

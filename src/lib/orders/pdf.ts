@@ -548,10 +548,13 @@ async function renderGmsPdf(
   const t = order.totals;
   const fmt = (n: number) =>
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // EXW Turkey is always USD via cost-sheet $ rate (fx_rate). PU Dollar Rate
-  // does not apply to Turkey.
+  // EXW Turkey USD: prefer the independent turkey_pu_dollar_rate when > 0,
+  // otherwise fall back to the cost-sheet fx_rate.
+  const turkeyRate = (c.turkey_pu_dollar_rate || 0) > 0
+    ? (c.turkey_pu_dollar_rate as number)
+    : (c.fx_rate || 0);
   const turkeyAlwaysUSD =
-    order.format === "GMS" && c.gms_mode === "EXW_TURKEY" && (c.fx_rate || 0) > 0;
+    order.format === "GMS" && c.gms_mode === "EXW_TURKEY" && turkeyRate > 0;
   // EXW CIF Port — always USD using PU Dollar Rate.
   const isCifPort = order.format === "GMS" && c.gms_mode === "EXW_CIF_PORT";
   const cifRate = c.cif_pu_dollar_rate || 0;
@@ -559,7 +562,7 @@ async function renderGmsPdf(
   const gmsUsd =
     order.format === "GMS" && cifRate > 0 && c.gms_mode !== "EXW_TURKEY";
   const usdDisplay = turkeyAlwaysUSD || gmsUsd;
-  const usdRate = turkeyAlwaysUSD ? (c.fx_rate || 1) : (gmsUsd ? cifRate : (c.fx_rate || 1));
+  const usdRate = turkeyAlwaysUSD ? (turkeyRate || 1) : (gmsUsd ? cifRate : (c.fx_rate || 1));
   const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
     `$ ${(n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

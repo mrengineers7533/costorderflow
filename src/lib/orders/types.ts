@@ -71,6 +71,12 @@ export interface Charges {
    *  to keep the legacy GMS totals (Ex-works Murthal Price + P&F + GST). */
   gms_mode?: "EXW_TURKEY" | "EXW_MURTHAL" | "EXW_CIF_PORT";
 
+  /** EXW Turkey only — independent "PU Dollar Rate" (₹ per $). When > 0,
+   *  it overrides the cost-sheet `fx_rate` for INR→USD display in the
+   *  Turkey preview / PDF / Excel. Leave 0/undefined to keep current
+   *  behavior (use `fx_rate`). Underlying calculations stay in INR. */
+  turkey_pu_dollar_rate?: number;
+
   /** EXW CIF Port (GMS only). USD-only flow.
    *  Calculation: Basic Total (USD) + Sea Freight (USD) = Grand Total (USD).
    *  No GST / P&F / insurance / freight / discount / advance.
