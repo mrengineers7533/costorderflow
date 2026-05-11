@@ -284,7 +284,7 @@ export function OrderPreview(p: Props) {
                       <td className="border border-foreground px-1.5 py-1">
                         {it.description || <Placeholder text="(blank)" />}
                       </td>
-                      <td className="border border-foreground px-1.5 py-1 text-center">{it.make_label || ""}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center">{displayMake(it)}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
