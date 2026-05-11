@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
-import { calcExTurkey, calcExMurthal, amountInWordsUSD } from "./calc";
+import { calcExTurkey, calcExMurthal, amountInWordsUSD, displayMake } from "./calc";
 import {
   DEFAULT_MR_BANK,
   DEFAULT_MR_TERMS,
