@@ -1,20 +1,28 @@
-## Context
+## Goal
 
-In the previous turn you confirmed "Permanently delete both accounts", so `it@mrengineers.com` and `pc.1@mrengineers.com` were removed from auth, profiles, and roles. The 400 `invalid_credentials` on login is a direct result — the user simply does not exist anymore.
-
-The existing `handle_new_user()` trigger automatically promotes `it@mrengineers.com` to `admin` whenever the account is (re)created, so we just need to recreate the auth user.
+Add a **Delete user** action in the Admin → Users table, visible and usable only by admins. Deleting removes the user's authentication account, profile, and role assignments so they can no longer sign in.
 
 ## Plan
 
-1. Recreate the auth user `it@mrengineers.com` with a temporary password via a one-shot SQL migration that inserts directly into `auth.users` (email confirmed, encrypted password). The `on_auth_user_created` trigger will:
-   - create the matching row in `public.profiles`
-   - insert `admin` into `public.user_roles` (because of the hard-coded rule in `handle_new_user`)
-2. Confirm by reading back `auth.users` + `user_roles` for that email.
-3. You log in with the temporary password, then change it from the Admin → Users → Reset action.
+1. **New edge function `admin-delete-user`** (`supabase/functions/admin-delete-user/index.ts`)
+   - Verifies caller via `Authorization` Bearer token (mirrors `admin-reset-password`)
+   - Confirms caller has `admin` role in `user_roles`
+   - Rejects self-deletion (prevents an admin locking themselves out)
+   - Uses service-role client to:
+     - delete from `public.user_roles`
+     - delete from `public.profiles`
+     - call `admin.auth.admin.deleteUser(user_id)`
+   - Returns `{ ok: true }` or `{ error }`
 
-## Decisions needed from you
+2. **UI changes in `src/pages/admin/AdminUsers.tsx`**
+   - Add a red **Delete** button next to Edit / Reset on each row
+   - Hide/disable the button on the currently signed-in admin's own row
+   - Open an `AlertDialog` confirmation:
+     > "Permanently delete {email}? This removes their login, profile, and all role access. This cannot be undone."
+   - On confirm: invoke `admin-delete-user` with `{ user_id }`, toast result, then `refresh()` the list
 
-- **Temporary password** — what should I set? Suggested: `Admin@12345` (you must change it after first login).
-- **Restore `pc.1@mrengineers.com` too?** It was also deleted. I will only recreate it if you say yes (and tell me the password).
+3. **No DB schema or RLS changes** — deletion runs through the service-role edge function.
 
-Once you confirm the password (and whether to restore the second account), I'll run the migration.
+## Out of scope
+
+- Bulk delete, soft delete / restore, or cascading cleanup of orders/BOQ/PI authored by the user (those rows will remain with the original `user_id` but will no longer be visible to that user since they cannot sign in). Tell me if you want them reassigned or wiped — that would be a separate task.
