@@ -1185,9 +1185,10 @@ export default function OrderEditor() {
                   <NumberField label="Cost Sheet $ Rate (₹)" value={charges.fx_rate || 0} onChange={(v) => setCharges({ ...charges, fx_rate: v })} />
                   <NumberField label="Advance %" value={charges.advance_percent ?? 40} onChange={(v) => setCharges({ ...charges, advance_percent: v })} />
                 </div>
-                {charges.gms_mode === "EXW_TURKEY" && (charges.fx_rate || 0) > 0 && (
+                {charges.gms_mode === "EXW_TURKEY" && ((charges.turkey_pu_dollar_rate || 0) > 0 || (charges.fx_rate || 0) > 0) && (
                   <p className="text-[11px] text-muted-foreground mt-3">
-                    EXW Turkey is always shown in USD ($) using the cost-sheet $ rate (₹{charges.fx_rate}). PU Dollar Rate does not apply here.
+                    EXW Turkey is shown in USD ($) using ₹{(charges.turkey_pu_dollar_rate || 0) > 0 ? charges.turkey_pu_dollar_rate : charges.fx_rate}
+                    {(charges.turkey_pu_dollar_rate || 0) > 0 ? " (PU Dollar Rate)" : " (cost-sheet $ rate)"}.
                   </p>
                 )}
               </div>
