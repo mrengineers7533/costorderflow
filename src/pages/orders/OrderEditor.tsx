@@ -87,7 +87,7 @@ export default function OrderEditor() {
   const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
 
   function newItem(): LineItem {
-    return { id: crypto.randomUUID(), description: "", hsn_code: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
+    return { id: crypto.randomUUID(), description: "", hsn_code: "", make_label: "", quantity: 1, unit: "Nos", unit_rate: 0, amount: 0, make: "MR" };
   }
 
   // Load existing
@@ -474,6 +474,7 @@ export default function OrderEditor() {
           return {
             id: crypto.randomUUID(),
             ...base,
+            make_label: (it as { make_label?: string }).make_label || "",
             quantity: Number(it.quantity) || 0,
             unit_rate: Number(it.unit_rate) || 0,
             amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
@@ -706,7 +707,7 @@ export default function OrderEditor() {
             <div className="space-y-2">
               <div className="grid grid-cols-14 gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                 <div className="col-span-4">Description</div>
-                <div className="col-span-2">HSN</div>
+                <div className="col-span-2">Make</div>
                 <div className="col-span-1">Qty</div>
                 <div className="col-span-1">Unit</div>
                 <div className="col-span-2">Rate</div>
@@ -717,7 +718,7 @@ export default function OrderEditor() {
               {editorItems.map((it) => (
                 <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
-                  <Input className="col-span-2" value={it.hsn_code} onChange={(e) => updateItemById(it.id, { hsn_code: e.target.value })} placeholder="HSN" />
+                  <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder="Make" />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
                   <Input className="col-span-1" value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
                   <Input className="col-span-2" type="number" step="any" value={it.unit_rate} onChange={(e) => updateItemById(it.id, { unit_rate: +e.target.value })} />

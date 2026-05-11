@@ -260,7 +260,7 @@ export function OrderPreview(p: Props) {
                   <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
                   {isGMS && <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>}
                   <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
-                  <th className="border border-foreground px-1.5 py-1 w-20 text-center">{isGMS ? "HSN CODE" : "HSN Code"}</th>
+                  <th className="border border-foreground px-1.5 py-1 w-24 text-center">{isGMS ? "MAKE" : "Make"}</th>
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
                   <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
                   <th className="border border-foreground px-1.5 py-1 w-24 text-right">
@@ -284,7 +284,7 @@ export function OrderPreview(p: Props) {
                       <td className="border border-foreground px-1.5 py-1">
                         {it.description || <Placeholder text="(blank)" />}
                       </td>
-                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.hsn_code || ""}</td>
+                      <td className="border border-foreground px-1.5 py-1 text-center">{it.make_label || ""}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
                       <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
                       <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">

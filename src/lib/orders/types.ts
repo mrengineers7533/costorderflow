@@ -16,6 +16,11 @@ export interface LineItem {
   description: string;
   hsn_code?: string;
   quantity: number;
+  /** Verbatim "Make" string captured from the cost sheet (e.g.
+   *  "M.R. Engineers", "GMS (Ugur)", "M.R. Engg. (Halmark)").
+   *  Displayed as the "Make" column on the OA item table. The MR/GMS/OTHER
+   *  enum below (`make`) is separate and still drives OA splitting. */
+  make_label?: string;
   /** Unit of measure (Nos, Set, Kg, Mtr, etc.). Defaults to "Nos". */
   unit?: string;
   unit_rate: number;
