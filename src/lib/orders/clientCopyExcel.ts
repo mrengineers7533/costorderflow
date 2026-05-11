@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { LineItem, Totals, OrderFormat, Charges } from "./types";
+import { displayMake } from "./calc";
 
 export interface ClientCopySnapshotMeta {
   oa_number: string;
