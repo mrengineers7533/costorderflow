@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Download, Eye, History, Printer, Save } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, History, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
@@ -17,6 +17,7 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
+import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
