@@ -213,6 +213,15 @@ export default function DesignReview() {
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">Item {it.item_no} · <span className="font-mono">{it.model_number}</span></div>
                     <div className="text-sm whitespace-pre-wrap">{it.description}</div>
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
+                      <span><b>Qty:</b> {it.quantity ?? 0}</span>
+                      <span><b>Unit:</b> {it.unit || "Nos"}</span>
+                    </div>
+                    {it.remarks && (
+                      <div className="text-xs bg-muted/40 rounded p-2 mt-1">
+                        <span className="font-medium">Remarks:</span> {it.remarks}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2">
@@ -234,7 +243,7 @@ export default function DesignReview() {
                       </label>
                     </div>
                     <Textarea
-                      placeholder="Design comment"
+                      placeholder="Design comment / change note"
                       value={d.comment}
                       onChange={(e) => update(it.boq_item_id, { comment: e.target.value })}
                       className="min-h-[60px]"

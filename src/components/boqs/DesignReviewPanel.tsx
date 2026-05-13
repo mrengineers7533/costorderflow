@@ -167,8 +167,11 @@ export function DesignReviewPanel({ boq, items }: Props) {
                     <th className="p-2 w-10">#</th>
                     <th className="p-2">Model</th>
                     <th className="p-2">Description</th>
+                    <th className="p-2 w-14">Qty</th>
+                    <th className="p-2 w-14">Unit</th>
+                    <th className="p-2">Remarks</th>
                     <th className="p-2 w-32">Status</th>
-                    <th className="p-2">Comment</th>
+                    <th className="p-2">Review Comment</th>
                     <th className="p-2">Files</th>
                   </tr>
                 </thead>
@@ -178,6 +181,9 @@ export function DesignReviewPanel({ boq, items }: Props) {
                       <td className="p-2">{it.item_no}</td>
                       <td className="p-2 font-mono">{it.model_number}</td>
                       <td className="p-2">{it.description}</td>
+                      <td className="p-2">{it.quantity ?? 0}</td>
+                      <td className="p-2">{it.unit || "Nos"}</td>
+                      <td className="p-2 text-muted-foreground">{it.remarks || <span className="opacity-50">—</span>}</td>
                       <td className="p-2">{decisionBadge(it.decision)}</td>
                       <td className="p-2 whitespace-pre-wrap">
                         {it.comment || it.design_change_note || <span className="text-muted-foreground">—</span>}
@@ -195,7 +201,7 @@ export function DesignReviewPanel({ boq, items }: Props) {
                     </tr>
                   ))}
                   {!openItems.length && (
-                    <tr><td colSpan={6} className="p-3 text-center text-muted-foreground">No items in this round.</td></tr>
+                    <tr><td colSpan={9} className="p-3 text-center text-muted-foreground">No items in this round.</td></tr>
                   )}
                 </tbody>
               </table>
