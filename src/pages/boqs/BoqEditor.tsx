@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Download, Eye, History, Printer, Save } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, History, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
@@ -17,6 +17,7 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
+import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -44,6 +45,7 @@ export default function BoqEditor() {
   const [projectNumber, setProjectNumber] = useState("");
   const [clientName, setClientName] = useState("");
   const [items, setItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
+  const [originalItems, setOriginalItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
   const [terms, setTerms] = useState(DEFAULT_BOQ_TERMS);
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
@@ -116,7 +118,9 @@ export default function BoqEditor() {
             setBoqNumber(deriveBoqNumber(o.oa_number));
           }
         }
-        setItems(nextItems.length ? nextItems : [newBoqItem(1)]);
+        const finalItems = nextItems.length ? nextItems : [newBoqItem(1)];
+        setItems(finalItems);
+        setOriginalItems(JSON.parse(JSON.stringify(finalItems)));
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");
         setLoading(false);
         return;
@@ -156,7 +160,9 @@ export default function BoqEditor() {
         unit: it.unit || "Nos",
         remarks: "",
       }));
-      setItems(mapped.length ? mapped : [newBoqItem(1)]);
+      const finalItems = mapped.length ? mapped : [newBoqItem(1)];
+      setItems(finalItems);
+      setOriginalItems(JSON.parse(JSON.stringify(finalItems)));
       setTerms(DEFAULT_BOQ_TERMS);
       setNotes(o.notes || "");
       setLoading(false);
@@ -202,9 +208,46 @@ export default function BoqEditor() {
       return;
     }
     setSaving(true);
+
+    // Build audit entries for any changed remarks
+    const originalMap = new Map(originalItems.map((it) => [it.id, it]));
+    const changed = items
+      .map((it) => {
+        const orig = originalMap.get(it.id);
+        if (!orig) return null;
+        if ((orig.remarks || "").trim() === (it.remarks || "").trim()) return null;
+        return { item: it, oldRemarks: orig.remarks || "" };
+      })
+      .filter(Boolean) as { item: BoqLineItem; oldRemarks: string }[];
+
+    if (changed.length) {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      const userName = (user?.user_metadata as { full_name?: string } | undefined)?.full_name?.trim() || "";
+      const auditEntries = changed.map((c) => ({
+        boq_id: boqId,
+        item_id: c.item.id,
+        item_no: c.item.item_no,
+        model_number: c.item.model_number,
+        old_remarks: c.oldRemarks,
+        new_remarks: c.item.remarks || "",
+        changed_by: user?.id || null,
+        changed_by_email: user?.email || null,
+        changed_by_name: userName || null,
+      }));
+      try {
+        await insertRemarksAuditLogs(auditEntries);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setSaving(false);
+        return toast({ title: "Audit log failed", description: msg, variant: "destructive" });
+      }
+    }
+
     const { error } = await supabase.from("boqs").update({ line_items: items } as never).eq("id", boqId);
     setSaving(false);
     if (error) return toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    setOriginalItems(JSON.parse(JSON.stringify(items)));
     toast({ title: "Remarks saved" });
   }
 
@@ -318,6 +361,7 @@ export default function BoqEditor() {
           <TabsList className="print:hidden">
             <TabsTrigger value="document">Document</TabsTrigger>
             <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />PDF History</TabsTrigger>
+            <TabsTrigger value="audit"><FileText className="mr-1 h-3.5 w-3.5" />Remarks Audit</TabsTrigger>
           </TabsList>
 
           <TabsContent value="document" className="space-y-5 mt-0">
@@ -410,6 +454,10 @@ export default function BoqEditor() {
 
           <TabsContent value="history" className="mt-0">
             <BoqPdfHistory orderId={orderId} currentBoqNumber={boqNumber} />
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-0">
+            <RemarksAuditPanel boqId={boqId} />
           </TabsContent>
         </Tabs>
       </div>
@@ -666,6 +714,82 @@ function BoqPdfHistory({ orderId, currentBoqNumber }: { orderId: string; current
                   <Button variant="outline" size="sm" disabled={busyPath === e.path} onClick={() => openOrDownload(e, "download")}>
                     <Download className="h-3.5 w-3.5 mr-1" />PDF
                   </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* -------- Remarks Audit Panel: shows who changed Remarks and when -------- */
+function RemarksAuditPanel({ boqId }: { boqId: string | null }) {
+  const [entries, setEntries] = useState<Array<{
+    id: string;
+    item_no: string | null;
+    model_number: string | null;
+    old_remarks: string | null;
+    new_remarks: string;
+    changed_by_name: string | null;
+    changed_by_email: string | null;
+    created_at: string;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!boqId) { setLoading(false); setEntries([]); return; }
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await fetchRemarksAuditLog(boqId);
+        setEntries(data);
+      } catch {
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [boqId]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Remarks Audit Log</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Every edit to the Remarks column is recorded here with the user name, email, and timestamp.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading audit log…</p>
+        ) : entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No remarks edits recorded yet.</p>
+        ) : (
+          <div className="divide-y rounded-md border">
+            {entries.map((e) => (
+              <div key={e.id} className="p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono text-sm">
+                    Item {e.item_no}{e.model_number ? ` • ${e.model_number}` : ""}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground shrink-0">
+                    {new Date(e.created_at).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  by <span className="font-medium text-foreground">{e.changed_by_name || e.changed_by_email || "Unknown"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                  <div className="rounded bg-muted/50 p-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Old</div>
+                    <div className="whitespace-pre-wrap">{e.old_remarks || "(empty)"}</div>
+                  </div>
+                  <div className="rounded bg-primary/5 p-2">
+                    <div className="text-[10px] uppercase tracking-wider text-primary mb-0.5">New</div>
+                    <div className="whitespace-pre-wrap">{e.new_remarks}</div>
+                  </div>
                 </div>
               </div>
             ))}
