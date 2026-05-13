@@ -626,7 +626,6 @@ function ExTurkeyBlock({
       <Row k="Base Amount (EXW Turkey)" v={t.base_amount} />
       {c.turkey_sea_freight_enabled && <Row k="Sea Freight" v={t.sea_freight} />}
       {c.turkey_custom_enabled && <Row k={customLbl} v={t.custom} />}
-      <Row k="Landed Price" v={t.total_amount} bold />
       {c.turkey_landed_discount_enabled && t.landed_discount > 0 && (
         <>
           <Row k={discLbl} v={-t.landed_discount} />
