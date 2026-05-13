@@ -361,6 +361,7 @@ export default function BoqEditor() {
           <TabsList className="print:hidden">
             <TabsTrigger value="document">Document</TabsTrigger>
             <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />PDF History</TabsTrigger>
+            <TabsTrigger value="audit"><FileText className="mr-1 h-3.5 w-3.5" />Remarks Audit</TabsTrigger>
           </TabsList>
 
           <TabsContent value="document" className="space-y-5 mt-0">
