@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
-import { calcExMurthal, calcExTurkey, amountInWordsUSD, displayMake } from "@/lib/orders/calc";
+import { calcExMurthal, calcExTurkey, amountInWordsUSD, amountInWords, displayMake } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
@@ -82,11 +82,18 @@ export function OrderPreview(p: Props) {
   // always USD via its own cost-sheet $ rate (fx_rate) — PU Dollar Rate does
   // not apply to Turkey.
   const gmsUsd = p.format === "GMS" && cifRate > 0 && p.charges.gms_mode !== "EXW_TURKEY";
-  const cifBasicUSD = isCifPort && cifRate > 0 ? p.totals.basic_total / cifRate : 0;
-  const cifSeaUSD = (p.charges.cif_sea_freight_mode || "amount") === "percent"
-    ? (cifBasicUSD * (p.charges.cif_sea_freight_percent || 0)) / 100
+  // When PU Dollar Rate is 0/blank, fall back to INR display so the totals
+  // never collapse to $0.00. When > 0, behave as before (USD = INR / rate).
+  const cifUseUSD = isCifPort && cifRate > 0;
+  const cifSym = cifUseUSD ? "$" : "₹";
+  const cifLocale = cifUseUSD ? "en-US" : "en-IN";
+  const cifBasic = cifUseUSD ? p.totals.basic_total / cifRate : p.totals.basic_total;
+  const cifSea = (p.charges.cif_sea_freight_mode || "amount") === "percent"
+    ? (cifBasic * (p.charges.cif_sea_freight_percent || 0)) / 100
     : (p.charges.cif_sea_freight_usd || 0);
-  const cifGrandUSD = cifBasicUSD + cifSeaUSD;
+  const cifGrand = cifBasic + cifSea;
+  // Back-compat alias kept in case other code paths reference it.
+  const cifGrandUSD = cifUseUSD ? cifGrand : 0;
   // Item-level USD display: EXW Turkey is always USD when fx_rate set,
   // OR any other GMS mode with PU Dollar Rate > 0.
   const turkeyAlwaysUSD =
@@ -384,7 +391,7 @@ export function OrderPreview(p: Props) {
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Basic Total</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                $ {cifBasicUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifBasic.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
@@ -394,13 +401,13 @@ export function OrderPreview(p: Props) {
                   : ""}
               </div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                $ {cifSeaUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifSea.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
               <div className="px-2 py-1.5 text-right font-bold">EX Work CIF Port</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                $ {cifGrandUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifGrand.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             {cifRate > 0 && (
@@ -409,9 +416,9 @@ export function OrderPreview(p: Props) {
               </div>
             )}
           </div>
-          {cifGrandUSD > 0 && (
+          {cifGrand > 0 && (
             <div className="text-[11px] font-semibold uppercase tracking-wide">
-              AMOUNT (IN WORDS): {amountInWordsUSD(cifGrandUSD)}
+              AMOUNT (IN WORDS): {cifUseUSD ? amountInWordsUSD(cifGrand) : amountInWords(cifGrand).replace(/^INR\s*/i, "RS. ")}
             </div>
           )}
           </>
