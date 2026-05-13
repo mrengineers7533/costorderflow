@@ -150,7 +150,10 @@ export type Database = {
           id: string
           item_no: string | null
           model_number: string | null
+          quantity: number | null
+          remarks: string | null
           review_id: string
+          unit: string | null
         }
         Insert: {
           boq_item_id: string
@@ -163,7 +166,10 @@ export type Database = {
           id?: string
           item_no?: string | null
           model_number?: string | null
+          quantity?: number | null
+          remarks?: string | null
           review_id: string
+          unit?: string | null
         }
         Update: {
           boq_item_id?: string
@@ -176,7 +182,10 @@ export type Database = {
           id?: string
           item_no?: string | null
           model_number?: string | null
+          quantity?: number | null
+          remarks?: string | null
           review_id?: string
+          unit?: string | null
         }
         Relationships: [
           {
