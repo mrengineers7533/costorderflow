@@ -121,8 +121,8 @@ export default function DesignReview() {
       const { error } = await supabase.rpc("submit_design_review_with_token", {
         _token: token,
         _reviewer_email: contact.includes("@") ? contact : (reviewerName + " <no-email>"),
-        _items: itemsPayload,
-        _docs: docs,
+        _items: itemsPayload as unknown as Record<string, unknown>[],
+        _docs: docs as unknown as Record<string, unknown>[],
         _reviewer_name: reviewerName,
         _reviewer_design_team: designTeam,
         _reviewer_contact: contact,
