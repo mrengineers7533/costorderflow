@@ -45,6 +45,7 @@ export default function BoqEditor() {
   const [projectNumber, setProjectNumber] = useState("");
   const [clientName, setClientName] = useState("");
   const [items, setItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
+  const [originalItems, setOriginalItems] = useState<BoqLineItem[]>([newBoqItem(1)]);
   const [terms, setTerms] = useState(DEFAULT_BOQ_TERMS);
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
