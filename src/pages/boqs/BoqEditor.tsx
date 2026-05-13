@@ -16,6 +16,7 @@ import type { OrderRecord } from "@/lib/orders/types";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
+import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -373,6 +374,11 @@ export default function BoqEditor() {
                 <Textarea value={notes} readOnly rows={3} />
               </CardContent>
             </Card>
+
+            <DesignReviewPanel
+              boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber }}
+              items={items}
+            />
           </div>
 
           {/* ---------- Live document preview (below editor) ---------- */}
