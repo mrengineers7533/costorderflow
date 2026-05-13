@@ -313,6 +313,8 @@ export default function OrderEditor() {
       oa = data as string;
       setOaNumber(oa);
     }
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUserId = authData.user?.id ?? null;
     const payload = {
       oa_number: oa, format, status: finalize ? "finalized" as const : "draft" as const,
       company_name: companyName, bill_to: billTo, ship_to: ship,
@@ -324,6 +326,7 @@ export default function OrderEditor() {
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
       tc_note: tcNote,
+      ...(isNew ? { user_id: currentUserId } : {}),
     };
 
     const res = isNew
