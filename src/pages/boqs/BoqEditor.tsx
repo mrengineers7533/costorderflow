@@ -160,7 +160,9 @@ export default function BoqEditor() {
         unit: it.unit || "Nos",
         remarks: "",
       }));
-      setItems(mapped.length ? mapped : [newBoqItem(1)]);
+      const finalItems = mapped.length ? mapped : [newBoqItem(1)];
+      setItems(finalItems);
+      setOriginalItems(JSON.parse(JSON.stringify(finalItems)));
       setTerms(DEFAULT_BOQ_TERMS);
       setNotes(o.notes || "");
       setLoading(false);
