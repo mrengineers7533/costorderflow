@@ -269,6 +269,48 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_remarks_audit_log: {
+        Row: {
+          boq_id: string
+          changed_by: string | null
+          changed_by_email: string | null
+          changed_by_name: string | null
+          created_at: string
+          id: string
+          item_id: string
+          item_no: string | null
+          model_number: string | null
+          new_remarks: string
+          old_remarks: string | null
+        }
+        Insert: {
+          boq_id: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          created_at?: string
+          id?: string
+          item_id: string
+          item_no?: string | null
+          model_number?: string | null
+          new_remarks: string
+          old_remarks?: string | null
+        }
+        Update: {
+          boq_id?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          created_at?: string
+          id?: string
+          item_id?: string
+          item_no?: string | null
+          model_number?: string | null
+          new_remarks?: string
+          old_remarks?: string | null
+        }
+        Relationships: []
+      }
       boqs: {
         Row: {
           boq_date: string
