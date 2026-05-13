@@ -455,6 +455,10 @@ export default function BoqEditor() {
           <TabsContent value="history" className="mt-0">
             <BoqPdfHistory orderId={orderId} currentBoqNumber={boqNumber} />
           </TabsContent>
+
+          <TabsContent value="audit" className="mt-0">
+            <RemarksAuditPanel boqId={boqId} />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
