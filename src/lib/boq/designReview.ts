@@ -27,6 +27,9 @@ export interface DesignReviewItemRow {
   item_no: string | null;
   model_number: string | null;
   description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  remarks: string | null;
   decision: Decision;
   comment: string | null;
   design_change_note: string | null;
@@ -91,6 +94,9 @@ export async function createReviewRound(
       item_no: it.item_no,
       model_number: it.model_number,
       description: it.description,
+      quantity: it.quantity,
+      unit: it.unit,
+      remarks: it.remarks,
       decision: "pending" as const,
     }));
     const { error: ie } = await supabase.from("boq_design_review_items").insert(rows);

@@ -48,13 +48,14 @@ export default function BoqEditor() {
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
-  // Track the OA owner so only that user can edit Remarks.
+  // Track the OA owner and BOQ creator so either can edit Remarks.
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
+  const [boqUserId, setBoqUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const isOaOwner = !!currentUserId && currentUserId === oaOwnerId;
-  // Remarks is the ONLY editable field, and only by the OA creator.
-  const canEditRemarks = isOaOwner;
+  const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
+  // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
+  const canEditRemarks = isCreator;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
@@ -77,6 +78,7 @@ export default function BoqEditor() {
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
         setVerificationStatus(b.verification_status || "approved");
         setVerificationToken(b.verification_token || null);
+        setBoqUserId(b.user_id || null);
         // OA-driven model: refresh items from latest OA. Preserve any
         // user-edited Description/Remarks matched by model number.
         let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
