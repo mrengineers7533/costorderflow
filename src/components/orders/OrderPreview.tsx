@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
-import { calcExMurthal, calcExTurkey, amountInWordsUSD, displayMake } from "@/lib/orders/calc";
+import { calcExMurthal, calcExTurkey, amountInWordsUSD, amountInWords, displayMake } from "@/lib/orders/calc";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
