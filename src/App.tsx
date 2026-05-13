@@ -22,6 +22,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDomains from "./pages/admin/AdminDomains";
 import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import BoqVerify from "./pages/boqs/BoqVerify";
+import DesignReview from "./pages/boqs/DesignReview";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/boq-verify/:token" element={<BoqVerify />} />
+          <Route path="/design-review/:token" element={<DesignReview />} />
           <Route
             path="/*"
             element={
