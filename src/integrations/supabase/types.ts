@@ -56,12 +56,208 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_design_review_documents: {
+        Row: {
+          boq_item_id: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          review_id: string
+          source: string
+          uploaded_by_email: string | null
+        }
+        Insert: {
+          boq_item_id?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          review_id: string
+          source: string
+          uploaded_by_email?: string | null
+        }
+        Update: {
+          boq_item_id?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          review_id?: string
+          source?: string
+          uploaded_by_email?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_design_review_documents_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "boq_design_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boq_design_review_email_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          gmail_message_id: string | null
+          id: string
+          review_id: string | null
+          status: string
+          subject: string | null
+          to_email: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          review_id?: string | null
+          status: string
+          subject?: string | null
+          to_email: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          review_id?: string | null
+          status?: string
+          subject?: string | null
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_design_review_email_log_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "boq_design_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boq_design_review_items: {
+        Row: {
+          boq_item_id: string
+          comment: string | null
+          created_at: string
+          decided_at: string | null
+          decision: string
+          description: string | null
+          design_change_note: string | null
+          id: string
+          item_no: string | null
+          model_number: string | null
+          review_id: string
+        }
+        Insert: {
+          boq_item_id: string
+          comment?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          description?: string | null
+          design_change_note?: string | null
+          id?: string
+          item_no?: string | null
+          model_number?: string | null
+          review_id: string
+        }
+        Update: {
+          boq_item_id?: string
+          comment?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          description?: string | null
+          design_change_note?: string | null
+          id?: string
+          item_no?: string | null
+          model_number?: string | null
+          review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_design_review_items_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "boq_design_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boq_design_reviews: {
+        Row: {
+          boq_id: string
+          boq_snapshot: Json
+          created_at: string
+          expires_at: string
+          id: string
+          overall_outcome: string | null
+          recipients: string[]
+          round_no: number
+          sent_at: string
+          sent_by: string | null
+          sent_by_email: string | null
+          sent_message: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by_email: string | null
+          token: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          boq_id: string
+          boq_snapshot?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          overall_outcome?: string | null
+          recipients?: string[]
+          round_no?: number
+          sent_at?: string
+          sent_by?: string | null
+          sent_by_email?: string | null
+          sent_message?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by_email?: string | null
+          token?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          boq_id?: string
+          boq_snapshot?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          overall_outcome?: string | null
+          recipients?: string[]
+          round_no?: number
+          sent_at?: string
+          sent_by?: string | null
+          sent_by_email?: string | null
+          sent_message?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by_email?: string | null
+          token?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       boqs: {
         Row: {
           boq_date: string
           boq_number: string
           client_name: string | null
           created_at: string
+          design_review_status: string
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -90,6 +286,7 @@ export type Database = {
           boq_number: string
           client_name?: string | null
           created_at?: string
+          design_review_status?: string
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -118,6 +315,7 @@ export type Database = {
           boq_number?: string
           client_name?: string | null
           created_at?: string
+          design_review_status?: string
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -705,6 +903,40 @@ export type Database = {
         }
         Returns: string
       }
+      submit_design_review_with_token: {
+        Args: {
+          _docs?: Json
+          _items: Json
+          _reviewer_email: string
+          _token: string
+        }
+        Returns: {
+          boq_id: string
+          boq_snapshot: Json
+          created_at: string
+          expires_at: string
+          id: string
+          overall_outcome: string | null
+          recipients: string[]
+          round_no: number
+          sent_at: string
+          sent_by: string | null
+          sent_by_email: string | null
+          sent_message: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by_email: string | null
+          token: string
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "boq_design_reviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       verify_boq_items_with_token: {
         Args: { _items: Json; _token: string; _verifier_email: string }
         Returns: {
@@ -712,6 +944,7 @@ export type Database = {
           boq_number: string
           client_name: string | null
           created_at: string
+          design_review_status: string
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -749,6 +982,7 @@ export type Database = {
           boq_number: string
           client_name: string | null
           created_at: string
+          design_review_status: string
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
