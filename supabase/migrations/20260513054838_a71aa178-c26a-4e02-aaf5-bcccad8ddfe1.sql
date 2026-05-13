@@ -1,0 +1,2 @@
+UPDATE public.orders SET user_id = '28a97e9a-cf1e-4e0d-bf0d-73d62235df47' WHERE user_id IS NULL;
+UPDATE public.proforma_invoices SET user_id = '28a97e9a-cf1e-4e0d-bf0d-73d62235df47' WHERE user_id IS NULL;
