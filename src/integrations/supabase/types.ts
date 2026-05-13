@@ -197,6 +197,9 @@ export type Database = {
           id: string
           overall_outcome: string | null
           recipients: string[]
+          reviewer_contact: string | null
+          reviewer_design_team: string | null
+          reviewer_name: string | null
           round_no: number
           sent_at: string
           sent_by: string | null
@@ -217,6 +220,9 @@ export type Database = {
           id?: string
           overall_outcome?: string | null
           recipients?: string[]
+          reviewer_contact?: string | null
+          reviewer_design_team?: string | null
+          reviewer_name?: string | null
           round_no?: number
           sent_at?: string
           sent_by?: string | null
@@ -237,6 +243,9 @@ export type Database = {
           id?: string
           overall_outcome?: string | null
           recipients?: string[]
+          reviewer_contact?: string | null
+          reviewer_design_team?: string | null
+          reviewer_name?: string | null
           round_no?: number
           sent_at?: string
           sent_by?: string | null
@@ -907,7 +916,10 @@ export type Database = {
         Args: {
           _docs?: Json
           _items: Json
+          _reviewer_contact?: string
+          _reviewer_design_team?: string
           _reviewer_email: string
+          _reviewer_name?: string
           _token: string
         }
         Returns: {
@@ -918,6 +930,9 @@ export type Database = {
           id: string
           overall_outcome: string | null
           recipients: string[]
+          reviewer_contact: string | null
+          reviewer_design_team: string | null
+          reviewer_name: string | null
           round_no: number
           sent_at: string
           sent_by: string | null
