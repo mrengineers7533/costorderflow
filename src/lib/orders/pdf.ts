@@ -352,7 +352,10 @@ export async function generateOrderPDF(
   doc.setFont("helvetica", "bold").setFontSize(8);
   doc.text("Amount in Words:", M, y);
   doc.setFont("helvetica", "normal");
-  doc.text(doc.splitTextToSize(order.amount_in_words || "", W - M * 2 - 30), M + 30, y);
+  const mrWords = opts?.currencyMode === "USD"
+    ? amountInWordsUSD(t.net_payable)
+    : (order.amount_in_words || "").replace(/^INR\s*/i, "RS. ");
+  doc.text(doc.splitTextToSize(mrWords, W - M * 2 - 30), M + 30, y);
   y += 8;
 
   // MR-format post-items section (single full-width table matching template)
