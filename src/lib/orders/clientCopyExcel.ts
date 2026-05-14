@@ -35,13 +35,13 @@ export function buildClientCopyXlsx(
     [`Date: ${meta.order_date || ""}`],
     isUSD ? [`Currency: USD (converted from INR @ ₹${usdRate}/$)`] : [],
     [],
-    ["S.No", "Description", "Make", "Qty", "Unit", `${rateLabel} ${sym}`, `${amtLabel} ${sym}`],
+    ["S.No", "Description", "Qty", "Make", "Unit", `${rateLabel} ${sym}`, `${amtLabel} ${sym}`],
   ];
   const body = items.map((it, i) => [
     i + 1,
     it.description || "",
-    displayMake(it),
     Number(it.quantity) || 0,
+    displayMake(it),
     it.unit || "",
     conv(Number(it.unit_rate) || 0),
     conv(Number(it.amount) || 0),
