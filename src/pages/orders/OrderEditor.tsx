@@ -88,11 +88,11 @@ export default function OrderEditor() {
   // INR↔USD conversion state. Persisted on the OA record.
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
-  // EXW Murthal "Landed Price" — current USD rate used to re-price items
-  // from USD back into INR at the latest dollar rate. Independent of the
-  // original `exchangeRate` so the user can lock the basic-total USD value
-  // and apply a different (current) rate later. Not persisted.
-  const [landedRate, setLandedRate] = useState<number>(0);
+  // EXW Murthal — separate "Amount in INR" rate (₹ per $) used by the
+  // Landed Price panel to convert the USD Landed Price into INR for
+  // P&F / Insurance / GST / Grand Total. Persisted on charges
+  // (`murthal_landed_inr_rate`); this local mirror keeps the input
+  // controlled when charges change.
   // Columns hidden from the rendered PDF / preview only. Not persisted —
   // it's an export-time toggle and does not affect saved data.
   const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
