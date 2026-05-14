@@ -797,8 +797,17 @@ async function renderGmsPdf(
       yEnd += 3;
     }
   }
-  // EXW Murthal — print USD amount in words when PU Dollar Rate set.
-  if (gmsUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && cifRate > 0) {
+  // EXW Murthal — when "Amount in INR" rate set, Net Payable is INR — words in Rs.
+  if ((c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && (c.murthal_landed_inr_rate || 0) > 0) {
+    const m = calcExMurthal(t.basic_total, c);
+    if (m.net_payable > 0) {
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+      const words = `AMOUNT (IN WORDS): ${amountInWords(m.net_payable).replace(/^INR\s*/i, "RS. ")}`;
+      const wrapped = doc.splitTextToSize(words, W - M * 2);
+      wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+      yEnd += 3;
+    }
+  } else if (gmsUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && cifRate > 0) {
     const m = calcExMurthal(t.basic_total, c);
     const np = m.net_payable / cifRate;
     if (np > 0) {
@@ -810,7 +819,7 @@ async function renderGmsPdf(
     }
   }
   // EXW Murthal — toolbar-forced USD path (values already in USD in state).
-  if (forcedUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled)) {
+  if (forcedUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && !((c.murthal_landed_inr_rate || 0) > 0)) {
     const m = calcExMurthal(t.basic_total, c);
     if (m.net_payable > 0) {
       doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
@@ -823,7 +832,8 @@ async function renderGmsPdf(
   // EXW Murthal — INR mode: print Rupees amount in words for net payable.
   if (
     !forcedUsd && !gmsUsd &&
-    (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled)
+    (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) &&
+    !((c.murthal_landed_inr_rate || 0) > 0)
   ) {
     const m = calcExMurthal(t.basic_total, c);
     if (m.net_payable > 0 && order.amount_in_words) {
