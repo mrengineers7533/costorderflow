@@ -25,7 +25,7 @@ export const PDF_COLUMN_DEFS: PdfColumnDef[] = [
   { key: "qty",          label: "Qty",               formats: ["MR", "GMS"] },
   { key: "unit",         label: "Unit",              formats: ["MR", "GMS"] },
   { key: "rate",         label: "Unit Price / Rate", formats: ["MR", "GMS"] },
-  { key: "amount",       label: "Amount",            formats: ["MR", "GMS"], required: true },
+  { key: "amount",       label: "Amount",            formats: ["MR", "GMS"] },
 ];
 
 export function isColumnVisible(
