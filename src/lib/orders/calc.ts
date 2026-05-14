@@ -114,7 +114,15 @@ export function calcExMurthal(
   // `amountInInr = netLanded × rate` instead of `netLanded`.
   const landedInrRate = c.murthal_landed_inr_rate || 0;
   const inrMode = landedInrRate > 0;
-  const downstreamBase = inrMode ? netLanded * landedInrRate : netLanded;
+  // The displayed "Landed Price" is in USD (state items in USD when toolbar
+  // forces USD; or INR-divided-by-PU-Dollar-Rate when cif_pu_dollar_rate is
+  // set). The user-entered "Amount in INR" rate (₹ per $) must apply to the
+  // USD landed value, NOT to the INR-stored netLanded — otherwise the result
+  // is multiplied by the PU rate twice. Normalize netLanded to USD first.
+  const puRate = c.cif_pu_dollar_rate || 0;
+  const usdLanded = puRate > 0 ? netLanded / puRate : netLanded;
+  const usdBaseWithHike = puRate > 0 ? baseWithHike / puRate : baseWithHike;
+  const downstreamBase = inrMode ? usdLanded * landedInrRate : netLanded;
 
   // Insurance — on downstream base (INR amount when inrMode, else Net Landed)
   let seaInsurance = 0;
@@ -127,7 +135,7 @@ export function calcExMurthal(
       // (or `amountInInr` when inrMode)
       const insBase = (c.murthal_insurance_base || "basic") === "landed"
         ? downstreamBase
-        : (inrMode ? baseWithHike * landedInrRate : baseWithHike);
+        : (inrMode ? usdBaseWithHike * landedInrRate : baseWithHike);
       seaInsurance = (insBase * (c.sea_insurance || 0)) / 100;
     }
   }
@@ -142,7 +150,7 @@ export function calcExMurthal(
     }
   } else if (c.pf_amount > 0 || c.pf_percent > 0) {
     // legacy: still read pf_amount/pf_percent against basic
-    const legacyBase = inrMode ? baseWithHike * landedInrRate : baseWithHike;
+    const legacyBase = inrMode ? usdBaseWithHike * landedInrRate : baseWithHike;
     pf = c.pf_amount > 0 ? c.pf_amount : (legacyBase * (c.pf_percent || 0)) / 100;
   }
 
@@ -152,7 +160,7 @@ export function calcExMurthal(
   if (c.murthal_freight_enabled) {
     freight = c.murthal_freight || 0;
   } else if (c.freight_enabled) {
-    const legacyBase = inrMode ? baseWithHike * landedInrRate : baseWithHike;
+    const legacyBase = inrMode ? usdBaseWithHike * landedInrRate : baseWithHike;
     freight = (legacyBase * (c.freight || 0)) / 100;
   }
 
@@ -203,7 +211,7 @@ export function calcExMurthal(
     advance_amount: r(advance),
     net_payable: r(net),
     landed_inr_rate: landedInrRate,
-    amount_in_inr: r(inrMode ? netLanded * landedInrRate : 0),
+    amount_in_inr: r(inrMode ? usdLanded * landedInrRate : 0),
   };
 }
 
