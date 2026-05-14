@@ -383,7 +383,9 @@ export default function PiEditor() {
                         <TableCell>
                           <Input type="number" value={it.unit_rate} onChange={(e) => updateItem(idx, { unit_rate: Number(e.target.value) })} className="w-28" />
                         </TableCell>
-                        <TableCell className="text-right font-mono">₹ {it.amount.toLocaleString("en-IN")}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {currencyMode === "USD" ? "$" : "₹"} {it.amount.toLocaleString(currencyMode === "USD" ? "en-US" : "en-IN")}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
