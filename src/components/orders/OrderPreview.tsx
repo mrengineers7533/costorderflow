@@ -432,32 +432,8 @@ export function OrderPreview(p: Props) {
                   : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
-        {/* EXW Murthal — when "Amount in INR" rate is set, the Net Payable
-            is already in ₹ INR; show INR words regardless of the upstream
-            USD/INR display mode. */}
-        {isMurthal && murthal && (murthal.landed_inr_rate || 0) > 0 && murthal.net_payable > 0 && (
-          <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
-          </div>
-        )}
-        {/* EXW Murthal USD amount in words (PU Dollar Rate path) */}
-        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
-          <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable / cifRate)}
-          </div>
-        )}
-        {/* EXW Murthal USD amount in words (toolbar-forced USD path — values already in USD) */}
-        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
-          <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable)}
-          </div>
-        )}
-        {/* EXW Murthal INR amount in words */}
-        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
-          <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
-          </div>
-        )}
+        {/* EXW Murthal AMOUNT (IN WORDS) is rendered AFTER Net Payable —
+            see the isMurthal branch below. */}
 
         {/* Specialised totals layouts (Ex-works Murthal & Ex-works FX) */}
         {isCifPort ? (
@@ -517,16 +493,37 @@ export function OrderPreview(p: Props) {
             })()}
           </>
         ) : isMurthal && murthal ? (
-          <ExMurthalBlock
-            m={murthal}
-            c={p.charges}
-            fxSymbol={fxSymbol}
-            fxRate={fxRate}
-            isFX={isFX}
-            basicFX={p.totals.basic_total}
-            forceUsdRate={gmsUsd ? cifRate : 0}
-            forcedUsd={forcedUsd && !gmsUsd}
-          />
+          <>
+            <ExMurthalBlock
+              m={murthal}
+              c={p.charges}
+              fxSymbol={fxSymbol}
+              fxRate={fxRate}
+              isFX={isFX}
+              basicFX={p.totals.basic_total}
+              forceUsdRate={gmsUsd ? cifRate : 0}
+              forcedUsd={forcedUsd && !gmsUsd}
+            />
+            {murthal.net_payable > 0 && (() => {
+              const inrModeM = (murthal.landed_inr_rate || 0) > 0;
+              let words = "";
+              if (inrModeM) {
+                // Net Payable already in ₹ INR.
+                words = amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ");
+              } else if (gmsUsd && cifRate > 0) {
+                words = amountInWordsUSD(murthal.net_payable / cifRate);
+              } else if (forcedUsd) {
+                words = amountInWordsUSD(murthal.net_payable);
+              } else {
+                words = amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ");
+              }
+              return (
+                <div className="text-[11px] font-semibold uppercase tracking-wide">
+                  AMOUNT (IN WORDS): {words}
+                </div>
+              );
+            })()}
+          </>
         ) : isFX ? (
           <div className="border rounded overflow-hidden text-xs">
             <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
@@ -634,11 +631,6 @@ function ExMurthalBlock({
   );
   return (
     <div className="border rounded overflow-hidden text-xs">
-      {displayUSD && (
-        <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
-          Showing totals in USD ({usdSym}) — converted from INR @ ₹{usdRate} (PU Dollar Rate). Underlying calculation is in INR.
-        </div>
-      )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
           <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
