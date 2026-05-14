@@ -444,6 +444,12 @@ export function OrderPreview(p: Props) {
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable)}
           </div>
         )}
+        {/* EXW Murthal INR amount in words */}
+        {isMurthal && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+          <div className="text-[11px] font-semibold uppercase tracking-wide">
+            AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
+          </div>
+        )}
 
         {/* Specialised totals layouts (Ex-works Murthal & Ex-works FX) */}
         {isCifPort ? (
