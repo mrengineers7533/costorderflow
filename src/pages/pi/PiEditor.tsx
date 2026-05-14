@@ -324,14 +324,6 @@ export default function PiEditor() {
 
         {/* Edit sections (stacked, full width — preview moved to bottom) */}
         <div className="space-y-5">
-          <CurrencyToolbar
-            mode={currencyMode}
-            rate={exchangeRate}
-            onRateChange={setExchangeRate}
-            onConvert={applyCurrencyConversion}
-            hideUsdToInr={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL"}
-            rateLabel={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL" ? "PU Dollar Rate (₹ per $)" : undefined}
-          />
           <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
