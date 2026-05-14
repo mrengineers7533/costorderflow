@@ -718,7 +718,14 @@ export default function OrderEditor() {
               rate={exchangeRate}
               onRateChange={setExchangeRate}
               onConvert={applyCurrencyConversion}
+              hideUsdToInr
+              rateLabel="PU Dollar Rate (₹ per $)"
             />
+            <p className="text-[11px] text-muted-foreground px-1">
+              Items, Basic Total and charges up to Landed Price stay in USD. Use the
+              "Amount in INR" panel inside Charges &amp; Totals to convert Landed Price
+              into INR for P&amp;F, Insurance, GST and Grand Total.
+            </p>
           </div>
         )}
 
