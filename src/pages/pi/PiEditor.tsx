@@ -235,6 +235,8 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
+        currency_mode: currencyMode,
+        exchange_rate: exchangeRate || null,
       };
       if (finalize) patch.status = "finalized";
       const { error } = await supabase
