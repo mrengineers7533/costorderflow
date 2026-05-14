@@ -261,6 +261,28 @@ export default function PiEditor() {
     update("line_items", items);
   }
 
+  function applyCurrencyConversion(target: CurrencyMode, factor: number) {
+    setPi((cur) => {
+      if (!cur) return cur;
+      return {
+        ...cur,
+        line_items: convertItems(cur.line_items, factor),
+        charges: convertCharges(cur.charges, factor),
+        other_charges: cur.other_charges
+          ? Math.round(cur.other_charges * factor * 100) / 100
+          : cur.other_charges,
+        advance_amount: cur.advance_amount
+          ? Math.round(cur.advance_amount * factor * 100) / 100
+          : cur.advance_amount,
+        discount_value:
+          cur.discount_value && (cur.discount_mode || "percent") === "amount"
+            ? Math.round(cur.discount_value * factor * 100) / 100
+            : cur.discount_value,
+      };
+    });
+    setCurrencyMode(target);
+  }
+
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
