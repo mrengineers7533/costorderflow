@@ -29,6 +29,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
+import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/convert";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -81,6 +83,9 @@ export default function OrderEditor() {
   // Editor-only filter for the Line Items table. Does NOT affect the OA
   // format / preview / PDF — those still follow the Format dropdown above.
   const [lineItemsView, setLineItemsView] = useState<"MR" | "GMS" | "ALL">("ALL");
+  // INR↔USD conversion state. Persisted on the OA record.
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
+  const [exchangeRate, setExchangeRate] = useState<number>(83);
 
   // PI item-selection dialog state (opened from "Convert to PI" button).
   const [piDialogOpen, setPiDialogOpen] = useState(false);
@@ -113,6 +118,9 @@ export default function OrderEditor() {
       setChargesGms({ ...emptyCharges, ...(o.charges_gms || {}) });
       setNotes(o.notes || "");
       setTcNote((o as unknown as { tc_note?: string }).tc_note || "");
+      const saved = o as unknown as { currency_mode?: CurrencyMode; exchange_rate?: number | null };
+      setCurrencyMode(saved.currency_mode === "USD" ? "USD" : "INR");
+      if (saved.exchange_rate && saved.exchange_rate > 0) setExchangeRate(Number(saved.exchange_rate));
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
       setIsCurrent(o.is_current ?? true);
@@ -326,6 +334,8 @@ export default function OrderEditor() {
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
       tc_note: tcNote,
+      currency_mode: currencyMode,
+      exchange_rate: exchangeRate || null,
       ...(isNew ? { user_id: currentUserId } : {}),
     };
 
@@ -350,6 +360,13 @@ export default function OrderEditor() {
     }
     toast({ title: "Saved", description: `OA ${oa}` });
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
+  }
+
+  function applyCurrencyConversion(target: CurrencyMode, factor: number) {
+    setItems((prev) => convertItems(prev, factor));
+    setChargesMr((prev) => convertCharges(prev, factor));
+    setChargesGms((prev) => convertCharges(prev, factor));
+    setCurrencyMode(target);
   }
 
   async function downloadPDF() {
@@ -683,6 +700,13 @@ export default function OrderEditor() {
             {isNew && location.pathname !== "/orders/new/edit" && (
               <CostSheetPicker onApply={(data) => applyCostSheet(data)} onParsingChange={setParsing} />
             )}
+
+        <CurrencyToolbar
+          mode={currencyMode}
+          rate={exchangeRate}
+          onRateChange={setExchangeRate}
+          onConvert={applyCurrencyConversion}
+        />
 
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>

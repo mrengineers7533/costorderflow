@@ -190,6 +190,9 @@ export async function createPiFromOaItems(
     other_charges: 0,
     advance_mode: "percent",
     advance_amount: 0,
+    // Carry currency state from the OA so the PI opens in the same mode.
+    currency_mode: ((oa as unknown as { currency_mode?: string }).currency_mode === "USD" ? "USD" : "INR"),
+    exchange_rate: ((oa as unknown as { exchange_rate?: number | null }).exchange_rate) ?? null,
   };
 
   const { data, error } = await supabase

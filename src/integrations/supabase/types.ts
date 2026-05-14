@@ -624,6 +624,8 @@ export type Database = {
           company_name: string | null
           cost_sheet_number: string | null
           created_at: string
+          currency_mode: string
+          exchange_rate: number | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -651,6 +653,8 @@ export type Database = {
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
+          currency_mode?: string
+          exchange_rate?: number | null
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -678,6 +682,8 @@ export type Database = {
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
+          currency_mode?: string
+          exchange_rate?: number | null
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -819,9 +825,11 @@ export type Database = {
           charges: Json
           company_name: string | null
           created_at: string
+          currency_mode: string
           discount_label: string | null
           discount_mode: string
           discount_value: number
+          exchange_rate: number | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -854,9 +862,11 @@ export type Database = {
           charges?: Json
           company_name?: string | null
           created_at?: string
+          currency_mode?: string
           discount_label?: string | null
           discount_mode?: string
           discount_value?: number
+          exchange_rate?: number | null
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -889,9 +899,11 @@ export type Database = {
           charges?: Json
           company_name?: string | null
           created_at?: string
+          currency_mode?: string
           discount_label?: string | null
           discount_mode?: string
           discount_value?: number
+          exchange_rate?: number | null
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean

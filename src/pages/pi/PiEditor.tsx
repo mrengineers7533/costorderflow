@@ -27,6 +27,13 @@ import {
   DEFAULT_MR_BANK,
   type GMSTerms,
 } from "@/lib/orders/defaults";
+import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
+import {
+  convertItems,
+  convertCharges,
+  conversionFactor,
+  type CurrencyMode,
+} from "@/lib/currency/convert";
 
 export default function PiEditor() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +44,8 @@ export default function PiEditor() {
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
+  const [exchangeRate, setExchangeRate] = useState<number>(83);
 
   useEffect(() => {
     if (!id) return;
@@ -48,6 +57,11 @@ export default function PiEditor() {
           nav("/pi"); return;
         }
         const rec = data as unknown as PiRecord;
+        const piSaved = data as unknown as { currency_mode?: CurrencyMode; exchange_rate?: number | null };
+        const piMode: CurrencyMode = piSaved.currency_mode === "USD" ? "USD" : "INR";
+        const piRate = piSaved.exchange_rate && piSaved.exchange_rate > 0 ? Number(piSaved.exchange_rate) : 83;
+        setCurrencyMode(piMode);
+        setExchangeRate(piRate);
         // OA-driven model: mirror line items + charges from the latest OA in
         // this PI's family. Only Advance Adjustment stays editable.
         let mirrored = rec;
@@ -56,6 +70,8 @@ export default function PiEditor() {
             .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
           if (oaRow) {
             const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
+            const oaSaved = oaRow as unknown as { currency_mode?: CurrencyMode };
+            const oaMode: CurrencyMode = oaSaved.currency_mode === "USD" ? "USD" : "INR";
             // Preserve PI-level partial quantities & amounts. We mirror OA
             // metadata (description/rate/HSN/etc.) but keep the qty stored
             // on the PI so partial conversions (e.g. PI qty 1 of OA qty 2)
@@ -74,10 +90,16 @@ export default function PiEditor() {
                 amount: qty * rate,
               };
             });
+            // Mirrored values are in the OA's currency. If the PI was
+            // independently converted, re-apply the delta so the editor
+            // shows the PI's persisted currency.
+            const factor = conversionFactor(oaMode, piMode, piRate);
+            const adjustedItems = factor === 1 ? items : convertItems(items, factor);
+            const adjustedCharges = factor === 1 ? oa.charges : convertCharges(oa.charges, factor);
             mirrored = {
               ...rec,
-              charges: oa.charges,
-              line_items: items.length ? items : rec.line_items,
+              charges: adjustedCharges,
+              line_items: adjustedItems.length ? adjustedItems : rec.line_items,
               bill_to: oa.bill_to,
               ship_to: oa.ship_to,
               company_name: oa.company_name,
@@ -213,6 +235,8 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
+        currency_mode: currencyMode,
+        exchange_rate: exchangeRate || null,
       };
       if (finalize) patch.status = "finalized";
       const { error } = await supabase
@@ -235,6 +259,28 @@ export default function PiEditor() {
     const items = pi.line_items.map((it, i) => i === idx ? { ...it, ...patch } : it);
     items.forEach((it) => { it.amount = calcLineAmount(it.quantity || 0, it.unit_rate || 0); });
     update("line_items", items);
+  }
+
+  function applyCurrencyConversion(target: CurrencyMode, factor: number) {
+    setPi((cur) => {
+      if (!cur) return cur;
+      return {
+        ...cur,
+        line_items: convertItems(cur.line_items, factor),
+        charges: convertCharges(cur.charges, factor),
+        other_charges: cur.other_charges
+          ? Math.round(cur.other_charges * factor * 100) / 100
+          : cur.other_charges,
+        advance_amount: cur.advance_amount
+          ? Math.round(cur.advance_amount * factor * 100) / 100
+          : cur.advance_amount,
+        discount_value:
+          cur.discount_value && (cur.discount_mode || "percent") === "amount"
+            ? Math.round(cur.discount_value * factor * 100) / 100
+            : cur.discount_value,
+      };
+    });
+    setCurrencyMode(target);
   }
 
   return (
@@ -275,6 +321,12 @@ export default function PiEditor() {
 
         {/* Edit sections (stacked, full width — preview moved to bottom) */}
         <div className="space-y-5">
+          <CurrencyToolbar
+            mode={currencyMode}
+            rate={exchangeRate}
+            onRateChange={setExchangeRate}
+            onConvert={applyCurrencyConversion}
+          />
           <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -331,7 +383,9 @@ export default function PiEditor() {
                         <TableCell>
                           <Input type="number" value={it.unit_rate} onChange={(e) => updateItem(idx, { unit_rate: Number(e.target.value) })} className="w-28" />
                         </TableCell>
-                        <TableCell className="text-right font-mono">₹ {it.amount.toLocaleString("en-IN")}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {currencyMode === "USD" ? "$" : "₹"} {it.amount.toLocaleString(currencyMode === "USD" ? "en-US" : "en-IN")}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
