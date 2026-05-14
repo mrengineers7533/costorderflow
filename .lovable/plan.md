@@ -1,31 +1,33 @@
-## Allow hiding the Amount column in PDF / Preview
+## Move "Landed Price" conversion next to Charges & Totals
 
-Currently `amount` is marked `required: true` in `src/lib/orders/pdfColumns.ts`, so the PdfColumnVisibility popover disables its checkbox. The user wants Amount to be hideable while keeping the bottom totals block (Basic Amount, GST/Taxes, Grand Total, Net Payable, Amount in Words) intact.
+Currently the Landed Price panel sits at the very top of the OA editor right under the `CurrencyToolbar` (lines ~714–767 of `src/pages/orders/OrderEditor.tsx`). The user wants it relocated inside the **Charges & Totals** card (CardHeader at line 892), since it conceptually belongs with the final total/landed calculation.
 
-### Changes
+### Change scope (single file)
 
-1. **`src/lib/orders/pdfColumns.ts`**
-   - Remove `required: true` from the `amount` entry so it becomes a normal toggleable column.
-   - `item_no` and `description` stay required (need at least one anchor column).
+`src/pages/orders/OrderEditor.tsx`
 
-2. **`src/components/orders/OrderPreview.tsx`**
-   - Item table already maps over `visibleColumns`, so hiding `amount` will drop the column automatically.
-   - Update the totals row `colSpan` logic so the "Basic Amount / GST / Grand Total / Net Payable" labels and values still align correctly when `amount` is absent:
-     - When `amount` is visible: label spans `visCols.length - 1`, value sits in the amount column (current behavior).
-     - When `amount` is hidden: render the totals as a separate block under the table (full-width rows with label on the left and value on the right) so they remain clearly visible without an Amount column to anchor to.
-   - Amount in Words line is already a separate full-width row — no change needed.
+1. **Top toolbar block (line 714–767):**
+   - Keep the `CurrencyToolbar` (INR → USD / USD → INR) exactly as today — it stays at the top, gated by `format === "GMS" && charges.gms_mode === "EXW_MURTHAL"`.
+   - Remove the inner `Landed Price` panel (the `<div>` containing the helper text, "Current USD = ₹" input, and "Convert USD → INR (Landed Price)" button) from this block.
 
-3. **`src/lib/orders/pdf.ts`** (MR + GMS branches) and **`src/lib/pi/pdf.ts`**
-   - `head` / `itemRows` / `columnStyles` already build from `visibleColumns`, so hiding `amount` drops it from the table head/body.
-   - Totals rendering: today the totals rows are appended into the same autoTable with `colSpan` math against the item columns. Update so when `amount` is hidden, totals render as a standalone autoTable below the items table with two columns (label, value) — keeps Basic Total, P&F, Insurance, Freight, Subtotal, GST, Discount, Grand Total, Advance, Net Payable, and Amount in Words exactly as they appear today, just decoupled from the item-table column grid.
-   - No changes to calculations, currency labels, or any other charge logic.
+2. **Charges & Totals card (CardContent under the header at line 892):**
+   - Insert the same Landed Price panel as the first row inside that card's `CardContent`, wrapped in the same `format === "GMS" && charges.gms_mode === "EXW_MURTHAL"` guard so it only renders for EXW Murthal. For every other GMS mode / MR format, the panel is not rendered at all (cleaner than disabling).
+   - Reuse the existing `landedRate` state, `setLandedRate` setter, and the existing button click handler verbatim — no logic changes:
+     - Validates `currencyMode === "USD"` (toast otherwise)
+     - Validates `landedRate > 0` (toast otherwise)
+     - Calls `applyCurrencyConversion("INR", landedRate)` then `setExchangeRate(landedRate)` and shows the success toast.
+   - Keep the helper copy ("Re-price items from USD to INR using the current dollar rate. Basic Total USD stays intact until you click.") so the user has the same context.
 
-### Out of scope
-- Calculations, currency conversion, MR vs GMS split, OA→PI carry-forward, DB schema.
-- Any column behavior other than making `amount` hideable.
+### Out of scope / unchanged
+
+- `CurrencyToolbar` behaviour, INR→USD / USD→INR item conversion, and `applyCurrencyConversion`.
+- `Charges` schema, `calcTotals`, GST/tax math, OA/PI flow, PDF/Preview rendering, persisted data.
+- Any other card, format, or `gms_mode` branch.
+- No new state or props are introduced.
 
 ### Acceptance
-- "Amount" appears as a normal (non-disabled) checkbox in the PDF Columns popover on both OA and PI editors, MR and GMS formats.
-- Hiding it removes the Amount column from Preview and PDF.
-- Bottom totals block (Basic Amount, GST/Taxes, Grand Total, Net Payable, Amount in Words) still renders correctly in both Preview and PDF whether Amount is shown or hidden.
-- All other features unchanged.
+
+- For GMS + EXW Murthal: the top area shows only the INR↔USD toolbar; the Landed Price input + button now appears at the top of the **Charges & Totals** card.
+- For any non-EXW-Murthal selection: the Landed Price panel is not visible anywhere.
+- Clicking "Convert USD → INR (Landed Price)" still re-prices items at the entered current USD rate exactly as before; Basic Total USD is preserved until the click.
+- All other features, totals, and PDFs render identically.
