@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
-import { calcExTurkey, calcExMurthal, amountInWordsUSD, displayMake } from "./calc";
+import { calcExTurkey, calcExMurthal, amountInWordsUSD, amountInWords, displayMake } from "./calc";
 import { visibleColumns, type PdfColumnKey } from "./pdfColumns";
 import {
   DEFAULT_MR_BANK,
@@ -850,6 +850,28 @@ async function renderGmsPdf(
       const wrapped = doc.splitTextToSize(words, W - M * 2);
       wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
       yEnd += 3;
+    }
+  }
+  // EXW Turkey — print Grand Total in words. Currency follows display mode:
+  // USD when turkey_pu_dollar_rate or fx_rate is set (totals shown in $),
+  // otherwise INR. Uses Net Payable when an advance/discount is applied.
+  if (c.gms_mode === "EXW_TURKEY" && t.basic_total > 0) {
+    const tk = calcExTurkey(t.basic_total, c);
+    const showNetPayable =
+      (c.turkey_advance_enabled && tk.advance_amount > 0) ||
+      (c.turkey_discount_enabled && tk.discount > 0);
+    const inrValue = showNetPayable ? tk.net_payable : tk.grand_total;
+    if (inrValue > 0) {
+      const turkeyDisplayUSD = (turkeyRate || 0) > 0;
+      const words = turkeyDisplayUSD
+        ? `AMOUNT (IN WORDS): ${amountInWordsUSD(inrValue / (turkeyRate || 1))}`
+        : `AMOUNT (IN WORDS): ${amountInWords(inrValue).replace(/^INR\s*/i, "RS. ")}`;
+      {
+        doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+        const wrapped = doc.splitTextToSize(words, W - M * 2);
+        wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+        yEnd += 3;
+      }
     }
   }
 
