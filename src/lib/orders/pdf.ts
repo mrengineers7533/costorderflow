@@ -320,11 +320,11 @@ export async function generateOrderPDF(
     }
   }
 
-  // Totals: when "amount" column is visible, value sits in that trailing
-  // column and label spans the rest; otherwise label spans all visible cols
-  // and the value is appended as a final cell.
-  const mrAmountVisible = mrCols.includes("amount");
-  const mrLabelSpan = mrAmountVisible ? Math.max(1, mrCols.length - 1) : mrCols.length;
+  // Totals: render as 2 cells inside the items table — label spans all
+  // visible columns except the last, value occupies the trailing column.
+  // When the user hides "Amount", the value naturally lands in whichever
+  // column is now last (e.g. Rate). Bottom totals stay visible regardless.
+  const mrLabelSpan = Math.max(1, mrCols.length - 1);
   const totalsAsBody = totalsRows.map((r) => [
     { content: r.label, colSpan: mrLabelSpan, styles: { halign: "right" as const, fontStyle: "bold" as const } },
     { content: fmt(r.value), styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal", fillColor: r.bold ? ([255, 235, 59] as [number, number, number]) : undefined } },
@@ -735,8 +735,7 @@ async function renderGmsPdf(
     }
   }
 
-  const gmsAmountVisible = gmsCols.includes("amount");
-  const gmsLabelSpan = gmsAmountVisible ? Math.max(1, gmsCols.length - 1) : gmsCols.length;
+  const gmsLabelSpan = Math.max(1, gmsCols.length - 1);
   const totalsAsBody = totalsRows.map((r) => [
     {
       content: r.label,
