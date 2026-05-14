@@ -18,6 +18,8 @@ import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
+import { BoqPdfColumnVisibility } from "@/components/boqs/BoqPdfColumnVisibility";
+import { visibleBoqColumns, type BoqPdfColumnKey } from "@/lib/boq/pdfColumns";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -50,6 +52,8 @@ export default function BoqEditor() {
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  // PDF-only column visibility (not persisted to BOQ data).
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<BoqPdfColumnKey[]>([]);
   // Track the OA owner and BOQ creator so either can edit Remarks.
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export default function BoqEditor() {
                 quantity: Number(it.quantity) || 0,
                 unit: it.unit || "Nos",
                 remarks: prev?.remarks || "",
+                make: it.make_label || prev?.make || "",
                 approval_status: prev?.approval_status,
                 approval_comment: prev?.approval_comment,
               };
@@ -159,6 +164,7 @@ export default function BoqEditor() {
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
         remarks: "",
+        make: it.make_label || "",
       }));
       const finalItems = mapped.length ? mapped : [newBoqItem(1)];
       setItems(finalItems);
@@ -252,7 +258,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { hiddenColumns: hiddenPdfColumns });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -282,7 +288,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { hiddenColumns: hiddenPdfColumns });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
