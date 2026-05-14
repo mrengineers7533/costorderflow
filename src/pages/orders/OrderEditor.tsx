@@ -701,6 +701,13 @@ export default function OrderEditor() {
               <CostSheetPicker onApply={(data) => applyCostSheet(data)} onParsingChange={setParsing} />
             )}
 
+        <CurrencyToolbar
+          mode={currencyMode}
+          rate={exchangeRate}
+          onRateChange={setExchangeRate}
+          onConvert={applyCurrencyConversion}
+        />
+
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
