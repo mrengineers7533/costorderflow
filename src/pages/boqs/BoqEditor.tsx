@@ -18,6 +18,8 @@ import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
+import { BoqPdfColumnVisibility } from "@/components/boqs/BoqPdfColumnVisibility";
+import { visibleBoqColumns, type BoqPdfColumnKey } from "@/lib/boq/pdfColumns";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -50,6 +52,8 @@ export default function BoqEditor() {
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  // PDF-only column visibility (not persisted to BOQ data).
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<BoqPdfColumnKey[]>([]);
   // Track the OA owner and BOQ creator so either can edit Remarks.
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export default function BoqEditor() {
                 quantity: Number(it.quantity) || 0,
                 unit: it.unit || "Nos",
                 remarks: prev?.remarks || "",
+                make: it.make_label || prev?.make || "",
                 approval_status: prev?.approval_status,
                 approval_comment: prev?.approval_comment,
               };
@@ -159,6 +164,7 @@ export default function BoqEditor() {
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
         remarks: "",
+        make: it.make_label || "",
       }));
       const finalItems = mapped.length ? mapped : [newBoqItem(1)];
       setItems(finalItems);
@@ -252,7 +258,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { hiddenColumns: hiddenPdfColumns });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -282,7 +288,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { hiddenColumns: hiddenPdfColumns });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
@@ -444,11 +450,12 @@ export default function BoqEditor() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2 print:hidden">
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Live Preview</div>
               <div className="flex flex-wrap gap-2">
+                <BoqPdfColumnVisibility hidden={hiddenPdfColumns} onChange={setHiddenPdfColumns} />
                 <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print</Button>
                 <Button variant="outline" size="sm" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />Download PDF</Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} />
+            <BoqDocPreview rec={buildRecord()} hiddenColumns={hiddenPdfColumns} />
           </div>
           </TabsContent>
 
@@ -475,10 +482,31 @@ export default function BoqEditor() {
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
    table column widths, header colors, terms box, and notes line. */
-function BoqDocPreview({ rec }: { rec: BoqRecord }) {
+function BoqDocPreview({ rec, hiddenColumns }: { rec: BoqRecord; hiddenColumns?: BoqPdfColumnKey[] }) {
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
+  const cols = visibleBoqColumns(hiddenColumns);
+  const COL: Record<BoqPdfColumnKey, { head: string; width?: string; align?: "center" | "left" }> = {
+    item_no:      { head: "ITEM No.",     width: "16mm", align: "center" },
+    quantity:     { head: "QTY",          width: "14mm", align: "center" },
+    unit:         { head: "UNIT",         width: "14mm", align: "center" },
+    make:         { head: "MAKE",         width: "30mm" },
+    model_number: { head: "MODEL NUMBER", width: "32mm" },
+    description:  { head: "DESCRIPTION" },
+    remarks:      { head: "Remarks",      width: "50mm" },
+  };
+  const cellValue = (k: BoqPdfColumnKey, it: BoqRecord["line_items"][number], i: number): string => {
+    switch (k) {
+      case "item_no":      return it.item_no || String(i + 1);
+      case "quantity":     return it.quantity ? String(it.quantity) : "";
+      case "unit":         return it.unit || "";
+      case "make":         return it.make || "";
+      case "model_number": return it.model_number || "";
+      case "description":  return it.description || "";
+      case "remarks":      return it.remarks || "";
+    }
+  };
   return (
     <Card className="overflow-hidden bg-muted/40 print:bg-white print:border-0 print:shadow-none">
       <div className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground border-b print:hidden">
@@ -535,31 +563,27 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
         {/* ===== Items table ===== */}
         <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: "16mm" }} />
-            <col style={{ width: "32mm" }} />
-            <col />
-            <col style={{ width: "14mm" }} />
-            <col style={{ width: "14mm" }} />
-            <col style={{ width: "50mm" }} />
+            {cols.map((k) => (
+              <col key={k} style={COL[k].width ? { width: COL[k].width } : undefined} />
+            ))}
           </colgroup>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
-              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"].map((h, i) => (
-                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 ? "center" : "left" }}>{h}</th>
+              {cols.map((k) => (
+                <th key={k} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: COL[k].align || "left" }}>{COL[k].head}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={6} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={cols.length} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
+                {cols.map((k) => (
+                  <td key={k} style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: COL[k].align || "left", whiteSpace: k === "description" || k === "remarks" ? "pre-wrap" : undefined }}>
+                    {cellValue(k, it, i)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
