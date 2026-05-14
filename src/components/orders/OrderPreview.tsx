@@ -263,8 +263,11 @@ export function OrderPreview(p: Props) {
         {/* Items + Totals — unified bordered table; column set differs MR vs GMS */}
         {(() => {
           const isGMS = p.format === "GMS";
-          const totalsColSpan = isGMS ? 7 : 6;
-          const emptyColSpan = isGMS ? 8 : 7;
+          const visCols = visibleColumns(p.format, p.hiddenColumns);
+          const showCol = (k: PdfColumnKey) => visCols.includes(k);
+          // Totals label cell spans every column except the trailing amount column.
+          const totalsColSpan = Math.max(1, visCols.length - 1);
+          const emptyColSpan = visCols.length;
           const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
           // When discount applied, % charges resolve against the discounted basic.
           const baseForCharges = showDiscount ? afterDiscount : p.totals.basic_total;
@@ -282,18 +285,34 @@ export function OrderPreview(p: Props) {
             <table className="w-full border-collapse text-[11px] border border-foreground">
               <thead>
                 <tr className={isGMS ? "" : "bg-muted/60"} style={isGMS ? { backgroundColor: "rgb(220,220,220)" } : undefined}>
-                  <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
-                  {isGMS && <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>}
-                  <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
-                  <th className="border border-foreground px-1.5 py-1 w-24 text-center">{isGMS ? "MAKE" : "Make"}</th>
-                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
-                  <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
-                  <th className="border border-foreground px-1.5 py-1 w-24 text-right">
-                    {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
-                  </th>
-                  <th className="border border-foreground px-1.5 py-1 w-28 text-right">
-                    {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
-                  </th>
+                  {showCol("item_no") && (
+                    <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
+                  )}
+                  {showCol("model_number") && (
+                    <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>
+                  )}
+                  {showCol("description") && (
+                    <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
+                  )}
+                  {showCol("make") && (
+                    <th className="border border-foreground px-1.5 py-1 w-24 text-center">{isGMS ? "MAKE" : "Make"}</th>
+                  )}
+                  {showCol("qty") && (
+                    <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
+                  )}
+                  {showCol("unit") && (
+                    <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
+                  )}
+                  {showCol("rate") && (
+                    <th className="border border-foreground px-1.5 py-1 w-24 text-right">
+                      {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                    </th>
+                  )}
+                  {showCol("amount") && (
+                    <th className="border border-foreground px-1.5 py-1 w-28 text-right">
+                      {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -304,20 +323,36 @@ export function OrderPreview(p: Props) {
                 ) : (
                   p.items.map((it, idx) => (
                     <tr key={it.id || idx} className="align-top">
-                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
-                      {isGMS && <td className="border border-foreground px-1.5 py-1"></td>}
-                      <td className="border border-foreground px-1.5 py-1">
-                        {it.description || <Placeholder text="(blank)" />}
-                      </td>
-                      <td className="border border-foreground px-1.5 py-1 text-center">{displayMake(it)}</td>
-                      <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
-                      <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
-                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {itemFmt(it.unit_rate || 0)}
-                      </td>
-                      <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
-                        {itemFmt(it.amount || 0)}
-                      </td>
+                      {showCol("item_no") && (
+                        <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
+                      )}
+                      {showCol("model_number") && (
+                        <td className="border border-foreground px-1.5 py-1"></td>
+                      )}
+                      {showCol("description") && (
+                        <td className="border border-foreground px-1.5 py-1">
+                          {it.description || <Placeholder text="(blank)" />}
+                        </td>
+                      )}
+                      {showCol("make") && (
+                        <td className="border border-foreground px-1.5 py-1 text-center">{displayMake(it)}</td>
+                      )}
+                      {showCol("qty") && (
+                        <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
+                      )}
+                      {showCol("unit") && (
+                        <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
+                      )}
+                      {showCol("rate") && (
+                        <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                          {itemFmt(it.unit_rate || 0)}
+                        </td>
+                      )}
+                      {showCol("amount") && (
+                        <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                          {itemFmt(it.amount || 0)}
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
