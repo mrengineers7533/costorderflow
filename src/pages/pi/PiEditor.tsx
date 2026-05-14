@@ -329,6 +329,8 @@ export default function PiEditor() {
             rate={exchangeRate}
             onRateChange={setExchangeRate}
             onConvert={applyCurrencyConversion}
+            hideUsdToInr={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL"}
+            rateLabel={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL" ? "PU Dollar Rate (₹ per $)" : undefined}
           />
           <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
