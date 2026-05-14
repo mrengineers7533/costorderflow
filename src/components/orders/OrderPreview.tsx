@@ -634,11 +634,6 @@ function ExMurthalBlock({
   );
   return (
     <div className="border rounded overflow-hidden text-xs">
-      {displayUSD && (
-        <div className="px-2 py-1.5 border-b bg-muted/30 text-[11px] italic">
-          Showing totals in USD ({usdSym}) — converted from INR @ ₹{usdRate} (PU Dollar Rate). Underlying calculation is in INR.
-        </div>
-      )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
           <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
