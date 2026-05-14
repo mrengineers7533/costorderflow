@@ -4,6 +4,7 @@ import type { BoqRecord } from "./types";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
+import { BOQ_PDF_COLUMN_DEFS, visibleBoqColumns, type BoqPdfColumnKey } from "./pdfColumns";
 
 interface LoadedLogo { dataUrl: string; w: number; h: number }
 const logoCache: Record<string, LoadedLogo> = {};
@@ -38,7 +39,10 @@ function fitInBox(natW: number, natH: number, maxW: number, maxH: number) {
   return { w: natW * r, h: natH * r };
 }
 
-export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
+export async function generateBoqPDF(
+  boq: BoqRecord,
+  opts?: { hiddenColumns?: BoqPdfColumnKey[] },
+): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
@@ -132,33 +136,45 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
   });
   y += leftRows.length * 5 + 4;
 
-  // Items table — only the 6 BOQ columns (no pricing!)
-  const rows = boq.line_items.map((it, i) => [
-    it.item_no || String(i + 1),
-    it.model_number || "",
-    it.description || "",
-    it.quantity ? String(it.quantity) : "",
-    it.unit || "",
-    it.remarks || "",
-  ]);
-
+  // Items table — column order/visibility per pdfColumns.ts
+  const cols = visibleBoqColumns(opts?.hiddenColumns);
+  const COL_META: Record<BoqPdfColumnKey, { head: string; width?: number; align?: "center" | "left" }> = {
+    item_no:      { head: "ITEM No.",     width: 16, align: "center" },
+    quantity:     { head: "QTY",          width: 14, align: "center" },
+    unit:         { head: "UNIT",         width: 14, align: "center" },
+    make:         { head: "MAKE",         width: 30 },
+    model_number: { head: "MODEL NUMBER", width: 32 },
+    description:  { head: "DESCRIPTION",  align: "left" },
+    remarks:      { head: "Remarks",      width: 50 },
+  };
+  const cellFor = (k: BoqPdfColumnKey, it: BoqRecord["line_items"][number], i: number): string => {
+    switch (k) {
+      case "item_no":      return it.item_no || String(i + 1);
+      case "quantity":     return it.quantity ? String(it.quantity) : "";
+      case "unit":         return it.unit || "";
+      case "make":         return it.make || "";
+      case "model_number": return it.model_number || "";
+      case "description":  return it.description || "";
+      case "remarks":      return it.remarks || "";
+    }
+  };
+  const rows = boq.line_items.map((it, i) => cols.map((k) => cellFor(k, it, i)));
+  const columnStyles: Record<number, { cellWidth?: number | "auto"; halign?: "center" | "left" }> = {};
+  cols.forEach((k, idx) => {
+    const m = COL_META[k];
+    columnStyles[idx] = { cellWidth: m.width ?? "auto", halign: m.align || "left" };
+  });
   autoTable(doc, {
     startY: y,
-    head: [["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"]],
-    body: rows.length ? rows : [["", "", "(no items)", "", "", ""]],
+    head: [cols.map((k) => COL_META[k].head)],
+    body: rows.length ? rows : [cols.map((_, i) => (i === Math.max(0, cols.indexOf("description")) ? "(no items)" : ""))],
     theme: "grid",
     styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 16, halign: "center" },
-      1: { cellWidth: 32 },
-      2: { cellWidth: "auto" },
-      3: { cellWidth: 14, halign: "center" },
-      4: { cellWidth: 14, halign: "center" },
-      5: { cellWidth: 50 },
-    },
+    columnStyles,
     margin: { left: M, right: M },
   });
+  void BOQ_PDF_COLUMN_DEFS;
 
   // @ts-expect-error lastAutoTable runtime
   y = doc.lastAutoTable.finalY + 6;
