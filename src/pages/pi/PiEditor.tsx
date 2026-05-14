@@ -1126,6 +1126,7 @@ export default function PiEditor() {
               bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
               gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
               currencyMode={currencyMode}
+              hiddenColumns={hiddenPdfColumns}
               docMeta={{
                 title: "Proforma Invoice",
                 numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
@@ -1162,6 +1163,13 @@ export default function PiEditor() {
               }}
           />
           <div className="flex justify-end pt-2">
+            <div className="mr-auto">
+              <PdfColumnVisibility
+                format={pi.format}
+                hidden={hiddenPdfColumns}
+                onChange={setHiddenPdfColumns}
+              />
+            </div>
             <Button size="lg" onClick={downloadPdf} className="w-full sm:w-auto">
               <Download className="mr-2 h-4 w-4" />Export PI PDF
             </Button>
