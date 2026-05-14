@@ -312,6 +312,17 @@ export default function OrderEditor() {
 
   async function save(finalize: boolean) {
     setSaving(true);
+  }
+
+  function applyCurrencyConversion(target: CurrencyMode, factor: number) {
+    setItems((prev) => convertItems(prev, factor));
+    setChargesMr((prev) => convertCharges(prev, factor));
+    setChargesGms((prev) => convertCharges(prev, factor));
+    setCurrencyMode(target);
+  }
+
+  // dummy line to keep diff valid
+  function _noop_currency() {
     const ship = sameAsBill ? billTo : shipTo;
     let oa = oaNumber;
     if (isNew && !oa) {
