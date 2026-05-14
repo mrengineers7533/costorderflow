@@ -596,16 +596,44 @@ async function renderGmsPdf(
     usdDisplay ? fmtUSD(n) : forcedUsd ? fmtForcedUsd(n) : fmt(n);
   const showUsdLabel = usdDisplay || forcedUsd;
 
-  const itemRows = order.line_items.map((it, i) => [
-    String(i + 1),
-    "", // model number — not stored separately; left blank
-    it.description,
-    displayMake(it),
-    String(it.quantity),
-    it.unit || "Nos",
-    fmtTotal(it.unit_rate),
-    fmtTotal(it.amount),
-  ]);
+  // Dynamic columns — user may hide non-required cells in the PDF.
+  const gmsCols = visibleColumns("GMS", opts?.hiddenColumns);
+  const gmsCellFor = (k: PdfColumnKey, it: OrderRecord["line_items"][number], idx: number): string => {
+    switch (k) {
+      case "item_no":      return String(idx + 1);
+      case "model_number": return ""; // not stored separately
+      case "description":  return it.description || "";
+      case "make":         return displayMake(it);
+      case "qty":          return String(it.quantity);
+      case "unit":         return it.unit || "Nos";
+      case "rate":         return fmtTotal(it.unit_rate);
+      case "amount":       return fmtTotal(it.amount);
+      default:             return "";
+    }
+  };
+  const gmsHeadFor = (k: PdfColumnKey): string => {
+    switch (k) {
+      case "item_no":      return "ITEM NO";
+      case "model_number": return "MODEL NUMBER";
+      case "description":  return "DESCRIPTION";
+      case "make":         return "MAKE";
+      case "qty":          return "QTY";
+      case "unit":         return "UNIT";
+      case "rate":         return `UNIT PRICE\n(${showUsdLabel ? "USD" : "INR"})`;
+      case "amount":       return `AMOUNT\n(${showUsdLabel ? "USD" : "INR"})`;
+    }
+  };
+  const gmsColWidthStyle: Record<PdfColumnKey, { cellWidth: number | "auto"; halign: "left" | "right" | "center" }> = {
+    item_no:      { cellWidth: 14, halign: "center" },
+    model_number: { cellWidth: 24, halign: "left" },
+    description:  { cellWidth: "auto", halign: "left" },
+    make:         { cellWidth: 30, halign: "center" },
+    qty:          { cellWidth: 12, halign: "center" },
+    unit:         { cellWidth: 12, halign: "center" },
+    rate:         { cellWidth: 24, halign: "right" },
+    amount:       { cellWidth: 26, halign: "right" },
+  };
+  const itemRows = order.line_items.map((it, i) => gmsCols.map((k) => gmsCellFor(k, it, i)));
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
   if (isCifPort) {
@@ -704,10 +732,12 @@ async function renderGmsPdf(
     }
   }
 
+  const gmsAmountVisible = gmsCols.includes("amount");
+  const gmsLabelSpan = gmsAmountVisible ? Math.max(1, gmsCols.length - 1) : gmsCols.length;
   const totalsAsBody = totalsRows.map((r) => [
     {
       content: r.label,
-      colSpan: 7,
+      colSpan: gmsLabelSpan,
       styles: { halign: "right" as const, fontStyle: "bold" as const },
     },
     {
@@ -721,12 +751,11 @@ async function renderGmsPdf(
 
   // (Conversion banners intentionally omitted from print/PDF view per spec.)
 
+  const gmsColumnStyles: Record<number, { cellWidth: number | "auto"; halign?: "left" | "right" | "center" }> = {};
+  gmsCols.forEach((k, i) => { gmsColumnStyles[i] = gmsColWidthStyle[k]; });
   autoTable(doc, {
     startY: y,
-    head: [[
-      "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "MAKE",
-      "QTY", "UNIT", `UNIT PRICE\n(${showUsdLabel ? "USD" : "INR"})`, `AMOUNT\n(${showUsdLabel ? "USD" : "INR"})`,
-    ]],
+    head: [gmsCols.map(gmsHeadFor)],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
     styles: {
@@ -738,16 +767,7 @@ async function renderGmsPdf(
       fillColor: [220, 220, 220], textColor: [0, 0, 0],
       halign: "center", fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.3,
     },
-    columnStyles: {
-      0: { cellWidth: 14, halign: "center" },
-      1: { cellWidth: 24, halign: "left" },
-      2: { cellWidth: "auto", halign: "left" },
-      3: { cellWidth: 30, halign: "center" },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 12, halign: "center" },
-      6: { cellWidth: 24, halign: "right" },
-      7: { cellWidth: 26, halign: "right" },
-    },
+    columnStyles: gmsColumnStyles,
     margin: { left: M, right: M, top: GMS_HEADER_H + GMS_TITLE_BAR_H + 4, bottom: GMS_FOOTER_RESERVED },
     didDrawPage: () => { drawHeader(); },
   });
