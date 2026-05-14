@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
 import { calcExTurkey, calcExMurthal, amountInWordsUSD, displayMake } from "./calc";
+import { visibleColumns, type PdfColumnKey } from "./pdfColumns";
 import {
   DEFAULT_MR_BANK,
   DEFAULT_MR_TERMS,
@@ -92,7 +93,7 @@ export interface DocMetaOverride {
 
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -216,15 +217,34 @@ export async function generateOrderPDF(
   const c = order.charges;
   const t = order.totals;
   const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const itemRows = order.line_items.map((it, i) => [
-    String(i + 1),
-    it.description,
-    displayMake(it),
-    String(it.quantity),
-    it.unit || "Nos",
-    fmt(it.unit_rate),
-    fmt(it.amount),
-  ]);
+  // Dynamic columns — user may hide non-required cells in the PDF.
+  const mrCols = visibleColumns("MR", opts?.hiddenColumns);
+  const mrColCellFor = (k: PdfColumnKey, it: OrderRecord["line_items"][number], idx: number): string => {
+    switch (k) {
+      case "item_no":     return String(idx + 1);
+      case "description": return it.description || "";
+      case "make":        return displayMake(it);
+      case "qty":         return String(it.quantity);
+      case "unit":        return it.unit || "Nos";
+      case "rate":        return fmt(it.unit_rate);
+      case "amount":      return fmt(it.amount);
+      default:            return "";
+    }
+  };
+  const mrColLabel: Record<PdfColumnKey, string> = {
+    item_no: "S. No.", model_number: "", description: "Item Description",
+    make: "Make", qty: "Qty.", unit: "Unit", rate: "Rate", amount: "Amount",
+  };
+  const mrColWidthStyle: Partial<Record<PdfColumnKey, { cellWidth: number | "auto"; halign: "left" | "right" | "center" }>> = {
+    item_no:     { cellWidth: 12, halign: "center" },
+    description: { cellWidth: "auto", halign: "left" },
+    make:        { cellWidth: 28, halign: "center" },
+    qty:         { cellWidth: 12, halign: "center" },
+    unit:        { cellWidth: 12, halign: "center" },
+    rate:        { cellWidth: 24, halign: "right" },
+    amount:      { cellWidth: 28, halign: "right" },
+  };
+  const itemRows = order.line_items.map((it, i) => mrCols.map((k) => mrColCellFor(k, it, i)));
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
   // Discount applies ONLY on Basic. When toggled on, show Sub Total → Discount
@@ -300,27 +320,29 @@ export async function generateOrderPDF(
     }
   }
 
+  // Totals: when "amount" column is visible, value sits in that trailing
+  // column and label spans the rest; otherwise label spans all visible cols
+  // and the value is appended as a final cell.
+  const mrAmountVisible = mrCols.includes("amount");
+  const mrLabelSpan = mrAmountVisible ? Math.max(1, mrCols.length - 1) : mrCols.length;
   const totalsAsBody = totalsRows.map((r) => [
-    { content: r.label, colSpan: 6, styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "bold") as "bold" } },
+    { content: r.label, colSpan: mrLabelSpan, styles: { halign: "right" as const, fontStyle: "bold" as const } },
     { content: fmt(r.value), styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal", fillColor: r.bold ? ([255, 235, 59] as [number, number, number]) : undefined } },
   ]);
 
+  const mrColumnStyles: Record<number, { cellWidth: number | "auto"; halign?: "left" | "right" | "center" }> = {};
+  mrCols.forEach((k, i) => {
+    const s = mrColWidthStyle[k];
+    if (s) mrColumnStyles[i] = s;
+  });
   autoTable(doc, {
     startY: y,
-    head: [["S. No.", "Item Description", "Make", "Qty.", "Unit", "Rate", "Amount"]],
+    head: [mrCols.map((k) => mrColLabel[k])],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 12, halign: "center" },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 28, halign: "center" },
-      3: { cellWidth: 12, halign: "center" },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
-      6: { cellWidth: 28, halign: "right" },
-    },
+    columnStyles: mrColumnStyles,
     margin: { left: M, right: M },
   });
 
@@ -426,7 +448,7 @@ const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 async function renderGmsPdf(
   doc: jsPDF,
   order: OrderRecord,
-  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" } | undefined,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] } | undefined,
   layout: GmsLayout,
 ) {
   const { W, H, M } = layout;
@@ -574,16 +596,44 @@ async function renderGmsPdf(
     usdDisplay ? fmtUSD(n) : forcedUsd ? fmtForcedUsd(n) : fmt(n);
   const showUsdLabel = usdDisplay || forcedUsd;
 
-  const itemRows = order.line_items.map((it, i) => [
-    String(i + 1),
-    "", // model number — not stored separately; left blank
-    it.description,
-    displayMake(it),
-    String(it.quantity),
-    it.unit || "Nos",
-    fmtTotal(it.unit_rate),
-    fmtTotal(it.amount),
-  ]);
+  // Dynamic columns — user may hide non-required cells in the PDF.
+  const gmsCols = visibleColumns("GMS", opts?.hiddenColumns);
+  const gmsCellFor = (k: PdfColumnKey, it: OrderRecord["line_items"][number], idx: number): string => {
+    switch (k) {
+      case "item_no":      return String(idx + 1);
+      case "model_number": return ""; // not stored separately
+      case "description":  return it.description || "";
+      case "make":         return displayMake(it);
+      case "qty":          return String(it.quantity);
+      case "unit":         return it.unit || "Nos";
+      case "rate":         return fmtTotal(it.unit_rate);
+      case "amount":       return fmtTotal(it.amount);
+      default:             return "";
+    }
+  };
+  const gmsHeadFor = (k: PdfColumnKey): string => {
+    switch (k) {
+      case "item_no":      return "ITEM NO";
+      case "model_number": return "MODEL NUMBER";
+      case "description":  return "DESCRIPTION";
+      case "make":         return "MAKE";
+      case "qty":          return "QTY";
+      case "unit":         return "UNIT";
+      case "rate":         return `UNIT PRICE\n(${showUsdLabel ? "USD" : "INR"})`;
+      case "amount":       return `AMOUNT\n(${showUsdLabel ? "USD" : "INR"})`;
+    }
+  };
+  const gmsColWidthStyle: Record<PdfColumnKey, { cellWidth: number | "auto"; halign: "left" | "right" | "center" }> = {
+    item_no:      { cellWidth: 14, halign: "center" },
+    model_number: { cellWidth: 24, halign: "left" },
+    description:  { cellWidth: "auto", halign: "left" },
+    make:         { cellWidth: 30, halign: "center" },
+    qty:          { cellWidth: 12, halign: "center" },
+    unit:         { cellWidth: 12, halign: "center" },
+    rate:         { cellWidth: 24, halign: "right" },
+    amount:       { cellWidth: 26, halign: "right" },
+  };
+  const itemRows = order.line_items.map((it, i) => gmsCols.map((k) => gmsCellFor(k, it, i)));
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
   if (isCifPort) {
@@ -682,10 +732,12 @@ async function renderGmsPdf(
     }
   }
 
+  const gmsAmountVisible = gmsCols.includes("amount");
+  const gmsLabelSpan = gmsAmountVisible ? Math.max(1, gmsCols.length - 1) : gmsCols.length;
   const totalsAsBody = totalsRows.map((r) => [
     {
       content: r.label,
-      colSpan: 7,
+      colSpan: gmsLabelSpan,
       styles: { halign: "right" as const, fontStyle: "bold" as const },
     },
     {
@@ -699,12 +751,11 @@ async function renderGmsPdf(
 
   // (Conversion banners intentionally omitted from print/PDF view per spec.)
 
+  const gmsColumnStyles: Record<number, { cellWidth: number | "auto"; halign?: "left" | "right" | "center" }> = {};
+  gmsCols.forEach((k, i) => { gmsColumnStyles[i] = gmsColWidthStyle[k]; });
   autoTable(doc, {
     startY: y,
-    head: [[
-      "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "MAKE",
-      "QTY", "UNIT", `UNIT PRICE\n(${showUsdLabel ? "USD" : "INR"})`, `AMOUNT\n(${showUsdLabel ? "USD" : "INR"})`,
-    ]],
+    head: [gmsCols.map(gmsHeadFor)],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
     styles: {
@@ -716,16 +767,7 @@ async function renderGmsPdf(
       fillColor: [220, 220, 220], textColor: [0, 0, 0],
       halign: "center", fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.3,
     },
-    columnStyles: {
-      0: { cellWidth: 14, halign: "center" },
-      1: { cellWidth: 24, halign: "left" },
-      2: { cellWidth: "auto", halign: "left" },
-      3: { cellWidth: 30, halign: "center" },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 12, halign: "center" },
-      6: { cellWidth: 24, halign: "right" },
-      7: { cellWidth: 26, halign: "right" },
-    },
+    columnStyles: gmsColumnStyles,
     margin: { left: M, right: M, top: GMS_HEADER_H + GMS_TITLE_BAR_H + 4, bottom: GMS_FOOTER_RESERVED },
     didDrawPage: () => { drawHeader(); },
   });

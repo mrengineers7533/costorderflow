@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { generateOrderPDF, type ExtraTotalsRow } from "@/lib/orders/pdf";
+import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
@@ -14,7 +15,7 @@ import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails,
  */
 export async function generatePiPDF(
   pi: PiRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; currencyMode?: "INR" | "USD" },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] },
 ): Promise<jsPDF> {
   // Map PI → OrderRecord-shape so we can reuse generateOrderPDF.
   const orderLike: OrderRecord = {
@@ -71,6 +72,7 @@ export async function generatePiPDF(
       bank: opts?.bank,
       gmsTerms: opts?.gmsTerms ?? DEFAULT_GMS_TERMS,
       currencyMode: opts?.currencyMode,
+      hiddenColumns: opts?.hiddenColumns,
       docMeta: {
         title: "Proforma Invoice",
         numberLabel: "PI No.",
@@ -121,6 +123,7 @@ export async function generatePiPDF(
     bank: opts?.bank ?? (pi.format === "MR" ? DEFAULT_MR_BANK : undefined),
     gmsTerms: opts?.gmsTerms ?? (pi.format === "GMS" ? DEFAULT_GMS_TERMS : undefined),
     currencyMode: opts?.currencyMode,
+    hiddenColumns: opts?.hiddenColumns,
     docMeta: {
       title: "Proforma Invoice",
       numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",

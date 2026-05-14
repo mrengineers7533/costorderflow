@@ -14,6 +14,8 @@ import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
 import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
+import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
+import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { Charges } from "@/lib/orders/types";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,7 @@ export default function PiEditor() {
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -199,7 +202,7 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
-      }, { terms, gmsTerms, currencyMode });
+      }, { terms, gmsTerms, currencyMode, hiddenColumns: hiddenPdfColumns });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
@@ -1123,6 +1126,7 @@ export default function PiEditor() {
               bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
               gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
               currencyMode={currencyMode}
+              hiddenColumns={hiddenPdfColumns}
               docMeta={{
                 title: "Proforma Invoice",
                 numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
@@ -1159,6 +1163,13 @@ export default function PiEditor() {
               }}
           />
           <div className="flex justify-end pt-2">
+            <div className="mr-auto">
+              <PdfColumnVisibility
+                format={pi.format}
+                hidden={hiddenPdfColumns}
+                onChange={setHiddenPdfColumns}
+              />
+            </div>
             <Button size="lg" onClick={downloadPdf} className="w-full sm:w-auto">
               <Download className="mr-2 h-4 w-4" />Export PI PDF
             </Button>

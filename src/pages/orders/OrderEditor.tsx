@@ -16,6 +16,8 @@ import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
+import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { saveClientCopy } from "@/lib/orders/clientCopies";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
@@ -86,6 +88,9 @@ export default function OrderEditor() {
   // INR↔USD conversion state. Persisted on the OA record.
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
+  // Columns hidden from the rendered PDF / preview only. Not persisted —
+  // it's an export-time toggle and does not affect saved data.
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
 
   // PI item-selection dialog state (opened from "Convert to PI" button).
   const [piDialogOpen, setPiDialogOpen] = useState(false);
@@ -387,7 +392,7 @@ export default function OrderEditor() {
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode });
+      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       doc.save(filename);
       return { used: "default" as const };
     };
@@ -424,7 +429,7 @@ export default function OrderEditor() {
         tc_note: tcNote,
         created_at: "", updated_at: "",
       };
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode });
+      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       const fileName = `${baseName}-CLIENT-COPY${suffix}.pdf`;
       doc.save(fileName);
       // Persist a copy so it shows up in the OA Version History.
@@ -1632,6 +1637,7 @@ export default function OrderEditor() {
               bank={bank}
               gmsTerms={gmsTerms}
               currencyMode={currencyMode}
+              hiddenColumns={hiddenPdfColumns}
             />
             {(!companyName.trim() || !itemsWithAmounts.some((i) => i.description.trim())) && (
               <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -1639,6 +1645,13 @@ export default function OrderEditor() {
               </p>
             )}
             <div className="flex justify-end pt-2">
+              <div className="mr-auto">
+                <PdfColumnVisibility
+                  format={format}
+                  hidden={hiddenPdfColumns}
+                  onChange={setHiddenPdfColumns}
+                />
+              </div>
               <Button size="lg" onClick={downloadPDF} className="w-full sm:w-auto">
                 <Download className="mr-2 h-4 w-4" />
                 {splitMode ? `Export ${format} PDF` : "Export PDF"}
