@@ -92,7 +92,7 @@ export interface DocMetaOverride {
 
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -426,7 +426,7 @@ const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 async function renderGmsPdf(
   doc: jsPDF,
   order: OrderRecord,
-  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride } | undefined,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" } | undefined,
   layout: GmsLayout,
 ) {
   const { W, H, M } = layout;
