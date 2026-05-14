@@ -334,6 +334,8 @@ export default function OrderEditor() {
       charges_gms: chargesGms,
       totals, amount_in_words: words, notes,
       tc_note: tcNote,
+      currency_mode: currencyMode,
+      exchange_rate: exchangeRate || null,
       ...(isNew ? { user_id: currentUserId } : {}),
     };
 
