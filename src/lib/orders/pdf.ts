@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
-import { calcExTurkey, calcExMurthal, amountInWordsUSD, displayMake } from "./calc";
+import { calcExTurkey, calcExMurthal, amountInWordsUSD, amountInWords, displayMake } from "./calc";
 import { visibleColumns, type PdfColumnKey } from "./pdfColumns";
 import {
   DEFAULT_MR_BANK,
@@ -865,8 +865,8 @@ async function renderGmsPdf(
       const turkeyDisplayUSD = (turkeyRate || 0) > 0;
       const words = turkeyDisplayUSD
         ? `AMOUNT (IN WORDS): ${amountInWordsUSD(inrValue / (turkeyRate || 1))}`
-        : `AMOUNT (IN WORDS): ${(order.amount_in_words || "").replace(/^INR\s*/i, "RS. ")}`;
-      if (words.length > "AMOUNT (IN WORDS): ".length) {
+        : `AMOUNT (IN WORDS): ${amountInWords(inrValue).replace(/^INR\s*/i, "RS. ")}`;
+      {
         doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
         const wrapped = doc.splitTextToSize(words, W - M * 2);
         wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
