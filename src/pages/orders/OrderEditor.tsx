@@ -88,6 +88,9 @@ export default function OrderEditor() {
   // INR↔USD conversion state. Persisted on the OA record.
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
+  // Columns hidden from the rendered PDF / preview only. Not persisted —
+  // it's an export-time toggle and does not affect saved data.
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
 
   // PI item-selection dialog state (opened from "Convert to PI" button).
   const [piDialogOpen, setPiDialogOpen] = useState(false);
