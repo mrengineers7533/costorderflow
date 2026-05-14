@@ -448,7 +448,7 @@ const GMS_FOOTER_RESERVED = 38; // mm — reserved for HEAD OFFICE / Bank block
 async function renderGmsPdf(
   doc: jsPDF,
   order: OrderRecord,
-  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" } | undefined,
+  opts: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] } | undefined,
   layout: GmsLayout,
 ) {
   const { W, H, M } = layout;
