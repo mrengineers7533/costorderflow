@@ -802,6 +802,29 @@ async function renderGmsPdf(
       yEnd += 3;
     }
   }
+  // Default GMS branch (no special mode) — print amount-in-words honouring
+  // the active currency mode (toolbar-forced USD, PU Dollar Rate USD, or INR).
+  if (
+    !isCifPort &&
+    c.gms_mode !== "EXW_TURKEY" &&
+    !(c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) &&
+    t.basic_total > 0
+  ) {
+    let words = "";
+    if (forcedUsd) {
+      words = `AMOUNT (IN WORDS): ${amountInWordsUSD(t.basic_total)}`;
+    } else if (gmsUsd && cifRate > 0) {
+      words = `AMOUNT (IN WORDS): ${amountInWordsUSD(t.basic_total / cifRate)}`;
+    } else if (order.amount_in_words) {
+      words = `AMOUNT (IN WORDS): ${order.amount_in_words.replace(/^INR\s*/i, "RS. ")}`;
+    }
+    if (words) {
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+      const wrapped = doc.splitTextToSize(words, W - M * 2);
+      wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+      yEnd += 3;
+    }
+  }
 
   if (!opts?.docMeta?.hideFirstPageFooter) {
     // If footer block won't fit on the current page, push to a new one
