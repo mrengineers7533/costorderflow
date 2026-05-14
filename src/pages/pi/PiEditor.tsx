@@ -321,6 +321,12 @@ export default function PiEditor() {
 
         {/* Edit sections (stacked, full width — preview moved to bottom) */}
         <div className="space-y-5">
+          <CurrencyToolbar
+            mode={currencyMode}
+            rate={exchangeRate}
+            onRateChange={setExchangeRate}
+            onConvert={applyCurrencyConversion}
+          />
           <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
