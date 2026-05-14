@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 import { calcExMurthal, calcExTurkey, amountInWordsUSD, amountInWords, displayMake } from "@/lib/orders/calc";
+import { visibleColumns, type PdfColumnKey } from "@/lib/orders/pdfColumns";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
@@ -44,6 +45,8 @@ interface Props {
    *  underlying line-item / charge values as already converted to dollars
    *  and only flip header labels + amount-in-words (no extra division). */
   currencyMode?: "INR" | "USD";
+  /** Columns to hide from the rendered item table (PDF/preview only). */
+  hiddenColumns?: PdfColumnKey[];
   docMeta?: {
     title?: string;
     numberLabel?: string;
