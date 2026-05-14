@@ -40,6 +40,10 @@ interface Props {
   terms?: string;
   bank?: BankDetails;
   gmsTerms?: GMSTerms;
+  /** Toolbar-driven currency mode for GMS OA/PI: when "USD", treat the
+   *  underlying line-item / charge values as already converted to dollars
+   *  and only flip header labels + amount-in-words (no extra division). */
+  currencyMode?: "INR" | "USD";
   docMeta?: {
     title?: string;
     numberLabel?: string;
@@ -98,18 +102,25 @@ export function OrderPreview(p: Props) {
   // OR any other GMS mode with PU Dollar Rate > 0.
   const turkeyAlwaysUSD =
     p.format === "GMS" && p.charges.gms_mode === "EXW_TURKEY" && turkeyRate > 0;
-  const displayUSDItems = turkeyAlwaysUSD || gmsUsd;
+  // Toolbar-forced USD (GMS only). Values in state are already in USD —
+  // we only need to relabel and format with $ / en-US.
+  const forcedUsd = p.format === "GMS" && p.currencyMode === "USD";
+  const displayUSDItems = turkeyAlwaysUSD || gmsUsd || forcedUsd;
   const itemUsdRate = gmsUsd ? cifRate : (turkeyAlwaysUSD ? turkeyRate : fxRate);
   const itemCurLabel = displayUSDItems ? "USD" : "INR";
   // Currency-aware totals formatter for the unified items+totals table.
   const totalFmt = (n: number) =>
     gmsUsd
       ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      : forcedUsd
+        ? `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const itemFmt = (n: number) =>
-    displayUSDItems
+    (turkeyAlwaysUSD || gmsUsd)
       ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      : forcedUsd
+        ? (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -374,7 +385,9 @@ export function OrderPreview(p: Props) {
         {/* Amount in words — sits between table and post sections (matches template) */}
         {!isFX && !isMurthal && !isTurkey && !isCifPort && p.amountInWords && p.totals.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
-            AMOUNT (IN WORDS): {p.amountInWords.replace(/^INR\s*/i, "RS. ")}
+            AMOUNT (IN WORDS): {forcedUsd
+              ? amountInWordsUSD(p.totals.net_payable)
+              : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
         {/* EXW Murthal USD amount in words */}
