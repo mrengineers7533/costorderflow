@@ -50,10 +50,11 @@ export function convertItems(items: LineItem[], factor: number): LineItem[] {
 
 export function convertCharges(charges: Charges, factor: number): Charges {
   const next: Charges = { ...charges };
+  const bag = next as unknown as Record<string, unknown>;
   for (const k of CHARGE_MONEY_FIELDS) {
-    const cur = (next as Record<string, unknown>)[k as string];
+    const cur = bag[k as string];
     if (typeof cur === "number" && cur !== 0) {
-      (next as Record<string, unknown>)[k as string] = scale(cur, factor);
+      bag[k as string] = scale(cur, factor);
     }
   }
   return next;
