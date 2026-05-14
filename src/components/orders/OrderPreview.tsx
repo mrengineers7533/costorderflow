@@ -432,20 +432,28 @@ export function OrderPreview(p: Props) {
                   : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
+        {/* EXW Murthal — when "Amount in INR" rate is set, the Net Payable
+            is already in ₹ INR; show INR words regardless of the upstream
+            USD/INR display mode. */}
+        {isMurthal && murthal && (murthal.landed_inr_rate || 0) > 0 && murthal.net_payable > 0 && (
+          <div className="text-[11px] font-semibold uppercase tracking-wide">
+            AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
+          </div>
+        )}
         {/* EXW Murthal USD amount in words (PU Dollar Rate path) */}
-        {isMurthal && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable / cifRate)}
           </div>
         )}
         {/* EXW Murthal USD amount in words (toolbar-forced USD path — values already in USD) */}
-        {isMurthal && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable)}
           </div>
         )}
         {/* EXW Murthal INR amount in words */}
-        {isMurthal && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
           </div>
