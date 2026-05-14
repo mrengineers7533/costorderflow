@@ -14,6 +14,8 @@ import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
 import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
+import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
+import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { Charges } from "@/lib/orders/types";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,7 @@ export default function PiEditor() {
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
 
   useEffect(() => {
     if (!id) return;
