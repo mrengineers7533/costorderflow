@@ -199,7 +199,7 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
-      }, { terms, gmsTerms });
+      }, { terms, gmsTerms, currencyMode });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
@@ -1122,6 +1122,7 @@ export default function PiEditor() {
               terms={terms}
               bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
               gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
+              currencyMode={currencyMode}
               docMeta={{
                 title: "Proforma Invoice",
                 numberLabel: pi.format === "MR" ? "PI Number" : "PI No.",
