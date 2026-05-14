@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { OrderRecord } from "./types";
 import { calcExTurkey, calcExMurthal, amountInWordsUSD, displayMake } from "./calc";
+import { visibleColumns, type PdfColumnKey } from "./pdfColumns";
 import {
   DEFAULT_MR_BANK,
   DEFAULT_MR_TERMS,
@@ -92,7 +93,7 @@ export interface DocMetaOverride {
 
 export async function generateOrderPDF(
   order: OrderRecord,
-  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD" },
+  opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; tcNote?: string; docMeta?: DocMetaOverride; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] },
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
