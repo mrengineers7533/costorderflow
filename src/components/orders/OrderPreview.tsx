@@ -425,7 +425,11 @@ export function OrderPreview(p: Props) {
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {forcedUsd
               ? amountInWordsUSD(p.totals.net_payable)
-              : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
+              : gmsUsd
+                ? amountInWordsUSD(p.totals.net_payable / (cifRate || 1))
+                : turkeyAlwaysUSD
+                  ? amountInWordsUSD(p.totals.net_payable / (turkeyRate || 1))
+                  : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
         {/* EXW Murthal USD amount in words */}
