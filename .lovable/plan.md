@@ -1,49 +1,31 @@
-# Reflect converted currency in GMS OA & PI Preview/PDF
+## Allow hiding the Amount column in PDF / Preview
 
-Scope: only the GMS format (OA + PI). MR format and existing PU-Dollar-Rate / EXW-Turkey behavior stay exactly as-is. No calculation, layout, or workflow changes.
+Currently `amount` is marked `required: true` in `src/lib/orders/pdfColumns.ts`, so the PdfColumnVisibility popover disables its checkbox. The user wants Amount to be hideable while keeping the bottom totals block (Basic Amount, GST/Taxes, Grand Total, Net Payable, Amount in Words) intact.
 
-## Problem
-The toolbar already converts the underlying line-item rates / amounts and charges in state. But:
-- The items table header in Preview and PDF is still hard-tied to the old PU-Dollar-Rate logic (`displayUSDItems` / `usdDisplay`), so it shows `UNIT PRICE (INR)` / `AMOUNT (INR)` even after a USD conversion.
-- The "Amount in Words" line stays in INR / Rupees.
+### Changes
 
-The new `currency_mode` (`"INR" | "USD"`) saved on `orders` and `proforma_invoices` is never read by `OrderPreview` or `generateOrderPDF`.
+1. **`src/lib/orders/pdfColumns.ts`**
+   - Remove `required: true` from the `amount` entry so it becomes a normal toggleable column.
+   - `item_no` and `description` stay required (need at least one anchor column).
 
-## Fix (GMS only)
-Plumb `currencyMode` into the preview + PDF and use it purely for **labels and amount-in-words formatting**. The numeric values are already in the correct currency (toolbar did the math), so we must NOT re-divide.
+2. **`src/components/orders/OrderPreview.tsx`**
+   - Item table already maps over `visibleColumns`, so hiding `amount` will drop the column automatically.
+   - Update the totals row `colSpan` logic so the "Basic Amount / GST / Grand Total / Net Payable" labels and values still align correctly when `amount` is absent:
+     - When `amount` is visible: label spans `visCols.length - 1`, value sits in the amount column (current behavior).
+     - When `amount` is hidden: render the totals as a separate block under the table (full-width rows with label on the left and value on the right) so they remain clearly visible without an Amount column to anchor to.
+   - Amount in Words line is already a separate full-width row — no change needed.
 
-### 1. `src/components/orders/OrderPreview.tsx`
-- Add `currencyMode?: "INR" | "USD"` to `Props`.
-- Define `forcedUsd = format === "GMS" && currencyMode === "USD"`.
-- Treat header label as USD when `displayUSDItems || forcedUsd`:
-  - `itemCurLabel = (displayUSDItems || forcedUsd) ? "USD" : "INR"`
-- Update `itemFmt` / `totalFmt` so that when `forcedUsd` is true (and the existing PU-rate branches are not), values are rendered with `$` + `en-US` formatting **without** dividing by any rate.
-- Amount in Words block: when `forcedUsd` (and not already on the Turkey/CIF/Murthal USD branches that already use `amountInWordsUSD`), render with `amountInWordsUSD(p.totals.net_payable)` instead of the INR string.
-- Do not touch the Turkey, CIF Port, Murthal-USD, or FX (cost-sheet) branches; their existing logic stays.
+3. **`src/lib/orders/pdf.ts`** (MR + GMS branches) and **`src/lib/pi/pdf.ts`**
+   - `head` / `itemRows` / `columnStyles` already build from `visibleColumns`, so hiding `amount` drops it from the table head/body.
+   - Totals rendering: today the totals rows are appended into the same autoTable with `colSpan` math against the item columns. Update so when `amount` is hidden, totals render as a standalone autoTable below the items table with two columns (label, value) — keeps Basic Total, P&F, Insurance, Freight, Subtotal, GST, Discount, Grand Total, Advance, Net Payable, and Amount in Words exactly as they appear today, just decoupled from the item-table column grid.
+   - No changes to calculations, currency labels, or any other charge logic.
 
-### 2. `src/lib/orders/pdf.ts`
-- Extend the `opts` object on `generateOrderPDF` with `currencyMode?: "INR" | "USD"`.
-- Compute `forcedUsd = c.format === "GMS" /* via order.format */ && opts?.currencyMode === "USD"`.
-- Header cells: `UNIT PRICE\n(${(usdDisplay || forcedUsd) ? "USD" : "INR"})` and same for `AMOUNT`.
-- New formatter `fmtForcedUsd(n) = "$ " + n.toLocaleString("en-US", {2,2})`.
-- `fmtTotal`: if `usdDisplay` keep existing (divides by rate); else if `forcedUsd` use `fmtForcedUsd`; else `fmt`.
-- Amount-in-words below the totals: when `forcedUsd` and not already in the CIF/Murthal-USD branches, print `amountInWordsUSD(t.net_payable)` (or `t.grand_total` for OA) using existing helper.
+### Out of scope
+- Calculations, currency conversion, MR vs GMS split, OA→PI carry-forward, DB schema.
+- Any column behavior other than making `amount` hideable.
 
-### 3. Wire it from the editors
-- `src/pages/orders/OrderEditor.tsx`: pass `currencyMode={currencyMode}` to `<OrderPreview …/>` and to `generateOrderPDF(order, { …, currencyMode })`.
-- `src/pages/pi/PiEditor.tsx`: pass `currencyMode={currencyMode}` to `<OrderPreview …/>`. PI PDF goes through `generatePiPDF` → `generateOrderPDF`; thread `currencyMode` through `generatePiPDF`'s `opts` and forward to `generateOrderPDF`.
-- `src/lib/pi/pdf.ts`: add `currencyMode` to its `opts` and forward.
-
-### Out of scope / unchanged
-- All numeric calculations (`recalc`, `calcPiTotals`, Turkey/Murthal/CIF math).
-- Existing PU-Dollar-Rate, EXW Turkey, EXW CIF Port, EXW Murthal USD displays.
-- MR format preview/PDF.
-- Database schema, RLS, OA→PI carry-forward (already handled).
-- Convert toolbar logic itself.
-
-## Acceptance
-- GMS OA in INR mode → headers `UNIT PRICE (INR)` / `AMOUNT (INR)`, words in Rupees (unchanged).
-- Click `INR → USD` → Preview & PDF headers flip to `(USD)`, values shown with `$` and en-US formatting using already-converted numbers, words in Dollars.
-- Click `USD → INR` → headers flip back to `(INR)`, words in Rupees.
-- Same behavior on the GMS PI page and its PDF.
-- MR OA / MR PI and all PU-Dollar-Rate driven views render exactly as before.
+### Acceptance
+- "Amount" appears as a normal (non-disabled) checkbox in the PDF Columns popover on both OA and PI editors, MR and GMS formats.
+- Hiding it removes the Amount column from Preview and PDF.
+- Bottom totals block (Basic Amount, GST/Taxes, Grand Total, Net Payable, Amount in Words) still renders correctly in both Preview and PDF whether Amount is shown or hidden.
+- All other features unchanged.
