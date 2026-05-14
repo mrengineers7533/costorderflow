@@ -27,6 +27,13 @@ import {
   DEFAULT_MR_BANK,
   type GMSTerms,
 } from "@/lib/orders/defaults";
+import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
+import {
+  convertItems,
+  convertCharges,
+  conversionFactor,
+  type CurrencyMode,
+} from "@/lib/currency/convert";
 
 export default function PiEditor() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +44,8 @@ export default function PiEditor() {
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
+  const [exchangeRate, setExchangeRate] = useState<number>(83);
 
   useEffect(() => {
     if (!id) return;
@@ -48,6 +57,11 @@ export default function PiEditor() {
           nav("/pi"); return;
         }
         const rec = data as unknown as PiRecord;
+        const piSaved = data as unknown as { currency_mode?: CurrencyMode; exchange_rate?: number | null };
+        const piMode: CurrencyMode = piSaved.currency_mode === "USD" ? "USD" : "INR";
+        const piRate = piSaved.exchange_rate && piSaved.exchange_rate > 0 ? Number(piSaved.exchange_rate) : 83;
+        setCurrencyMode(piMode);
+        setExchangeRate(piRate);
         // OA-driven model: mirror line items + charges from the latest OA in
         // this PI's family. Only Advance Adjustment stays editable.
         let mirrored = rec;
@@ -56,6 +70,8 @@ export default function PiEditor() {
             .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
           if (oaRow) {
             const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
+            const oaSaved = oaRow as unknown as { currency_mode?: CurrencyMode };
+            const oaMode: CurrencyMode = oaSaved.currency_mode === "USD" ? "USD" : "INR";
             // Preserve PI-level partial quantities & amounts. We mirror OA
             // metadata (description/rate/HSN/etc.) but keep the qty stored
             // on the PI so partial conversions (e.g. PI qty 1 of OA qty 2)
@@ -74,10 +90,16 @@ export default function PiEditor() {
                 amount: qty * rate,
               };
             });
+            // Mirrored values are in the OA's currency. If the PI was
+            // independently converted, re-apply the delta so the editor
+            // shows the PI's persisted currency.
+            const factor = conversionFactor(oaMode, piMode, piRate);
+            const adjustedItems = factor === 1 ? items : convertItems(items, factor);
+            const adjustedCharges = factor === 1 ? oa.charges : convertCharges(oa.charges, factor);
             mirrored = {
               ...rec,
-              charges: oa.charges,
-              line_items: items.length ? items : rec.line_items,
+              charges: adjustedCharges,
+              line_items: adjustedItems.length ? adjustedItems : rec.line_items,
               bill_to: oa.bill_to,
               ship_to: oa.ship_to,
               company_name: oa.company_name,
