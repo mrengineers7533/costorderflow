@@ -872,30 +872,16 @@ export default function OrderEditor() {
                   variant="outline"
                   className="rounded-md"
                   onClick={() => {
+                    if (currencyMode !== "USD") {
+                      toast({ title: "Convert items to USD first", description: "Use INR → USD above before computing Landed Price.", variant: "destructive" });
+                      return;
+                    }
                     if (!(landedRate > 0)) {
                       toast({ title: "Enter a valid current USD rate", variant: "destructive" });
                       return;
                     }
-                    // Two supported sources of "USD":
-                    //  1) Items already converted to USD via INR→USD toolbar
-                    //     (currencyMode === "USD"). Multiply by landedRate.
-                    //  2) Items still in INR but displayed as USD via the
-                    //     PU Dollar Rate (exchangeRate > 0). Re-scale items
-                    //     so that the displayed-USD equals the new INR at
-                    //     1 USD = landedRate, then clear the display rate.
-                    if (currencyMode === "USD") {
-                      applyCurrencyConversion("INR", landedRate);
-                      setExchangeRate(landedRate);
-                    } else if (exchangeRate > 0) {
-                      const factor = landedRate / exchangeRate;
-                      setItems((prev) => convertItems(prev, factor));
-                      setChargesMr((prev) => convertCharges(prev, factor));
-                      setChargesGms((prev) => convertCharges(prev, factor));
-                      setExchangeRate(0);
-                    } else {
-                      toast({ title: "Convert items to USD first", description: "Use INR → USD above or set the PU Dollar Rate before computing Landed Price.", variant: "destructive" });
-                      return;
-                    }
+                    applyCurrencyConversion("INR", landedRate);
+                    setExchangeRate(landedRate);
                     toast({
                       title: "Landed Price applied",
                       description: `Items re-priced at 1 USD = ₹ ${landedRate}`,
