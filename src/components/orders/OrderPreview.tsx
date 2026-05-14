@@ -432,20 +432,28 @@ export function OrderPreview(p: Props) {
                   : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
+        {/* EXW Murthal — when "Amount in INR" rate is set, the Net Payable
+            is already in ₹ INR; show INR words regardless of the upstream
+            USD/INR display mode. */}
+        {isMurthal && murthal && (murthal.landed_inr_rate || 0) > 0 && murthal.net_payable > 0 && (
+          <div className="text-[11px] font-semibold uppercase tracking-wide">
+            AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
+          </div>
+        )}
         {/* EXW Murthal USD amount in words (PU Dollar Rate path) */}
-        {isMurthal && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable / cifRate)}
           </div>
         )}
         {/* EXW Murthal USD amount in words (toolbar-forced USD path — values already in USD) */}
-        {isMurthal && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable)}
           </div>
         )}
         {/* EXW Murthal INR amount in words */}
-        {isMurthal && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+        {isMurthal && !(murthal && (murthal.landed_inr_rate || 0) > 0) && !forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWords(murthal.net_payable).replace(/^INR\s*/i, "RS. ")}
           </div>
@@ -606,10 +614,22 @@ function ExMurthalBlock({
     `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtAmt = (n: number) =>
     forcedUsd ? usdDirect(n) : displayUSD ? usd(n) : inr(n);
+  // EXW Murthal — when "Amount in INR" rate is set, values up to Landed
+  // stay in the active "above-landed" currency; values from "Amount in INR"
+  // row downward are always rendered in ₹ INR.
+  const inrRate = c.murthal_landed_inr_rate || 0;
+  const inrMode = inrRate > 0;
+  const fmtInr = (n: number) => inr(n);
   const Row = ({ k, v, bold, sub }: { k: string; v: number; bold?: boolean; sub?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
       <div className={`px-2 py-1.5 ${sub ? "pl-6" : ""} ${bold ? "font-bold" : ""}`}>{k}</div>
       <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{fmtAmt(v)}</div>
+    </div>
+  );
+  const InrRow = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
+    <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
+      <div className={`px-2 py-1.5 ${bold ? "font-bold" : ""}`}>{k}</div>
+      <div className={`px-2 py-1.5 border-l text-right tabular-nums w-40 ${bold ? "font-bold" : ""}`}>{fmtInr(v)}</div>
     </div>
   );
   return (
@@ -636,22 +656,30 @@ function ExMurthalBlock({
           <Row k="Net Landed Price" v={m.net_landed} bold />
         </>
       )}
-      {c.sea_insurance_enabled && <Row k="Insurance" v={m.sea_insurance} />}
-      {(c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0 && (
-        <Row k="P&F" v={m.pf} />
-      )}
-      {(c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0 && (
-        <Row k="Freight" v={m.freight} />
-      )}
-      {c.landed_gst_enabled && <Row k="GST" v={m.gst} />}
-      <Row k="Grand Total" v={m.grand_total} bold />
-      {c.landed_discount_enabled && m.discount > 0 && (
-        <Row k="One-time Discount" v={-m.discount} />
-      )}
-      {c.murthal_advance_enabled && m.advance_amount > 0 && (
-        <Row k="Advance Adjustment" v={-m.advance_amount} />
-      )}
-      <Row k="Net Payable" v={m.net_payable} bold />
+      {inrMode && <InrRow k={`Amount in INR @ ${inrRate}`} v={m.amount_in_inr} bold />}
+      {(() => {
+        const R = inrMode ? InrRow : Row;
+        return (
+          <>
+            {c.sea_insurance_enabled && <R k="Insurance" v={m.sea_insurance} />}
+            {(c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0 && (
+              <R k="P&F" v={m.pf} />
+            )}
+            {(c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0 && (
+              <R k="Freight" v={m.freight} />
+            )}
+            {c.landed_gst_enabled && <R k="GST" v={m.gst} />}
+            <R k="Grand Total" v={m.grand_total} bold />
+            {c.landed_discount_enabled && m.discount > 0 && (
+              <R k="One-time Discount" v={-m.discount} />
+            )}
+            {c.murthal_advance_enabled && m.advance_amount > 0 && (
+              <R k="Advance Adjustment" v={-m.advance_amount} />
+            )}
+            <R k="Net Payable" v={m.net_payable} bold />
+          </>
+        );
+      })()}
     </div>
   );
 }

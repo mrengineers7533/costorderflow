@@ -329,6 +329,8 @@ export default function PiEditor() {
             rate={exchangeRate}
             onRateChange={setExchangeRate}
             onConvert={applyCurrencyConversion}
+            hideUsdToInr={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL"}
+            rateLabel={pi.format === "GMS" && pi.charges.gms_mode === "EXW_MURTHAL" ? "PU Dollar Rate (₹ per $)" : undefined}
           />
           <Card>
               <CardHeader><CardTitle className="text-base">PI details</CardTitle></CardHeader>
@@ -834,6 +836,46 @@ export default function PiEditor() {
                   {pi.charges.gms_mode === "EXW_MURTHAL" && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW Murthal Charges</div>
+                      <div className="flex flex-wrap items-end gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs uppercase tracking-wider text-muted-foreground">Amount in INR</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Converts Landed Price (USD) into INR. P&amp;F, Insurance, GST, etc. calculate on this INR value.
+                            Does not change PU Dollar Rate or item rates.
+                          </span>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Amount in INR Rate (₹ per $)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={pi.charges.murthal_landed_inr_rate || ""}
+                            onChange={(e) => update("charges", { ...pi.charges, murthal_landed_inr_rate: Number(e.target.value) || 0 })}
+                            className="h-9 w-28"
+                            placeholder="85.70"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-md"
+                          onClick={() => {
+                            if (currencyMode !== "USD") {
+                              toast({ title: "Convert items to USD first", description: "Use INR → USD above so Landed Price is in USD before applying the INR rate.", variant: "destructive" });
+                              return;
+                            }
+                            const r = pi.charges.murthal_landed_inr_rate || 0;
+                            if (!(r > 0)) {
+                              toast({ title: "Enter a valid INR rate", variant: "destructive" });
+                              return;
+                            }
+                            toast({ title: "Amount in INR applied", description: `Landed Price converted at 1 USD = ₹ ${r}. Downstream charges now in INR.` });
+                          }}
+                        >
+                          Calculate Amount in INR
+                        </Button>
+                      </div>
                       <PiModeToggleRow
                         label="Sea Freight"
                         enabled={!!pi.charges.sea_freight_enabled}

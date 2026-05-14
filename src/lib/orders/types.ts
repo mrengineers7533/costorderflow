@@ -170,6 +170,14 @@ export interface Charges {
   murthal_advance_percent?: number;
   murthal_advance_amount?: number;
 
+  /** EXW Murthal — INR per 1 USD used to convert the (USD) Landed Price
+   *  into INR for the "Amount in INR @ rate" row. When > 0, downstream
+   *  charges (P&F, Insurance, Freight, GST, Discount, Advance, Grand
+   *  Total, Net Payable) compute on this INR value instead of the USD
+   *  Landed Price. Independent of `cif_pu_dollar_rate` / `exchange_rate`
+   *  so editing it does not touch item rates or basic totals. */
+  murthal_landed_inr_rate?: number;
+
   /** When false, the OA discount row is hidden in the editor breakdown and
    *  omitted from the PDF (even if a discount value was entered). Default true
    *  if any discount is set, undefined otherwise. */

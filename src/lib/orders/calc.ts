@@ -53,6 +53,11 @@ export interface ExMurthalBreakdown {
   grand_total: number;
   /** Advance Adjustment in ₹ (% of Grand Total or flat). */
   advance_amount: number;
+  /** EXW Murthal "Amount in INR" rate (₹ per $) used to convert the USD
+   *  Landed Price into INR. 0 when feature unused. */
+  landed_inr_rate: number;
+  /** Net Landed Price × landed_inr_rate. Always in ₹ when active. */
+  amount_in_inr: number;
 }
 
 export function calcExMurthal(
@@ -102,7 +107,16 @@ export function calcExMurthal(
   }
   const netLanded = Math.max(0, landed - landedDiscount);
 
-  // Insurance — on Net Landed
+  // EXW Murthal — "Amount in INR" rate. When > 0, the user is in USD-
+  // up-to-Landed mode: every value at and above Landed Price stays in the
+  // input unit (typically USD), and downstream charges (Insurance, P&F,
+  // Freight, GST, Discount, Advance, Grand Total, Net Payable) compute on
+  // `amountInInr = netLanded × rate` instead of `netLanded`.
+  const landedInrRate = c.murthal_landed_inr_rate || 0;
+  const inrMode = landedInrRate > 0;
+  const downstreamBase = inrMode ? netLanded * landedInrRate : netLanded;
+
+  // Insurance — on downstream base (INR amount when inrMode, else Net Landed)
   let seaInsurance = 0;
   if (c.sea_insurance_enabled) {
     const mode = c.murthal_insurance_mode || "percent";
@@ -110,22 +124,26 @@ export function calcExMurthal(
       seaInsurance = c.murthal_insurance_amount || 0;
     } else {
       // legacy `sea_insurance` was a percent of basic; new behavior uses Net Landed
-      const insBase = (c.murthal_insurance_base || "basic") === "landed" ? netLanded : baseWithHike;
+      // (or `amountInInr` when inrMode)
+      const insBase = (c.murthal_insurance_base || "basic") === "landed"
+        ? downstreamBase
+        : (inrMode ? baseWithHike * landedInrRate : baseWithHike);
       seaInsurance = (insBase * (c.sea_insurance || 0)) / 100;
     }
   }
 
-  // P&F — on Net Landed (or legacy basic)
+  // P&F — on downstream base (or legacy basic)
   let pf = 0;
   if (c.murthal_pf_enabled) {
     if ((c.murthal_pf_mode || "percent") === "percent") {
-      pf = (netLanded * (c.murthal_pf_percent ?? 1.5)) / 100;
+      pf = (downstreamBase * (c.murthal_pf_percent ?? 1.5)) / 100;
     } else {
       pf = c.murthal_pf_amount || 0;
     }
   } else if (c.pf_amount > 0 || c.pf_percent > 0) {
     // legacy: still read pf_amount/pf_percent against basic
-    pf = c.pf_amount > 0 ? c.pf_amount : (baseWithHike * (c.pf_percent || 0)) / 100;
+    const legacyBase = inrMode ? baseWithHike * landedInrRate : baseWithHike;
+    pf = c.pf_amount > 0 ? c.pf_amount : (legacyBase * (c.pf_percent || 0)) / 100;
   }
 
   // Freight — flat ₹ (new). Legacy `freight_enabled` used % of basic; honor it
@@ -134,15 +152,16 @@ export function calcExMurthal(
   if (c.murthal_freight_enabled) {
     freight = c.murthal_freight || 0;
   } else if (c.freight_enabled) {
-    freight = (baseWithHike * (c.freight || 0)) / 100;
+    const legacyBase = inrMode ? baseWithHike * landedInrRate : baseWithHike;
+    freight = (legacyBase * (c.freight || 0)) / 100;
   }
 
-  // GST on (Net Landed + Insurance + P&F + Freight)
-  const gstBase = netLanded + seaInsurance + pf + freight;
+  // GST on (downstream base + Insurance + P&F + Freight)
+  const gstBase = downstreamBase + seaInsurance + pf + freight;
   const gst = c.landed_gst_enabled ? (gstBase * (c.landed_gst_percent ?? 18)) / 100 : 0;
 
-  // Grand Total = Net Landed + Insurance + P&F + Freight + GST
-  const grand = netLanded + seaInsurance + pf + freight + gst;
+  // Grand Total = downstream base + Insurance + P&F + Freight + GST
+  const grand = downstreamBase + seaInsurance + pf + freight + gst;
 
   // One-time Discount (after GST) — ₹ or % of Grand Total
   let discount = 0;
@@ -183,6 +202,8 @@ export function calcExMurthal(
     grand_total: r(grand),
     advance_amount: r(advance),
     net_payable: r(net),
+    landed_inr_rate: landedInrRate,
+    amount_in_inr: r(inrMode ? netLanded * landedInrRate : 0),
   };
 }
 

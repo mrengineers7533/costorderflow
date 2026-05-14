@@ -246,7 +246,7 @@ export async function generateOrderPDF(
   };
   const itemRows = order.line_items.map((it, i) => mrCols.map((k) => mrColCellFor(k, it, i)));
 
-  const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
+  const totalsRows: Array<{ label: string; value: number; bold?: boolean; inr?: boolean }> = [];
   // Discount applies ONLY on Basic. When toggled on, show Sub Total → Discount
   // → After Discount, then P&F/Insurance/Freight, then GST, then Grand Total.
   const rawDiscount = c.discount_percent > 0
@@ -638,7 +638,7 @@ async function renderGmsPdf(
   };
   const itemRows = order.line_items.map((it, i) => gmsCols.map((k) => gmsCellFor(k, it, i)));
 
-  const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
+  const totalsRows: Array<{ label: string; value: number; bold?: boolean; inr?: boolean }> = [];
   if (isCifPort) {
     // USD-only CIF Port: Basic Total + Local Freight = EX Work CIF Port. No taxes/extras.
     const basicUsd = cifRate > 0 ? t.basic_total / cifRate : 0;
@@ -706,25 +706,30 @@ async function renderGmsPdf(
       totalsRows.push({ label: lbl, value: -m.landed_discount_amount });
       totalsRows.push({ label: "Net Landed Price", value: m.net_landed, bold: true });
     }
-    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance });
+    const inrRate = m.landed_inr_rate || 0;
+    const inrMode = inrRate > 0;
+    if (inrMode) {
+      totalsRows.push({ label: `Amount in INR @ ${inrRate}`, value: m.amount_in_inr, bold: true, inr: true });
+    }
+    if (c.sea_insurance_enabled) totalsRows.push({ label: "Insurance", value: m.sea_insurance, inr: inrMode });
     if ((c.murthal_pf_enabled || c.pf_amount > 0 || c.pf_percent > 0) && m.pf > 0) {
-      totalsRows.push({ label: "P&F", value: m.pf });
+      totalsRows.push({ label: "P&F", value: m.pf, inr: inrMode });
     }
     if ((c.murthal_freight_enabled || c.freight_enabled) && m.freight > 0) {
-      totalsRows.push({ label: "Freight", value: m.freight });
+      totalsRows.push({ label: "Freight", value: m.freight, inr: inrMode });
     }
-    if (c.landed_gst_enabled) totalsRows.push({ label: "GST", value: m.gst });
-    totalsRows.push({ label: "Grand Total", value: m.grand_total, bold: true });
+    if (c.landed_gst_enabled) totalsRows.push({ label: "GST", value: m.gst, inr: inrMode });
+    totalsRows.push({ label: "Grand Total", value: m.grand_total, bold: true, inr: inrMode });
     if (c.landed_discount_enabled && m.discount > 0) {
-      totalsRows.push({ label: "One-time Discount", value: -m.discount });
+      totalsRows.push({ label: "One-time Discount", value: -m.discount, inr: inrMode });
     }
     if (c.murthal_advance_enabled && m.advance_amount > 0) {
       const lbl = (c.murthal_advance_mode || "percent") === "percent" && c.murthal_advance_percent
         ? `Advance Adjustment @ ${c.murthal_advance_percent}%`
         : "Advance Adjustment";
-      totalsRows.push({ label: lbl, value: -m.advance_amount });
+      totalsRows.push({ label: lbl, value: -m.advance_amount, inr: inrMode });
     }
-    totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true });
+    totalsRows.push({ label: "Net Payable", value: m.net_payable, bold: true, inr: inrMode });
   } else {
   totalsRows.push({ label: "Ex-works Murthal Price", value: t.basic_total });
   totalsRows.push({ label: "Grand Total", value: t.basic_total, bold: true });
@@ -743,7 +748,7 @@ async function renderGmsPdf(
       styles: { halign: "right" as const, fontStyle: "bold" as const },
     },
     {
-      content: fmtTotal(r.value),
+      content: r.inr ? `Rs. ${(r.value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : fmtTotal(r.value),
       styles: {
         halign: "right" as const,
         fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal",
@@ -792,8 +797,17 @@ async function renderGmsPdf(
       yEnd += 3;
     }
   }
-  // EXW Murthal — print USD amount in words when PU Dollar Rate set.
-  if (gmsUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && cifRate > 0) {
+  // EXW Murthal — when "Amount in INR" rate set, Net Payable is INR — words in Rs.
+  if ((c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && (c.murthal_landed_inr_rate || 0) > 0) {
+    const m = calcExMurthal(t.basic_total, c);
+    if (m.net_payable > 0) {
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
+      const words = `AMOUNT (IN WORDS): ${amountInWords(m.net_payable).replace(/^INR\s*/i, "RS. ")}`;
+      const wrapped = doc.splitTextToSize(words, W - M * 2);
+      wrapped.forEach((line: string) => { doc.text(line, M, yEnd); yEnd += 4; });
+      yEnd += 3;
+    }
+  } else if (gmsUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && cifRate > 0) {
     const m = calcExMurthal(t.basic_total, c);
     const np = m.net_payable / cifRate;
     if (np > 0) {
@@ -805,7 +819,7 @@ async function renderGmsPdf(
     }
   }
   // EXW Murthal — toolbar-forced USD path (values already in USD in state).
-  if (forcedUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled)) {
+  if (forcedUsd && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) && !((c.murthal_landed_inr_rate || 0) > 0)) {
     const m = calcExMurthal(t.basic_total, c);
     if (m.net_payable > 0) {
       doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 0, 0);
@@ -818,7 +832,8 @@ async function renderGmsPdf(
   // EXW Murthal — INR mode: print Rupees amount in words for net payable.
   if (
     !forcedUsd && !gmsUsd &&
-    (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled)
+    (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) &&
+    !((c.murthal_landed_inr_rate || 0) > 0)
   ) {
     const m = calcExMurthal(t.basic_total, c);
     if (m.net_payable > 0 && order.amount_in_words) {

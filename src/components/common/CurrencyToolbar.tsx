@@ -14,10 +14,17 @@ export interface CurrencyToolbarProps {
    *  Toolbar itself does the guard + toasts and only fires when conversion
    *  is actually required. */
   onConvert: (target: CurrencyMode, factor: number) => void;
+  /** Hide the "USD → INR" button (e.g. for EXW Murthal where the
+   *  reverse conversion is handled by the dedicated "Amount in INR"
+   *  panel near Charges & Totals). */
+  hideUsdToInr?: boolean;
+  /** Override the rate label (e.g. "PU Dollar Rate (₹ per $)" for
+   *  EXW Murthal). Defaults to "1 USD = ₹". */
+  rateLabel?: string;
 }
 
 /** Compact INR↔USD toolbar shared by the OA and PI editors. */
-export function CurrencyToolbar({ mode, rate, onRateChange, onConvert }: CurrencyToolbarProps) {
+export function CurrencyToolbar({ mode, rate, onRateChange, onConvert, hideUsdToInr, rateLabel }: CurrencyToolbarProps) {
   function handle(target: CurrencyMode) {
     if (mode === target) {
       toast({
@@ -47,7 +54,7 @@ export function CurrencyToolbar({ mode, rate, onRateChange, onConvert }: Currenc
       </div>
       <div className="flex items-end gap-2">
         <div>
-          <Label className="text-[11px] text-muted-foreground">1 USD = ₹</Label>
+          <Label className="text-[11px] text-muted-foreground">{rateLabel || "1 USD = ₹"}</Label>
           <Input
             type="number"
             step="0.01"
@@ -67,7 +74,7 @@ export function CurrencyToolbar({ mode, rate, onRateChange, onConvert }: Currenc
         >
           <ArrowLeftRight className="mr-1 h-3.5 w-3.5" />INR → USD
         </Button>
-        <Button
+        {!hideUsdToInr && <Button
           type="button"
           size="sm"
           variant="outline"
@@ -76,7 +83,7 @@ export function CurrencyToolbar({ mode, rate, onRateChange, onConvert }: Currenc
           title="Convert all rates and amounts from USD to INR"
         >
           <ArrowLeftRight className="mr-1 h-3.5 w-3.5" />USD → INR
-        </Button>
+        </Button>}
       </div>
     </div>
   );
