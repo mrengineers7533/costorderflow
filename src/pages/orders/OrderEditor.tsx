@@ -1637,6 +1637,7 @@ export default function OrderEditor() {
               bank={bank}
               gmsTerms={gmsTerms}
               currencyMode={currencyMode}
+              hiddenColumns={hiddenPdfColumns}
             />
             {(!companyName.trim() || !itemsWithAmounts.some((i) => i.description.trim())) && (
               <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -1644,6 +1645,13 @@ export default function OrderEditor() {
               </p>
             )}
             <div className="flex justify-end pt-2">
+              <div className="mr-auto">
+                <PdfColumnVisibility
+                  format={format}
+                  hidden={hiddenPdfColumns}
+                  onChange={setHiddenPdfColumns}
+                />
+              </div>
               <Button size="lg" onClick={downloadPDF} className="w-full sm:w-auto">
                 <Download className="mr-2 h-4 w-4" />
                 {splitMode ? `Export ${format} PDF` : "Export PDF"}
