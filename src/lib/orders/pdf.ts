@@ -638,7 +638,7 @@ async function renderGmsPdf(
   };
   const itemRows = order.line_items.map((it, i) => gmsCols.map((k) => gmsCellFor(k, it, i)));
 
-  const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
+  const totalsRows: Array<{ label: string; value: number; bold?: boolean; inr?: boolean }> = [];
   if (isCifPort) {
     // USD-only CIF Port: Basic Total + Local Freight = EX Work CIF Port. No taxes/extras.
     const basicUsd = cifRate > 0 ? t.basic_total / cifRate : 0;
