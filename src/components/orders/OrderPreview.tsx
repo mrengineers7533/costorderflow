@@ -490,7 +490,24 @@ export function OrderPreview(p: Props) {
           )}
           </>
         ) : isTurkey && turkey ? (
-          <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={turkeyRate} isFX={isFX} basicFX={p.totals.basic_total} forceUsdRate={gmsUsd ? cifRate : 0} />
+          <>
+            <ExTurkeyBlock t={turkey} c={p.charges} fxSymbol={fxSymbol} fxRate={turkeyRate} isFX={isFX} basicFX={p.totals.basic_total} forceUsdRate={gmsUsd ? cifRate : 0} />
+            {(() => {
+              const showNet =
+                (p.charges.turkey_advance_enabled && turkey.advance_amount > 0) ||
+                (p.charges.turkey_discount_enabled && turkey.discount > 0);
+              const inrVal = showNet ? turkey.net_payable : turkey.grand_total;
+              if (!(inrVal > 0)) return null;
+              const useUSD = (turkeyRate || 0) > 0;
+              return (
+                <div className="text-[11px] font-semibold uppercase tracking-wide">
+                  AMOUNT (IN WORDS): {useUSD
+                    ? amountInWordsUSD(inrVal / (turkeyRate || 1))
+                    : amountInWords(inrVal).replace(/^INR\s*/i, "RS. ")}
+                </div>
+              );
+            })()}
+          </>
         ) : isMurthal && murthal ? (
           <ExMurthalBlock
             m={murthal}
