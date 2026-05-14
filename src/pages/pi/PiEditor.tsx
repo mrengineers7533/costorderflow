@@ -202,7 +202,7 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
-      }, { terms, gmsTerms, currencyMode });
+      }, { terms, gmsTerms, currencyMode, hiddenColumns: hiddenPdfColumns });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
