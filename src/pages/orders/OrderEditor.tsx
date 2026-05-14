@@ -706,12 +706,14 @@ export default function OrderEditor() {
               <CostSheetPicker onApply={(data) => applyCostSheet(data)} onParsingChange={setParsing} />
             )}
 
-        <CurrencyToolbar
-          mode={currencyMode}
-          rate={exchangeRate}
-          onRateChange={setExchangeRate}
-          onConvert={applyCurrencyConversion}
-        />
+        {format !== "MR" && (
+          <CurrencyToolbar
+            mode={currencyMode}
+            rate={exchangeRate}
+            onRateChange={setExchangeRate}
+            onConvert={applyCurrencyConversion}
+          />
+        )}
 
         <Card>
           <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
