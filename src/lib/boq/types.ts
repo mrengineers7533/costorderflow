@@ -8,9 +8,6 @@ export interface BoqLineItem {
   quantity: number;
   unit: string;
   remarks: string;
-  /** "Make" label mirrored from the source OA item (e.g. "M.R. Engineers",
-   *  "GMS (Ugur)"). Displayed as a BOQ column; can be hidden in PDF/Preview. */
-  make?: string;
   /** Senior approval state per line item. */
   approval_status?: "pending" | "approved" | "rejected";
   approval_comment?: string;
