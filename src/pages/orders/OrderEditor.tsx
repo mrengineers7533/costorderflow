@@ -719,50 +719,6 @@ export default function OrderEditor() {
               onRateChange={setExchangeRate}
               onConvert={applyCurrencyConversion}
             />
-            <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
-              <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Landed Price</span>
-                <span className="text-[11px] text-muted-foreground">
-                  Re-price items from USD to INR using the current dollar rate. Basic Total USD stays intact until you click.
-                </span>
-              </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground">Current USD = ₹</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={landedRate || ""}
-                  onChange={(e) => setLandedRate(Number(e.target.value) || 0)}
-                  className="h-9 w-28"
-                  placeholder="100.00"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-md"
-                onClick={() => {
-                  if (currencyMode !== "USD") {
-                    toast({ title: "Convert items to USD first", description: "Use INR → USD above before computing Landed Price.", variant: "destructive" });
-                    return;
-                  }
-                  if (!(landedRate > 0)) {
-                    toast({ title: "Enter a valid current USD rate", variant: "destructive" });
-                    return;
-                  }
-                  applyCurrencyConversion("INR", landedRate);
-                  setExchangeRate(landedRate);
-                  toast({
-                    title: "Landed Price applied",
-                    description: `Items re-priced at 1 USD = ₹ ${landedRate}`,
-                  });
-                }}
-                title="Multiply each item's USD amount by the current USD rate to get the INR Landed Price"
-              >
-                Convert USD → INR (Landed Price)
-              </Button>
-            </div>
           </div>
         )}
 
@@ -891,6 +847,52 @@ export default function OrderEditor() {
         <Card>
           <CardHeader><CardTitle>Charges & Totals</CardTitle></CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
+            {format === "GMS" && charges.gms_mode === "EXW_MURTHAL" && (
+              <div className="md:col-span-2 flex flex-wrap items-end gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">Landed Price</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Re-price items from USD to INR using the current dollar rate. Basic Total USD stays intact until you click.
+                  </span>
+                </div>
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">Current USD = ₹</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={landedRate || ""}
+                    onChange={(e) => setLandedRate(Number(e.target.value) || 0)}
+                    className="h-9 w-28"
+                    placeholder="100.00"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-md"
+                  onClick={() => {
+                    if (currencyMode !== "USD") {
+                      toast({ title: "Convert items to USD first", description: "Use INR → USD above before computing Landed Price.", variant: "destructive" });
+                      return;
+                    }
+                    if (!(landedRate > 0)) {
+                      toast({ title: "Enter a valid current USD rate", variant: "destructive" });
+                      return;
+                    }
+                    applyCurrencyConversion("INR", landedRate);
+                    setExchangeRate(landedRate);
+                    toast({
+                      title: "Landed Price applied",
+                      description: `Items re-priced at 1 USD = ₹ ${landedRate}`,
+                    });
+                  }}
+                  title="Multiply each item's USD amount by the current USD rate to get the INR Landed Price"
+                >
+                  Convert USD → INR (Landed Price)
+                </Button>
+              </div>
+            )}
             <div className="space-y-3">
               {format === "MR" && (
                 <>
