@@ -217,15 +217,34 @@ export async function generateOrderPDF(
   const c = order.charges;
   const t = order.totals;
   const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const itemRows = order.line_items.map((it, i) => [
-    String(i + 1),
-    it.description,
-    displayMake(it),
-    String(it.quantity),
-    it.unit || "Nos",
-    fmt(it.unit_rate),
-    fmt(it.amount),
-  ]);
+  // Dynamic columns — user may hide non-required cells in the PDF.
+  const mrCols = visibleColumns("MR", opts?.hiddenColumns);
+  const mrColCellFor = (k: PdfColumnKey, it: OrderRecord["line_items"][number], idx: number): string => {
+    switch (k) {
+      case "item_no":     return String(idx + 1);
+      case "description": return it.description || "";
+      case "make":        return displayMake(it);
+      case "qty":         return String(it.quantity);
+      case "unit":        return it.unit || "Nos";
+      case "rate":        return fmt(it.unit_rate);
+      case "amount":      return fmt(it.amount);
+      default:            return "";
+    }
+  };
+  const mrColLabel: Record<PdfColumnKey, string> = {
+    item_no: "S. No.", model_number: "", description: "Item Description",
+    make: "Make", qty: "Qty.", unit: "Unit", rate: "Rate", amount: "Amount",
+  };
+  const mrColWidthStyle: Partial<Record<PdfColumnKey, { cellWidth: number | "auto"; halign: "left" | "right" | "center" }>> = {
+    item_no:     { cellWidth: 12, halign: "center" },
+    description: { cellWidth: "auto", halign: "left" },
+    make:        { cellWidth: 28, halign: "center" },
+    qty:         { cellWidth: 12, halign: "center" },
+    unit:        { cellWidth: 12, halign: "center" },
+    rate:        { cellWidth: 24, halign: "right" },
+    amount:      { cellWidth: 28, halign: "right" },
+  };
+  const itemRows = order.line_items.map((it, i) => mrCols.map((k) => mrColCellFor(k, it, i)));
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean }> = [];
   // Discount applies ONLY on Basic. When toggled on, show Sub Total → Discount
@@ -301,27 +320,29 @@ export async function generateOrderPDF(
     }
   }
 
+  // Totals: when "amount" column is visible, value sits in that trailing
+  // column and label spans the rest; otherwise label spans all visible cols
+  // and the value is appended as a final cell.
+  const mrAmountVisible = mrCols.includes("amount");
+  const mrLabelSpan = mrAmountVisible ? Math.max(1, mrCols.length - 1) : mrCols.length;
   const totalsAsBody = totalsRows.map((r) => [
-    { content: r.label, colSpan: 6, styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "bold") as "bold" } },
+    { content: r.label, colSpan: mrLabelSpan, styles: { halign: "right" as const, fontStyle: "bold" as const } },
     { content: fmt(r.value), styles: { halign: "right" as const, fontStyle: (r.bold ? "bold" : "normal") as "bold" | "normal", fillColor: r.bold ? ([255, 235, 59] as [number, number, number]) : undefined } },
   ]);
 
+  const mrColumnStyles: Record<number, { cellWidth: number | "auto"; halign?: "left" | "right" | "center" }> = {};
+  mrCols.forEach((k, i) => {
+    const s = mrColWidthStyle[k];
+    if (s) mrColumnStyles[i] = s;
+  });
   autoTable(doc, {
     startY: y,
-    head: [["S. No.", "Item Description", "Make", "Qty.", "Unit", "Rate", "Amount"]],
+    head: [mrCols.map((k) => mrColLabel[k])],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
     styles: { fontSize: 8, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 12, halign: "center" },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 28, halign: "center" },
-      3: { cellWidth: 12, halign: "center" },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
-      6: { cellWidth: 28, halign: "right" },
-    },
+    columnStyles: mrColumnStyles,
     margin: { left: M, right: M },
   });
 
