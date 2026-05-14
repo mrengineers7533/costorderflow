@@ -432,10 +432,16 @@ export function OrderPreview(p: Props) {
                   : p.amountInWords.replace(/^INR\s*/i, "RS. ")}
           </div>
         )}
-        {/* EXW Murthal USD amount in words */}
+        {/* EXW Murthal USD amount in words (PU Dollar Rate path) */}
         {isMurthal && gmsUsd && cifRate > 0 && murthal && murthal.net_payable > 0 && (
           <div className="text-[11px] font-semibold uppercase tracking-wide">
             AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable / cifRate)}
+          </div>
+        )}
+        {/* EXW Murthal USD amount in words (toolbar-forced USD path — values already in USD) */}
+        {isMurthal && forcedUsd && !gmsUsd && murthal && murthal.net_payable > 0 && (
+          <div className="text-[11px] font-semibold uppercase tracking-wide">
+            AMOUNT (IN WORDS): {amountInWordsUSD(murthal.net_payable)}
           </div>
         )}
 
@@ -488,6 +494,7 @@ export function OrderPreview(p: Props) {
             isFX={isFX}
             basicFX={p.totals.basic_total}
             forceUsdRate={gmsUsd ? cifRate : 0}
+            forcedUsd={forcedUsd && !gmsUsd}
           />
         ) : isFX ? (
           <div className="border rounded overflow-hidden text-xs">
