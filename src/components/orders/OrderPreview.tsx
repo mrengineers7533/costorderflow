@@ -560,7 +560,7 @@ export function OrderPreview(p: Props) {
 }
 
 function ExMurthalBlock({
-  m, c, fxSymbol, fxRate, isFX, basicFX, forceUsdRate = 0,
+  m, c, fxSymbol, fxRate, isFX, basicFX, forceUsdRate = 0, forcedUsd = false,
 }: {
   m: ReturnType<typeof calcExMurthal>;
   c: Charges;
@@ -569,15 +569,20 @@ function ExMurthalBlock({
   isFX: boolean;
   basicFX: number;
   forceUsdRate?: number;
+  forcedUsd?: boolean;
 }) {
-  const displayUSD = forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
+  const displayUSD = forcedUsd || forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
   const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
   const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
   const inr = (n: number) =>
     `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usd = (n: number) =>
     `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
+  // When toolbar-forced USD: state values are already in USD — show "$ n" without re-dividing.
+  const usdDirect = (n: number) =>
+    `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtAmt = (n: number) =>
+    forcedUsd ? usdDirect(n) : displayUSD ? usd(n) : inr(n);
   const Row = ({ k, v, bold, sub }: { k: string; v: number; bold?: boolean; sub?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
       <div className={`px-2 py-1.5 ${sub ? "pl-6" : ""} ${bold ? "font-bold" : ""}`}>{k}</div>
