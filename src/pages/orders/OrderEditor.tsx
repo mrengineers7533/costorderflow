@@ -1631,6 +1631,7 @@ export default function OrderEditor() {
               terms={terms}
               bank={bank}
               gmsTerms={gmsTerms}
+              currencyMode={currencyMode}
             />
             {(!companyName.trim() || !itemsWithAmounts.some((i) => i.description.trim())) && (
               <p className="text-sm text-amber-600 dark:text-amber-400">
