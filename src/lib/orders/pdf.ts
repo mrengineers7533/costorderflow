@@ -566,7 +566,13 @@ async function renderGmsPdf(
   const turkeyCurLabel = "USD";
   const fmtUSD = (n: number) =>
     `$ ${(n / usdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const fmtTotal = (n: number) => (usdDisplay ? fmtUSD(n) : fmt(n));
+  // Toolbar-forced USD (values already converted in state — do NOT re-divide).
+  const forcedUsd = order.format === "GMS" && opts?.currencyMode === "USD" && !usdDisplay;
+  const fmtForcedUsd = (n: number) =>
+    `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtTotal = (n: number) =>
+    usdDisplay ? fmtUSD(n) : forcedUsd ? fmtForcedUsd(n) : fmt(n);
+  const showUsdLabel = usdDisplay || forcedUsd;
 
   const itemRows = order.line_items.map((it, i) => [
     String(i + 1),
@@ -697,7 +703,7 @@ async function renderGmsPdf(
     startY: y,
     head: [[
       "ITEM NO", "MODEL NUMBER", "DESCRIPTION", "MAKE",
-      "QTY", "UNIT", `UNIT PRICE\n(${usdDisplay ? "USD" : "INR"})`, `AMOUNT\n(${usdDisplay ? "USD" : "INR"})`,
+      "QTY", "UNIT", `UNIT PRICE\n(${showUsdLabel ? "USD" : "INR"})`, `AMOUNT\n(${showUsdLabel ? "USD" : "INR"})`,
     ]],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
