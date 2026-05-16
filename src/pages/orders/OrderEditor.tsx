@@ -1376,6 +1376,19 @@ export default function OrderEditor() {
                     <p className="text-[11px] text-muted-foreground -mt-1">
                       Landed Price = Base + Sea Freight + Custom + Clearing. Insurance &amp; P&amp;F below are computed on the Landed Price.
                     </p>
+                    {/* Show / hide the "Exwork Murthal" (Landed Price) row in the preview */}
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={!charges.murthal_hide_landed_row}
+                        onCheckedChange={(b) => setCharges({ ...charges, murthal_hide_landed_row: !b })}
+                      />
+                      <Label className="text-sm">
+                        Show "Exwork Murthal" row in preview
+                      </Label>
+                      <span className="text-[11px] text-muted-foreground">
+                        (Visible by default. Hiding does not change calculations — the amount still flows into the total.)
+                      </span>
+                    </div>
                     {/* Discount on Landed Price */}
                     <div className="grid grid-cols-[auto_1fr_120px_140px] items-center gap-3">
                       <Switch

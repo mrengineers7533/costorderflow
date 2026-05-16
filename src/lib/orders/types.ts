@@ -157,6 +157,10 @@ export interface Charges {
   murthal_landed_discount_mode?: "amount" | "percent"; // default "percent"
   murthal_landed_discount_percent?: number;
   murthal_landed_discount_amount?: number;
+  /** When true, hide the "Exwork Murthal" (Landed Price) row in the OA
+   *  preview. Calculation is unaffected — the amount still flows into
+   *  downstream charges and totals. Default false (row visible). */
+  murthal_hide_landed_row?: boolean;
   murthal_pf_enabled?: boolean;
   murthal_pf_mode?: "amount" | "percent";          // default "percent"
   murthal_pf_percent?: number;                     // default 1.5
