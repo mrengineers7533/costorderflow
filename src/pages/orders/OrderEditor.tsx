@@ -711,7 +711,7 @@ export default function OrderEditor() {
               <CostSheetPicker onApply={(data) => applyCostSheet(data)} onParsingChange={setParsing} />
             )}
 
-        {format === "GMS" && charges.gms_mode === "EXW_MURTHAL" && (
+        {format === "GMS" && (charges.gms_mode === "EXW_MURTHAL" || (!charges.gms_mode && charges.ex_murthal_enabled)) && (
           <div className="space-y-2">
             <CurrencyToolbar
               mode={currencyMode}
@@ -854,7 +854,7 @@ export default function OrderEditor() {
         <Card>
           <CardHeader><CardTitle>Charges & Totals</CardTitle></CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
-            {format === "GMS" && charges.gms_mode === "EXW_MURTHAL" && (
+            {format === "GMS" && (charges.gms_mode === "EXW_MURTHAL" || (!charges.gms_mode && charges.ex_murthal_enabled)) && (
               <div className="md:col-span-2 flex flex-wrap items-end gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
                 <div className="flex flex-col">
                   <span className="text-xs uppercase tracking-wider text-muted-foreground">Amount in INR</span>
@@ -1006,6 +1006,7 @@ export default function OrderEditor() {
                         // path so hidden Murthal values can't sneak into CIF / Turkey totals.
                         ex_murthal_enabled:
                           mode === "EXW_MURTHAL" ? true
+                          : mode === undefined ? true
                           : mode === "EXW_TURKEY" || mode === "EXW_CIF_PORT" ? false
                           : charges.ex_murthal_enabled,
                         // Drop Turkey display toggle when switching to CIF / Murthal — CIF
@@ -1017,6 +1018,13 @@ export default function OrderEditor() {
                         turkey_pf_percent: charges.turkey_pf_percent ?? 1.5,
                         turkey_pf_mode: charges.turkey_pf_mode ?? "percent",
                         turkey_advance_mode: charges.turkey_advance_mode ?? "percent",
+                        // Legacy & Murthal share the same Murthal defaults
+                        custom_percent: charges.custom_percent ?? 8.25,
+                        clearing_percent: charges.clearing_percent ?? 1.5,
+                        landed_gst_percent: charges.landed_gst_percent ?? 18,
+                        murthal_pf_percent: charges.murthal_pf_percent ?? 1.5,
+                        murthal_pf_mode: charges.murthal_pf_mode ?? "percent",
+                        murthal_advance_mode: charges.murthal_advance_mode ?? "percent",
                       });
                     }}
                   >
