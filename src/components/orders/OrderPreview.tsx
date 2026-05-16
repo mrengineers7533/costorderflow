@@ -641,7 +641,7 @@ function ExMurthalBlock({
       {c.sea_freight_enabled && <Row k="Sea Freight" v={m.sea_freight} />}
       {c.custom_enabled && <Row k="Custom Duty" v={m.custom} />}
       {c.clearing_enabled && <Row k="Clearing Charge / CHA & Port" v={m.clearing} />}
-      {!c.murthal_hide_landed_row && <Row k="Exwork Murthal" v={m.total_amount} bold />}
+      <Row k="Landed Price" v={m.total_amount} bold />
       {c.murthal_landed_discount_enabled && m.landed_discount_amount > 0 && (
         <>
           <Row k="Discount on Landed" v={-m.landed_discount_amount} />
