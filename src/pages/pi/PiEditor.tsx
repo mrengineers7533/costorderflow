@@ -584,6 +584,7 @@ export default function PiEditor() {
                           gms_mode: mode,
                           ex_murthal_enabled:
                             mode === "EXW_MURTHAL" ? true
+                            : mode === undefined ? true
                             : mode === "EXW_TURKEY" || mode === "EXW_CIF_PORT" ? false
                             : pi.charges.ex_murthal_enabled,
                           display_currency: mode === "EXW_CIF_PORT" ? undefined : pi.charges.display_currency,
@@ -592,6 +593,12 @@ export default function PiEditor() {
                           turkey_pf_percent: pi.charges.turkey_pf_percent ?? 1.5,
                           turkey_pf_mode: pi.charges.turkey_pf_mode ?? "percent",
                           turkey_advance_mode: pi.charges.turkey_advance_mode ?? "percent",
+                          custom_percent: pi.charges.custom_percent ?? 8.25,
+                          clearing_percent: pi.charges.clearing_percent ?? 1.5,
+                          landed_gst_percent: pi.charges.landed_gst_percent ?? 18,
+                          murthal_pf_percent: pi.charges.murthal_pf_percent ?? 1.5,
+                          murthal_pf_mode: pi.charges.murthal_pf_mode ?? "percent",
+                          murthal_advance_mode: pi.charges.murthal_advance_mode ?? "percent",
                         });
                       }}
                     >
@@ -825,7 +832,7 @@ export default function PiEditor() {
                     </div>
                   )}
 
-                  {pi.charges.gms_mode === "EXW_MURTHAL" && (
+                  {(pi.charges.gms_mode === "EXW_MURTHAL" || (!pi.charges.gms_mode && pi.charges.ex_murthal_enabled)) && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/20">
                       <div className="text-xs font-semibold uppercase tracking-wide">EXW Murthal Charges</div>
                       <div className="flex flex-wrap items-end gap-3 rounded-md border border-border/70 bg-background/60 px-3 py-2">
