@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { fetchLatestSubmittedRound, publicDocUrl, type DesignReviewItemRow, type DesignReviewDocRow, type DesignReviewRow } from "@/lib/boq/designReview";
 
@@ -44,7 +44,7 @@ export function DesignCommentRow({ item, docs, round }: { item: DesignReviewItem
   );
 }
 
-export function DesignCommentsByItem({ boqId, render }: Props & { render: (itemId: string, node: React.ReactNode) => React.ReactNode }) {
+export function DesignCommentsByItem({ boqId, render }: Props & { render: (itemId: string, node: ReactNode) => ReactNode }) {
   const data = useLatestDesignReview(boqId);
   if (!data) return null;
   const byId = new Map(data.items.map((it) => [it.boq_item_id, it]));
