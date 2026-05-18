@@ -1,44 +1,42 @@
 ## Goal
 
-Collapse the BOQ Folder so it lists only the **latest revision** per BOQ family, and surface all sibling revisions inside the latest BOQ's editor page with one-click read-only open.
-
-Nothing about saving, calculations, OA/PI sync, permissions, or snapshot data changes. We only adjust list filtering, sorting, counts, and add a revision-history panel on the editor.
+Apply the same "save each revision as a snapshot + folder shows only latest + history visible from latest" pattern (already done for BOQ) to **OA (orders)**. No DB schema changes — the `orders` table already has `parent_order_id`, `revision`, and `is_current`, and a trigger that flips siblings to superseded on save. Each `reviseOrder()` already creates a fresh row, so revisions are already their own saved snapshots.
 
 ## Changes
 
-### 1. `src/pages/boqs/BoqList.tsx` — default to current-only
+### 1. `src/pages/orders/OrdersList.tsx` — folder shows only latest
 
-- Flip the default of `showSuperseded` from `true` → `false`, so the folder shows only `is_current = true` rows on load (the existing query already filters when the toggle is off). The toggle stays available for admin/debug use, just hidden by default.
-- Update the `counts` memo to count only current rows (since `rows` will then only contain currents, no extra logic needed — counts auto-reflect).
-- Sort sibling revisions in the expand-row family view numerically (`revision ?? 0` ascending — already numeric, just confirm the `.order("revision", { ascending: true })` query is used; `R10` issue only happens with text sort, our column is numeric so already correct — no change required, but the inline label generator already strips/appends `/Rn` correctly).
-- Keep the chevron expand row so users can still peek siblings inline.
+- Flip default `showSuperseded` from `true` → `false` so the OA Folder loads with `is_current = true` only.
+- The toggle stays available (admin/debug). Counts (`all`, `MR`, `GMS`) and BOQ/PI badges automatically reflect only current rows because they iterate `orders`.
+- No change to delete logic, sort, columns, or actions.
 
-### 2. `src/pages/boqs/BoqEditor.tsx` — add BOQ Revision History panel
+### 2. New component `src/components/orders/OaRevisionHistory.tsx`
 
-- Below the existing design-review `RevisionsTable` (which is a separate concept — design-review snapshots), add a new **"BOQ Revision History"** card listing every BOQ in the same OA family (same logic as `loadFamilyFor` in `BoqList`).
-- Each row: revision label (`Rn`), BOQ number, date, status badge (**Current** if `is_current`, otherwise **Superseded**), and a **View** button.
-- Clicking **View** navigates to `/boqs/<that-id>`. The editor already enforces edit-permission rules per record, so older non-current rows naturally render read-only for everyone except the original creator path; we'll also force a read-only banner when `!is_current` so it's explicit.
-- Sort numerically by `revision` ascending. R0, R1, R2 … R10 — no string sort.
+- Props: `currentOrder: OrderRecord`.
+- Resolves the family root (`parent_order_id || id`), fetches all sibling orders, sorts numerically by `revision` ascending (R0, R1, R2, R3, R10 — no string sort).
+- Renders a compact table with columns: **OA Number**, **Rev**, **Date**, **Created/Updated By** (from `prepared_by`), **Status**, **Current/Superseded** badge, **View** button.
+- View navigates to `/orders/<that-id>`. The currently open row is highlighted and labeled "Viewing".
 
-### 3. New component `src/components/boqs/BoqRevisionHistory.tsx`
+### 3. `src/pages/orders/OrderEditor.tsx` — wire the history + enforce read-only
 
-- Props: `currentBoq: BoqRecord`.
-- On mount, resolves the OA family root (same query as `loadFamilyFor`) and fetches all sibling BOQs ordered by `revision asc`.
-- Renders a compact table with the columns above and a `View` link per row.
-- The currently open BOQ row is highlighted and labeled "Viewing".
+- Add `<OaRevisionHistory currentOrder={...} />` directly below the existing `RevisionsPanel` (keep RevisionsPanel — it groups BOQs/PIs/Client Copies, separate concern).
+- The amber "Superseded — newer revision exists" banner already exists. Add a one-click **"Open current revision"** link inside that banner.
+- **Lock editing on superseded revisions**: in `save()` and `Finalize`, short-circuit with a toast if `!isCurrent && !isNew` and return early. Also disable the `Save Draft` and `Finalize` buttons in that state (`disabled={!isCurrent && !isNew}`).
+- No change to `reviseOrder`, OA/BOQ/PI sync, formats, calculations, or permissions.
 
-### 4. Read-only marker on superseded BOQ in editor
+### 4. Sorting
 
-- In `BoqEditor.tsx`, if the loaded BOQ has `is_current === false`, show a small alert at the top: *"Viewing superseded revision Rn (read-only). Open the current revision to edit."* with a link to the current sibling. No change to existing save/edit gating logic — this is purely a label.
+- `OaRevisionHistory` sorts by numeric `revision asc`. `OrdersList` keeps `created_at desc` (unchanged) — it now only shows current rows so ordering is unambiguous per family.
 
 ## What is NOT changed
 
-- No DB migration, no schema change, no deletion of old revisions.
-- No change to `boq_revisions` snapshot table, design-review history, OA/PI sync, calc, permissions, or saved-snapshot logic.
-- "Save to BOQ Folder" behavior unchanged.
-- Toggle still available — only the default flips.
+- No DB migration. `orders.parent_order_id`, `revision`, `is_current`, and `orders_keep_single_current` trigger are sufficient.
+- No change to PDF/Excel exports, cost-sheet parsing, OA→BOQ sync, OA→PI sync, OA counters/numbering, deletion behavior, or permissions.
+- Old revisions are not deleted, merged, or overwritten — only hidden from the main folder list and surfaced inside the latest OA page.
+- BOQ folder logic (already shipped) stays as-is.
 
 ## Technical notes
 
-- The `boqs` table already has `is_current`, `revision`, `revised_from_id`, `source_order_id`, and the OA family is reachable via `orders.parent_order_id`. All needed data is already available client-side.
-- Numeric sort uses the numeric `revision` column, not the string `boq_number`, so `R10` ordering is automatically correct.
+- Family root resolution: `parent_order_id || id`. Fetch siblings with `.or(\`id.eq.<root>,parent_order_id.eq.<root>\`)`.
+- "Created/Updated By" uses `prepared_by` (already a column). If empty, falls back to `—`.
+- Read-only guard mirrors the BOQ editor pattern (`!isNew && !isCurrent`), so behavior is consistent across BOQ and OA.

@@ -26,7 +26,7 @@ export default function OrdersList() {
     folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showSuperseded, setShowSuperseded] = useState(true);
+  const [showSuperseded, setShowSuperseded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ order: OrderRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);

@@ -24,6 +24,7 @@ import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/Co
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
+import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { reviseOrder, syncBoqsAndPisForOrder, createInitialBoqForOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
@@ -337,6 +338,10 @@ export default function OrderEditor() {
   }
 
   async function save(finalize: boolean) {
+    if (!isNew && !isCurrent) {
+      toast({ title: "Read-only revision", description: "This is a superseded OA revision. Open the current revision to edit.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     const ship = sameAsBill ? billTo : shipTo;
     let oa = oaNumber;
@@ -677,8 +682,8 @@ export default function OrderEditor() {
                 </Button>
               </>
             )}
-            <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
-            <Button className="rounded-lg" disabled={saving} onClick={() => save(true)}>Finalize</Button>
+            <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>
+            <Button className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
 
@@ -689,6 +694,7 @@ export default function OrderEditor() {
               <Badge variant="outline" className="text-[10px] uppercase">Superseded</Badge>
               <span>You are viewing OA <span className="font-mono">{oaNumber}</span> — Rev {revision}. A newer revision exists.</span>
             </div>
+            <span className="text-xs text-muted-foreground">Open the current revision from the OA Revision History below.</span>
           </div>
         )}
         {!isNew && isCurrent && revision > 0 && (
@@ -701,6 +707,10 @@ export default function OrderEditor() {
         {/* Revisions section (OA + linked BOQ history) */}
         {!isNew && parentOrderId && (
           <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+        )}
+
+        {!isNew && parentOrderId && orderId && (
+          <OaRevisionHistory currentOrderId={orderId} rootOrderId={parentOrderId} />
         )}
 
         {/* Confirmation prompts */}
