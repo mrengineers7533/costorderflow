@@ -189,6 +189,7 @@ export default function BoqEditor() {
 
   async function save(finalize: boolean) {
     setSaving(true);
+    const shouldFlipStatus = !isNew && (designReviewStatus === "review_received" || designReviewStatus === "changes_required");
     const payload = {
       order_id: orderId,
       boq_number: boqNumber || deriveBoqNumber(referenceOa),
@@ -197,6 +198,7 @@ export default function BoqEditor() {
       prepared_by: preparedBy || null, boq_date: boqDate,
       reference_oa_number: referenceOa || null, project_number: projectNumber || null,
       client_name: clientName || null, line_items: items, terms, notes,
+      ...(shouldFlipStatus ? { design_review_status: "boq_updated" } : {}),
     };
     const res = isNew
       ? await supabase.from("boqs").insert(payload as never).select().single()
@@ -204,6 +206,7 @@ export default function BoqEditor() {
     setSaving(false);
     if (res.error) return toast({ title: "Save failed", description: res.error.message, variant: "destructive" });
     setStatus(payload.status);
+    if (shouldFlipStatus) setDesignReviewStatus("boq_updated");
     toast({ title: "Saved", description: `BOQ ${payload.boq_number}` });
     if (isNew) navigate(`/boqs/${res.data.id}`, { replace: true });
   }

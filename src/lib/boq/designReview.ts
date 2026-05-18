@@ -2,12 +2,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { BoqLineItem } from "@/lib/boq/types";
 
 export type Decision = "pending" | "approved" | "change_required";
+export type ReviewKind = "comment" | "approval";
 
 export interface DesignReviewRow {
   id: string;
   boq_id: string;
   token: string;
   round_no: number;
+  kind: ReviewKind;
   status: "sent" | "submitted" | "expired";
   expires_at: string;
   sent_at: string;
@@ -51,8 +53,10 @@ export interface DesignReviewDocRow {
 export async function createReviewRound(
   boq: { id: string; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null },
   items: BoqLineItem[],
-  expiryDays = 14,
+  opts: { kind: ReviewKind; expiryDays?: number },
 ): Promise<DesignReviewRow> {
+  const expiryDays = opts.expiryDays ?? 14;
+  const kind = opts.kind;
   // Compute next round number
   const { data: prev } = await supabase
     .from("boq_design_reviews")
@@ -82,6 +86,7 @@ export async function createReviewRound(
       status: "sent",
       expires_at: expiresAt,
       boq_snapshot: snapshot,
+      kind,
     })
     .select("*")
     .single();
@@ -105,7 +110,7 @@ export async function createReviewRound(
 
   await supabase
     .from("boqs")
-    .update({ design_review_status: nextRound === 1 ? "sent_to_design" : "resubmitted" })
+    .update({ design_review_status: kind === "comment" ? "comment_sent" : "approval_sent" })
     .eq("id", boq.id);
 
   return review as unknown as DesignReviewRow;
@@ -250,14 +255,17 @@ export async function fetchRevisions(boqId: string): Promise<BoqRevisionRow[]> {
 
 export const DESIGN_STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  sent_to_design: "Sent to Design",
+  sent_to_design: "Comment Link Sent to Design",
+  comment_sent: "Comment Link Sent to Design",
   review_received: "Design Comments Received",
+  boq_updated: "BOQ Updated by Creator",
+  approval_sent: "Approval Link Sent to Design",
   changes_required: "Changes Required",
-  resubmitted: "Resubmitted to Design",
+  resubmitted: "Approval Link Sent to Design",
   design_approved: "Design Approved",
-  final_sent: "Final BOQ Sent",
+  final_sent: "Final BOQ",
   // legacy values
-  sent: "Sent to Design",
+  sent: "Comment Link Sent to Design",
   approved_by_design: "Design Approved",
 };
 

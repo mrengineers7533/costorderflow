@@ -30,7 +30,7 @@ export function RevisionsTable({ boqId, currentLabel }: { boqId: string | null; 
               <tr className="text-left">
                 <th className="p-2">Version</th>
                 <th className="p-2">Date</th>
-                <th className="p-2">Round</th>
+                <th className="p-2">Link Type</th>
                 <th className="p-2">Status at snapshot</th>
                 <th className="p-2">Reviewer outcome</th>
                 <th className="p-2 w-24"></th>
@@ -45,16 +45,20 @@ export function RevisionsTable({ boqId, currentLabel }: { boqId: string | null; 
                 <td className="p-2">—</td>
                 <td className="p-2"></td>
               </tr>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const note = (r.snapshot_note || "").toLowerCase();
+                const kind = note.includes("approval") ? "Approval" : note.includes("comment") ? "Comment" : (r.round_no ? `R${r.round_no}` : "—");
+                return (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.revision_label}</td>
                   <td className="p-2">{new Date(r.created_at).toLocaleString()}</td>
-                  <td className="p-2">{r.round_no ?? "—"}</td>
+                  <td className="p-2">{kind}</td>
                   <td className="p-2">{statusLabel(r.design_review_status)}</td>
                   <td className="p-2">{r.reviewer_outcome || "—"}</td>
                   <td className="p-2"><Button size="sm" variant="outline" onClick={() => setOpen(r)}><Eye className="h-3 w-3 mr-1" />View</Button></td>
                 </tr>
-              ))}
+                );
+              })}
               {!rows.length && (
                 <tr><td colSpan={6} className="p-3 text-center text-muted-foreground">No previous revisions yet.</td></tr>
               )}
