@@ -13,6 +13,9 @@ import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import {
   fetchReviewItems,
   publicDocUrl,
+  fetchLatestCommentBaseline,
+  DIFF_FIELDS,
+  type DiffField,
   type DesignReviewItemRow,
   type Decision,
 } from "@/lib/boq/designReview";
@@ -50,6 +53,8 @@ export default function DesignReview() {
   const [colComments, setColComments] = useState<Record<string, Partial<Record<ColKey, string>>>>({});
   const [docs, setDocs] = useState<DocDraft[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [baselineById, setBaselineById] = useState<Record<string, DesignReviewItemRow>>({});
+  const [baselineRoundNo, setBaselineRoundNo] = useState<number | null>(null);
 
   const [reviewerName, setReviewerName] = useState("");
   const [designTeam, setDesignTeam] = useState("");
@@ -83,6 +88,17 @@ export default function DesignReview() {
       const d: typeof decisions = {};
       its.forEach((it) => { d[it.boq_item_id] = { decision: "pending", comment: "", design_change_note: "" }; });
       setDecisions(d);
+      // For Approval links, load the previous Comment-round baseline so
+      // Design sees a clear "Previous → Updated" comparison per item.
+      if (data.kind === "approval") {
+        const base = await fetchLatestCommentBaseline(data.boq_id).catch(() => null);
+        if (base) {
+          const map: Record<string, DesignReviewItemRow> = {};
+          for (const b of base.items) map[b.boq_item_id] = b;
+          setBaselineById(map);
+          setBaselineRoundNo(base.round.round_no);
+        }
+      }
       setLoading(false);
     })();
   }, [token]);
