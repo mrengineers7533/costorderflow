@@ -19,6 +19,7 @@ import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
+import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, parseColumnComments, diffItemsAgainstBaseline, buildChangeLog, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
@@ -60,6 +61,8 @@ export default function BoqEditor() {
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isCurrentBoq, setIsCurrentBoq] = useState<boolean>(true);
+  const [boqRevision, setBoqRevision] = useState<number>(0);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
@@ -97,6 +100,8 @@ export default function BoqEditor() {
         setVerificationToken(b.verification_token || null);
         setDesignReviewStatus((b as unknown as { design_review_status?: string }).design_review_status || "draft");
         setBoqUserId(b.user_id || null);
+        setIsCurrentBoq(b.is_current !== false);
+        setBoqRevision(b.revision ?? 0);
         // Saved BOQ is a fixed snapshot: header + items come from the saved
         // record and are NOT auto-refreshed from the linked OA. The OA is
         // fetched only to resolve the OA owner (for edit permissions).
@@ -494,6 +499,8 @@ export default function BoqEditor() {
             />
 
             <RevisionsTable boqId={boqId} currentLabel={`R${(version) || 1}`} />
+
+            <BoqRevisionHistory currentBoqId={boqId} orderId={orderId || null} />
           </div>
 
           {/* ---------- Live document preview (below editor) ---------- */}
