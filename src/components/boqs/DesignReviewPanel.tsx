@@ -15,6 +15,7 @@ import {
   finalBoqLink,
   snapshotRevision,
   statusLabel,
+  type ReviewKind,
   type DesignReviewRow,
   type DesignReviewItemRow,
   type DesignReviewDocRow,
@@ -45,7 +46,7 @@ function outcomeBadge(o: string | null, status: string) {
 export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: Props) {
   const [rounds, setRounds] = useState<DesignReviewRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<ReviewKind | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openItems, setOpenItems] = useState<DesignReviewItemRow[]>([]);
@@ -75,12 +76,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
     })();
   }, [openId]);
 
-  async function handleCreate() {
+  async function handleCreate(kind: ReviewKind) {
     if (!boq.id) {
       toast({ title: "Save the BOQ first", variant: "destructive" });
       return;
     }
-    setCreating(true);
+    setCreating(kind);
     try {
       // Snapshot the current state into versions before creating a new round (only if at least one round already exists)
       if (rounds.length) {
@@ -102,8 +103,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
           console.warn("snapshotRevision failed", e);
         }
       }
-      const r = await createReviewRound(boq, items);
-      toast({ title: `Round ${r.round_no} link generated` });
+      const r = await createReviewRound(boq, items, { kind });
+      toast({ title: `${kind === "comment" ? "Comment" : "Approval"} link generated (R${r.round_no})` });
       const url = reviewLink(r.token);
       await navigator.clipboard.writeText(url).catch(() => {});
       await load();
@@ -113,7 +114,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
       console.error(e);
       toast({ title: "Failed to generate link", description: String((e as Error).message || e), variant: "destructive" });
     } finally {
-      setCreating(false);
+      setCreating(null);
     }
   }
 
@@ -135,9 +136,9 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
 
   const open = rounds.find((r) => r.id === openId) || null;
   const latest = rounds[0];
-  const latestSubmitted = rounds.find((r) => r.status === "submitted");
-  const isApproved = latestSubmitted?.overall_outcome === "approved" || designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
-  const needsChanges = latestSubmitted?.overall_outcome === "changes_required" || designReviewStatus === "changes_required";
+  const latestApprovalSubmitted = rounds.find((r) => r.status === "submitted" && r.kind === "approval");
+  const isApproved = latestApprovalSubmitted?.overall_outcome === "approved" || designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
+  const needsChanges = latestApprovalSubmitted?.overall_outcome === "changes_required" || designReviewStatus === "changes_required";
   const docsByItem = openDocs.reduce<Record<string, DesignReviewDocRow[]>>((m, d) => {
     const k = d.boq_item_id || "_general";
     (m[k] ||= []).push(d); return m;
@@ -162,9 +163,13 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
               <Copy className="mr-1 h-4 w-4" />Copy Final BOQ Link
             </Button>
           )}
-          <Button size="sm" onClick={handleCreate} disabled={creating || !boq.id}>
-            {creating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
-            {rounds.length ? "Generate New Review Round" : "Generate Review Link"}
+          <Button size="sm" variant="outline" onClick={() => handleCreate("comment")} disabled={!!creating || !boq.id}>
+            {creating === "comment" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+            Generate Comment Link
+          </Button>
+          <Button size="sm" onClick={() => handleCreate("approval")} disabled={!!creating || !boq.id}>
+            {creating === "approval" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+            Generate Approval Link
           </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh
@@ -209,6 +214,9 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                 className={`px-3 py-1.5 rounded-md border text-xs flex items-center gap-2 ${openId === r.id ? "bg-accent border-primary" : "bg-background hover:bg-accent/50"}`}
               >
                 <span className="font-medium">Round {r.round_no}</span>
+                <Badge variant="outline" className={r.kind === "approval" ? "border-indigo-500 text-indigo-700" : "border-slate-400 text-slate-600"}>
+                  {r.kind === "approval" ? "Approval" : "Comment"}
+                </Badge>
                 {outcomeBadge(r.overall_outcome, r.status)}
               </button>
             ))}
