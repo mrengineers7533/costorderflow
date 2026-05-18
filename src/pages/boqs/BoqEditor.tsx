@@ -19,6 +19,7 @@ import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
+import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, parseColumnComments, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
@@ -478,6 +479,8 @@ export default function BoqEditor() {
                 <Textarea value={notes} readOnly rows={3} />
               </CardContent>
             </Card>
+
+            <PendingChangesPanel boqId={boqId} items={items} designReviewStatus={designReviewStatus} />
 
             <DesignReviewPanel
               boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber }}

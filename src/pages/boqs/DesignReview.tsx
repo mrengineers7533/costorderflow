@@ -13,6 +13,9 @@ import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import {
   fetchReviewItems,
   publicDocUrl,
+  fetchLatestCommentBaseline,
+  DIFF_FIELDS,
+  type DiffField,
   type DesignReviewItemRow,
   type Decision,
 } from "@/lib/boq/designReview";
@@ -50,6 +53,8 @@ export default function DesignReview() {
   const [colComments, setColComments] = useState<Record<string, Partial<Record<ColKey, string>>>>({});
   const [docs, setDocs] = useState<DocDraft[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [baselineById, setBaselineById] = useState<Record<string, DesignReviewItemRow>>({});
+  const [baselineRoundNo, setBaselineRoundNo] = useState<number | null>(null);
 
   const [reviewerName, setReviewerName] = useState("");
   const [designTeam, setDesignTeam] = useState("");
@@ -83,6 +88,17 @@ export default function DesignReview() {
       const d: typeof decisions = {};
       its.forEach((it) => { d[it.boq_item_id] = { decision: "pending", comment: "", design_change_note: "" }; });
       setDecisions(d);
+      // For Approval links, load the previous Comment-round baseline so
+      // Design sees a clear "Previous → Updated" comparison per item.
+      if (data.kind === "approval") {
+        const base = await fetchLatestCommentBaseline(data.boq_id).catch(() => null);
+        if (base) {
+          const map: Record<string, DesignReviewItemRow> = {};
+          for (const b of base.items) map[b.boq_item_id] = b;
+          setBaselineById(map);
+          setBaselineRoundNo(base.round.round_no);
+        }
+      }
       setLoading(false);
     })();
   }, [token]);
@@ -264,8 +280,33 @@ export default function DesignReview() {
                         const d = decisions[it.boq_item_id];
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+                        const base = baselineById[it.boq_item_id];
+                        const wasChanged = (field: DiffField): string | null => {
+                          if (isComment || !base) return null;
+                          const a = base[field as keyof DesignReviewItemRow];
+                          const b = (it as unknown as Record<string, unknown>)[field];
+                          const sa = a == null ? "" : String(a).trim();
+                          const sb = b == null ? "" : String(b).trim();
+                          return sa === sb ? null : sa;
+                        };
                         return (
                           <Fragment key={it.id}>
+                            {!isComment && base && DIFF_FIELDS.some(({ key }) => wasChanged(key) !== null) && (
+                              <TableRow className="bg-amber-50/60 dark:bg-amber-950/20 border-t-2 border-amber-500/40">
+                                <TableCell className="py-1 align-top">
+                                  <span className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold">Previous{baselineRoundNo ? ` · R${baselineRoundNo}` : ""}</span>
+                                </TableCell>
+                                {DIFF_FIELDS.map(({ key }) => {
+                                  const prev = wasChanged(key);
+                                  return (
+                                    <TableCell key={key} className="py-1 text-xs text-muted-foreground line-through whitespace-pre-wrap">
+                                      {prev === null ? "" : (prev || "—")}
+                                    </TableCell>
+                                  );
+                                })}
+                                <TableCell className="py-1" />
+                              </TableRow>
+                            )}
                             <TableRow className="align-top">
                               <TableCell className="py-2 font-medium">{it.item_no}</TableCell>
                               <TableCell className="py-2 font-mono text-xs">{it.model_number}</TableCell>
