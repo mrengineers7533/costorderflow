@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Loader2 } from "lucide-react";
-import type { BoqRecord } from "@/lib/boq/types";
+import { sortByItemNo, type BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
 export default function FinalBoq() {

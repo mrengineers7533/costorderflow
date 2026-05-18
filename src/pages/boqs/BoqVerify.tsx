@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, ShieldCheck, Loader2, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
+import { sortByItemNo, type BoqLineItem, type BoqRecord } from "@/lib/boq/types";
 
 type Decision = { status: "pending" | "approved" | "rejected"; comment: string };
 

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Download, Eye, FileText, History, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
-import { DEFAULT_BOQ_TERMS, deriveBoqNumber } from "@/lib/boq/types";
+import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import type { OrderRecord } from "@/lib/orders/types";
 import mrLogoUrl from "@/assets/mr-logo.png";

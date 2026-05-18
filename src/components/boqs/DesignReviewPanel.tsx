@@ -20,7 +20,7 @@ import {
   type DesignReviewItemRow,
   type DesignReviewDocRow,
 } from "@/lib/boq/designReview";
-import type { BoqLineItem } from "@/lib/boq/types";
+import { sortByItemNo, type BoqLineItem } from "@/lib/boq/types";
 
 interface Props {
   boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null };
