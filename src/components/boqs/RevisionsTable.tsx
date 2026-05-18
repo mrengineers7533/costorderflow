@@ -11,7 +11,6 @@ import {
   getRevisionChanges,
   summarizeChanges,
   type BoqRevisionRow,
-  type RevisionChange,
 } from "@/lib/boq/designReview";
 import { sortByItemNo } from "@/lib/boq/types";
 import { supabase } from "@/integrations/supabase/client";
