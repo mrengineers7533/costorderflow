@@ -17,6 +17,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
+import { DesignCommentRow, useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { RevisionsTable } from "@/components/boqs/RevisionsTable";
+import { statusLabel } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -50,6 +53,8 @@ export default function BoqEditor() {
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  const [designReviewStatus, setDesignReviewStatus] = useState<string>("draft");
+  const [refreshKey, setRefreshKey] = useState(0);
   // Track the OA owner and BOQ creator so either can edit Remarks.
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
@@ -80,6 +85,7 @@ export default function BoqEditor() {
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
         setVerificationStatus(b.verification_status || "approved");
         setVerificationToken(b.verification_token || null);
+        setDesignReviewStatus((b as unknown as { design_review_status?: string }).design_review_status || "draft");
         setBoqUserId(b.user_id || null);
         // OA-driven model: refresh items from latest OA. Preserve any
         // user-edited Description/Remarks matched by model number.
@@ -309,6 +315,9 @@ export default function BoqEditor() {
                 <div className="font-mono font-semibold truncate">{boqNumber || "New BOQ"}</div>
                 <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[11px] font-medium px-2 py-0.5">{format}</span>
                 {version > 1 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
+                <span className="inline-flex items-center rounded-full bg-muted text-foreground text-[11px] font-medium px-2 py-0.5">
+                  {statusLabel(designReviewStatus)}
+                </span>
               </div>
             </div>
           </div>
@@ -391,31 +400,13 @@ export default function BoqEditor() {
                 <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
                   <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
                 </div>
-                {items.map((it) => (
-                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
-                    <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
-                    <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
-                    <Textarea
-                      value={it.remarks}
-                      onChange={(e) => updateItem(it.id, { remarks: e.target.value })}
-                      readOnly={!canEditRemarks}
-                      className="min-h-9"
-                      rows={1}
-                    />
-                    <div className="text-[11px] pt-2">
-                      {it.approval_status === "approved" ? (
-                        <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
-                      ) : it.approval_status === "rejected" ? (
-                        <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 font-medium" title={it.approval_comment || ""}>Rejected</span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <BoqItemsList
+                  key={`items-${refreshKey}`}
+                  items={items}
+                  canEditRemarks={canEditRemarks}
+                  boqId={boqId}
+                  onUpdate={updateItem}
+                />
               </CardContent>
             </Card>
 
@@ -436,7 +427,17 @@ export default function BoqEditor() {
             <DesignReviewPanel
               boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber }}
               items={items}
+              designReviewStatus={designReviewStatus}
+              onChange={async () => {
+                if (!boqId) return;
+                const { data } = await supabase.from("boqs").select("design_review_status").eq("id", boqId).maybeSingle();
+                const s = (data as { design_review_status?: string } | null)?.design_review_status;
+                if (s) setDesignReviewStatus(s);
+                setRefreshKey((k) => k + 1);
+              }}
             />
+
+            <RevisionsTable boqId={boqId} currentLabel={`R${(version) || 1}`} />
           </div>
 
           {/* ---------- Live document preview (below editor) ---------- */}
@@ -469,6 +470,57 @@ export default function BoqEditor() {
   }
   // Item rows can no longer be added/removed manually — they always
   // come from the linked OA. Helper kept for future use.
+}
+
+function BoqItemsList({
+  items, canEditRemarks, boqId, onUpdate,
+}: {
+  items: BoqLineItem[];
+  canEditRemarks: boolean;
+  boqId: string | null;
+  onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
+}) {
+  const data = useLatestDesignReview(boqId);
+  const byItemId = new Map((data?.items || []).map((r) => [r.boq_item_id, r]));
+  return (
+    <>
+      {items.map((it) => {
+        const r = byItemId.get(it.id);
+        return (
+          <div key={it.id} className="space-y-1.5">
+            <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
+              <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
+              <Textarea
+                value={it.remarks}
+                onChange={(e) => onUpdate(it.id, { remarks: e.target.value })}
+                readOnly={!canEditRemarks}
+                className="min-h-9"
+                rows={1}
+              />
+              <div className="text-[11px] pt-2">
+                {it.approval_status === "approved" ? (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
+                ) : it.approval_status === "rejected" ? (
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 font-medium" title={it.approval_comment || ""}>Rejected</span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
+                )}
+              </div>
+            </div>
+            {r && data && (
+              <div className="pl-12 pr-1">
+                <DesignCommentRow item={r} docs={data.docs} round={data.round} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 /* -------- BOQ document-style preview — mirrors generated PDF 1:1 --------

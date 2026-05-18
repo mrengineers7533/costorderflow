@@ -209,8 +209,8 @@ export default function DesignReview() {
               const d = decisions[it.boq_item_id];
               const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
               return (
-                <div key={it.id} className="rounded-lg border p-3 grid md:grid-cols-[1fr,1fr] gap-3">
-                  <div className="space-y-1">
+                <div key={it.id} className="rounded-lg border overflow-hidden">
+                  <div className="p-3 bg-muted/30 space-y-1">
                     <div className="text-xs text-muted-foreground">Item {it.item_no} · <span className="font-mono">{it.model_number}</span></div>
                     <div className="text-sm whitespace-pre-wrap">{it.description}</div>
                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
@@ -223,7 +223,8 @@ export default function DesignReview() {
                       </div>
                     )}
                   </div>
-                  <div className="space-y-2">
+                  <div className="p-3 border-t bg-background space-y-2">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Design Comment for this item</div>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"

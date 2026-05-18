@@ -1,37 +1,91 @@
-## Goal
+# BOQ Design Review Workflow Upgrade
 
-Make the **Legacy (use simple PI charges above)** GMS Pricing Mode behave identically to **EXW Murthal (full landed cost)** in both OA and PI — same charges UI, same calculation, same preview/PDF rendering. EXW Turkey, EXW CIF Port, MR, and all non‑GMS flows are untouched.
+Builds on existing tables (`boqs`, `boq_design_reviews`, `boq_design_review_items`) and the `/design-review/:token` flow. Nothing in OA→BOQ sync, calculations, or permissions changes except where the new workflow needs it.
 
-## Approach
+## 1. Status lifecycle (DB)
 
-The calculation, preview, PDF, Excel, convert‑to‑PI, and revision layers already gate Murthal logic on `(charges.gms_mode === "EXW_MURTHAL" || charges.ex_murthal_enabled)`. So the entire change reduces to:
+Migration: add/extend `boqs.design_review_status` enum-like text with these values:
 
-1. When the user picks Legacy in the GMS Pricing Mode dropdown, automatically set `ex_murthal_enabled: true` (with the same sensible defaults the Murthal path uses).
-2. Render the EXW Murthal charges UI for Legacy mode the same way it renders for `EXW_MURTHAL`.
+```
+draft → sent_to_design → comments_received → changes_required
+  → resubmitted → design_approved → final_sent
+```
 
-No changes to `calc.ts`, `pdf.ts`, `OrderPreview.tsx`, `convert.ts`, `excel.ts`, or `revisions/index.ts` — those already handle the dual condition.
+- Trigger / RPC updates `design_review_status` automatically when:
+  - a review round is created (sent_to_design / resubmitted if round_no > 1)
+  - reviewer submits (`comments_received` initially, then `changes_required` or `design_approved` based on overall outcome)
+  - creator clicks "Send Final BOQ to Departments" (`final_sent`)
+- Add column `boqs.final_share_token uuid` + `final_sent_at timestamptz` for the departmental link.
 
-## Files to edit
+## 2. Reviewer page — per-item comment row
 
-### `src/pages/pi/PiEditor.tsx`
+`src/pages/boqs/DesignReview.tsx`:
 
-- **GMS Pricing Mode `onValueChange` (≈ line 580):** when `mode === undefined` (Legacy / "NONE"), set `ex_murthal_enabled: true` instead of preserving the previous value, and seed Murthal defaults (`custom_percent ?? 8.25`, `clearing_percent ?? 1.5`, `landed_gst_percent ?? 18`, `murthal_pf_percent ?? 1.5`, `murthal_pf_mode ?? "percent"`, `murthal_advance_mode ?? "percent"`). When switching to Turkey / CIF, keep the existing reset to `false`.
-- **EXW Murthal Charges section (≈ line 828):** change the gate from `pi.charges.gms_mode === "EXW_MURTHAL"` to `pi.charges.gms_mode === "EXW_MURTHAL" || (!pi.charges.gms_mode && pi.charges.ex_murthal_enabled)`. Same JSX, same fields, no duplication.
-- **CurrencyToolbar visibility (PI side):** extend the existing `gms_mode === "EXW_MURTHAL"` condition to also accept Legacy with `ex_murthal_enabled`, so the "Amount in INR" / PU Dollar Rate UX is identical.
+- Keep current item card, but render the **comment + Approve / Change Required / Attach** as a clearly separated row directly under each item (full-width sub-row, not side column) so it visually reads as "item → its own comment row".
+- Add a sticky summary header with counts and big "Submit Review" button.
+- Reviewer can still set decision per item; no change to RPC `submit_design_review_with_token`.
 
-### `src/pages/orders/OrderEditor.tsx`
+## 3. BOQ page — show Design comments item-wise
 
-- **GMS Pricing Mode `onValueChange` (≈ line 1000):** mirror the PI change — when `mode === undefined`, set `ex_murthal_enabled: true` and seed the same Murthal defaults.
-- **CurrencyToolbar gate (line 714) and "Amount in INR" panel gate (line 857):** change `charges.gms_mode === "EXW_MURTHAL"` to `charges.gms_mode === "EXW_MURTHAL" || (!charges.gms_mode && charges.ex_murthal_enabled)`.
-- **Existing "Ex-works Murthal (Landed Cost)" block (lines 1290–1530):** keep as-is. It already renders for Legacy when `ex_murthal_enabled` is true; the Pricing-Mode change will flip that on automatically for new Legacy selections. The manual switch stays so legacy OAs in the wild can still be toggled.
+`src/pages/boqs/BoqEditor.tsx` + new helper in `designReview.ts`:
 
-## Out of scope (do not touch)
+- After loading the BOQ, fetch the **latest submitted** review round and its items.
+- In the existing Items table, add a read-only sub-row under each item showing:
+  - Decision badge (Approved / Change Required / Pending)
+  - Reviewer comment + design_change_note
+  - Attachments (links)
+  - Round number + reviewer name/date
+- If no submitted round yet, show nothing extra (keeps current UI clean).
 
-- `src/lib/orders/calc.ts`, `pdf.ts`, `OrderPreview.tsx`, `pi/convert.ts`, `pi/excel.ts`, `revisions/index.ts`, `clientCopyExcel.ts` — already correct.
-- EXW Turkey, EXW CIF Port, MR format, GST rules, OA→PI flow, DB schema, saved Murthal data, layout/design.
+## 4. Rework / re-approval cycle
 
-## Verification
+In `DesignReviewPanel.tsx`:
 
-- In PI editor: select **Legacy** → the full EXW Murthal Charges card (Amount in INR, Sea Freight, Custom, Clearing, Discount on Landed, Insurance, P&F, Local Freight, GST, One‑time Discount, Advance Adjustment) appears, identical to what EXW Murthal shows. Editing values updates totals/preview/PDF the same way.
-- In OA editor: same behavior — selecting Legacy auto‑enables the Murthal panel and the Amount‑in‑INR/PU‑Dollar‑Rate toolbar.
-- Selecting EXW Turkey, EXW CIF Port, or staying on MR shows no change vs. today.
+- When latest round status = `submitted`:
+  - If outcome = `changes_required` → show prominent banner "Design requires changes" with a button **"Generate New Review Round"** (already exists; ensure it bumps `round_no` and resets statuses — already does).
+  - If outcome = `approved` → show green "Design Approved" banner and reveal a new button **"Send Final BOQ to Departments"** (see §6).
+- After creator updates items + saves remarks, the same panel button generates the next round; existing `createReviewRound` already increments round_no.
+
+## 5. Final BOQ approval + departmental link
+
+- New action **"Send Final BOQ to Departments"** (visible only when latest round outcome = `approved`):
+  - Generates `final_share_token` (if not set), sets `design_review_status = 'final_sent'`, stores `final_sent_at`.
+  - Copies departmental URL `/boq/final/:token` to clipboard.
+- New page `src/pages/boqs/FinalBoq.tsx` + route in `App.tsx`:
+  - Public read-only page (RLS policy `select using final_share_token = :token AND design_review_status = 'final_sent'`).
+  - Shows BOQ header, items, remarks, PDF download.
+- Migration adds the RLS policy.
+
+## 6. Versioning (R1, R2, R3 …)
+
+The existing `revision` column on `boqs` already exists. We surface and drive it from the new flow:
+
+- When creator clicks **"Generate New Review Round"** after a `changes_required` outcome, also:
+  - Create a snapshot row in new table `boq_revisions` (id, boq_id, revision_label `R1`/`R2`, line_items jsonb, design_review_status, snapshot_at, created_by).
+  - Bump `boqs.revision` by 1; label is `R{revision}`.
+- New "Versions" card on BOQ page (`BoqEditor.tsx`):
+  - Table of all revisions: Label · Date · Status at snapshot · Reviewer outcome · "View" button.
+  - Clicking "View" opens a read-only dialog showing that snapshot's items + design comments for that round. Current version highlighted with a primary badge.
+
+## 7. Status badge
+
+- Add a status pill in the BOQ header (`BoqEditor.tsx`) reflecting `design_review_status` with friendly labels (Draft, Sent to Design, Design Comments Received, Changes Required, Resubmitted to Design, Design Approved, Final BOQ Sent).
+
+## 8. Out of scope (explicit no-ops)
+
+- No change to OA→BOQ sync logic, BOQ calculations, OA editor, PDF generator core, or existing senior-verification flow.
+- No change to existing creator/admin permissions other than the new "Send Final BOQ" action which requires creator or admin.
+- The legacy "BOQ link generation" (existing `Generate Review Link`) keeps working unchanged; we only layer new behavior on top.
+
+## Files touched
+
+- New migration: `boqs` columns, `boq_revisions` table, RLS policies, status update trigger on `boq_design_reviews`.
+- `src/lib/boq/designReview.ts` — add `fetchLatestSubmittedRound`, `sendFinalBoq`, `snapshotRevision`, types.
+- `src/components/boqs/DesignReviewPanel.tsx` — banners, "Send Final BOQ" button, link copy.
+- `src/components/boqs/DesignCommentsInline.tsx` (new) — renders per-item comment sub-row in BOQ table.
+- `src/components/boqs/RevisionsTable.tsx` (new) — versions list + viewer dialog.
+- `src/pages/boqs/BoqEditor.tsx` — wire status badge, inline comments, revisions card.
+- `src/pages/boqs/DesignReview.tsx` — restructure layout so comment sits in its own row under each item.
+- `src/pages/boqs/FinalBoq.tsx` (new) + route in `src/App.tsx`.
+
+Ready to implement on approval.

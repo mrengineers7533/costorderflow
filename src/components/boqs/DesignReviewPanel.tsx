@@ -11,6 +11,10 @@ import {
   fetchReviewDocs,
   reviewLink,
   publicDocUrl,
+  sendFinalBoq,
+  finalBoqLink,
+  snapshotRevision,
+  statusLabel,
   type DesignReviewRow,
   type DesignReviewItemRow,
   type DesignReviewDocRow,
@@ -20,6 +24,8 @@ import type { BoqLineItem } from "@/lib/boq/types";
 interface Props {
   boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null };
   items: BoqLineItem[];
+  designReviewStatus?: string | null;
+  onChange?: () => void;
 }
 
 function decisionBadge(d: string) {
@@ -36,10 +42,11 @@ function outcomeBadge(o: string | null, status: string) {
   return <Badge variant="outline">{status}</Badge>;
 }
 
-export function DesignReviewPanel({ boq, items }: Props) {
+export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: Props) {
   const [rounds, setRounds] = useState<DesignReviewRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openItems, setOpenItems] = useState<DesignReviewItemRow[]>([]);
   const [openDocs, setOpenDocs] = useState<DesignReviewDocRow[]>([]);
@@ -75,12 +82,33 @@ export function DesignReviewPanel({ boq, items }: Props) {
     }
     setCreating(true);
     try {
+      // Snapshot the current state into versions before creating a new round (only if at least one round already exists)
+      if (rounds.length) {
+        const latest = rounds[0];
+        let revItems: DesignReviewItemRow[] = [];
+        if (latest.status === "submitted") {
+          try { revItems = await fetchReviewItems(latest.id); } catch { /* ignore */ }
+        }
+        try {
+          await snapshotRevision({
+            boqId: boq.id,
+            lineItems: items as unknown[],
+            designReviewStatus: designReviewStatus || "draft",
+            reviewerOutcome: latest.overall_outcome,
+            roundNo: latest.round_no,
+            reviewItems: revItems as unknown[],
+          });
+        } catch (e) {
+          console.warn("snapshotRevision failed", e);
+        }
+      }
       const r = await createReviewRound(boq, items);
       toast({ title: `Round ${r.round_no} link generated` });
       const url = reviewLink(r.token);
       await navigator.clipboard.writeText(url).catch(() => {});
       await load();
       setOpenId(r.id);
+      onChange?.();
     } catch (e) {
       console.error(e);
       toast({ title: "Failed to generate link", description: String((e as Error).message || e), variant: "destructive" });
@@ -89,7 +117,27 @@ export function DesignReviewPanel({ boq, items }: Props) {
     }
   }
 
+  async function handleSendFinal() {
+    if (!boq.id) return;
+    setFinalizing(true);
+    try {
+      const token = await sendFinalBoq(boq.id);
+      const url = finalBoqLink(token);
+      await navigator.clipboard.writeText(url).catch(() => {});
+      toast({ title: "Final BOQ link copied", description: url });
+      onChange?.();
+    } catch (e) {
+      toast({ title: "Failed to send final BOQ", description: String((e as Error).message || e), variant: "destructive" });
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
   const open = rounds.find((r) => r.id === openId) || null;
+  const latest = rounds[0];
+  const latestSubmitted = rounds.find((r) => r.status === "submitted");
+  const isApproved = latestSubmitted?.overall_outcome === "approved" || designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
+  const needsChanges = latestSubmitted?.overall_outcome === "changes_required" || designReviewStatus === "changes_required";
   const docsByItem = openDocs.reduce<Record<string, DesignReviewDocRow[]>>((m, d) => {
     const k = d.boq_item_id || "_general";
     (m[k] ||= []).push(d); return m;
@@ -98,8 +146,22 @@ export function DesignReviewPanel({ boq, items }: Props) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="text-base">Design Review</CardTitle>
+        <div>
+          <CardTitle className="text-base">Design Review</CardTitle>
+          <div className="text-xs text-muted-foreground mt-1">Status: <span className="font-medium">{statusLabel(designReviewStatus)}</span></div>
+        </div>
         <div className="flex flex-wrap gap-2">
+          {isApproved && designReviewStatus !== "final_sent" && (
+            <Button size="sm" variant="default" onClick={handleSendFinal} disabled={finalizing || !boq.id}>
+              {finalizing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              Send Final BOQ to Departments
+            </Button>
+          )}
+          {designReviewStatus === "final_sent" && (
+            <Button size="sm" variant="outline" onClick={handleSendFinal} disabled={finalizing}>
+              <Copy className="mr-1 h-4 w-4" />Copy Final BOQ Link
+            </Button>
+          )}
           <Button size="sm" onClick={handleCreate} disabled={creating || !boq.id}>
             {creating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
             {rounds.length ? "Generate New Review Round" : "Generate Review Link"}
@@ -110,6 +172,27 @@ export function DesignReviewPanel({ boq, items }: Props) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {needsChanges && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
+            <div className="font-medium text-destructive">Design requires changes</div>
+            <p className="mt-1 text-muted-foreground">
+              Update the BOQ as per the Design comments below, then click <span className="font-medium">Generate New Review Round</span> to resend.
+            </p>
+          </div>
+        )}
+        {isApproved && designReviewStatus !== "final_sent" && (
+          <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs">
+            <div className="font-medium text-emerald-700 dark:text-emerald-400">Design Approved</div>
+            <p className="mt-1 text-muted-foreground">You can now send the Final BOQ to departments.</p>
+          </div>
+        )}
+        {designReviewStatus === "final_sent" && (
+          <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-xs">
+            <div className="font-medium text-primary">Final BOQ sent to departments</div>
+            <p className="mt-1 text-muted-foreground">Share the copied link with downstream departments.</p>
+          </div>
+        )}
+
         {!rounds.length && (
           <p className="text-sm text-muted-foreground">
             No review rounds yet. Click <span className="font-medium">Generate Review Link</span> to create a secure, read-only review link

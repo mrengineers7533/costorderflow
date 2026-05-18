@@ -311,6 +311,59 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_revisions: {
+        Row: {
+          boq_id: string
+          created_at: string
+          created_by: string | null
+          design_review_status: string | null
+          id: string
+          line_items: Json
+          review_items: Json
+          reviewer_outcome: string | null
+          revision_label: string
+          revision_no: number
+          round_no: number | null
+          snapshot_note: string | null
+        }
+        Insert: {
+          boq_id: string
+          created_at?: string
+          created_by?: string | null
+          design_review_status?: string | null
+          id?: string
+          line_items?: Json
+          review_items?: Json
+          reviewer_outcome?: string | null
+          revision_label: string
+          revision_no: number
+          round_no?: number | null
+          snapshot_note?: string | null
+        }
+        Update: {
+          boq_id?: string
+          created_at?: string
+          created_by?: string | null
+          design_review_status?: string | null
+          id?: string
+          line_items?: Json
+          review_items?: Json
+          reviewer_outcome?: string | null
+          revision_label?: string
+          revision_no?: number
+          round_no?: number | null
+          snapshot_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_revisions_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       boqs: {
         Row: {
           boq_date: string
@@ -318,6 +371,8 @@ export type Database = {
           client_name: string | null
           created_at: string
           design_review_status: string
+          final_sent_at: string | null
+          final_share_token: string | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -347,6 +402,8 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           design_review_status?: string
+          final_sent_at?: string | null
+          final_share_token?: string | null
           format: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -376,6 +433,8 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           design_review_status?: string
+          final_sent_at?: string | null
+          final_share_token?: string | null
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           is_current?: boolean
@@ -1023,6 +1082,8 @@ export type Database = {
           client_name: string | null
           created_at: string
           design_review_status: string
+          final_sent_at: string | null
+          final_share_token: string | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
@@ -1061,6 +1122,8 @@ export type Database = {
           client_name: string | null
           created_at: string
           design_review_status: string
+          final_sent_at: string | null
+          final_share_token: string | null
           format: Database["public"]["Enums"]["order_format"]
           id: string
           is_current: boolean
