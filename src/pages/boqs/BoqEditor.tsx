@@ -504,10 +504,11 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, boqId, onUpdate,
+  items, canEditRemarks, canEditFull, boqId, onUpdate,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
+  canEditFull: boolean;
   boqId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
 }) {
@@ -521,14 +522,30 @@ function BoqItemsList({
           <div key={it.id} className="space-y-1.5">
             <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
-              <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
-              <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
-              <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
-              <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
+              {canEditFull ? (
+                <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
+              ) : (
+                <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              )}
+              {canEditFull ? (
+                <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
+              ) : (
+                <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
+              )}
+              {canEditFull ? (
+                <Input type="number" value={it.quantity ?? 0} onChange={(e) => onUpdate(it.id, { quantity: Number(e.target.value) || 0 })} className="h-9" />
+              ) : (
+                <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
+              )}
+              {canEditFull ? (
+                <Input value={it.unit || ""} onChange={(e) => onUpdate(it.id, { unit: e.target.value })} className="h-9" />
+              ) : (
+                <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
+              )}
               <Textarea
                 value={it.remarks}
                 onChange={(e) => onUpdate(it.id, { remarks: e.target.value })}
-                readOnly={!canEditRemarks}
+                readOnly={!canEditRemarks && !canEditFull}
                 className="min-h-9"
                 rows={1}
               />
@@ -544,7 +561,12 @@ function BoqItemsList({
             </div>
             {r && data && (
               <div className="pl-12 pr-1">
-                <DesignCommentRow item={r} docs={data.docs} round={data.round} />
+                <DesignCommentRow
+                  item={r}
+                  docs={data.docs}
+                  round={data.round}
+                  onApply={canEditFull ? (target, text) => onUpdate(it.id, { [target]: text } as Partial<BoqLineItem>) : undefined}
+                />
               </div>
             )}
           </div>
