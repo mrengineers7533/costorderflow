@@ -98,6 +98,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
             reviewerOutcome: latest.overall_outcome,
             roundNo: latest.round_no,
             reviewItems: revItems as unknown[],
+            note: `${latest.kind === "approval" ? "Approval" : "Comment"} round R${latest.round_no}`,
           });
         } catch (e) {
           console.warn("snapshotRevision failed", e);
