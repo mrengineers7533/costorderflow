@@ -1,3 +1,4 @@
+import { sortByItemNo } from "@/lib/boq/types";
 import { supabase } from "@/integrations/supabase/client";
 import type { BoqLineItem } from "@/lib/boq/types";
 
@@ -134,10 +135,9 @@ export async function fetchReviewItems(reviewId: string): Promise<DesignReviewIt
   const { data, error } = await supabase
     .from("boq_design_review_items")
     .select("*")
-    .eq("review_id", reviewId)
-    .order("item_no", { ascending: true });
+    .eq("review_id", reviewId);
   if (error) throw error;
-  return (data || []) as unknown as DesignReviewItemRow[];
+  return sortByItemNo((data || []) as unknown as DesignReviewItemRow[]);
 }
 
 export async function fetchReviewDocs(reviewId: string): Promise<DesignReviewDocRow[]> {

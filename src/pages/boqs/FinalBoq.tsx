@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Loader2 } from "lucide-react";
-import type { BoqRecord } from "@/lib/boq/types";
+import { sortByItemNo, type BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
 export default function FinalBoq() {
@@ -78,7 +78,7 @@ export default function FinalBoq() {
                 </tr>
               </thead>
               <tbody>
-                {boq.line_items.map((it, i) => (
+                {sortByItemNo(boq.line_items).map((it, i) => (
                   <tr key={it.id || i} className="border-t align-top">
                     <td className="p-2">{it.item_no || i + 1}</td>
                     <td className="p-2 font-mono">{it.model_number}</td>
