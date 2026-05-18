@@ -204,6 +204,7 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          kind: string
           overall_outcome: string | null
           recipients: string[]
           reviewer_contact: string | null
@@ -227,6 +228,7 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          kind?: string
           overall_outcome?: string | null
           recipients?: string[]
           reviewer_contact?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          kind?: string
           overall_outcome?: string | null
           recipients?: string[]
           reviewer_contact?: string | null
@@ -1050,6 +1053,7 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          kind: string
           overall_outcome: string | null
           recipients: string[]
           reviewer_contact: string | null
