@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fetchLatestSubmittedRound, publicDocUrl, type DesignReviewItemRow, type DesignReviewDocRow, type DesignReviewRow } from "@/lib/boq/designReview";
 
 interface Props { boqId: string | null; }
@@ -13,7 +14,14 @@ export function useLatestDesignReview(boqId: string | null) {
   return data;
 }
 
-export function DesignCommentRow({ item, docs, round }: { item: DesignReviewItemRow; docs: DesignReviewDocRow[]; round: DesignReviewRow }) {
+export function DesignCommentRow({
+  item, docs, round, onApply,
+}: {
+  item: DesignReviewItemRow;
+  docs: DesignReviewDocRow[];
+  round: DesignReviewRow;
+  onApply?: (target: "description" | "remarks", text: string) => void;
+}) {
   const badge =
     item.decision === "approved" ? <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge> :
     item.decision === "change_required" ? <Badge variant="destructive">Change Required</Badge> :
@@ -21,6 +29,7 @@ export function DesignCommentRow({ item, docs, round }: { item: DesignReviewItem
   const myDocs = docs.filter((d) => d.boq_item_id === item.boq_item_id);
   const hasContent = item.comment || item.design_change_note || myDocs.length || item.decision !== "pending";
   if (!hasContent) return null;
+  const applyText = (item.comment || item.design_change_note || "").trim();
   return (
     <div className="rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs space-y-1">
       <div className="flex flex-wrap items-center gap-2">
@@ -28,6 +37,12 @@ export function DesignCommentRow({ item, docs, round }: { item: DesignReviewItem
         {badge}
         {round.reviewer_name && <span className="text-muted-foreground">· {round.reviewer_name}</span>}
         {round.submitted_at && <span className="text-muted-foreground">· {new Date(round.submitted_at).toLocaleDateString()}</span>}
+        {onApply && applyText && (
+          <div className="ml-auto flex gap-1">
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => onApply("description", applyText)}>Apply → Description</Button>
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => onApply("remarks", applyText)}>Apply → Remarks</Button>
+          </div>
+        )}
       </div>
       {item.comment && <div className="whitespace-pre-wrap">{item.comment}</div>}
       {item.design_change_note && (
