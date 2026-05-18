@@ -24,6 +24,7 @@ import { generatePiPDF } from "@/lib/pi/pdf";
 import { buildPiXlsx } from "@/lib/pi/excel";
 import type { OrderRecord } from "@/lib/orders/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
+import { formatRevisionedNumber, byRevisionAsc } from "@/lib/revisions";
 
 type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_date: string; pi_count: number };
 
@@ -35,7 +36,7 @@ export default function PiList() {
     folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [rows, setRows] = useState<PiRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showSuperseded, setShowSuperseded] = useState(false);
+  const [showSuperseded, setShowSuperseded] = useState(true);
   const [oas, setOas] = useState<OaOption[]>([]);
   const [oaSearch, setOaSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ pi: PiRecord; isRoot: boolean } | null>(null);
@@ -57,6 +58,28 @@ export default function PiList() {
     () => (folder === "all" ? rows : rows.filter((r) => r.format === folder)),
     [rows, folder],
   );
+
+  /** Group PI rows by family (parent_pi_id || id), sort families by latest
+   *  created_at desc, and revisions within each family ascending (R0..Rn). */
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, PiRecord[]>();
+    for (const p of visibleRows) {
+      const root = p.parent_pi_id || p.id;
+      const arr = groups.get(root) || [];
+      arr.push(p);
+      groups.set(root, arr);
+    }
+    const families = Array.from(groups.entries()).map(([root, arr]) => {
+      const sorted = [...arr].sort(byRevisionAsc);
+      const latestCreated = sorted.reduce(
+        (m, r) => Math.max(m, new Date(r.created_at).getTime() || 0),
+        0,
+      );
+      return { root, rows: sorted, latestCreated };
+    });
+    families.sort((a, b) => b.latestCreated - a.latestCreated);
+    return families;
+  }, [visibleRows]);
 
   function setFolder(next: "all" | "MR" | "GMS") {
     const sp = new URLSearchParams(searchParams);
@@ -264,9 +287,16 @@ export default function PiList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visibleRows.map((p) => (
-                      <TableRow key={p.id} className="cursor-pointer hover:bg-accent/40" onClick={() => nav(`/pi/${p.id}`)}>
-                        <TableCell className="font-mono font-medium">{p.pi_number}</TableCell>
+                    {groupedRows.flatMap((fam, fi) =>
+                      fam.rows.map((p, ri) => (
+                      <TableRow
+                        key={p.id}
+                        className={`cursor-pointer hover:bg-accent/40 ${ri === 0 && fi > 0 ? "border-t-2 border-t-border/70" : ""}`}
+                        onClick={() => nav(`/pi/${p.id}`)}
+                      >
+                        <TableCell className="font-mono font-medium">
+                          {formatRevisionedNumber(p.base_pi_number || p.pi_number, p.revision)}
+                        </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                             <span className="px-1.5 py-0.5 rounded bg-muted">R{p.revision ?? 0}</span>
@@ -312,7 +342,7 @@ export default function PiList() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )))}
                   </TableBody>
                 </Table>
               )}
