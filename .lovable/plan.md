@@ -1,76 +1,58 @@
-# BOQ Design Comment → Update → Approval Workflow
+## Goal
 
-Builds on the already-shipped split (comment link vs approval link) and the existing inline `DesignCommentRow` under each item. Adds creator-side editing on the main BOQ page, gates the Approval link until the BOQ is re-saved, and locks Final BOQ.
+Right now Design's per-field comments (Model / Description / Qty / Unit / Remarks) get joined into one string and dumped into a single "Review Comment" cell. Split them so each suggested value appears under its own column, directly beneath the matching BOQ item, on both the main BOQ page and the Design Review panel.
 
-## 1. Inline Design comments per item (main BOQ page)
-- `BoqItemsList` in `src/pages/boqs/BoqEditor.tsx` already renders `<DesignCommentRow>` under each item via `useLatestDesignReview`. Keep this — confirm it shows for every item that has a `comment`, `design_change_note`, files, or non-pending decision (it does).
-- Add a small header chip on the row when a comment exists ("Design comment — click to apply / edit") so the creator can spot rows needing action.
-- No "global comments" panel — strictly item-wise (already the case).
+## 1. DB — store per-column comments
 
-## 2. Creator can edit every field row-wise (after comments received)
-Today only `Remarks` is editable. Expand `BoqItemsList` so when `isCreator && designReviewStatus ∈ {review_received, changes_required, boq_updated, draft}` the following per-row cells become editable inputs:
-- Model Number (Input)
-- Description (Textarea)
-- Quantity (number Input)
-- Unit (Input)
-- Remarks (already editable)
+New migration that:
 
-Item No. stays read-only (auto-sequenced). Editing flips a dirty flag.
+1. Adds `column_comments jsonb` (default `'{}'::jsonb`) to `boq_design_review_items`.
+2. Replaces `submit_design_review_with_token` so it also writes `column_comments = _it->'column_comments'` when present (keeps existing `comment` write for backward compatibility with old data and the approval-link flow).
 
-Once `designReviewStatus = design_approved` or `final_sent`, the row becomes fully read-only (lock — see §6).
+No changes to `boqs`, `boq_design_reviews`, `boq_revisions`, or RLS.
 
-`updateItem` already supports arbitrary patches, so wiring new inputs is straightforward.
+## 2. Design Comment link (`src/pages/boqs/DesignReview.tsx`)
 
-### Click-to-apply from comment
-On each `DesignCommentRow` that has a `comment` or `design_change_note`, add a small "Apply to Description" / "Apply to Remarks" button that copies the text into the corresponding field via `updateItem`. Manual editing remains available regardless.
+- Keep the existing per-column textareas (Model / Description / Qty / Unit / Remarks) — they are already correct.
+- Submit payload changes: send `column_comments: { model, description, quantity, unit, remarks }` per item alongside `comment` (still concatenated for legacy viewers / approval-kind change notes).
+- No layout change.
 
-## 3. Save updated BOQ → unlocks Approval link
-- The existing `save()` already flips `design_review_status` to `boq_updated` when saving while status is `review_received` or `changes_required`. Keep it.
-- In `DesignReviewPanel`, **disable the "Generate Approval Link" button** unless:
-  `designReviewStatus ∈ {boq_updated, design_approved}` **or** no comment round has been received yet (first-time approval is allowed).
-  Tooltip: "Save the updated BOQ first (after Design comments) before generating an Approval link."
-- "Generate Comment Link" remains always available (for fresh comment rounds).
+## 3. Type — `src/lib/boq/designReview.ts`
 
-## 4. Approval flow (already implemented, minor tightening)
-- Approval link reviewer page (`DesignReview.tsx` with `kind=approval`) — no change.
-- On approval submission: RPC already sets `design_review_status = design_approved`.
-- On change_required: RPC sets `changes_required` → creator edits → saves → flips to `boq_updated` → can send new approval link. Loop supported.
+- Extend `DesignReviewItemRow` with `column_comments: Partial<Record<"model"|"description"|"quantity"|"unit"|"remarks", string>> | null`.
+- Add a tiny helper `parseColumnComments(row)` that returns the column map. If `column_comments` is populated use it; otherwise parse the legacy `comment` string of shape `"Model: X\nDescription: Y\n…"` into the same map (covers existing submitted rows).
 
-## 5. Final BOQ save & lock
-- "Send Final BOQ to Departments" button already appears when `design_approved`. After click, status becomes `final_sent`.
-- When `designReviewStatus ∈ {design_approved, final_sent}`:
-  - All item cells become read-only in `BoqItemsList`.
-  - "Save Remarks" button hidden.
-  - "Generate Comment Link" / "Generate Approval Link" buttons hidden (or disabled with tooltip "BOQ is locked").
-- Admin override is out of scope (no admin lock-bypass exists today; leave existing behavior intact).
+## 4. Main BOQ page — `src/pages/boqs/BoqEditor.tsx` + new sub-component
 
-## 6. OA revision
-- No change. OA revision remains manual via the OA editor. Existing OA→BOQ sync logic on reload is untouched.
+- Replace the current `<DesignCommentRow>` block under each item (lines 562–571) with a new `<DesignSuggestionRow>` rendered inside `BoqItemsList` that uses the SAME 7-column grid template as the item row.
+- For each column (Model, Description, Qty, Unit, Remarks) the suggestion row shows:
+  - the suggested value from `parseColumnComments(reviewItem)` (or `—` if blank), styled as a dashed-bordered, accent-tinted cell labelled "Design Suggested Update (R{n})";
+  - when `canEditFull`, an inline "Apply" button per cell that calls `onUpdate(it.id, { [field]: suggestedValue })`. Quantity is parsed to a number before apply.
+- Item No. column shows the round badge + reviewer name/date; Approval column stays empty.
+- Item-to-comment mapping uses `boq_item_id` (already correct) so item 1's comment can never show under item 2.
+- `DesignCommentsInline.tsx`: `DesignCommentRow` continues to exist for any legacy use (none after this change in BoqEditor), but we add and export the new `DesignSuggestionRow` from the same file.
 
-## 7. Versioning / Revision History
-- `snapshotRevision` is already called in `DesignReviewPanel.handleCreate` before generating a new round. Extend to also snapshot when the creator **saves an updated BOQ** following a comment round:
-  - In `save()` (BoqEditor), if `shouldFlipStatus` is true (i.e., saving in response to comments), call `snapshotRevision` with `note: "Creator update R{n}"` and current `line_items` after the DB update succeeds.
-- `RevisionsTable` already lists revisions row-wise, view-only with one-click open. Highlight current via existing `currentLabel` prop — already wired with `R{version}`.
+## 5. Design Review Panel — `src/components/boqs/DesignReviewPanel.tsx`
+
+- Drop the "Review Comment" column from the table.
+- For each item render two `<tr>`s: the existing item row, then a "Design Suggested Update" row that spans the same Model / Description / Qty / Unit / Remarks columns showing the per-field suggestions (using `parseColumnComments`), with reviewer name + round in the `#` cell. Status cell stays (approval-kind decision). Files cell stays on the suggestion row.
+- No change to round tabs, link gating, or button logic.
+
+## 6. Versioning (no functional change, just confirm)
+
+- `snapshotRevision` already saves `line_items` + `review_items` per round in `boq_revisions`; the new `column_comments` field will flow through automatically because it's stored on `boq_design_review_items` and read via `fetchReviewItems`. `RevisionsTable` keeps its current row-wise read-only display.
 
 ## Out of scope
-- BOQ calculations, OA sync rules, RLS, RPC signatures.
-- No DB migration required — all changes are frontend.
 
-## Technical details
+- BOQ calculations, OA sync, item-data logic, RLS, permission rules — all untouched.
+- The Design Approval link UI (still one combined change-note per item, as required).
+- Old already-submitted comment rounds: handled by the legacy-string parser in step 3, so they also render column-wise.
 
-**Files to edit:**
-- `src/pages/boqs/BoqEditor.tsx`
-  - `BoqItemsList`: convert Model/Description/Qty/Unit cells to controlled inputs gated by `canEditFull = isCreator && !locked`.
-  - Compute `locked = designReviewStatus === "design_approved" || designReviewStatus === "final_sent"`.
-  - Pass `locked` to `BoqItemsList`; reuse `onUpdate`.
-  - In `DesignCommentRow` callsite, add "Apply to Description/Remarks" action buttons (small variant) calling `onUpdate`.
-  - In `save()` after successful update + `shouldFlipStatus`, await `snapshotRevision({...note:"Creator update"})`.
-  - Hide "Save Remarks" button when `locked`. Add a primary "Save BOQ Updates" button visible when any field (not just remarks) is dirty and `!locked` — calls existing `save(false)`.
+## Files touched
+
+- `supabase/migrations/<new>.sql` (new)
+- `src/lib/boq/designReview.ts`
 - `src/components/boqs/DesignCommentsInline.tsx`
-  - Extend `DesignCommentRow` props with optional `onApply?: (target: "description" | "remarks", text: string) => void`. Render small "Apply →" buttons when provided and comment text exists.
 - `src/components/boqs/DesignReviewPanel.tsx`
-  - Compute `approvalGated = rounds.some(r => r.kind === "comment" && r.status === "submitted") && designReviewStatus !== "boq_updated" && designReviewStatus !== "design_approved"`.
-  - Disable "Generate Approval Link" with tooltip when `approvalGated`.
-  - Hide both generate buttons when `designReviewStatus ∈ {design_approved, final_sent}` (keep Copy Final BOQ Link visible).
-
-**No new state shape, no DB schema changes, no migration.**
+- `src/pages/boqs/BoqEditor.tsx`
+- `src/pages/boqs/DesignReview.tsx`

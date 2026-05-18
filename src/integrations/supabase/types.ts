@@ -141,6 +141,7 @@ export type Database = {
       boq_design_review_items: {
         Row: {
           boq_item_id: string
+          column_comments: Json
           comment: string | null
           created_at: string
           decided_at: string | null
@@ -157,6 +158,7 @@ export type Database = {
         }
         Insert: {
           boq_item_id: string
+          column_comments?: Json
           comment?: string | null
           created_at?: string
           decided_at?: string | null
@@ -173,6 +175,7 @@ export type Database = {
         }
         Update: {
           boq_item_id?: string
+          column_comments?: Json
           comment?: string | null
           created_at?: string
           decided_at?: string | null
