@@ -7,20 +7,6 @@ import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { PiRecord } from "@/lib/pi/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
-/** Render a base OA/BOQ/PI number with `/R{n}` suffix when revision > 0.
- *  Strips any existing `/R\d+` suffix from `base` first so we never
- *  double-suffix (e.g. "OA/211/R1" -> "OA/211" -> "OA/211/R2"). */
-export function formatRevisionedNumber(base: string, revision: number | null | undefined): string {
-  const stripped = (base || "").replace(/\/R\d+$/i, "");
-  const r = Number(revision ?? 0);
-  return r > 0 ? `${stripped}/R${r}` : stripped;
-}
-
-/** Numeric ascending comparator for revision rows (R0, R1, R2, …). */
-export function byRevisionAsc<T extends { revision?: number | null }>(a: T, b: T): number {
-  return (Number(a.revision ?? 0)) - (Number(b.revision ?? 0));
-}
-
 /** Snapshot the given BOQ as a PDF in the `boq-documents` bucket under a
  *  history/ prefix so it is never overwritten by future revisions. Best
  *  effort — failures are logged but never break the revision flow. */

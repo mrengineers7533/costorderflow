@@ -17,7 +17,6 @@ import {
 import type { OrderRecord } from "@/lib/orders/types";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildOrderXlsx } from "@/lib/orders/excel";
-import { formatRevisionedNumber, byRevisionAsc } from "@/lib/revisions";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -47,28 +46,6 @@ export default function OrdersList() {
     () => (folder === "all" ? orders : orders.filter((o) => o.format === folder)),
     [orders, folder],
   );
-
-  /** Group rows by OA family (parent_order_id || id), sort families by latest
-   *  created_at desc, and revisions within each family ascending (R0..Rn). */
-  const groupedOrders = useMemo(() => {
-    const groups = new Map<string, OrderRecord[]>();
-    for (const o of visibleOrders) {
-      const root = o.parent_order_id || o.id;
-      const arr = groups.get(root) || [];
-      arr.push(o);
-      groups.set(root, arr);
-    }
-    const families = Array.from(groups.entries()).map(([root, rows]) => {
-      const sorted = [...rows].sort(byRevisionAsc);
-      const latestCreated = sorted.reduce(
-        (m, r) => Math.max(m, new Date(r.created_at).getTime() || 0),
-        0,
-      );
-      return { root, rows: sorted, latestCreated };
-    });
-    families.sort((a, b) => b.latestCreated - a.latestCreated);
-    return families;
-  }, [visibleOrders]);
 
   function setFolder(next: "all" | "MR" | "GMS") {
     const sp = new URLSearchParams(searchParams);
@@ -246,15 +223,14 @@ export default function OrdersList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupedOrders.flatMap((fam, fi) =>
-                    fam.rows.map((o, ri) => (
-                    <TableRow
-                      key={o.id}
-                      className={`cursor-pointer hover:bg-accent/40 ${ri === 0 && fi > 0 ? "border-t-2 border-t-border/70" : ""}`}
-                      onClick={() => navigate(`/orders/${o.id}`)}
-                    >
+                  {visibleOrders.map((o) => (
+                    <TableRow key={o.id} className="cursor-pointer hover:bg-accent/40" onClick={() => navigate(`/orders/${o.id}`)}>
                       <TableCell className="font-mono font-medium">
-                        {formatRevisionedNumber(o.oa_number, o.revision)}
+                        {(() => {
+                          const base = (o.oa_number || "").replace(/\/R\d+$/i, "");
+                          const rev = o.revision ?? 0;
+                          return rev > 0 ? `${base}/R${rev}` : base;
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1 font-mono text-[11px]">
@@ -328,7 +304,7 @@ export default function OrdersList() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  )))}
+                  ))}
                 </TableBody>
               </Table>
             }
