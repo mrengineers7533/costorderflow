@@ -140,6 +140,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const latestApprovalSubmitted = rounds.find((r) => r.status === "submitted" && r.kind === "approval");
   const isApproved = latestApprovalSubmitted?.overall_outcome === "approved" || designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
   const needsChanges = latestApprovalSubmitted?.overall_outcome === "changes_required" || designReviewStatus === "changes_required";
+  const isLocked = designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
+  const hasSubmittedComment = rounds.some((r) => r.kind === "comment" && r.status === "submitted");
+  const approvalGated = hasSubmittedComment
+    && designReviewStatus !== "boq_updated"
+    && designReviewStatus !== "design_approved"
+    && designReviewStatus !== "final_sent";
   const docsByItem = openDocs.reduce<Record<string, DesignReviewDocRow[]>>((m, d) => {
     const k = d.boq_item_id || "_general";
     (m[k] ||= []).push(d); return m;
@@ -164,14 +170,23 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
               <Copy className="mr-1 h-4 w-4" />Copy Final BOQ Link
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => handleCreate("comment")} disabled={!!creating || !boq.id}>
-            {creating === "comment" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
-            Generate Comment Link
-          </Button>
-          <Button size="sm" onClick={() => handleCreate("approval")} disabled={!!creating || !boq.id}>
-            {creating === "approval" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
-            Generate Approval Link
-          </Button>
+          {!isLocked && (
+            <Button size="sm" variant="outline" onClick={() => handleCreate("comment")} disabled={!!creating || !boq.id}>
+              {creating === "comment" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+              Generate Comment Link
+            </Button>
+          )}
+          {!isLocked && (
+            <Button
+              size="sm"
+              onClick={() => handleCreate("approval")}
+              disabled={!!creating || !boq.id || approvalGated}
+              title={approvalGated ? "Save the updated BOQ first (after Design comments) before generating an Approval link." : undefined}
+            >
+              {creating === "approval" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+              Generate Approval Link
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh
           </Button>
