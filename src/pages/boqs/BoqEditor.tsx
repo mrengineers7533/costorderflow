@@ -434,6 +434,7 @@ export default function BoqEditor() {
                   key={`items-${refreshKey}`}
                   items={items}
                   canEditRemarks={canEditRemarks}
+                  canEditFull={canEditFull}
                   boqId={boqId}
                   onUpdate={updateItem}
                 />
