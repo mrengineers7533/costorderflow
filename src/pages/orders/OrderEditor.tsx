@@ -682,8 +682,8 @@ export default function OrderEditor() {
                 </Button>
               </>
             )}
-            <Button variant="secondary" className="rounded-lg" disabled={saving} onClick={() => save(false)}>Save Draft</Button>
-            <Button className="rounded-lg" disabled={saving} onClick={() => save(true)}>Finalize</Button>
+            <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>
+            <Button className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
 
@@ -706,6 +706,10 @@ export default function OrderEditor() {
         {/* Revisions section (OA + linked BOQ history) */}
         {!isNew && parentOrderId && (
           <RevisionsPanel rootOrderId={parentOrderId} reloadKey={revisionsKey} />
+        )}
+
+        {!isNew && parentOrderId && orderId && (
+          <OaRevisionHistory currentOrderId={orderId} rootOrderId={parentOrderId} />
         )}
 
         {/* Confirmation prompts */}
