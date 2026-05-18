@@ -17,9 +17,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
-import { DesignCommentRow, useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
-import { statusLabel, snapshotRevision } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, parseColumnComments, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
