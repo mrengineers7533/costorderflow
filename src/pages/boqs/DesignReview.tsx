@@ -280,8 +280,33 @@ export default function DesignReview() {
                         const d = decisions[it.boq_item_id];
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+                        const base = baselineById[it.boq_item_id];
+                        const wasChanged = (field: DiffField): string | null => {
+                          if (isComment || !base) return null;
+                          const a = base[field as keyof DesignReviewItemRow];
+                          const b = (it as unknown as Record<string, unknown>)[field];
+                          const sa = a == null ? "" : String(a).trim();
+                          const sb = b == null ? "" : String(b).trim();
+                          return sa === sb ? null : sa;
+                        };
                         return (
                           <Fragment key={it.id}>
+                            {!isComment && base && DIFF_FIELDS.some(({ key }) => wasChanged(key) !== null) && (
+                              <TableRow className="bg-amber-50/60 dark:bg-amber-950/20 border-t-2 border-amber-500/40">
+                                <TableCell className="py-1 align-top">
+                                  <span className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold">Previous{baselineRoundNo ? ` · R${baselineRoundNo}` : ""}</span>
+                                </TableCell>
+                                {DIFF_FIELDS.map(({ key }) => {
+                                  const prev = wasChanged(key);
+                                  return (
+                                    <TableCell key={key} className="py-1 text-xs text-muted-foreground line-through whitespace-pre-wrap">
+                                      {prev === null ? "" : (prev || "—")}
+                                    </TableCell>
+                                  );
+                                })}
+                                <TableCell className="py-1" />
+                              </TableRow>
+                            )}
                             <TableRow className="align-top">
                               <TableCell className="py-2 font-medium">{it.item_no}</TableCell>
                               <TableCell className="py-2 font-mono text-xs">{it.model_number}</TableCell>
