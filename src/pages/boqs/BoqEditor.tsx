@@ -435,7 +435,8 @@ export default function BoqEditor() {
                 <div><Label>Project / Cost Sheet No.</Label><Input value={projectNumber} readOnly /></div>
                 <div><Label>Prepared By</Label><Input value={preparedBy} readOnly /></div>
                 <p className="md:col-span-2 text-xs text-muted-foreground">
-                  All BOQ fields mirror the linked OA. Only Remarks are editable, and only by the OA/BOQ creator.
+                  Saved BOQ snapshot. Header data stays fixed after Save to BOQ Folder and does not change
+                  automatically when the OA is edited. Only Remarks are editable, and only by the OA/BOQ creator.
                 </p>
               </CardContent>
             </Card>
@@ -444,7 +445,8 @@ export default function BoqEditor() {
               <CardHeader>
                 <CardTitle>Items</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Synced from OA. Only Remarks editable (OA/BOQ creator only). Senior approval is item-wise.
+                  Saved snapshot for this revision. Items are frozen at the moment this BOQ was saved.
+                  Only Remarks editable (OA/BOQ creator only). Senior approval is item-wise.
                 </p>
               </CardHeader>
               <CardContent className="space-y-2">
