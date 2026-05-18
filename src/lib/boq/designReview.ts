@@ -107,7 +107,7 @@ export async function createReviewRound(
   const { data: userData } = await supabase.auth.getUser();
   const expiresAt = new Date(Date.now() + expiryDays * 86400_000).toISOString();
 
-  const snapshot = {
+  const snapshot: Record<string, unknown> = {
     boq_number: boq.boq_number,
     client_name: boq.client_name,
     project_number: boq.project_number,
@@ -127,7 +127,7 @@ export async function createReviewRound(
       round_no: nextRound,
       status: "sent",
       expires_at: expiresAt,
-      boq_snapshot: snapshot,
+      boq_snapshot: snapshot as never,
       kind,
     })
     .select("*")
