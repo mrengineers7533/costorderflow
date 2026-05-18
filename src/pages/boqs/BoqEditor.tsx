@@ -315,6 +315,9 @@ export default function BoqEditor() {
                 <div className="font-mono font-semibold truncate">{boqNumber || "New BOQ"}</div>
                 <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[11px] font-medium px-2 py-0.5">{format}</span>
                 {version > 1 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
+                <span className="inline-flex items-center rounded-full bg-muted text-foreground text-[11px] font-medium px-2 py-0.5">
+                  {statusLabel(designReviewStatus)}
+                </span>
               </div>
             </div>
           </div>
@@ -397,31 +400,13 @@ export default function BoqEditor() {
                 <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
                   <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
                 </div>
-                {items.map((it) => (
-                  <div key={it.id} className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
-                    <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
-                    <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
-                    <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
-                    <Textarea
-                      value={it.remarks}
-                      onChange={(e) => updateItem(it.id, { remarks: e.target.value })}
-                      readOnly={!canEditRemarks}
-                      className="min-h-9"
-                      rows={1}
-                    />
-                    <div className="text-[11px] pt-2">
-                      {it.approval_status === "approved" ? (
-                        <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
-                      ) : it.approval_status === "rejected" ? (
-                        <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 font-medium" title={it.approval_comment || ""}>Rejected</span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <BoqItemsList
+                  items={items}
+                  canEditRemarks={canEditRemarks}
+                  boqId={boqId}
+                  refreshKey={refreshKey}
+                  onUpdate={updateItem}
+                />
               </CardContent>
             </Card>
 
@@ -442,7 +427,17 @@ export default function BoqEditor() {
             <DesignReviewPanel
               boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber }}
               items={items}
+              designReviewStatus={designReviewStatus}
+              onChange={async () => {
+                if (!boqId) return;
+                const { data } = await supabase.from("boqs").select("design_review_status").eq("id", boqId).maybeSingle();
+                const s = (data as { design_review_status?: string } | null)?.design_review_status;
+                if (s) setDesignReviewStatus(s);
+                setRefreshKey((k) => k + 1);
+              }}
             />
+
+            <RevisionsTable boqId={boqId} currentLabel={`R${(version) || 1}`} />
           </div>
 
           {/* ---------- Live document preview (below editor) ---------- */}
