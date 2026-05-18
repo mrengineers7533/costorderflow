@@ -401,10 +401,10 @@ export default function BoqEditor() {
                   <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
                 </div>
                 <BoqItemsList
+                  key={`items-${refreshKey}`}
                   items={items}
                   canEditRemarks={canEditRemarks}
                   boqId={boqId}
-                  refreshKey={refreshKey}
                   onUpdate={updateItem}
                 />
               </CardContent>
@@ -473,18 +473,14 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, boqId, refreshKey, onUpdate,
+  items, canEditRemarks, boqId, onUpdate,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
   boqId: string | null;
-  refreshKey: number;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
 }) {
-  const review = useLatestDesignReview(boqId ? `${boqId}#${refreshKey}` : null) as ReturnType<typeof useLatestDesignReview>;
-  // The hook keys by boqId; pass real id for fetching:
-  const review2 = useLatestDesignReview(boqId);
-  const data = review || review2;
+  const data = useLatestDesignReview(boqId);
   const byItemId = new Map((data?.items || []).map((r) => [r.boq_item_id, r]));
   return (
     <>
