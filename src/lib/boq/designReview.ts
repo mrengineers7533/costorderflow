@@ -105,7 +105,7 @@ export async function createReviewRound(
 
   await supabase
     .from("boqs")
-    .update({ design_review_status: "sent" })
+    .update({ design_review_status: nextRound === 1 ? "sent_to_design" : "resubmitted" })
     .eq("id", boq.id);
 
   return review as unknown as DesignReviewRow;
@@ -147,4 +147,121 @@ export async function fetchReviewDocs(reviewId: string): Promise<DesignReviewDoc
 export function publicDocUrl(filePath: string): string {
   const { data } = supabase.storage.from("design-review-docs").getPublicUrl(filePath);
   return data.publicUrl;
+}
+
+/** Fetch latest submitted review round + its items for a BOQ. */
+export async function fetchLatestSubmittedRound(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
+  const { data } = await supabase
+    .from("boq_design_reviews")
+    .select("*")
+    .eq("boq_id", boqId)
+    .eq("status", "submitted")
+    .order("round_no", { ascending: false })
+    .limit(1);
+  const round = data?.[0] as unknown as DesignReviewRow | undefined;
+  if (!round) return null;
+  const [items, docs] = await Promise.all([fetchReviewItems(round.id), fetchReviewDocs(round.id)]);
+  return { round, items, docs };
+}
+
+/** Mark a BOQ as Final and generate a share token for departments. */
+export async function sendFinalBoq(boqId: string): Promise<string> {
+  const { data: existing } = await supabase
+    .from("boqs")
+    .select("final_share_token")
+    .eq("id", boqId)
+    .maybeSingle();
+  let token = (existing as { final_share_token: string | null } | null)?.final_share_token || null;
+  const patch: Record<string, unknown> = {
+    design_review_status: "final_sent",
+    final_sent_at: new Date().toISOString(),
+  };
+  if (!token) {
+    token = (globalThis.crypto || crypto).randomUUID();
+    patch.final_share_token = token;
+  }
+  const { error } = await supabase.from("boqs").update(patch as never).eq("id", boqId);
+  if (error) throw error;
+  return token!;
+}
+
+export function finalBoqLink(token: string): string {
+  return `${window.location.origin}/boq/final/${token}`;
+}
+
+/** Snapshot the current BOQ state into boq_revisions. Returns the new revision label. */
+export async function snapshotRevision(params: {
+  boqId: string;
+  lineItems: unknown[];
+  designReviewStatus: string;
+  reviewerOutcome?: string | null;
+  roundNo?: number | null;
+  reviewItems?: unknown[];
+  note?: string;
+}): Promise<string> {
+  const { data: prev } = await supabase
+    .from("boq_revisions")
+    .select("revision_no")
+    .eq("boq_id", params.boqId)
+    .order("revision_no", { ascending: false })
+    .limit(1);
+  const nextNo = ((prev?.[0] as { revision_no?: number } | undefined)?.revision_no || 0) + 1;
+  const label = `R${nextNo}`;
+  const { data: auth } = await supabase.auth.getUser();
+  const { error } = await supabase.from("boq_revisions").insert({
+    boq_id: params.boqId,
+    revision_label: label,
+    revision_no: nextNo,
+    design_review_status: params.designReviewStatus,
+    reviewer_outcome: params.reviewerOutcome ?? null,
+    round_no: params.roundNo ?? null,
+    line_items: params.lineItems as never,
+    review_items: (params.reviewItems ?? []) as never,
+    snapshot_note: params.note ?? null,
+    created_by: auth.user?.id || null,
+  } as never);
+  if (error) throw error;
+  return label;
+}
+
+export interface BoqRevisionRow {
+  id: string;
+  boq_id: string;
+  revision_label: string;
+  revision_no: number;
+  design_review_status: string | null;
+  reviewer_outcome: string | null;
+  round_no: number | null;
+  line_items: unknown[];
+  review_items: unknown[];
+  snapshot_note: string | null;
+  created_at: string;
+}
+
+export async function fetchRevisions(boqId: string): Promise<BoqRevisionRow[]> {
+  const { data, error } = await supabase
+    .from("boq_revisions")
+    .select("*")
+    .eq("boq_id", boqId)
+    .order("revision_no", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as BoqRevisionRow[];
+}
+
+export const DESIGN_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  sent_to_design: "Sent to Design",
+  review_received: "Design Comments Received",
+  changes_required: "Changes Required",
+  resubmitted: "Resubmitted to Design",
+  design_approved: "Design Approved",
+  final_sent: "Final BOQ Sent",
+  // legacy values
+  sent: "Sent to Design",
+  approved_by_design: "Design Approved",
+};
+
+export function statusLabel(s?: string | null): string {
+  if (!s) return "Draft";
+  return DESIGN_STATUS_LABELS[s] || s;
 }
