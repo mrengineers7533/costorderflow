@@ -1,58 +1,82 @@
 ## Goal
 
-Right now Design's per-field comments (Model / Description / Qty / Unit / Remarks) get joined into one string and dumped into a single "Review Comment" cell. Split them so each suggested value appears under its own column, directly beneath the matching BOQ item, on both the main BOQ page and the Design Review panel.
+Show every OA / BOQ / PI revision row-wise under its base record (R0, R1, R2…), sorted numerically, current always visible and clearly marked, older revisions read-only.
 
-## 1. DB — store per-column comments
+## Scope
 
-New migration that:
+Display/grouping only. No changes to revision creation logic, calculations, OA/BOQ/PI sync, link generation, edit permissions, or DB schema.
 
-1. Adds `column_comments jsonb` (default `'{}'::jsonb`) to `boq_design_review_items`.
-2. Replaces `submit_design_review_with_token` so it also writes `column_comments = _it->'column_comments'` when present (keeps existing `comment` write for backward compatibility with old data and the approval-link flow).
+Files touched:
+- `src/pages/orders/OrdersList.tsx`
+- `src/pages/boqs/BoqList.tsx`
+- `src/pages/pi/PiList.tsx`
 
-No changes to `boqs`, `boq_design_reviews`, `boq_revisions`, or RLS.
+## Changes
 
-## 2. Design Comment link (`src/pages/boqs/DesignReview.tsx`)
+### 1. OrdersList — grouped row-wise display
 
-- Keep the existing per-column textareas (Model / Description / Qty / Unit / Remarks) — they are already correct.
-- Submit payload changes: send `column_comments: { model, description, quantity, unit, remarks }` per item alongside `comment` (still concatenated for legacy viewers / approval-kind change notes).
-- No layout change.
+Replace the current flat list. Group all rows by `parent_order_id || id` (base OA family). For each group:
 
-## 3. Type — `src/lib/boq/designReview.ts`
+- Render a "family header" row showing the base OA number (e.g. `GMSOA/2026-2027/211`), company, format, latest date, and a "× revisions" count. Clicking expands the group (open by default).
+- Inside the group render every revision in **numeric ascending order by `revision`** (R0, R1, R2, …), each as a normal table row using the existing column layout:
+  - OA Number (with `/R{n}` suffix when `revision > 0`)
+  - Rev badge `R{n}`
+  - Format, Company, Date, Net Payable, Status
+  - BOQ link badge, PI link badge (per-row, using same `boqCounts` / `piCounts` map but keyed by that revision's `id`)
+  - Current / Superseded badge (existing logic — `is_current`)
+  - Actions: Edit, PDF, Excel, Print, Delete (existing handlers, unchanged)
+- The "Show superseded revisions" switch keeps working: when OFF, only the current row of each family is shown (group collapses to one row).
+- Sorting between families: by latest revision's `created_at` desc (matches current behavior).
+- Numeric sort inside a family uses `Number(revision ?? 0)` — never string-sort the OA number.
 
-- Extend `DesignReviewItemRow` with `column_comments: Partial<Record<"model"|"description"|"quantity"|"unit"|"remarks", string>> | null`.
-- Add a tiny helper `parseColumnComments(row)` that returns the column map. If `column_comments` is populated use it; otherwise parse the legacy `comment` string of shape `"Model: X\nDescription: Y\n…"` into the same map (covers existing submitted rows).
+Per-row counts: extend the existing `boqCounts` / `piCounts` queries so they count by `order_id` (BOQ) and `reference_oa_id` (PI) for **every** OA id in the loaded set, not just current — so superseded rows also show their related counts.
 
-## 4. Main BOQ page — `src/pages/boqs/BoqEditor.tsx` + new sub-component
+### 2. BoqList — grouped row-wise display
 
-- Replace the current `<DesignCommentRow>` block under each item (lines 562–571) with a new `<DesignSuggestionRow>` rendered inside `BoqItemsList` that uses the SAME 7-column grid template as the item row.
-- For each column (Model, Description, Qty, Unit, Remarks) the suggestion row shows:
-  - the suggested value from `parseColumnComments(reviewItem)` (or `—` if blank), styled as a dashed-bordered, accent-tinted cell labelled "Design Suggested Update (R{n})";
-  - when `canEditFull`, an inline "Apply" button per cell that calls `onUpdate(it.id, { [field]: suggestedValue })`. Quantity is parsed to a number before apply.
-- Item No. column shows the round badge + reviewer name/date; Approval column stays empty.
-- Item-to-comment mapping uses `boq_item_id` (already correct) so item 1's comment can never show under item 2.
-- `DesignCommentsInline.tsx`: `DesignCommentRow` continues to exist for any legacy use (none after this change in BoqEditor), but we add and export the new `DesignSuggestionRow` from the same file.
+The current page already has a per-row expand chevron that lazy-loads the BOQ family into a nested card list. Replace that nested-card pattern with proper row-wise grouping that matches OrdersList:
 
-## 5. Design Review Panel — `src/components/boqs/DesignReviewPanel.tsx`
+- Group rows by BOQ family root: resolve via `parent_order_id` of the underlying OA (existing `loadFamilyFor` logic), but do the grouping up-front for all visible rows in a single batched fetch so the table renders the whole family inline.
+- Render one family header row per group (base BOQ number, reference OA, latest date, `× revisions` count, expand toggle — open by default).
+- Inside the group render every BOQ revision **sorted by `Number(revision)` ascending**:
+  - BOQ No. (with `/R{n}` suffix when `revision > 0`)
+  - Rev badge + Current/Superseded/Pending/Rejected (existing logic)
+  - Format, Reference OA, Date, Status
+  - Actions: Edit, PDF, Excel, Print, Delete (unchanged handlers)
+- Older revisions: keep `Edit` button but the editor already enforces read-only on superseded rows — no permission changes here.
+- `showSuperseded` toggle keeps working as today (also keeps pending/rejected visible).
+- Remove the old "BOQ Revision History" nested card block (its info is now in the inline rows). Keep `BoqCompareDialog` available via a small "Compare" action on each non-current row that opens compare against the family's current row.
 
-- Drop the "Review Comment" column from the table.
-- For each item render two `<tr>`s: the existing item row, then a "Design Suggested Update" row that spans the same Model / Description / Qty / Unit / Remarks columns showing the per-field suggestions (using `parseColumnComments`), with reviewer name + round in the `#` cell. Status cell stays (approval-kind decision). Files cell stays on the suggestion row.
-- No change to round tabs, link gating, or button logic.
+### 3. PiList — grouped row-wise display
 
-## 6. Versioning (no functional change, just confirm)
+PiList is currently flat with no grouping. Add the same pattern:
 
-- `snapshotRevision` already saves `line_items` + `review_items` per round in `boq_revisions`; the new `column_comments` field will flow through automatically because it's stored on `boq_design_review_items` and read via `fetchReviewItems`. `RevisionsTable` keeps its current row-wise read-only display.
+- Group by `parent_pi_id || id` (PI family root).
+- Family header row: base PI number, ref OA, customer, latest date, `× revisions` count, expand toggle (open by default).
+- Inside the group, render every PI revision **sorted by `Number(revision)` ascending** using the existing PI columns and actions (View, Edit, PDF, Excel, Delete). Current vs Superseded badge as today.
+- `showSuperseded` toggle keeps working.
 
-## Out of scope
+### 4. Revision number formatting helper
 
-- BOQ calculations, OA sync, item-data logic, RLS, permission rules — all untouched.
-- The Design Approval link UI (still one combined change-note per item, as required).
-- Old already-submitted comment rounds: handled by the legacy-string parser in step 3, so they also render column-wise.
+Add a tiny local helper in each list (or co-locate in `src/lib/revisions/index.ts`) used by all three pages:
 
-## Files touched
+```ts
+function formatRevisionedNumber(base: string, revision: number) {
+  const stripped = (base || "").replace(/\/R\d+$/i, "");
+  return revision > 0 ? `${stripped}/R${revision}` : stripped;
+}
+```
 
-- `supabase/migrations/<new>.sql` (new)
-- `src/lib/boq/designReview.ts`
-- `src/components/boqs/DesignCommentsInline.tsx`
-- `src/components/boqs/DesignReviewPanel.tsx`
-- `src/pages/boqs/BoqEditor.tsx`
-- `src/pages/boqs/DesignReview.tsx`
+Used wherever the OA/BOQ/PI number is rendered, replacing the inline IIFEs already present.
+
+## Out of scope (explicit)
+
+- No DB migration, no RLS change.
+- No change to `reviseOrder`, `reviseBoqFromOrder`, `syncBoqsAndPisForOrder`, or any totals/calc code.
+- No change to OA/BOQ/PI editors, permissions, design-comment workflow, or link generation.
+- No change to public Design Comment / Approval / Final BOQ pages.
+
+## Technical notes
+
+- All grouping is client-side over already-loaded rows; no extra round-trips beyond the existing per-page queries (and the existing `boqCounts` / `piCounts` lookups).
+- Sorting always uses `Number(revision ?? 0)` — never lexical string sort on the OA/BOQ/PI number, matching the BOQ item serial-number fix already applied.
+- Expand state is local component state, defaulting to `true` for every family so users see "all revisions row-wise" by default, as requested.
