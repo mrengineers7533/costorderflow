@@ -19,7 +19,7 @@ import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { DesignCommentRow, useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
-import { statusLabel } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -63,6 +63,15 @@ export default function BoqEditor() {
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
   const canEditRemarks = isCreator;
+  const locked = designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
+  // After comments are received (or while iterating), the creator can edit any item field.
+  const canEditFull = isCreator && !locked && (
+    designReviewStatus === "review_received" ||
+    designReviewStatus === "changes_required" ||
+    designReviewStatus === "boq_updated" ||
+    designReviewStatus === "draft"
+  );
+  const isDirty = JSON.stringify(items) !== JSON.stringify(originalItems);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
@@ -207,6 +216,19 @@ export default function BoqEditor() {
     if (res.error) return toast({ title: "Save failed", description: res.error.message, variant: "destructive" });
     setStatus(payload.status);
     if (shouldFlipStatus) setDesignReviewStatus("boq_updated");
+    setOriginalItems(JSON.parse(JSON.stringify(items)));
+    if (shouldFlipStatus && boqId) {
+      try {
+        await snapshotRevision({
+          boqId,
+          lineItems: items as unknown[],
+          designReviewStatus: "boq_updated",
+          note: "Creator update after Design comments",
+        });
+      } catch (e) {
+        console.warn("snapshotRevision (creator update) failed", e);
+      }
+    }
     toast({ title: "Saved", description: `BOQ ${payload.boq_number}` });
     if (isNew) navigate(`/boqs/${res.data.id}`, { replace: true });
   }
@@ -326,7 +348,12 @@ export default function BoqEditor() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={uploadToBoqFolder}>Save to BOQ Folder</Button>
-            {canEditRemarks && (
+            {canEditFull && isDirty && (
+              <Button size="sm" disabled={saving} onClick={() => save(false)}>
+                <Save className="mr-1 h-4 w-4" />Save BOQ Updates
+              </Button>
+            )}
+            {canEditRemarks && !locked && (
               <Button size="sm" disabled={saving} onClick={saveRemarks}>
                 <Save className="mr-1 h-4 w-4" />Save Remarks
               </Button>
