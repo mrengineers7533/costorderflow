@@ -107,11 +107,15 @@ export async function createReviewRound(
   const { data: userData } = await supabase.auth.getUser();
   const expiresAt = new Date(Date.now() + expiryDays * 86400_000).toISOString();
 
-  const snapshot = {
+  const snapshot: Record<string, unknown> = {
     boq_number: boq.boq_number,
     client_name: boq.client_name,
     project_number: boq.project_number,
     item_count: items.length,
+    // Persist a stable baseline of the BOQ at the moment this link was
+    // generated. Used by the Approval link to render "Previous → Updated"
+    // even if items were later added/removed.
+    line_items: items,
   };
 
   const { data: review, error } = await supabase
@@ -123,7 +127,7 @@ export async function createReviewRound(
       round_no: nextRound,
       status: "sent",
       expires_at: expiresAt,
-      boq_snapshot: snapshot,
+      boq_snapshot: snapshot as never,
       kind,
     })
     .select("*")
@@ -219,6 +223,28 @@ export async function fetchLatestCommentBaseline(boqId: string): Promise<{ round
     .limit(1);
   const round = data?.[0] as unknown as DesignReviewRow | undefined;
   if (!round) return null;
+  // Prefer the line_items snapshot stored on boq_snapshot (survives item
+  // add/remove). Fall back to boq_design_review_items for legacy rounds.
+  const snap = (round.boq_snapshot || {}) as { line_items?: Array<Record<string, unknown>> };
+  if (Array.isArray(snap.line_items) && snap.line_items.length) {
+    const items = snap.line_items.map((it) => ({
+      id: String(it.id ?? ""),
+      review_id: round.id,
+      boq_item_id: String(it.id ?? ""),
+      item_no: (it.item_no as string) ?? null,
+      model_number: (it.model_number as string) ?? null,
+      description: (it.description as string) ?? null,
+      quantity: (it.quantity as number) ?? null,
+      unit: (it.unit as string) ?? null,
+      remarks: (it.remarks as string) ?? null,
+      decision: "pending" as Decision,
+      comment: null,
+      design_change_note: null,
+      decided_at: null,
+      column_comments: null,
+    })) as DesignReviewItemRow[];
+    return { round, items };
+  }
   const items = await fetchReviewItems(round.id);
   return { round, items };
 }
@@ -297,6 +323,46 @@ export function finalBoqLink(token: string): string {
   return `${window.location.origin}/boq/final/${token}`;
 }
 
+export interface RevisionChange {
+  item_id: string;
+  item_no: string | null;
+  model_number: string | null;
+  field: DiffField;
+  label: string;
+  old_value: string;
+  new_value: string;
+  changed_by: string | null;
+  changed_at: string;
+}
+
+/** Build a flat change-log from a per-item diff array. */
+export function buildChangeLog(diffs: ItemDiff[], changedBy: string | null): RevisionChange[] {
+  const now = new Date().toISOString();
+  const out: RevisionChange[] = [];
+  for (const d of diffs) {
+    for (const c of d.changes) {
+      out.push({
+        item_id: d.itemId,
+        item_no: d.item_no,
+        model_number: d.model_number,
+        field: c.field,
+        label: c.label,
+        old_value: c.from,
+        new_value: c.to,
+        changed_by: changedBy,
+        changed_at: now,
+      });
+    }
+  }
+  return out;
+}
+
+export function summarizeChanges(changes: RevisionChange[]): string {
+  if (!changes.length) return "—";
+  const items = new Set(changes.map((c) => c.item_id));
+  return `${changes.length} field${changes.length === 1 ? "" : "s"} across ${items.size} item${items.size === 1 ? "" : "s"}`;
+}
+
 /** Snapshot the current BOQ state into boq_revisions. Returns the new revision label. */
 export async function snapshotRevision(params: {
   boqId: string;
@@ -305,6 +371,7 @@ export async function snapshotRevision(params: {
   reviewerOutcome?: string | null;
   roundNo?: number | null;
   reviewItems?: unknown[];
+  changes?: RevisionChange[];
   note?: string;
 }): Promise<string> {
   const { data: prev } = await supabase
@@ -316,6 +383,13 @@ export async function snapshotRevision(params: {
   const nextNo = ((prev?.[0] as { revision_no?: number } | undefined)?.revision_no || 0) + 1;
   const label = `R${nextNo}`;
   const { data: auth } = await supabase.auth.getUser();
+  // Embed `changes` alongside the per-item decisions inside review_items
+  // (jsonb column — accepts any shape). Stored as
+  //   { items: [...], changes: [...] }
+  // when a change log is provided, otherwise as a plain array (legacy).
+  const reviewItemsPayload = params.changes && params.changes.length
+    ? { items: params.reviewItems ?? [], changes: params.changes }
+    : (params.reviewItems ?? []);
   const { error } = await supabase.from("boq_revisions").insert({
     boq_id: params.boqId,
     revision_label: label,
@@ -324,7 +398,7 @@ export async function snapshotRevision(params: {
     reviewer_outcome: params.reviewerOutcome ?? null,
     round_no: params.roundNo ?? null,
     line_items: params.lineItems as never,
-    review_items: (params.reviewItems ?? []) as never,
+    review_items: reviewItemsPayload as never,
     snapshot_note: params.note ?? null,
     created_by: auth.user?.id || null,
   } as never);
@@ -341,9 +415,28 @@ export interface BoqRevisionRow {
   reviewer_outcome: string | null;
   round_no: number | null;
   line_items: unknown[];
-  review_items: unknown[];
+  review_items: unknown[] | { items: unknown[]; changes: RevisionChange[] };
   snapshot_note: string | null;
   created_at: string;
+  created_by: string | null;
+}
+
+/** Helpers to read the new `review_items` shape safely. */
+export function getRevisionItems(r: BoqRevisionRow): unknown[] {
+  const ri = r.review_items as unknown;
+  if (Array.isArray(ri)) return ri;
+  if (ri && typeof ri === "object" && Array.isArray((ri as { items?: unknown[] }).items)) {
+    return (ri as { items: unknown[] }).items;
+  }
+  return [];
+}
+
+export function getRevisionChanges(r: BoqRevisionRow): RevisionChange[] {
+  const ri = r.review_items as unknown;
+  if (ri && typeof ri === "object" && !Array.isArray(ri) && Array.isArray((ri as { changes?: unknown[] }).changes)) {
+    return (ri as { changes: RevisionChange[] }).changes;
+  }
+  return [];
 }
 
 export async function fetchRevisions(boqId: string): Promise<BoqRevisionRow[]> {

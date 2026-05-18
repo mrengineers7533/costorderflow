@@ -20,7 +20,7 @@ import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
-import { statusLabel, snapshotRevision, parseColumnComments, type ColKey } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, parseColumnComments, diffItemsAgainstBaseline, buildChangeLog, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -220,10 +220,35 @@ export default function BoqEditor() {
     setOriginalItems(JSON.parse(JSON.stringify(items)));
     if (shouldFlipStatus && boqId) {
       try {
+        // Diff prev (originalItems captured at load) vs current items so the
+        // revision row carries a structured "what changed" payload.
+        const { data: auth } = await supabase.auth.getUser();
+        const userName =
+          (auth.user?.user_metadata as { full_name?: string } | undefined)?.full_name?.trim() ||
+          auth.user?.email || null;
+        const baselineRows = originalItems.map((it) => ({
+          id: "",
+          review_id: "",
+          boq_item_id: it.id,
+          item_no: it.item_no ?? null,
+          model_number: it.model_number ?? null,
+          description: it.description ?? null,
+          quantity: it.quantity ?? null,
+          unit: it.unit ?? null,
+          remarks: it.remarks ?? null,
+          decision: "pending" as const,
+          comment: null,
+          design_change_note: null,
+          decided_at: null,
+          column_comments: null,
+        }));
+        const diffs = diffItemsAgainstBaseline(baselineRows as never, items);
+        const changes = buildChangeLog(diffs, userName);
         await snapshotRevision({
           boqId,
           lineItems: items as unknown[],
           designReviewStatus: "boq_updated",
+          changes,
           note: "Creator update after Design comments",
         });
       } catch (e) {
