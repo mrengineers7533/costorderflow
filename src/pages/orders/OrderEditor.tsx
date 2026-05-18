@@ -216,13 +216,29 @@ export default function OrderEditor() {
   // Pre-fill from extracted cost sheet passed via router state (from chooser page).
   useEffect(() => {
     if (!isNew) return;
+    let extracted: ExtractedCostSheet | undefined;
+    let forcedFormat: OrderFormat | undefined;
     const state = location.state as { extracted?: ExtractedCostSheet; forcedFormat?: OrderFormat } | null;
-    const extracted = state?.extracted;
+    if (state?.extracted) {
+      extracted = state.extracted;
+      forcedFormat = state.forcedFormat;
+    } else {
+      // Recover from sessionStorage so a hard refresh doesn't lose the
+      // Apply'd cost-sheet data.
+      try {
+        const raw = sessionStorage.getItem("oa-draft-extracted");
+        if (raw) {
+          const parsed = JSON.parse(raw) as { extracted?: ExtractedCostSheet; forcedFormat?: OrderFormat | null };
+          extracted = parsed.extracted;
+          forcedFormat = parsed.forcedFormat || undefined;
+        }
+      } catch { /* ignore */ }
+    }
     if (!extracted) return;
-    if (state?.forcedFormat) {
-      setFormat(state.forcedFormat);
+    if (forcedFormat) {
+      setFormat(forcedFormat);
       setAutoFormat(false);
-      applyCostSheet(extracted, state.forcedFormat);
+      applyCostSheet(extracted, forcedFormat);
     } else {
       applyCostSheet(extracted);
     }
