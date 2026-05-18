@@ -78,7 +78,7 @@ export default function FinalBoq() {
                 </tr>
               </thead>
               <tbody>
-                {boq.line_items.map((it, i) => (
+                {sortByItemNo(boq.line_items).map((it, i) => (
                   <tr key={it.id || i} className="border-t align-top">
                     <td className="p-2">{it.item_no || i + 1}</td>
                     <td className="p-2 font-mono">{it.model_number}</td>

@@ -97,7 +97,7 @@ function RevisionView({ row }: { row: BoqRevisionRow }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((it, i) => {
+          {sortByItemNo(items).map((it, i) => {
             const r = byId.get(it.id || "");
             return (
               <tr key={i} className="border-t align-top">

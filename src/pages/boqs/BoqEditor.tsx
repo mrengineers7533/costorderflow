@@ -124,7 +124,7 @@ export default function BoqEditor() {
             setBoqNumber(deriveBoqNumber(o.oa_number));
           }
         }
-        const finalItems = nextItems.length ? nextItems : [newBoqItem(1)];
+        const finalItems = sortByItemNo(nextItems.length ? nextItems : [newBoqItem(1)]);
         setItems(finalItems);
         setOriginalItems(JSON.parse(JSON.stringify(finalItems)));
         setTerms(b.terms || DEFAULT_BOQ_TERMS); setNotes(b.notes || "");

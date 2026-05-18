@@ -141,7 +141,7 @@ export default function BoqVerify() {
 
               <div className="space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item-wise approval</div>
-                {(boq.line_items || []).map((it: BoqLineItem) => {
+                {sortByItemNo(boq.line_items || []).map((it: BoqLineItem) => {
                   const d = decisions[it.id] || { status: "pending", comment: "" };
                   return (
                     <div key={it.id} className="rounded-lg border p-3 space-y-2">

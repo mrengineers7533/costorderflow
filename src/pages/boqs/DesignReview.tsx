@@ -16,6 +16,7 @@ import {
   type DesignReviewItemRow,
   type Decision,
 } from "@/lib/boq/designReview";
+import { sortByItemNo } from "@/lib/boq/types";
 
 interface ReviewMeta {
   id: string;
@@ -258,7 +259,7 @@ export default function DesignReview() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {items.map((it) => {
+                      {sortByItemNo(items).map((it) => {
                         const d = decisions[it.boq_item_id];
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);

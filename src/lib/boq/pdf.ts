@@ -133,7 +133,7 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
   y += leftRows.length * 5 + 4;
 
   // Items table — only the 6 BOQ columns (no pricing!)
-  const rows = boq.line_items.map((it, i) => [
+  const rows = sortByItemNo(boq.line_items).map((it, i) => [
     it.item_no || String(i + 1),
     it.model_number || "",
     it.description || "",
