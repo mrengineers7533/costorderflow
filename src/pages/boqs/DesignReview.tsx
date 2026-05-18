@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import {
@@ -27,6 +28,16 @@ interface ReviewMeta {
 
 interface DocDraft { boq_item_id: string; file_name: string; file_path: string; }
 
+type ColKey = "model" | "description" | "quantity" | "unit" | "remarks";
+const COL_KEYS: ColKey[] = ["model", "description", "quantity", "unit", "remarks"];
+const COL_LABEL: Record<ColKey, string> = {
+  model: "Model",
+  description: "Description",
+  quantity: "Qty",
+  unit: "Unit",
+  remarks: "Remarks",
+};
+
 export default function DesignReview() {
   const { token } = useParams<{ token: string }>();
   const [loading, setLoading] = useState(true);
@@ -34,6 +45,7 @@ export default function DesignReview() {
   const [meta, setMeta] = useState<ReviewMeta | null>(null);
   const [items, setItems] = useState<DesignReviewItemRow[]>([]);
   const [decisions, setDecisions] = useState<Record<string, { decision: Decision; comment: string; design_change_note: string }>>({});
+  const [colComments, setColComments] = useState<Record<string, Partial<Record<ColKey, string>>>>({});
   const [docs, setDocs] = useState<DocDraft[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
 
@@ -86,6 +98,22 @@ export default function DesignReview() {
     setDecisions((s) => ({ ...s, [boqItemId]: { ...s[boqItemId], ...patch } }));
   }
 
+  function updateCol(boqItemId: string, col: ColKey, value: string) {
+    setColComments((s) => ({ ...s, [boqItemId]: { ...(s[boqItemId] || {}), [col]: value } }));
+  }
+
+  function buildCommentFromCols(boqItemId: string, existing: string): string {
+    const cols = colComments[boqItemId] || {};
+    const parts: string[] = [];
+    for (const k of COL_KEYS) {
+      const v = (cols[k] || "").trim();
+      if (v) parts.push(`${COL_LABEL[k]}: ${v}`);
+    }
+    const colText = parts.join("\n");
+    if (!colText) return existing;
+    return existing ? `${existing}\n${colText}` : colText;
+  }
+
   async function uploadFile(boqItemId: string, file: File) {
     if (!meta) return;
     setUploading(boqItemId);
@@ -106,7 +134,8 @@ export default function DesignReview() {
   async function submit() {
     if (!meta || !token) return;
     if (!reviewerName.trim()) { toast({ title: "Please enter your name", variant: "destructive" }); return; }
-    if (counts.pending > 0) {
+    const isRound1 = (meta?.round_no || 1) === 1;
+    if (!isRound1 && counts.pending > 0) {
       const ok = window.confirm(`${counts.pending} item(s) are still Pending. Submit anyway?`);
       if (!ok) return;
     }
@@ -115,7 +144,7 @@ export default function DesignReview() {
       const itemsPayload = items.map((it) => ({
         boq_item_id: it.boq_item_id,
         decision: decisions[it.boq_item_id].decision,
-        comment: decisions[it.boq_item_id].comment,
+        comment: buildCommentFromCols(it.boq_item_id, decisions[it.boq_item_id].comment),
         design_change_note: decisions[it.boq_item_id].design_change_note,
       }));
       const { error } = await supabase.rpc("submit_design_review_with_token", {
@@ -203,73 +232,111 @@ export default function DesignReview() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">BOQ Items (read-only)</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {items.map((it) => {
-              const d = decisions[it.boq_item_id];
-              const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+          <CardHeader><CardTitle className="text-base">BOQ Items</CardTitle></CardHeader>
+          <CardContent>
+            {(() => {
+              const isRound1 = (meta?.round_no || 1) === 1;
               return (
-                <div key={it.id} className="rounded-lg border overflow-hidden">
-                  <div className="p-3 bg-muted/30 space-y-1">
-                    <div className="text-xs text-muted-foreground">Item {it.item_no} · <span className="font-mono">{it.model_number}</span></div>
-                    <div className="text-sm whitespace-pre-wrap">{it.description}</div>
-                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
-                      <span><b>Qty:</b> {it.quantity ?? 0}</span>
-                      <span><b>Unit:</b> {it.unit || "Nos"}</span>
-                    </div>
-                    {it.remarks && (
-                      <div className="text-xs bg-muted/40 rounded p-2 mt-1">
-                        <span className="font-medium">Remarks:</span> {it.remarks}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3 border-t bg-background space-y-2">
-                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Design Comment for this item</div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant={d.decision === "approved" ? "default" : "outline"}
-                        className={d.decision === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
-                        onClick={() => update(it.boq_item_id, { decision: "approved" })}
-                      >Approved</Button>
-                      <Button
-                        size="sm"
-                        variant={d.decision === "change_required" ? "destructive" : "outline"}
-                        onClick={() => update(it.boq_item_id, { decision: "change_required" })}
-                      >Change Required</Button>
-                      <label className="inline-flex items-center gap-1 text-xs cursor-pointer rounded-md border px-3 py-1.5 hover:bg-accent">
-                        {uploading === it.boq_item_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
-                        Attach
-                        <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(it.boq_item_id, f); e.target.value = ""; }} />
-                      </label>
-                    </div>
-                    <Textarea
-                      placeholder="Design comment / change note"
-                      value={d.comment}
-                      onChange={(e) => update(it.boq_item_id, { comment: e.target.value })}
-                      className="min-h-[60px]"
-                    />
-                    {d.decision === "change_required" && (
-                      <Textarea
-                        placeholder="What design changed and what BOQ update is required?"
-                        value={d.design_change_note}
-                        onChange={(e) => update(it.boq_item_id, { design_change_note: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    )}
-                    {itemDocs.length > 0 && (
-                      <div className="text-xs space-y-0.5">
-                        {itemDocs.map((dc, i) => (
-                          <a key={i} href={publicDocUrl(dc.file_path)} target="_blank" rel="noreferrer" className="block underline truncate">
-                            {dc.file_name}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="border rounded-md overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead className="w-32">Model</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="w-20">Qty</TableHead>
+                        <TableHead className="w-20">Unit</TableHead>
+                        <TableHead className="w-48">Remarks</TableHead>
+                        {!isRound1 && <TableHead className="w-40">Status</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((it) => {
+                        const d = decisions[it.boq_item_id];
+                        const cols = colComments[it.boq_item_id] || {};
+                        const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+                        return (
+                          <Fragment key={it.id}>
+                            <TableRow className="align-top">
+                              <TableCell className="py-2 font-medium">{it.item_no}</TableCell>
+                              <TableCell className="py-2 font-mono text-xs">{it.model_number}</TableCell>
+                              <TableCell className="py-2 text-sm whitespace-pre-wrap">{it.description}</TableCell>
+                              <TableCell className="py-2">{it.quantity ?? 0}</TableCell>
+                              <TableCell className="py-2">{it.unit || "Nos"}</TableCell>
+                              <TableCell className="py-2 text-xs">{it.remarks || ""}</TableCell>
+                              {!isRound1 && (
+                                <TableCell className="py-2">
+                                  <div className="flex flex-col gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={d.decision === "approved" ? "default" : "outline"}
+                                      className={d.decision === "approved" ? "bg-emerald-600 hover:bg-emerald-700 h-7" : "h-7"}
+                                      onClick={() => update(it.boq_item_id, { decision: "approved" })}
+                                    >Approved</Button>
+                                    <Button
+                                      size="sm"
+                                      variant={d.decision === "change_required" ? "destructive" : "outline"}
+                                      className="h-7"
+                                      onClick={() => update(it.boq_item_id, { decision: "change_required" })}
+                                    >Change</Button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                            <TableRow key={`${it.id}-comments`} className="bg-muted/20 border-b-4 border-background">
+                              <TableCell className="py-2 align-top">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Comment</span>
+                                  <label className="inline-flex items-center justify-center cursor-pointer rounded border h-7 w-7 hover:bg-accent" title="Attach">
+                                    {uploading === it.boq_item_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
+                                    <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(it.boq_item_id, f); e.target.value = ""; }} />
+                                  </label>
+                                </div>
+                              </TableCell>
+                              {COL_KEYS.map((k) => (
+                                <TableCell key={k} className="py-2">
+                                  <Textarea
+                                    placeholder="Comment"
+                                    value={cols[k] || ""}
+                                    onChange={(e) => updateCol(it.boq_item_id, k, e.target.value)}
+                                    className="min-h-[44px] text-xs"
+                                  />
+                                </TableCell>
+                              ))}
+                              {!isRound1 && (
+                                <TableCell className="py-2">
+                                  {d.decision === "change_required" && (
+                                    <Textarea
+                                      placeholder="Change note"
+                                      value={d.design_change_note}
+                                      onChange={(e) => update(it.boq_item_id, { design_change_note: e.target.value })}
+                                      className="min-h-[44px] text-xs"
+                                    />
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                            {itemDocs.length > 0 && (
+                              <TableRow>
+                                <TableCell colSpan={isRound1 ? 6 : 7} className="py-1 text-xs">
+                                  <div className="flex flex-wrap gap-2">
+                                    {itemDocs.map((dc, i) => (
+                                      <a key={i} href={publicDocUrl(dc.file_path)} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px]">
+                                        {dc.file_name}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               );
-            })}
+            })()}
           </CardContent>
         </Card>
 
