@@ -21,6 +21,7 @@ interface ReviewMeta {
   id: string;
   boq_id: string;
   round_no: number;
+  kind: "comment" | "approval";
   status: string;
   expires_at: string;
   boq_snapshot: { boq_number?: string; client_name?: string; project_number?: string };
@@ -61,7 +62,7 @@ export default function DesignReview() {
       if (!token) { setError("Missing link token"); setLoading(false); return; }
       const { data, error } = await supabase
         .from("boq_design_reviews")
-        .select("id, boq_id, round_no, status, expires_at, boq_snapshot")
+        .select("id, boq_id, round_no, kind, status, expires_at, boq_snapshot")
         .eq("token", token)
         .maybeSingle();
       if (error || !data) {
@@ -75,7 +76,7 @@ export default function DesignReview() {
         setLoading(false);
         return;
       }
-      setMeta(data as ReviewMeta);
+      setMeta(data as unknown as ReviewMeta);
       const its = await fetchReviewItems(data.id);
       setItems(its);
       const d: typeof decisions = {};
@@ -134,18 +135,18 @@ export default function DesignReview() {
   async function submit() {
     if (!meta || !token) return;
     if (!reviewerName.trim()) { toast({ title: "Please enter your name", variant: "destructive" }); return; }
-    const isRound1 = (meta?.round_no || 1) === 1;
-    if (!isRound1 && counts.pending > 0) {
+      const isComment = meta.kind === "comment";
+      if (!isComment && counts.pending > 0) {
       const ok = window.confirm(`${counts.pending} item(s) are still Pending. Submit anyway?`);
       if (!ok) return;
     }
     setSubmitting(true);
     try {
-      const itemsPayload = items.map((it) => ({
+        const itemsPayload = items.map((it) => ({
         boq_item_id: it.boq_item_id,
-        decision: decisions[it.boq_item_id].decision,
+          decision: isComment ? "pending" : decisions[it.boq_item_id].decision,
         comment: buildCommentFromCols(it.boq_item_id, decisions[it.boq_item_id].comment),
-        design_change_note: decisions[it.boq_item_id].design_change_note,
+          design_change_note: isComment ? "" : decisions[it.boq_item_id].design_change_note,
       }));
       const { error } = await supabase.rpc("submit_design_review_with_token", {
         _token: token,
@@ -198,17 +199,23 @@ export default function DesignReview() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">Design Review · Round {meta?.round_no}</div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {meta?.kind === "approval" ? "Design Approval" : "Design Comments"} · Round {meta?.round_no}
+                </div>
                 <CardTitle className="mt-1">{meta?.boq_snapshot.boq_number}</CardTitle>
                 <div className="text-sm text-muted-foreground mt-1">
                   {meta?.boq_snapshot.client_name} {meta?.boq_snapshot.project_number ? `· ${meta?.boq_snapshot.project_number}` : ""}
                 </div>
               </div>
-              <div className="flex gap-2 text-xs">
-                <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved {counts.approved}</Badge>
-                <Badge variant="destructive">Change {counts.change}</Badge>
-                <Badge variant="secondary">Pending {counts.pending}</Badge>
-              </div>
+              {meta?.kind === "approval" ? (
+                <div className="flex gap-2 text-xs">
+                  <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved {counts.approved}</Badge>
+                  <Badge variant="destructive">Change {counts.change}</Badge>
+                  <Badge variant="secondary">Pending {counts.pending}</Badge>
+                </div>
+              ) : (
+                <Badge variant="outline">{items.length} items</Badge>
+              )}
             </div>
           </CardHeader>
         </Card>
@@ -235,7 +242,7 @@ export default function DesignReview() {
           <CardHeader><CardTitle className="text-base">BOQ Items</CardTitle></CardHeader>
           <CardContent>
             {(() => {
-              const isRound1 = (meta?.round_no || 1) === 1;
+              const isComment = meta?.kind === "comment";
               return (
                 <div className="border rounded-md overflow-x-auto">
                   <Table>
@@ -247,7 +254,7 @@ export default function DesignReview() {
                         <TableHead className="w-20">Qty</TableHead>
                         <TableHead className="w-20">Unit</TableHead>
                         <TableHead className="w-48">Remarks</TableHead>
-                        {!isRound1 && <TableHead className="w-40">Status</TableHead>}
+                        {!isComment && <TableHead className="w-40">Status</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -264,7 +271,7 @@ export default function DesignReview() {
                               <TableCell className="py-2">{it.quantity ?? 0}</TableCell>
                               <TableCell className="py-2">{it.unit || "Nos"}</TableCell>
                               <TableCell className="py-2 text-xs">{it.remarks || ""}</TableCell>
-                              {!isRound1 && (
+                              {!isComment && (
                                 <TableCell className="py-2">
                                   <div className="flex flex-col gap-1">
                                     <Button
@@ -303,7 +310,7 @@ export default function DesignReview() {
                                   />
                                 </TableCell>
                               ))}
-                              {!isRound1 && (
+                              {!isComment && (
                                 <TableCell className="py-2">
                                   {d.decision === "change_required" && (
                                     <Textarea
@@ -318,7 +325,7 @@ export default function DesignReview() {
                             </TableRow>
                             {itemDocs.length > 0 && (
                               <TableRow>
-                                <TableCell colSpan={isRound1 ? 6 : 7} className="py-1 text-xs">
+                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
                                       <a key={i} href={publicDocUrl(dc.file_path)} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px]">
