@@ -181,6 +181,15 @@ export async function fetchReviewItems(reviewId: string): Promise<DesignReviewIt
   return sortByItemNo((data || []) as unknown as DesignReviewItemRow[]);
 }
 
+/** Public-link variant: fetch review items by the secret review token via
+ *  a SECURITY DEFINER RPC. Used on the anonymous /design-review/:token page. */
+export async function fetchReviewItemsByToken(token: string): Promise<DesignReviewItemRow[]> {
+  const { data, error } = await supabase
+    .rpc("get_design_review_items_by_token", { _token: token });
+  if (error) throw error;
+  return sortByItemNo((data || []) as unknown as DesignReviewItemRow[]);
+}
+
 export async function fetchReviewDocs(reviewId: string): Promise<DesignReviewDocRow[]> {
   const { data, error } = await supabase
     .from("boq_design_review_documents")
