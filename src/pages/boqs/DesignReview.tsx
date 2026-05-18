@@ -147,6 +147,7 @@ export default function DesignReview() {
         boq_item_id: it.boq_item_id,
           decision: isComment ? "pending" : decisions[it.boq_item_id].decision,
         comment: buildCommentFromCols(it.boq_item_id, decisions[it.boq_item_id].comment),
+          column_comments: colComments[it.boq_item_id] || {},
           design_change_note: isComment ? "" : decisions[it.boq_item_id].design_change_note,
       }));
       const { error } = await supabase.rpc("submit_design_review_with_token", {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import {
   finalBoqLink,
   snapshotRevision,
   statusLabel,
+  parseColumnComments,
+  type ColKey,
   type ReviewKind,
   type DesignReviewRow,
   type DesignReviewItemRow,
@@ -278,37 +280,61 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                     <th className="p-2 w-14">Unit</th>
                     <th className="p-2">Remarks</th>
                     <th className="p-2 w-32">Status</th>
-                    <th className="p-2">Review Comment</th>
                     <th className="p-2">Files</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortByItemNo(openItems).map((it) => (
-                    <tr key={it.id} className="border-t align-top">
-                      <td className="p-2">{it.item_no}</td>
-                      <td className="p-2 font-mono">{it.model_number}</td>
-                      <td className="p-2">{it.description}</td>
-                      <td className="p-2">{it.quantity ?? 0}</td>
-                      <td className="p-2">{it.unit || "Nos"}</td>
-                      <td className="p-2 text-muted-foreground">{it.remarks || <span className="opacity-50">—</span>}</td>
-                      <td className="p-2">{decisionBadge(it.decision)}</td>
-                      <td className="p-2 whitespace-pre-wrap">
-                        {it.comment || it.design_change_note || <span className="text-muted-foreground">—</span>}
-                        {it.design_change_note && it.comment && (
-                          <div className="mt-1 text-[10px] text-muted-foreground">Change note: {it.design_change_note}</div>
+                  {sortByItemNo(openItems).map((it) => {
+                    const cols = parseColumnComments(it);
+                    const colMap: { key: ColKey; label: string }[] = [
+                      { key: "model", label: "Model" },
+                      { key: "description", label: "Description" },
+                      { key: "quantity", label: "Qty" },
+                      { key: "unit", label: "Unit" },
+                      { key: "remarks", label: "Remarks" },
+                    ];
+                    const hasSuggestion = colMap.some(({ key }) => (cols[key] || "").trim() !== "") || !!it.design_change_note;
+                    return (
+                      <Fragment key={it.id}>
+                        <tr className="border-t align-top">
+                          <td className="p-2">{it.item_no}</td>
+                          <td className="p-2 font-mono">{it.model_number}</td>
+                          <td className="p-2">{it.description}</td>
+                          <td className="p-2">{it.quantity ?? 0}</td>
+                          <td className="p-2">{it.unit || "Nos"}</td>
+                          <td className="p-2 text-muted-foreground">{it.remarks || <span className="opacity-50">—</span>}</td>
+                          <td className="p-2">{decisionBadge(it.decision)}</td>
+                          <td className="p-2">
+                            {(docsByItem[it.boq_item_id] || []).map((d) => (
+                              <a key={d.id} href={publicDocUrl(d.file_path)} target="_blank" rel="noreferrer" className="block underline truncate max-w-[160px]">
+                                {d.file_name}
+                              </a>
+                            ))}
+                          </td>
+                        </tr>
+                        {hasSuggestion && (
+                          <tr className="bg-primary/5 border-b">
+                            <td className="p-2 align-top text-[10px] uppercase tracking-wider text-primary font-semibold">Design</td>
+                            {colMap.map(({ key, label }) => {
+                              const v = (cols[key] || "").trim();
+                              return (
+                                <td key={key} className="p-2 align-top whitespace-pre-wrap">
+                                  {v ? <span className="text-foreground">{v}</span> : <span className="text-muted-foreground opacity-50">—</span>}
+                                  {key === "remarks" && it.design_change_note && (
+                                    <div className="mt-1 text-[10px] text-muted-foreground">Change note: {it.design_change_note}</div>
+                                  )}
+                                  {label === undefined && null}
+                                </td>
+                              );
+                            })}
+                            <td className="p-2" colSpan={2} />
+                          </tr>
                         )}
-                      </td>
-                      <td className="p-2">
-                        {(docsByItem[it.boq_item_id] || []).map((d) => (
-                          <a key={d.id} href={publicDocUrl(d.file_path)} target="_blank" rel="noreferrer" className="block underline truncate max-w-[160px]">
-                            {d.file_name}
-                          </a>
-                        ))}
-                      </td>
-                    </tr>
-                  ))}
+                      </Fragment>
+                    );
+                  })}
                   {!openItems.length && (
-                    <tr><td colSpan={9} className="p-3 text-center text-muted-foreground">No items in this round.</td></tr>
+                    <tr><td colSpan={8} className="p-3 text-center text-muted-foreground">No items in this round.</td></tr>
                   )}
                 </tbody>
               </table>

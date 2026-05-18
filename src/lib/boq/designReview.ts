@@ -37,6 +37,43 @@ export interface DesignReviewItemRow {
   comment: string | null;
   design_change_note: string | null;
   decided_at: string | null;
+  column_comments?: Partial<Record<ColKey, string>> | null;
+}
+
+export type ColKey = "model" | "description" | "quantity" | "unit" | "remarks";
+
+const LEGACY_LABELS: Record<string, ColKey> = {
+  model: "model",
+  description: "description",
+  qty: "quantity",
+  quantity: "quantity",
+  unit: "unit",
+  remarks: "remarks",
+};
+
+/** Returns a per-column map of design suggestions for a review item.
+ *  Prefers `column_comments` jsonb; falls back to parsing legacy
+ *  "Model: X\nDescription: Y\n..." text stored in `comment`. */
+export function parseColumnComments(it: DesignReviewItemRow): Partial<Record<ColKey, string>> {
+  const cc = (it.column_comments || {}) as Partial<Record<ColKey, string>>;
+  const hasAny = (["model","description","quantity","unit","remarks"] as ColKey[])
+    .some((k) => (cc[k] || "").trim() !== "");
+  if (hasAny) return cc;
+  const raw = (it.comment || "").trim();
+  if (!raw) return {};
+  const out: Partial<Record<ColKey, string>> = {};
+  const lines = raw.split(/\r?\n/);
+  let current: ColKey | null = null;
+  for (const ln of lines) {
+    const m = ln.match(/^\s*([A-Za-z]+)\s*:\s*(.*)$/);
+    if (m && LEGACY_LABELS[m[1].toLowerCase()]) {
+      current = LEGACY_LABELS[m[1].toLowerCase()];
+      out[current] = m[2];
+    } else if (current) {
+      out[current] = ((out[current] || "") + "\n" + ln).trim();
+    }
+  }
+  return out;
 }
 
 export interface DesignReviewDocRow {

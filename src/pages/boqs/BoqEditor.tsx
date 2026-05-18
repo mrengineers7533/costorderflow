@@ -17,9 +17,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
-import { DesignCommentRow, useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
-import { statusLabel, snapshotRevision } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, parseColumnComments, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -561,11 +561,12 @@ function BoqItemsList({
             </div>
             {r && data && (
               <div className="pl-12 pr-1">
-                <DesignCommentRow
-                  item={r}
-                  docs={data.docs}
+                <DesignSuggestionInlineRow
+                  itemId={it.id}
+                  reviewItem={r}
                   round={data.round}
-                  onApply={canEditFull ? (target, text) => onUpdate(it.id, { [target]: text } as Partial<BoqLineItem>) : undefined}
+                  canApply={canEditFull}
+                  onApply={(field, value) => onUpdate(it.id, { [field]: value } as Partial<BoqLineItem>)}
                 />
               </div>
             )}
@@ -573,6 +574,63 @@ function BoqItemsList({
         );
       })}
     </>
+  );
+}
+
+function DesignSuggestionInlineRow({
+  reviewItem, round, canApply, onApply,
+}: {
+  itemId: string;
+  reviewItem: import("@/lib/boq/designReview").DesignReviewItemRow;
+  round: import("@/lib/boq/designReview").DesignReviewRow;
+  canApply: boolean;
+  onApply: (field: keyof BoqLineItem, value: string | number) => void;
+}) {
+  const cols = parseColumnComments(reviewItem);
+  const order: { key: ColKey; field: keyof BoqLineItem; label: string }[] = [
+    { key: "model", field: "model_number", label: "Model" },
+    { key: "description", field: "description", label: "Description" },
+    { key: "quantity", field: "quantity", label: "Qty" },
+    { key: "unit", field: "unit", label: "Unit" },
+    { key: "remarks", field: "remarks", label: "Remarks" },
+  ];
+  const hasAny = order.some(({ key }) => (cols[key] || "").trim() !== "");
+  if (!hasAny) return null;
+  return (
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-1.5 text-xs">
+      <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-primary font-semibold">
+        Design Suggested Update · R{round.round_no}
+        {round.reviewer_name && <span className="ml-1 text-muted-foreground font-normal">· {round.reviewer_name}</span>}
+      </div>
+      <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
+        <div />
+        {order.map(({ key, field, label }) => {
+          const v = (cols[key] || "").trim();
+          return (
+            <div key={key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
+              <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+              {v ? (
+                <>
+                  <div className="whitespace-pre-wrap text-foreground">{v}</div>
+                  {canApply && (
+                    <button
+                      type="button"
+                      onClick={() => onApply(field, field === "quantity" ? (Number(v) || 0) : v)}
+                      className="mt-1 text-[10px] underline text-primary hover:opacity-80"
+                    >
+                      Apply
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="text-muted-foreground">—</div>
+              )}
+            </div>
+          );
+        })}
+        <div />
+      </div>
+    </div>
   );
 }
 
