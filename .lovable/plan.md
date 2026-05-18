@@ -1,58 +1,34 @@
-## What already works (no changes needed)
+## Add Excel + PDF download for the selected Design Review round
 
-- **Design comments item-wise on BOQ page** — `DesignCommentsInline` renders Design suggestions row-wise under each BOQ item, per column.
-- **Creator can edit Model / Description / Qty / Unit / Remarks** after comments arrive (`canEditFull` in `BoqEditor.tsx`).
-- **Save flips status to `boq_updated`** and snapshots a revision (`save()` in `BoqEditor.tsx`).
-- **Approval link is separate from Comment link** (`kind: "comment" | "approval"`), enforced server-side in `submit_design_review_with_token`. Design cannot edit BOQ data through either link.
-- **Approval link already shows Previous → Updated** per item via `fetchLatestCommentBaseline` + the amber "Previous · R<n>" row in `DesignReview.tsx`.
-- **Approve / Request Changes flow** — RPC sets BOQ to `design_approved` / `changes_required`; `changes_required` re-opens editing and a new round can be generated.
-- **Final BOQ lock** — once `design_approved`, the editor goes read-only and the "Send Final BOQ" button appears; `final_sent` locks fully.
-- **Revisions table** — `boq_revisions` rows are written on every new round and on each creator save after comments.
+Add two buttons inside the open-round details box in `DesignReviewPanel.tsx` (next to "Copy Review Link"): **Download Excel** and **Download PDF**. Both export the round currently open in the panel — items + Design comments per column + decisions — so the BOQ creator can use it offline to update the BOQ.
 
-## Gaps this plan closes
+### Contents of the export
 
-### 1. Persist the field-level diff into the revision snapshot
+For the selected round, include:
 
-`snapshotRevision` already accepts a generic `reviewItems` blob but the creator-save path doesn't pass a structured "what changed" payload. Add an optional `changes` field on the snapshot:
+- Header: BOQ number, client, project, round number, kind (Comment/Approval), sent/submitted timestamps, reviewer name / team / contact.
+- Items table, one row per BOQ item:
+  - `#`, Model, Description, Qty, Unit, Remarks (the BOQ values at the moment the link was generated).
+  - Decision (Pending / Approved / Change Required) — only meaningful for Approval rounds.
+  - Design comments split per column: Model, Description, Qty, Unit, Remarks (sourced from `parseColumnComments(it)`).
+  - Design change note (Approval rounds only).
+  - Attached file names (joined).
 
-```ts
-changes: { item_id, item_no, model_number, field, old_value, new_value, changed_by, changed_at }[]
-```
+### Files touched
 
-Compute it in `BoqEditor.save()` by diffing `originalItems` vs `items` on Model / Description / Qty / Unit / Remarks, and store it in the existing `boq_revisions.review_items` jsonb (under a `__changes` key) so no migration is needed.
+- New `src/lib/boq/designReviewExport.ts` — two functions:
+  - `exportDesignReviewRoundExcel(round, items, docs, boq)` — uses `xlsx` (already a transitive dep via project? if not, use `exceljs`/`xlsx` — check first, install if needed).
+  - `exportDesignReviewRoundPDF(round, items, docs, boq)` — uses `jspdf` + `jspdf-autotable` (already used by `src/lib/boq/pdf.ts`).
+- `src/components/boqs/DesignReviewPanel.tsx` — add two `Button`s in the open-round header bar; wire to the new helpers; show toast on success/failure.
 
-### 2. Capture a stable baseline at comment-link generation
+### Technical notes
 
-Today the "Previous Data" baseline comes from `boq_design_review_items` of the latest Comment round (works, but is per-item and skips items removed since). When a Comment round is created in `createReviewRound`, also write `boq_snapshot.line_items = items` so the baseline survives item add/remove. `fetchLatestCommentBaseline` falls back to `boq_design_review_items` when `line_items` is absent (legacy rounds keep working).
+- Reuse `parseColumnComments` from `@/lib/boq/designReview` to split a comment into Model/Description/Qty/Unit/Remarks columns.
+- File name pattern: `<BOQ-number>_R<round>_<Comment|Approval>.xlsx` / `.pdf` (slashes in BOQ number replaced with `_`).
+- No DB changes, no API changes, no permission changes.
+- Buttons appear only when a round is open (same condition as "Copy Review Link").
 
-### 3. Enrich the Revisions table to match your spec
+### Out of scope
 
-Extend `RevisionsTable.tsx` columns to:
-
-```text
-Version | Date/Time | Created/Updated by | Link Type | Status | Reviewer outcome | Changes | View
-```
-
-- **Created/Updated by** — resolve `boq_revisions.created_by` → `profiles.full_name`.
-- **Changes** — "3 fields across 2 items" summary built from the new `__changes` payload (step 1).
-- **View dialog** — add a "Changes" section listing before → after per field, and a "Design comments" section already in `RevisionView` (already shows decision + comment).
-- Keep `Current` row highlighted at top (already done).
-- All historical rows remain read-only (already enforced — no edit UI exists).
-
-### 4. Re-comment cycle after Design rejection
-
-Today `changes_required` reopens editing and the creator can generate a new Approval link directly. Per your spec, the creator should also be able to send the BOQ back for a fresh **Comment** round at any iteration. The `Generate Comment Link` button already exists in `DesignReviewPanel` and is enabled whenever the BOQ isn't locked, so no UI change is required — just verify the gating doesn't hide it when `designReviewStatus === "changes_required"` (currently it doesn't; confirm in QA).
-
-## Files touched
-
-- `src/lib/boq/designReview.ts` — extend `snapshotRevision` with `changes`; write `boq_snapshot.line_items` in `createReviewRound`; add `summarizeChanges()` helper.
-- `src/pages/boqs/BoqEditor.tsx` — compute diff in `save()` and pass `changes` into `snapshotRevision`.
-- `src/components/boqs/RevisionsTable.tsx` — add Created-by + Changes columns; render before/after in `RevisionView`.
-- (Optional) `src/components/boqs/PendingChangesPanel.tsx` — unchanged; already shows live pending diff above `DesignReviewPanel`.
-
-## Explicitly out of scope
-
-- No DB migration (uses existing `boq_revisions.review_items` jsonb and `boq_design_reviews.boq_snapshot` jsonb).
-- No change to OA sync, BOQ number derivation, BOQ calculations, PDF output, RLS, or permissions.
-- No edit capability added to Design on either link.
-- No change to manual revision rules for the Final BOQ.
+- No bulk "download all rounds" export.
+- No changes to OA, BOQ calc, or revision logic.
