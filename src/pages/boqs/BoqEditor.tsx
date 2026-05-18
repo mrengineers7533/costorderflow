@@ -330,6 +330,11 @@ export default function BoqEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
+        {!isNew && !isCurrentBoq && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
+            Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm print:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <Button variant="ghost" size="sm" onClick={() => navigate(orderId ? `/orders/${orderId}` : "/boqs")} className="rounded-lg">
