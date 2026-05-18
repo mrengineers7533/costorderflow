@@ -12,6 +12,14 @@ export default function NewOrderChooser() {
   const [extracted, setExtracted] = useState<ExtractedCostSheet | null>(null);
 
   function handleExtracted(data: ExtractedCostSheet, _sheet: unknown, forcedFormat?: OrderFormat) {
+    // Persist the parsed payload to sessionStorage so a hard refresh on the
+    // editor doesn't lose Apply'd data. Cleared after successful save.
+    try {
+      sessionStorage.setItem(
+        "oa-draft-extracted",
+        JSON.stringify({ extracted: data, forcedFormat: forcedFormat ?? null, ts: Date.now() }),
+      );
+    } catch { /* quota or private mode — fall back to router state only */ }
     // If the user clicked the per-sheet "Create MR/GMS OA" button, skip the
     // in-page chooser and go straight to the editor with the chosen format.
     if (forcedFormat) {
@@ -24,6 +32,12 @@ export default function NewOrderChooser() {
   }
 
   function startOA(forcedFormat: OrderFormat) {
+    try {
+      sessionStorage.setItem(
+        "oa-draft-extracted",
+        JSON.stringify({ extracted, forcedFormat, ts: Date.now() }),
+      );
+    } catch { /* ignore */ }
     navigate("/orders/new/edit", { state: { extracted, forcedFormat } });
   }
 
