@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { BoqRecord } from "./types";
+import { sortByItemNo, type BoqRecord } from "./types";
 
 /** Build a simple .xlsx workbook (as a Blob) for a BOQ revision.
  *  Pricing is intentionally omitted — BOQ has no rates, only the 6

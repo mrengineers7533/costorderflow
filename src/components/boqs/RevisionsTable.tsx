@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Eye } from "lucide-react";
 import { fetchRevisions, statusLabel, type BoqRevisionRow } from "@/lib/boq/designReview";
+import { sortByItemNo } from "@/lib/boq/types";
 
 export function RevisionsTable({ boqId, currentLabel }: { boqId: string | null; currentLabel: string }) {
   const [rows, setRows] = useState<BoqRevisionRow[]>([]);
