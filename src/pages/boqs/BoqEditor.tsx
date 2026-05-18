@@ -97,42 +97,13 @@ export default function BoqEditor() {
         setVerificationToken(b.verification_token || null);
         setDesignReviewStatus((b as unknown as { design_review_status?: string }).design_review_status || "draft");
         setBoqUserId(b.user_id || null);
-        // OA-driven model: refresh items from latest OA. Preserve any
-        // user-edited Description/Remarks matched by model number.
-        let nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
+        // Saved BOQ is a fixed snapshot: header + items come from the saved
+        // record and are NOT auto-refreshed from the linked OA. The OA is
+        // fetched only to resolve the OA owner (for edit permissions).
+        const nextItems: BoqLineItem[] = b.line_items?.length ? b.line_items : [newBoqItem(1)];
         if (b.order_id) {
-          const { data: oa } = await supabase.from("orders").select("*").eq("id", b.order_id).maybeSingle();
-          if (oa) {
-            const o = oa as unknown as OrderRecord;
-            setOaOwnerId(o.user_id || null);
-            const prevByModel = new Map<string, BoqLineItem>();
-            (b.line_items || []).forEach((it) => {
-              const k = (it.model_number || "").trim().toLowerCase();
-              if (k) prevByModel.set(k, it);
-            });
-            nextItems = (o.line_items || []).map((it, i) => {
-              const model = it.hsn_code || "";
-              const prev = prevByModel.get(model.trim().toLowerCase());
-              return {
-                id: prev?.id || crypto.randomUUID(),
-                item_no: String(i + 1),
-                model_number: model,
-                // BOQ description always comes from latest OA.
-                description: it.description || "",
-                quantity: Number(it.quantity) || 0,
-                unit: it.unit || "Nos",
-                remarks: prev?.remarks || "",
-                approval_status: prev?.approval_status,
-                approval_comment: prev?.approval_comment,
-              };
-            });
-            setReferenceOa(o.oa_number);
-            setProjectNumber(o.cost_sheet_number || o.reference || b.project_number || "");
-            setClientName(o.company_name || o.bill_to?.name || b.client_name || "");
-            setFormat(o.format);
-            // BOQ number always mirrors the latest OA revision.
-            setBoqNumber(deriveBoqNumber(o.oa_number));
-          }
+          const { data: oa } = await supabase.from("orders").select("user_id").eq("id", b.order_id).maybeSingle();
+          if (oa) setOaOwnerId((oa as { user_id: string | null }).user_id || null);
         }
         const finalItems = sortByItemNo(nextItems.length ? nextItems : [newBoqItem(1)]);
         setItems(finalItems);
