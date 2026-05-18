@@ -694,7 +694,7 @@ export default function OrderEditor() {
               <Badge variant="outline" className="text-[10px] uppercase">Superseded</Badge>
               <span>You are viewing OA <span className="font-mono">{oaNumber}</span> — Rev {revision}. A newer revision exists.</span>
             </div>
-            <CurrentRevisionLink rootOrderId={parentOrderId} />
+            <span className="text-xs text-muted-foreground">Open the current revision from the OA Revision History below.</span>
           </div>
         )}
         {!isNew && isCurrent && revision > 0 && (
