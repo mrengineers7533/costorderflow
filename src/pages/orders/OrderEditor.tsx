@@ -384,7 +384,9 @@ export default function OrderEditor() {
     } catch (e) {
       console.warn("Auto BOQ create failed", e);
     }
-    toast({ title: "Saved", description: `OA ${oa}` });
+    // Clear the cost-sheet draft cache — data is now persisted in the DB.
+    try { sessionStorage.removeItem("oa-draft-extracted"); } catch { /* ignore */ }
+    toast({ title: "OA data saved successfully", description: `OA ${oa} · ${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"} saved` });
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
 
