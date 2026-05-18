@@ -338,6 +338,10 @@ export default function OrderEditor() {
   }
 
   async function save(finalize: boolean) {
+    if (!isNew && !isCurrent) {
+      toast({ title: "Read-only revision", description: "This is a superseded OA revision. Open the current revision to edit.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     const ship = sameAsBill ? billTo : shipTo;
     let oa = oaNumber;
