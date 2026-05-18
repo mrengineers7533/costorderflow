@@ -1,68 +1,58 @@
-# Plan — Before vs After change tracking for BOQ updates
+## What already works (no changes needed)
 
-Most of the workflow you described is already wired:
+- **Design comments item-wise on BOQ page** — `DesignCommentsInline` renders Design suggestions row-wise under each BOQ item, per column.
+- **Creator can edit Model / Description / Qty / Unit / Remarks** after comments arrive (`canEditFull` in `BoqEditor.tsx`).
+- **Save flips status to `boq_updated`** and snapshots a revision (`save()` in `BoqEditor.tsx`).
+- **Approval link is separate from Comment link** (`kind: "comment" | "approval"`), enforced server-side in `submit_design_review_with_token`. Design cannot edit BOQ data through either link.
+- **Approval link already shows Previous → Updated** per item via `fetchLatestCommentBaseline` + the amber "Previous · R<n>" row in `DesignReview.tsx`.
+- **Approve / Request Changes flow** — RPC sets BOQ to `design_approved` / `changes_required`; `changes_required` re-opens editing and a new round can be generated.
+- **Final BOQ lock** — once `design_approved`, the editor goes read-only and the "Send Final BOQ" button appears; `final_sent` locks fully.
+- **Revisions table** — `boq_revisions` rows are written on every new round and on each creator save after comments.
 
-- Design comments already show item-wise under each BOQ row (`DesignSuggestionInlineRow` in `BoqEditor.tsx`).
-- Creator can already edit Model / Description / Qty / Unit / Remarks once Design comments are received (`canEditFull`).
-- Approval link, final approval, locking, and revision history (R1/R2/R3 via `snapshotRevision` + `RevisionsTable`) are in place.
-- OA sync, BOQ calculations, and permissions are untouched.
+## Gaps this plan closes
 
-The real gap is **change tracking visibility**: today, when the creator edits the BOQ after comments, neither the creator nor Design clearly sees "previous value → updated value". This plan closes that gap without changing existing data flow.
+### 1. Persist the field-level diff into the revision snapshot
 
-## What gets added
+`snapshotRevision` already accepts a generic `reviewItems` blob but the creator-save path doesn't pass a structured "what changed" payload. Add an optional `changes` field on the snapshot:
 
-### 1. Capture a "baseline" snapshot at the moment Design submits a Comment round
-
-When a Comment round is submitted by Design (via the comment link), persist the BOQ line items as they were at that moment into the existing `boq_design_reviews.boq_snapshot` JSON (extend the snapshot with a `line_items` array). This becomes the "Previous Data" against which creator edits are compared.
-
-If a Comment round was submitted before this change ships, fall back to the per-item values stored in `boq_design_review_items` (already present) — so old rounds still produce a valid baseline.
-
-### 2. Show "Pending Changes" panel on the BOQ page (creator side)
-
-On `BoqEditor.tsx`, render a new collapsible "Pending Changes vs Last Design Comment" card above the `DesignReviewPanel`, visible only when:
-- status is `review_received` / `changes_required` / `boq_updated`, and
-- at least one of (Model, Description, Qty, Unit, Remarks) differs from the baseline.
-
-Each row shows:
-
-```text
-Item 3 · Aspiration Filter
-  Qty       11  →  12
-  Remarks   —   →  "Updated as per design note"
-  Changed by: <name>   at: <timestamp>
+```ts
+changes: { item_id, item_no, model_number, field, old_value, new_value, changed_by, changed_at }[]
 ```
 
-`Changed by` / timestamp come from the existing `boq_remarks_audit` log for Remarks; for the other four fields we add a lightweight in-memory diff sourced from `originalItems` vs `items` plus the current user/time at the moment Save is clicked (persisted into the revision snapshot — see step 4).
+Compute it in `BoqEditor.save()` by diffing `originalItems` vs `items` on Model / Description / Qty / Unit / Remarks, and store it in the existing `boq_revisions.review_items` jsonb (under a `__changes` key) so no migration is needed.
 
-### 3. Show the same comparison to Design on the Approval link
+### 2. Capture a stable baseline at comment-link generation
 
-In `src/pages/boqs/DesignReview.tsx`, when `meta.kind === "approval"`, fetch the previous Comment round's baseline (from step 1) and render a "Previous → Updated" column next to each item showing only the changed fields. Unchanged items render normally. Design still only Approves / Requests Changes — no edit access added.
+Today the "Previous Data" baseline comes from `boq_design_review_items` of the latest Comment round (works, but is per-item and skips items removed since). When a Comment round is created in `createReviewRound`, also write `boq_snapshot.line_items = items` so the baseline survives item add/remove. `fetchLatestCommentBaseline` falls back to `boq_design_review_items` when `line_items` is absent (legacy rounds keep working).
 
-### 4. Persist the diff into the revision snapshot
+### 3. Enrich the Revisions table to match your spec
 
-Extend `snapshotRevision` (in `src/lib/boq/designReview.ts`) to also accept and store a `changes` array: `{ item_id, field, old_value, new_value, changed_by, changed_at }`. This is already invoked from `save()` in `BoqEditor.tsx` when the creator saves an update after comments; we just pass the computed diff in.
+Extend `RevisionsTable.tsx` columns to:
 
-`RevisionsTable` then gains a small "Changes" cell ("3 fields across 2 items") with the existing View dialog expanded to render the before/after rows.
+```text
+Version | Date/Time | Created/Updated by | Link Type | Status | Reviewer outcome | Changes | View
+```
+
+- **Created/Updated by** — resolve `boq_revisions.created_by` → `profiles.full_name`.
+- **Changes** — "3 fields across 2 items" summary built from the new `__changes` payload (step 1).
+- **View dialog** — add a "Changes" section listing before → after per field, and a "Design comments" section already in `RevisionView` (already shows decision + comment).
+- Keep `Current` row highlighted at top (already done).
+- All historical rows remain read-only (already enforced — no edit UI exists).
+
+### 4. Re-comment cycle after Design rejection
+
+Today `changes_required` reopens editing and the creator can generate a new Approval link directly. Per your spec, the creator should also be able to send the BOQ back for a fresh **Comment** round at any iteration. The `Generate Comment Link` button already exists in `DesignReviewPanel` and is enabled whenever the BOQ isn't locked, so no UI change is required — just verify the gating doesn't hide it when `designReviewStatus === "changes_required"` (currently it doesn't; confirm in QA).
 
 ## Files touched
 
-- `src/lib/boq/designReview.ts` — extend `snapshotRevision`, add `fetchPreviousCommentBaseline(boqId)`, extend submit flow to write `line_items` into `boq_snapshot`.
-- `src/pages/boqs/BoqEditor.tsx` — compute diff from `originalItems` vs `items`; render Pending Changes card; pass diff into `snapshotRevision`.
-- `src/pages/boqs/DesignReview.tsx` — for approval kind, fetch baseline and render before/after column.
-- `src/components/boqs/RevisionsTable.tsx` — show changes summary + render diff in the view dialog.
-- New migration: none required if we only extend the JSON shape of `boq_snapshot` and the existing `revision_snapshot` column. (No schema change.)
+- `src/lib/boq/designReview.ts` — extend `snapshotRevision` with `changes`; write `boq_snapshot.line_items` in `createReviewRound`; add `summarizeChanges()` helper.
+- `src/pages/boqs/BoqEditor.tsx` — compute diff in `save()` and pass `changes` into `snapshotRevision`.
+- `src/components/boqs/RevisionsTable.tsx` — add Created-by + Changes columns; render before/after in `RevisionView`.
+- (Optional) `src/components/boqs/PendingChangesPanel.tsx` — unchanged; already shows live pending diff above `DesignReviewPanel`.
 
-## Technical notes
+## Explicitly out of scope
 
-- "Previous Data" baseline source priority:
-  1. `boq_design_reviews.boq_snapshot.line_items` (preferred, set going forward).
-  2. Fallback to `boq_design_review_items` rows for the latest submitted Comment round (legacy data).
-- Diff comparison fields: `model_number`, `description`, `quantity`, `unit`, `remarks`. Other fields untouched.
-- Permissions, OA sync, BOQ calculations, PDF output, and existing revision rules are not modified. Manual revisions after final approval continue to use the existing flow.
-- No new tables. No changes to RLS. No edit access for Design.
-
-## Out of scope (intentionally)
-
-- No automatic OA/PI revision creation — manual revision only, as you specified.
-- No changes to the existing Approve / Request Changes UI for Design beyond adding the read-only Previous → Updated column.
-- No change to BOQ number derivation or version numbering rules.
+- No DB migration (uses existing `boq_revisions.review_items` jsonb and `boq_design_reviews.boq_snapshot` jsonb).
+- No change to OA sync, BOQ number derivation, BOQ calculations, PDF output, RLS, or permissions.
+- No edit capability added to Design on either link.
+- No change to manual revision rules for the Final BOQ.
