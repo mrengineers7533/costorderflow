@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -256,8 +256,8 @@ export default function DesignReview() {
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
                         return (
-                          <>
-                            <TableRow key={`${it.id}-data`} className="align-top">
+                          <Fragment key={it.id}>
+                            <TableRow className="align-top">
                               <TableCell className="py-2 font-medium">{it.item_no}</TableCell>
                               <TableCell className="py-2 font-mono text-xs">{it.model_number}</TableCell>
                               <TableCell className="py-2 text-sm whitespace-pre-wrap">{it.description}</TableCell>
@@ -317,7 +317,7 @@ export default function DesignReview() {
                               )}
                             </TableRow>
                             {itemDocs.length > 0 && (
-                              <TableRow key={`${it.id}-docs`}>
+                              <TableRow>
                                 <TableCell colSpan={isRound1 ? 6 : 7} className="py-1 text-xs">
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
@@ -329,7 +329,7 @@ export default function DesignReview() {
                                 </TableCell>
                               </TableRow>
                             )}
-                          </>
+                          </Fragment>
                         );
                       })}
                     </TableBody>
