@@ -67,31 +67,29 @@ export default function DesignReview() {
     (async () => {
       if (!token) { setError("Missing link token"); setLoading(false); return; }
       const { data, error } = await supabase
-        .from("boq_design_reviews")
-        .select("id, boq_id, round_no, kind, status, expires_at, boq_snapshot")
-        .eq("token", token)
-        .maybeSingle();
-      if (error || !data) {
+        .rpc("get_design_review_by_token", { _token: token });
+      const row = Array.isArray(data) ? data[0] : data;
+      if (error || !row) {
         setError("This review link is invalid, expired, or already submitted.");
         setLoading(false);
         return;
       }
-      if (data.status !== "sent" || new Date(data.expires_at) < new Date()) {
+      if (row.status !== "sent" || new Date(row.expires_at) < new Date()) {
         setError("This review link has expired or has already been submitted.");
-        setMeta(data as ReviewMeta);
+        setMeta(row as ReviewMeta);
         setLoading(false);
         return;
       }
-      setMeta(data as unknown as ReviewMeta);
-      const its = await fetchReviewItems(data.id);
+      setMeta(row as unknown as ReviewMeta);
+      const its = await (await import("@/lib/boq/designReview")).fetchReviewItemsByToken(token);
       setItems(its);
       const d: typeof decisions = {};
       its.forEach((it) => { d[it.boq_item_id] = { decision: "pending", comment: "", design_change_note: "" }; });
       setDecisions(d);
       // For Approval links, load the previous Comment-round baseline so
       // Design sees a clear "Previous → Updated" comparison per item.
-      if (data.kind === "approval") {
-        const base = await fetchLatestCommentBaseline(data.boq_id).catch(() => null);
+      if (row.kind === "approval") {
+        const base = await fetchLatestCommentBaseline(row.boq_id).catch(() => null);
         if (base) {
           const map: Record<string, DesignReviewItemRow> = {};
           for (const b of base.items) map[b.boq_item_id] = b;

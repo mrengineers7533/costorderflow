@@ -1018,6 +1018,84 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_design_review_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_id: string
+          boq_snapshot: Json
+          created_at: string
+          expires_at: string
+          id: string
+          kind: string
+          overall_outcome: string | null
+          recipients: string[]
+          reviewer_contact: string | null
+          reviewer_design_team: string | null
+          reviewer_name: string | null
+          round_no: number
+          sent_at: string
+          sent_by: string | null
+          sent_by_email: string | null
+          sent_message: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by_email: string | null
+          token: string
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "boq_design_reviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_design_review_docs_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_item_id: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          review_id: string
+          source: string
+          uploaded_by_email: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "boq_design_review_documents"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_design_review_items_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_item_id: string
+          column_comments: Json
+          comment: string | null
+          created_at: string
+          decided_at: string | null
+          decision: string
+          description: string | null
+          design_change_note: string | null
+          id: string
+          item_no: string | null
+          model_number: string | null
+          quantity: number | null
+          remarks: string | null
+          review_id: string
+          unit: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "boq_design_review_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
