@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Link2, Loader2, RefreshCw } from "lucide-react";
+import { Copy, Download, FileSpreadsheet, Link2, Loader2, RefreshCw } from "lucide-react";
+import { exportDesignReviewRoundExcel, exportDesignReviewRoundPDF } from "@/lib/boq/designReviewExport";
 import {
   createReviewRound,
   fetchReviewsForBoq,
@@ -258,6 +259,42 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                 }}
               >
                 <Copy className="mr-1 h-4 w-4" />Copy Review Link
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  try {
+                    exportDesignReviewRoundExcel(open, openItems, openDocs, {
+                      boq_number: boq.boq_number,
+                      client_name: boq.client_name,
+                      project_number: boq.project_number,
+                    });
+                    toast({ title: "Excel downloaded" });
+                  } catch (e) {
+                    toast({ title: "Download failed", description: String((e as Error).message || e), variant: "destructive" });
+                  }
+                }}
+              >
+                <FileSpreadsheet className="mr-1 h-4 w-4" />Download Excel
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  try {
+                    exportDesignReviewRoundPDF(open, openItems, openDocs, {
+                      boq_number: boq.boq_number,
+                      client_name: boq.client_name,
+                      project_number: boq.project_number,
+                    });
+                    toast({ title: "PDF downloaded" });
+                  } catch (e) {
+                    toast({ title: "Download failed", description: String((e as Error).message || e), variant: "destructive" });
+                  }
+                }}
+              >
+                <Download className="mr-1 h-4 w-4" />Download PDF
               </Button>
             </div>
 
