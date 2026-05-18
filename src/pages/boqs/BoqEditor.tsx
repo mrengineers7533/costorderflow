@@ -17,6 +17,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
+import { DesignCommentRow, useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { RevisionsTable } from "@/components/boqs/RevisionsTable";
+import { statusLabel } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -50,6 +53,8 @@ export default function BoqEditor() {
   const [notes, setNotes] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<"approved" | "pending_verification" | "rejected">("approved");
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  const [designReviewStatus, setDesignReviewStatus] = useState<string>("draft");
+  const [refreshKey, setRefreshKey] = useState(0);
   // Track the OA owner and BOQ creator so either can edit Remarks.
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
@@ -80,6 +85,7 @@ export default function BoqEditor() {
         setProjectNumber(b.project_number || ""); setClientName(b.client_name || "");
         setVerificationStatus(b.verification_status || "approved");
         setVerificationToken(b.verification_token || null);
+        setDesignReviewStatus((b as unknown as { design_review_status?: string }).design_review_status || "draft");
         setBoqUserId(b.user_id || null);
         // OA-driven model: refresh items from latest OA. Preserve any
         // user-edited Description/Remarks matched by model number.
