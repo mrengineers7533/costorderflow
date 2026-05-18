@@ -472,6 +472,61 @@ export default function BoqEditor() {
   // come from the linked OA. Helper kept for future use.
 }
 
+function BoqItemsList({
+  items, canEditRemarks, boqId, refreshKey, onUpdate,
+}: {
+  items: BoqLineItem[];
+  canEditRemarks: boolean;
+  boqId: string | null;
+  refreshKey: number;
+  onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
+}) {
+  const review = useLatestDesignReview(boqId ? `${boqId}#${refreshKey}` : null) as ReturnType<typeof useLatestDesignReview>;
+  // The hook keys by boqId; pass real id for fetching:
+  const review2 = useLatestDesignReview(boqId);
+  const data = review || review2;
+  const byItemId = new Map((data?.items || []).map((r) => [r.boq_item_id, r]));
+  return (
+    <>
+      {items.map((it) => {
+        const r = byItemId.get(it.id);
+        return (
+          <div key={it.id} className="space-y-1.5">
+            <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
+              <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
+              <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
+              <Textarea
+                value={it.remarks}
+                onChange={(e) => onUpdate(it.id, { remarks: e.target.value })}
+                readOnly={!canEditRemarks}
+                className="min-h-9"
+                rows={1}
+              />
+              <div className="text-[11px] pt-2">
+                {it.approval_status === "approved" ? (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
+                ) : it.approval_status === "rejected" ? (
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 font-medium" title={it.approval_comment || ""}>Rejected</span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
+                )}
+              </div>
+            </div>
+            {r && data && (
+              <div className="pl-12 pr-1">
+                <DesignCommentRow item={r} docs={data.docs} round={data.round} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /* -------- BOQ document-style preview — mirrors generated PDF 1:1 --------
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
