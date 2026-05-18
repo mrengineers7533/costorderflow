@@ -154,7 +154,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   }, {});
 
   return (
-    <Card>
+    <Card id="design-review-panel">
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle className="text-base">Design Review</CardTitle>

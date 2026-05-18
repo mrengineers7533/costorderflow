@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Download, Eye, FileText, History, Printer, Save } from "lucide-react";
+import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
@@ -361,6 +361,30 @@ export default function BoqEditor() {
           </div>
         </div>
 
+        {/* Quick Action shortcuts */}
+        <div className="flex flex-wrap gap-2 rounded-xl border border-border/70 bg-card p-3 shadow-sm print:hidden">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold self-center mr-1">
+            Quick Actions
+          </div>
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Printer className="mr-1 h-4 w-4" />Print View
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => document.getElementById("design-review-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            <Link2 className="mr-1 h-4 w-4" />Create Design Comment Link
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => document.getElementById("design-review-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            <Link2 className="mr-1 h-4 w-4" />Create Design Approval Link
+          </Button>
+        </div>
+
         {verificationStatus === "pending_verification" && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm print:hidden">
             <div className="font-medium text-amber-700 dark:text-amber-400">Pending Senior Approval</div>
@@ -478,6 +502,13 @@ export default function BoqEditor() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print</Button>
                 <Button variant="outline" size="sm" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />Download PDF</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                >
+                  <ArrowUp className="mr-1 h-4 w-4" />Go to Top
+                </Button>
               </div>
             </div>
             <BoqDocPreview rec={buildRecord()} />
