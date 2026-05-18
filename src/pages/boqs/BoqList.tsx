@@ -44,7 +44,7 @@ export default function BoqList() {
     folderParam === "mr" ? "MR" : folderParam === "gms" ? "GMS" : "all";
   const [rows, setRows] = useState<BoqRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showSuperseded, setShowSuperseded] = useState(true);
+  const [showSuperseded, setShowSuperseded] = useState(false);
   const [oas, setOas] = useState<OaOption[]>([]);
   const [oaSearch, setOaSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null);

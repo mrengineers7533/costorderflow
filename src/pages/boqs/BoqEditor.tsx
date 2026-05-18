@@ -19,6 +19,7 @@ import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
+import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, parseColumnComments, diffItemsAgainstBaseline, buildChangeLog, type ColKey } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
@@ -60,6 +61,8 @@ export default function BoqEditor() {
   const [oaOwnerId, setOaOwnerId] = useState<string | null>(null);
   const [boqUserId, setBoqUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isCurrentBoq, setIsCurrentBoq] = useState<boolean>(true);
+  const [boqRevision, setBoqRevision] = useState<number>(0);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
@@ -97,6 +100,8 @@ export default function BoqEditor() {
         setVerificationToken(b.verification_token || null);
         setDesignReviewStatus((b as unknown as { design_review_status?: string }).design_review_status || "draft");
         setBoqUserId(b.user_id || null);
+        setIsCurrentBoq(b.is_current !== false);
+        setBoqRevision(b.revision ?? 0);
         // Saved BOQ is a fixed snapshot: header + items come from the saved
         // record and are NOT auto-refreshed from the linked OA. The OA is
         // fetched only to resolve the OA owner (for edit permissions).
@@ -325,6 +330,11 @@ export default function BoqEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
+        {!isNew && !isCurrentBoq && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
+            Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm print:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <Button variant="ghost" size="sm" onClick={() => navigate(orderId ? `/orders/${orderId}` : "/boqs")} className="rounded-lg">
@@ -494,6 +504,8 @@ export default function BoqEditor() {
             />
 
             <RevisionsTable boqId={boqId} currentLabel={`R${(version) || 1}`} />
+
+            <BoqRevisionHistory currentBoqId={boqId} orderId={orderId || null} />
           </div>
 
           {/* ---------- Live document preview (below editor) ---------- */}
