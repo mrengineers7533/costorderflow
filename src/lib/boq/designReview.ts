@@ -206,6 +206,72 @@ export async function fetchLatestSubmittedRound(boqId: string): Promise<{ round:
   return { round, items, docs };
 }
 
+/** Fetch the baseline BOQ snapshot from the latest **comment** review round.
+ *  Items are the BOQ state at the moment that comment link was generated —
+ *  i.e. "Previous Data" before the creator applied any updates. */
+export async function fetchLatestCommentBaseline(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[] } | null> {
+  const { data } = await supabase
+    .from("boq_design_reviews")
+    .select("*")
+    .eq("boq_id", boqId)
+    .eq("kind", "comment")
+    .order("round_no", { ascending: false })
+    .limit(1);
+  const round = data?.[0] as unknown as DesignReviewRow | undefined;
+  if (!round) return null;
+  const items = await fetchReviewItems(round.id);
+  return { round, items };
+}
+
+export type DiffField = "model_number" | "description" | "quantity" | "unit" | "remarks";
+export const DIFF_FIELDS: { key: DiffField; label: string }[] = [
+  { key: "model_number", label: "Model" },
+  { key: "description", label: "Description" },
+  { key: "quantity", label: "Qty" },
+  { key: "unit", label: "Unit" },
+  { key: "remarks", label: "Remarks" },
+];
+
+export interface ItemDiff {
+  itemId: string;
+  item_no: string | null;
+  model_number: string | null;
+  changes: { field: DiffField; label: string; from: string; to: string }[];
+}
+
+function norm(v: unknown): string {
+  if (v == null) return "";
+  return String(v).trim();
+}
+
+/** Compute per-item before/after diff between a baseline snapshot (e.g.
+ *  the latest comment-round items) and the current BOQ line items. Only
+ *  Model / Description / Qty / Unit / Remarks are compared. Items absent
+ *  from one side are skipped. */
+export function diffItemsAgainstBaseline(
+  baseline: DesignReviewItemRow[],
+  current: Array<{ id: string; item_no?: string; model_number?: string; description?: string; quantity?: number; unit?: string; remarks?: string }>,
+): ItemDiff[] {
+  const baseById = new Map(baseline.map((b) => [b.boq_item_id, b]));
+  const out: ItemDiff[] = [];
+  for (const it of current) {
+    const b = baseById.get(it.id);
+    if (!b) continue;
+    const changes: ItemDiff["changes"] = [];
+    for (const { key, label } of DIFF_FIELDS) {
+      const baseVal = (b as unknown as Record<string, unknown>)[key];
+      const curVal = (it as unknown as Record<string, unknown>)[key];
+      if (norm(baseVal) !== norm(curVal)) {
+        changes.push({ field: key, label, from: norm(baseVal), to: norm(curVal) });
+      }
+    }
+    if (changes.length) {
+      out.push({ itemId: it.id, item_no: it.item_no ?? null, model_number: it.model_number ?? null, changes });
+    }
+  }
+  return out;
+}
+
 /** Mark a BOQ as Final and generate a share token for departments. */
 export async function sendFinalBoq(boqId: string): Promise<string> {
   const { data: existing } = await supabase
