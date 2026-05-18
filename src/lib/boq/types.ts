@@ -13,6 +13,17 @@ export interface BoqLineItem {
   approval_comment?: string;
 }
 
+/** Sort BOQ-like items by numeric value of `item_no` (text column in DB).
+ *  Items with blank / non-numeric values sink to the end. Returns a new
+ *  array; the original is not mutated. */
+export function sortByItemNo<T extends { item_no?: string | number | null }>(items: T[]): T[] {
+  const toNum = (v: unknown) => {
+    const n = parseInt(String(v ?? "").trim(), 10);
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+  return [...items].sort((a, b) => toNum(a.item_no) - toNum(b.item_no));
+}
+
 export interface BoqRecord {
   id: string;
   order_id: string;
