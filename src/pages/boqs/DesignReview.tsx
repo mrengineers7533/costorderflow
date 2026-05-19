@@ -12,13 +12,13 @@ import { toast } from "@/hooks/use-toast";
 import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import {
   fetchReviewItems,
-  publicDocUrl,
   fetchLatestCommentBaseline,
   DIFF_FIELDS,
   type DiffField,
   type DesignReviewItemRow,
   type Decision,
 } from "@/lib/boq/designReview";
+import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo } from "@/lib/boq/types";
 
 interface ReviewMeta {
@@ -369,9 +369,7 @@ export default function DesignReview() {
                                 <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
-                                      <a key={i} href={publicDocUrl(dc.file_path)} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px]">
-                                        {dc.file_name}
-                                      </a>
+                                      <DocLink key={i} filePath={dc.file_path} fileName={dc.file_name} className="underline truncate max-w-[200px]" />
                                     ))}
                                   </div>
                                 </TableCell>
