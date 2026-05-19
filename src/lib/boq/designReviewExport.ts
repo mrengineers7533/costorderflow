@@ -4,7 +4,7 @@ import autoTable from "jspdf-autotable";
 import { sortByItemNo } from "@/lib/boq/types";
 import {
   parseColumnComments,
-  publicDocUrl,
+  signedDocUrl,
   type DesignReviewRow,
   type DesignReviewItemRow,
   type DesignReviewDocRow,
@@ -105,12 +105,12 @@ export function exportDesignReviewRoundExcel(
   XLSX.writeFile(wb, fname);
 }
 
-export function exportDesignReviewRoundPDF(
+export async function exportDesignReviewRoundPDF(
   round: DesignReviewRow,
   items: DesignReviewItemRow[],
   docs: DesignReviewDocRow[],
   boq: ExportBoqMeta,
-): void {
+): Promise<void> {
   const isApproval = round.kind === "approval";
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -162,8 +162,14 @@ export function exportDesignReviewRoundPDF(
     doc.setFontSize(9);
     doc.text("General attachments:", 32, y + 18);
     doc.setFont("helvetica", "normal");
+    const urls = await Promise.all(general.map((d) => signedDocUrl(d.file_path)));
     general.forEach((d, i) => {
-      doc.textWithLink(`• ${d.file_name}`, 32, y + 32 + i * 12, { url: publicDocUrl(d.file_path) });
+      const url = urls[i];
+      if (url) {
+        doc.textWithLink(`• ${d.file_name}`, 32, y + 32 + i * 12, { url });
+      } else {
+        doc.text(`• ${d.file_name}`, 32, y + 32 + i * 12);
+      }
     });
   }
 
