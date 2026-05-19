@@ -1,29 +1,20 @@
-## Goal
-In the OA PDF (preview/download/print), remove the "Format" and "Status" fields from the header meta box. Only 4 fields should remain — matching the attached screenshot layout.
+## Update Client Copy Make labels
 
-## Current state
-`src/lib/orders/pdf.ts` (lines 150–174) renders a 2-column meta box:
-- Left column: OA Number, Date, Reference (3 rows)
-- Right column: Prepared By, Format, Status (3 rows)
+Set the `make_label` field on the four summarized Client Copy rows in `src/lib/orders/clientCopy.ts` so the "Make" column displays the correct value per group.
 
-## Change
-Rearrange to a 2×2 layout (4 fields total), matching the screenshot:
+### Change
 
-```text
-| OA No.: MROA/2024-25/0220                    | Dated: 09-01-2025          |
-| Ref. NO.: Cost Sheet GMS/OFF/23-24/076/...   | Prepared By- Shubham Kumar |
-```
+In `buildClientCopyItems`, when constructing the summarized rows, attach a fixed `make_label` per group:
 
-Implementation in `src/lib/orders/pdf.ts`:
-- `metaLeft` → `[OA Number, Reference]`
-- `metaRight` → `[Date, Prepared By]`
-- Remove `Format` and `Status` rows entirely
-- Adjust `y += 18` → `y += 13` (2 rows instead of 3)
+- `MHE` (Material Handling Equipments) → `"M.R. Engg"`
+- `SPOUTING` (Spouting, Aspiration Ducting & Pneumatic Manifold) → `"M.R. Engg"`
+- `FAN` (Centrifugal Fans (Ferrari)) → `"Ferrari"`
+- `MAGNET` (Magnets (J. K.)) → `"J. K."`
 
-## Scope guard
-- Only edit the OA PDF meta-box rendering. Do not touch BOQ, PI, Excel exports, totals, calculations, or any other layout.
-- PI PDF reuses `generateOrderPDF` with its own `docMeta` overrides — it already overrides the number/ref labels and is unaffected by removing Format/Status (those fields aren't overridden, just dropped for everyone). Confirmed acceptable since user request is global to OA-style header.
-- No DB / RLS / functionality changes.
+Implementation: add a `GROUP_MAKE: Record<GroupKey, string>` map next to `GROUP_LABEL`, and include `make_label: GROUP_MAKE[g]` in the synthesized line item returned by the `FIXED_ORDER.map(...)` block.
 
-## Files touched
-- `src/lib/orders/pdf.ts` (header meta block only)
+### Scope guard
+
+- Only `src/lib/orders/clientCopy.ts` is touched.
+- No changes to grouping logic, totals, qty/rate math, passthrough items, ordering, PDF/Excel renderers, or any OA/BOQ/PI calculations.
+- Non-grouped passthrough items keep their original `make_label` unchanged.

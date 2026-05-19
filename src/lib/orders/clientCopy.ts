@@ -10,6 +10,13 @@ const GROUP_LABEL: Record<GroupKey, string> = {
   SPOUTING: "Spouting, Aspiration Ducting & Pneumatic Manifold - approx*",
 };
 
+const GROUP_MAKE: Record<GroupKey, string> = {
+  MHE: "M.R. Engg",
+  SPOUTING: "M.R. Engg",
+  FAN: "Ferrari",
+  MAGNET: "J. K.",
+};
+
 function detectGroup(desc: string): GroupKey | null {
   const d = (desc || "").toLowerCase();
   // Priority: spouting/ducting bucket first so "Fan Accessories" doesn't get caught by FAN.
@@ -99,6 +106,7 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
     return {
       id: `client-copy-${g.toLowerCase()}-${idx}`,
       description: GROUP_LABEL[g],
+      make_label: GROUP_MAKE[g],
       quantity: 1,
       unit: "Set",
       // qty = 1 Set, so unit_rate equals the grouped total. Keeps
