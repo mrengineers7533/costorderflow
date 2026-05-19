@@ -254,11 +254,24 @@ function EditUserDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
   async function save() {
     setSaving(true);
     try {
+      // Update name directly; toggle is_active via edge function so that
+      // deactivation also revokes the user's active sessions.
       const { error: pErr } = await supabase
         .from("profiles")
-        .update({ full_name: fullName.trim() || null, is_active: active })
+        .update({ full_name: fullName.trim() || null })
         .eq("id", row.id);
       if (pErr) throw pErr;
+
+      if (active !== row.is_active) {
+        const { data: actData, error: actErr } = await supabase.functions.invoke(
+          "admin-set-user-active",
+          { body: { user_id: row.id, is_active: active } },
+        );
+        if (actErr) throw actErr;
+        if ((actData as { error?: string })?.error) {
+          throw new Error((actData as { error: string }).error);
+        }
+      }
 
       if (role !== row.role) {
         // Replace role rows with the new one
