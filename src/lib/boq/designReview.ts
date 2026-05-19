@@ -199,9 +199,16 @@ export async function fetchReviewDocs(reviewId: string): Promise<DesignReviewDoc
   return (data || []) as unknown as DesignReviewDocRow[];
 }
 
-export function publicDocUrl(filePath: string): string {
-  const { data } = supabase.storage.from("design-review-docs").getPublicUrl(filePath);
-  return data.publicUrl;
+/**
+ * Bucket "design-review-docs" is private. Use a short-lived signed URL.
+ * Returns "" on failure (caller can decide how to render).
+ */
+export async function signedDocUrl(filePath: string, ttlSeconds = 3600): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("design-review-docs")
+    .createSignedUrl(filePath, ttlSeconds);
+  if (error || !data?.signedUrl) return "";
+  return data.signedUrl;
 }
 
 /** Fetch latest submitted review round + its items for a BOQ. */
