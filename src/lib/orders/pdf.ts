@@ -149,16 +149,14 @@ export async function generateOrderPDF(
   doc.setFontSize(9).setFont("helvetica", "normal");
   const metaLeft = [
     [opts?.docMeta?.numberLabel || "OA Number", opts?.docMeta?.numberValue || order.oa_number],
-    ["Date", new Date(order.order_date).toLocaleDateString("en-IN")],
     [
       opts?.docMeta?.refLabel || "Reference",
       opts?.docMeta?.refValue ?? (order.reference || order.cost_sheet_number || "-"),
     ],
   ];
   const metaRight = [
+    ["Date", new Date(order.order_date).toLocaleDateString("en-IN")],
     ["Prepared By", order.prepared_by || "-"],
-    ["Format", order.format],
-    ["Status", order.status.toUpperCase()],
   ];
   metaLeft.forEach((row, i) => {
     doc.setFont("helvetica", "bold");
@@ -172,7 +170,7 @@ export async function generateOrderPDF(
     doc.setFont("helvetica", "normal");
     doc.text(String(row[1]), W / 2 + 35, y + i * 5);
   });
-  y += 18;
+  y += 13;
 
   // Bill To / Ship To
   const boxW = (W - M * 2 - 4) / 2;
