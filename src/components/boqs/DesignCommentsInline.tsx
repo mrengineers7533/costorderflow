@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchLatestSubmittedRound, publicDocUrl, type DesignReviewItemRow, type DesignReviewDocRow, type DesignReviewRow } from "@/lib/boq/designReview";
+import { fetchLatestSubmittedRound, type DesignReviewItemRow, type DesignReviewDocRow, type DesignReviewRow } from "@/lib/boq/designReview";
+import { DocLink } from "@/components/boqs/DocLink";
 
 interface Props { boqId: string | null; }
 
@@ -51,7 +52,7 @@ export function DesignCommentRow({
       {myDocs.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {myDocs.map((d) => (
-            <a key={d.id} href={publicDocUrl(d.file_path)} target="_blank" rel="noreferrer" className="underline truncate max-w-[180px]">{d.file_name}</a>
+            <DocLink key={d.id} filePath={d.file_path} fileName={d.file_name} className="underline truncate max-w-[180px]" />
           ))}
         </div>
       )}
