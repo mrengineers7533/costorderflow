@@ -1103,7 +1103,9 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_design_review_owner: { Args: { _review_id: string }; Returns: boolean }
       is_domain_allowed: { Args: { _domain: string }; Returns: boolean }
+      is_open_design_review: { Args: { _review_id: string }; Returns: boolean }
       next_oa_number: {
         Args: {
           _financial_year: string
