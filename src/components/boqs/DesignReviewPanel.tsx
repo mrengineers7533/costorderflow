@@ -11,7 +11,6 @@ import {
   fetchReviewItems,
   fetchReviewDocs,
   reviewLink,
-  publicDocUrl,
   sendFinalBoq,
   finalBoqLink,
   snapshotRevision,
@@ -23,6 +22,7 @@ import {
   type DesignReviewItemRow,
   type DesignReviewDocRow,
 } from "@/lib/boq/designReview";
+import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo, type BoqLineItem } from "@/lib/boq/types";
 
 interface Props {
@@ -343,9 +343,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                           <td className="p-2">{decisionBadge(it.decision)}</td>
                           <td className="p-2">
                             {(docsByItem[it.boq_item_id] || []).map((d) => (
-                              <a key={d.id} href={publicDocUrl(d.file_path)} target="_blank" rel="noreferrer" className="block underline truncate max-w-[160px]">
-                                {d.file_name}
-                              </a>
+                              <DocLink key={d.id} filePath={d.file_path} fileName={d.file_name} className="block underline truncate max-w-[160px]" />
                             ))}
                           </td>
                         </tr>
