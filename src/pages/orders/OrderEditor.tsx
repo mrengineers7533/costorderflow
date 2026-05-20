@@ -97,10 +97,6 @@ export default function OrderEditor() {
   // Columns hidden from the rendered PDF / preview only. Not persisted —
   // it's an export-time toggle and does not affect saved data.
   const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
-  // Client Copy: when true, MHE / Spouting / Fan / Magnet rows are collapsed
-  // into a single labelled summary row. Default OFF so Client Copy mirrors
-  // the main OA item-by-item. Persisted on the order row.
-  const [clientCopyGrouped, setClientCopyGrouped] = useState<boolean>(false);
 
   // PI item-selection dialog state (opened from "Convert to PI" button).
   const [piDialogOpen, setPiDialogOpen] = useState(false);
@@ -136,7 +132,6 @@ export default function OrderEditor() {
       const saved = o as unknown as { currency_mode?: CurrencyMode; exchange_rate?: number | null };
       setCurrencyMode(saved.currency_mode === "USD" ? "USD" : "INR");
       if (saved.exchange_rate && saved.exchange_rate > 0) setExchangeRate(Number(saved.exchange_rate));
-      setClientCopyGrouped(Boolean((o as unknown as { client_copy_grouping?: boolean }).client_copy_grouping));
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
       setIsCurrent(o.is_current ?? true);
@@ -372,7 +367,6 @@ export default function OrderEditor() {
       tc_note: tcNote,
       currency_mode: currencyMode,
       exchange_rate: exchangeRate || null,
-      client_copy_grouping: clientCopyGrouped,
       ...(isNew ? { user_id: currentUserId } : {}),
     };
 
@@ -451,7 +445,7 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
 
     const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
-      const summarized = buildClientCopyItems(subsetItems, { grouped: clientCopyGrouped });
+      const summarized = buildClientCopyItems(subsetItems);
       const subTotals = calcTotals(summarized, sideCharges);
       const subWords = amountInWords(subTotals.net_payable);
       const record: OrderRecord = {
@@ -525,8 +519,7 @@ export default function OrderEditor() {
       created_at: "", updated_at: "",
       parent_order_id: parentOrderId || orderId || "",
       revision, is_current: isCurrent,
-      ...( { client_copy_grouping: clientCopyGrouped } as Record<string, unknown> ),
-    } as OrderRecord;
+    };
   }
 
   async function handleReviseOa() {
@@ -683,19 +676,10 @@ export default function OrderEditor() {
                   variant="outline"
                   className="rounded-lg"
                   onClick={downloadClientCopy}
-                  title="Generate a customer-facing PDF mirroring the main OA"
+                  title="Generate a customer-facing PDF with summarized item groups"
                 >
                   <Users className="mr-1 h-4 w-4" />Create Client Copy
                 </Button>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer" title="When ON, MHE / Spouting / Fan / Magnet rows are collapsed into summary lines in the Client Copy & PI. When OFF, every item shows individually like the main OA.">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5"
-                    checked={clientCopyGrouped}
-                    onChange={(e) => setClientCopyGrouped(e.target.checked)}
-                  />
-                  Group items
-                </label>
               </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>

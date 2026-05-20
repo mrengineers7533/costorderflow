@@ -3,7 +3,6 @@ import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurtha
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
-import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 
 export interface OaItemPiStatus {
   done: boolean;
@@ -123,13 +122,6 @@ export async function createPiFromOaItems(
     throw new Error("Selected items were not found on this OA.");
   }
 
-  // Apply the OA's Client Copy grouping preference so the PI mirrors the
-  // Client Copy view (PI is generated from the Client Copy OA).
-  const grouped = Boolean(
-    (oa as unknown as { client_copy_grouping?: boolean }).client_copy_grouping,
-  );
-  const piItems = buildClientCopyItems(filteredItems, { grouped });
-
   const fy = getFinancialYear(new Date());
   const { data: piNum, error: numErr } = await supabase.rpc("next_pi_number", {
     _format: oa.format,
@@ -137,7 +129,7 @@ export async function createPiFromOaItems(
   });
   if (numErr || !piNum) throw numErr || new Error("Failed to allocate PI number");
 
-  const totals = calcPiTotals(piItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
+  const totals = calcPiTotals(filteredItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
 
   // GMS landed-cost overrides — when the OA uses an EXW Turkey/Murthal/CIF
   // breakdown, the PI must carry the exact same calculation chain & totals
@@ -183,7 +175,7 @@ export async function createPiFromOaItems(
     company_name: oa.company_name,
     bill_to: oa.bill_to,
     ship_to: oa.ship_to,
-    line_items: piItems,
+    line_items: filteredItems,
     charges: oa.charges,
     totals: {
       basic_total: totals.basic_total,

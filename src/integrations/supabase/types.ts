@@ -686,7 +686,6 @@ export type Database = {
           bill_to: Json
           charges: Json
           charges_gms: Json | null
-          client_copy_grouping: boolean
           company_name: string | null
           cost_sheet_number: string | null
           created_at: string
@@ -716,7 +715,6 @@ export type Database = {
           bill_to?: Json
           charges?: Json
           charges_gms?: Json | null
-          client_copy_grouping?: boolean
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
@@ -746,7 +744,6 @@ export type Database = {
           bill_to?: Json
           charges?: Json
           charges_gms?: Json | null
-          client_copy_grouping?: boolean
           company_name?: string | null
           cost_sheet_number?: string | null
           created_at?: string
