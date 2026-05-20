@@ -627,7 +627,9 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
             <EmptyDetail text="No PI converted yet." />
           )}
           <DetailActions>
-            <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
+            {f.current && (
+              <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
+            )}
             {f.pis.slice(0, 3).map((p) => (
               <Link key={p.id} to={`/pi/${p.id}`}><Button size="sm" variant="outline">{p.pi_number}</Button></Link>
             ))}
