@@ -856,8 +856,9 @@ export default function OrderEditor() {
                 <div className="col-span-2 text-right">Amount</div>
                 <div className="col-span-1" />
               </div>
-              {editorItems.map((it) => (
-                <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
+              {editorItems.map((it, idx) => (
+                <div key={it.id} className="space-y-1.5">
+                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
@@ -873,6 +874,15 @@ export default function OrderEditor() {
                   </Select>
                   <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+                {designReview && (
+                  <OaDesignSuggestionRow
+                    reviewItem={findReviewItemForOaItem(designReview.items, it, idx)}
+                    round={designReview.round}
+                    canApply={oaEditable}
+                    onApply={(patch) => updateItemById(it.id, patch)}
+                  />
+                )}
                 </div>
               ))}
               {editorItems.length === 0 && (
