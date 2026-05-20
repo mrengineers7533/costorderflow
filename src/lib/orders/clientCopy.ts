@@ -101,10 +101,12 @@ export function buildClientCopyItems(items: LineItem[]): LineItem[] {
   const FIXED_ORDER: GroupKey[] = ["MHE", "FAN", "MAGNET", "SPOUTING"];
   const summarized: LineItem[] = FIXED_ORDER
     .filter((g) => groups[g].amount > 0 || groups[g].qty > 0)
-    .map((g, idx) => {
+    .map((g) => {
     const totalAmt = groups[g].amount;
     return {
-      id: `client-copy-${g.toLowerCase()}-${idx}`,
+      // Stable ID (no index suffix) so partial-PI tracking can accumulate
+      // across multiple PIs against the same Client Copy group row.
+      id: `client-copy-${g.toLowerCase()}`,
       description: GROUP_LABEL[g],
       make_label: GROUP_MAKE[g],
       quantity: 1,
