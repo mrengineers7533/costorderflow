@@ -1,41 +1,43 @@
-# Show Total (A+B) in Workflow
+## Goal
 
-## Problem
-The 200TPD cost sheet PDF clearly prints:
-- Total (A) = 8,42,17,000
-- Total Others (B) = 1,69,67,000
-- TOTAL (A+B) = 10,11,84,000
+When a Cost Sheet is parsed and applied to an Order Acceptance (OA), the system should automatically save the OA to the database — no manual "Save" click required. After a page refresh or reopening the page, the applied Cost Sheet data must still be there.
 
-But the AI parser stored only `line_items` for this sheet — `total_a`, `total_other_b`, and `cost_of_project` are all `null` in the DB. So in the Workflow card the row shows "—" for A, B and Cost of Project, and the Matched/Not Matched badge has nothing to compare against.
+## What happens today
 
-We cannot re-run the AI parse for every old sheet, so the fix has to work from data already on disk: the `line_items` array (84 rows for this sheet) plus the `make` field already classified by the parser.
+- **New OA (`/orders/new`)** — Parsed data is held in memory plus a `sessionStorage` cache (`oa-draft-extracted`). The OA row is created in the database only when the user clicks **Save**. A hard refresh recovers via session storage, but closing the tab / logging out loses everything.
+- **Existing OA (`/orders/:id`)** — `CostSheetPicker` applies parsed data to the on-screen state, but nothing is written to the database until the user clicks **Save**.
 
-## Fix (UI only — `src/pages/workflow/WorkflowPage.tsx`)
+## What will change
 
-In `FamilyCard`, when `total_a` / `total_other_b` / `cost_of_project` are missing, derive them from `extracted.line_items`:
+A new auto-save trigger fires the moment `applyCostSheet(...)` finishes, in both flows:
 
-```ts
-const items = Array.isArray(csEx.line_items) ? csEx.line_items as Array<{amount?: number; make?: string}> : [];
-const sumA = items.filter(i => (i.make || "").toUpperCase() !== "GMS")
-                  .reduce((s, i) => s + (Number(i.amount) || 0), 0);
-const sumB = items.filter(i => (i.make || "").toUpperCase() === "GMS")
-                  .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+1. **New OA flow** — After apply, schedule an auto-save (~600 ms debounce so all derived state — items, totals, format — settles first). The existing `save(false)` path:
+   - allocates an OA number via `next_oa_number` RPC,
+   - inserts the order row,
+   - clears the `oa-draft-extracted` session cache,
+   - navigates to `/orders/<new-id>`.
+   From that point on the URL points to the persisted record, so refresh / reopen reload from the DB.
 
-const csTotalA = Number(csEx.total_a as number) || sumA;
-const csTotalB = Number(csEx.total_other_b as number) || sumB;
-const csCopPrinted = Number((csEx.cost_of_project || csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
-const csTotal = csCopPrinted || (csTotalA + csTotalB);
-```
+2. **Existing OA flow** — After apply, call the existing `scheduleAutoSave()` so the updated `line_items` / charges / addresses are persisted via `save(false)` → `orders.update(...)`. This already runs `syncBoqsAndPisForOrder` afterward, matching the manual save behaviour.
 
-Result for the 200TPD sheet: A = 8,42,17,000, B = 1,69,67,000, A+B = **10,11,84,000** — shown in both the Cost Sheet Upload detail grid and the Matched/Not Matched badge in the card header.
+3. **Guards** (do not change any existing behaviour):
+   - Skip auto-save if the OA is a read-only / superseded revision (`isCurrent === false`).
+   - Skip if a save is already in flight (`saving` flag).
+   - Skip if `applyCostSheet` was called with empty data.
+   - Keep the session-storage cache exactly as-is — it still covers the tiny window between "apply" and "insert completes" on the new-OA page.
 
-## Strengthen the parser (optional follow-up — `supabase/functions/parse-cost-sheet/index.ts`)
-Add one line to the prompt so future uploads persist the totals directly:
-> "If `total_a`, `total_other_b` or `cost_of_project` are not labelled exactly, still compute and return them: `total_a` = sum of all non-GMS section sub-totals (machinery sections), `total_other_b` = sum of GMS / Others sub-totals, `cost_of_project` = A + B. Never leave these null when line items are present."
+4. **User feedback** — Reuse the existing toast from `save(false)` ("OA data saved successfully …"). No new UI.
 
-This doesn't affect existing data but makes new uploads self-sufficient.
+## Files touched
 
-## Out of scope
+- `src/pages/orders/OrderEditor.tsx`
+  - `applyCostSheet(...)`: at the end, call `scheduleAutoSave()` (the debounced wrapper that already exists for design-Apply auto-saves).
+  - The router-state / sessionStorage recovery effect that calls `applyCostSheet` on mount will therefore also trigger the auto-save, so a Cost Sheet that was just applied on `/orders/new` is persisted within ~½ second and the URL flips to `/orders/<id>`.
+  - Add a small `savingRef` / `appliedOnceRef` guard so the auto-save can't loop.
+
+## Out of scope (explicitly unchanged)
+
+- Manual **Save** button, **Save & Finalize**, revision flow, BOQ / PI sync — all untouched.
+- Cost-sheet parsing edge function, storage bucket, and DB schema — untouched.
+- Workflow page matching, OA revision history, per-item change history — untouched.
 - No DB migration.
-- No change to OA / BOQ / PI flows.
-- No change to the Matched/Not Matched logic itself — it already reads `csTotal`, which will now be populated.
