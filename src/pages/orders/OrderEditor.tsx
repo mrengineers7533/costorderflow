@@ -1948,74 +1948,93 @@ function OaDesignSuggestionRow({
   boqLinked: boolean;
   onApplyToBoq: (reviewItem: DesignReviewItemRow, patch: { model_number?: string; remarks?: string }) => Promise<void>;
 }) {
+  const [showHistory, setShowHistory] = useState(false);
   if (!reviewItem) return null;
   const cols = parseColumnComments(reviewItem);
-  const tiles: { key: ColKey; label: string }[] = [
-    { key: "model", label: "Model" },
-    { key: "description", label: "Description" },
-    { key: "quantity", label: "Qty" },
-    { key: "unit", label: "Unit" },
-    { key: "remarks", label: "Remarks" },
+  const tiles: { key: ColKey; label: string; target: "oa" | "boq" }[] = [
+    { key: "model", label: "Model", target: "boq" },
+    { key: "description", label: "Description", target: "oa" },
+    { key: "quantity", label: "Qty", target: "oa" },
+    { key: "unit", label: "Unit", target: "oa" },
+    { key: "remarks", label: "Remarks", target: "boq" },
   ];
   const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
-  const hasAny = tiles.some(({ key }) => val(key) !== "");
-  if (!hasAny) return null;
-  const oaPatch: Partial<LineItem> = {};
-  if (val("description")) oaPatch.description = val("description");
-  if (val("quantity")) oaPatch.quantity = Number(val("quantity")) || 0;
-  if (val("unit")) oaPatch.unit = val("unit");
-  const hasOaFields = Object.keys(oaPatch).length > 0;
-  const boqPatch: { model_number?: string; remarks?: string } = {};
-  if (val("model")) boqPatch.model_number = val("model");
-  if (val("remarks")) boqPatch.remarks = val("remarks");
-  const hasBoqFields = Object.keys(boqPatch).length > 0;
+  const present = tiles.filter(({ key }) => val(key) !== "");
+  if (!present.length) return null;
+
+  const applyCell = (t: { key: ColKey; target: "oa" | "boq" }) => {
+    const v = val(t.key);
+    if (t.target === "oa") {
+      if (!canApply) return;
+      if (t.key === "description") onApply({ description: v });
+      else if (t.key === "quantity") onApply({ quantity: Number(v) || 0 });
+      else if (t.key === "unit") onApply({ unit: v });
+    } else {
+      if (!boqLinked) return;
+      if (t.key === "model") void onApplyToBoq(reviewItem, { model_number: v });
+      else if (t.key === "remarks") void onApplyToBoq(reviewItem, { remarks: v });
+    }
+  };
+  const cellDisabled = (t: { target: "oa" | "boq" }) =>
+    t.target === "oa" ? !canApply : !boqLinked;
+
   return (
-    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 text-xs">
-      <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-primary font-semibold">
-        Design Suggested Update · R{round.round_no}
-        {round.reviewer_name && <span className="ml-1 text-muted-foreground font-normal">· {round.reviewer_name}</span>}
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">
+          Design R{round.round_no}
+        </span>
+        {present.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            disabled={cellDisabled(t)}
+            onClick={() => applyCell(t)}
+            title={
+              cellDisabled(t)
+                ? t.target === "oa"
+                  ? "Open the current OA revision to apply"
+                  : "Save the OA first — BOQ auto-syncs on save"
+                : `Apply suggested ${t.label} → ${t.target === "oa" ? "OA" : "BOQ"}: ${val(t.key)}`
+            }
+            className="rounded border border-primary/50 bg-background px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply {t.label}
+            <span className="ml-1 text-[10px] text-muted-foreground">→ {t.target === "oa" ? "OA" : "BOQ"}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowHistory((s) => !s)}
+          className="ml-auto rounded border border-border bg-background px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:bg-muted"
+        >
+          {showHistory ? "Hide" : "View"} history
+        </button>
       </div>
-      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
-        {tiles.map(({ key, label }) => {
-          const v = val(key);
-          return (
-            <div key={key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
-              <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
-              {v ? (
-                <div className="whitespace-pre-wrap text-foreground">{v}</div>
-              ) : (
-                <div className="text-muted-foreground">—</div>
-              )}
+      {showHistory && (
+        <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${present.length}, minmax(0, 1fr))` }}>
+          {present.map((t) => (
+            <div key={t.key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] uppercase text-muted-foreground">{t.label}</span>
+                <span className="text-[9px] uppercase text-muted-foreground">{t.target === "oa" ? "OA" : "BOQ"}</span>
+              </div>
+              <div className="whitespace-pre-wrap text-foreground">{val(t.key)}</div>
+              <button
+                type="button"
+                disabled={cellDisabled(t)}
+                onClick={() => applyCell(t)}
+                className="mt-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Apply
+              </button>
             </div>
-          );
-        })}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
-        <button
-          type="button"
-          disabled={!hasOaFields || !canApply}
-          onClick={() => onApply(oaPatch)}
-          className="rounded border border-primary/50 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-          title={!canApply ? "Open the current OA revision to edit" : !hasOaFields ? "No OA-mappable fields suggested" : "Apply Description / Qty / Unit to this OA item"}
-        >
-          Apply Comment to OA
-        </button>
-        <button
-          type="button"
-          disabled={!hasBoqFields || !boqLinked}
-          onClick={() => onApplyToBoq(reviewItem, boqPatch)}
-          className="rounded border border-primary/50 bg-background px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          title={!boqLinked ? "Save the OA first so a linked BOQ exists" : !hasBoqFields ? "No Model / Remarks suggested" : "Apply Model & Remarks to the linked BOQ"}
-        >
-          Apply Model &amp; Remarks to BOQ
-        </button>
-        {!canApply && hasOaFields && (
-          <span className="text-[10px] text-muted-foreground">OA is a read-only revision — open the current revision to apply.</span>
-        )}
-        {!boqLinked && hasBoqFields && (
-          <span className="text-[10px] text-muted-foreground">Save the OA first — BOQ auto-syncs on save.</span>
-        )}
-      </div>
+          ))}
+          {round.reviewer_name && (
+            <div className="col-span-full text-[10px] text-muted-foreground">Reviewer: {round.reviewer_name}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
