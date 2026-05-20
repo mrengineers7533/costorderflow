@@ -215,8 +215,8 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
   const csTotal = Number((csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
 
-  const mrBasic = f.mrOa?.totals?.basic_amount || f.mrOa?.totals?.subtotal || 0;
-  const gmsAmt = f.gmsOa?.totals?.net_payable || f.gmsOa?.totals?.basic_amount || 0;
+  const mrBasic = f.mrOa?.totals?.subtotal || f.mrOa?.totals?.net_payable || 0;
+  const gmsAmt = f.gmsOa?.totals?.net_payable || f.gmsOa?.totals?.subtotal || 0;
 
   const commentRound = [...f.reviews].reverse().find((r) => r.kind === "comment");
   const commentSubmitted = [...f.reviews].reverse().find((r) => r.kind === "comment" && r.status === "submitted");
