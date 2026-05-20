@@ -874,6 +874,14 @@ export default function OrderEditor() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2"><CardTitle>Line Items</CardTitle>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={showItemExtras ? "secondary" : "outline"}
+                onClick={() => setShowItemExtras((v) => !v)}
+                title="Show/hide Model & Remarks columns"
+              >
+                {showItemExtras ? "Hide" : "Show"} Model & Remarks
+              </Button>
               {(hasMR || hasGMS) && (
                 <ToggleGroup
                   type="single"
