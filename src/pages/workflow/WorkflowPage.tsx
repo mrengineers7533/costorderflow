@@ -370,7 +370,15 @@ type ActivityEvent = {
   isHistory?: boolean;
 };
 
-function buildActivity(f: Family, csNumber: string, csDate: string | undefined, csTotal: number): ActivityEvent[] {
+function buildActivity(
+  f: Family,
+  csNumber: string,
+  csDate: string | undefined,
+  csTotal: number,
+  csTotalA = 0,
+  csTotalB = 0,
+  csClientScope = 0,
+): ActivityEvent[] {
   const evs: ActivityEvent[] = [];
 
   if (f.costSheet) {
@@ -379,7 +387,15 @@ function buildActivity(f: Family, csNumber: string, csDate: string | undefined, 
       ts: f.costSheet.created_at,
       icon: <FileSpreadsheet className="h-4 w-4" />,
       title: "Cost Sheet uploaded",
-      details: [`CS#: ${csNumber}`, `CS Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null, `File: ${f.costSheet.original_filename}`],
+      details: [
+        `CS#: ${csNumber}`,
+        `CS Date: ${fmtDate(csDate)}`,
+        csTotalA ? `Total A: ${fmtINR(csTotalA)}` : null,
+        csTotalB ? `Total (Other B): ${fmtINR(csTotalB)}` : null,
+        csTotal ? `Cost of Project (A+B): ${fmtINR(csTotal)}` : null,
+        csClientScope ? `Client Scope: ${fmtINR(csClientScope)}` : null,
+        `File: ${f.costSheet.original_filename}`,
+      ],
       status: { label: "Uploaded", tone: "ok" },
     });
   }
