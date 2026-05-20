@@ -31,12 +31,18 @@ function detectGroup(desc: string): GroupKey | null {
   return null;
 }
 
-/** Build a summarized line-items list for the Client Copy.
- *  - Items in known categories are collapsed into a single labelled row per category.
- *  - All other items pass through unchanged.
- *  Σ(qty × rate) of the synthesized rows equals Σ(amount) of the originals so
- *  downstream charges/totals stay consistent. */
-export function buildClientCopyItems(items: LineItem[]): LineItem[] {
+/** Build the line-items list for the Client Copy.
+ *  - By default (`grouped` false/undefined), returns the items unchanged so
+ *    the Client Copy mirrors the main OA item-by-item (with individual prices).
+ *  - When `grouped` is true, collapses MHE / Spouting / Fan / Magnet rows into
+ *    a single labelled row per category. Other items still pass through
+ *    (consolidated by description). Σ(qty × rate) of the synthesized rows
+ *    equals Σ(amount) of the originals so downstream totals stay consistent. */
+export function buildClientCopyItems(
+  items: LineItem[],
+  opts?: { grouped?: boolean },
+): LineItem[] {
+  if (!opts?.grouped) return items;
   const groups: Record<GroupKey, { qty: number; amount: number; unit?: string }> = {
     MHE: { qty: 0, amount: 0 },
     MAGNET: { qty: 0, amount: 0 },
