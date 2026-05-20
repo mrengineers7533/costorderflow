@@ -136,6 +136,7 @@ export default function OrderEditor() {
       const saved = o as unknown as { currency_mode?: CurrencyMode; exchange_rate?: number | null };
       setCurrencyMode(saved.currency_mode === "USD" ? "USD" : "INR");
       if (saved.exchange_rate && saved.exchange_rate > 0) setExchangeRate(Number(saved.exchange_rate));
+      setClientCopyGrouped(Boolean((o as unknown as { client_copy_grouping?: boolean }).client_copy_grouping));
       setParentOrderId(o.parent_order_id || o.id);
       setRevision(o.revision ?? 0);
       setIsCurrent(o.is_current ?? true);
