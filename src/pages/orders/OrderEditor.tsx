@@ -346,6 +346,64 @@ export default function OrderEditor() {
     });
   }
 
+  /** Apply Model / Remarks (BOQ-only design suggestions) directly to the
+   *  current linked BOQ row. Looks up the BOQ row by `boq_item_id` first,
+   *  then falls back to normalized-description match. Writes a single
+   *  `line_items` patch — no calc / totals / PI / PDF impact. */
+  async function applyDesignToBoq(
+    reviewItem: DesignReviewItemRow,
+    patch: { model_number?: string; remarks?: string },
+  ): Promise<void> {
+    if (!currentBoq?.id) {
+      toast({ title: "No linked BOQ", description: "Save the OA first so a BOQ exists, then try again.", variant: "destructive" });
+      return;
+    }
+    const keys = Object.keys(patch) as (keyof typeof patch)[];
+    if (!keys.length) return;
+    const lineItems = (currentBoq.line_items as BoqLineItem[]) || [];
+    const normDesc = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    let idx = lineItems.findIndex((r) => r.id === reviewItem.boq_item_id);
+    if (idx < 0 && reviewItem.description) {
+      const key = normDesc(reviewItem.description);
+      idx = lineItems.findIndex((r) => normDesc(r.description) === key);
+    }
+    if (idx < 0) {
+      toast({ title: "Matching BOQ item not found", description: "Save the OA so the BOQ re-syncs, then retry.", variant: "destructive" });
+      return;
+    }
+    const oldRow = lineItems[idx];
+    const nextRow: BoqLineItem = { ...oldRow };
+    if (patch.model_number !== undefined) nextRow.model_number = patch.model_number;
+    if (patch.remarks !== undefined) nextRow.remarks = patch.remarks;
+    const nextItems = lineItems.slice();
+    nextItems[idx] = nextRow;
+    const { error } = await supabase
+      .from("boqs")
+      .update({ line_items: nextItems as never, updated_at: new Date().toISOString() })
+      .eq("id", currentBoq.id);
+    if (error) {
+      toast({ title: "BOQ update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    // Audit-log remarks change (matches inline BOQ remarks-edit behavior).
+    if (patch.remarks !== undefined && (oldRow.remarks || "") !== patch.remarks) {
+      const { data: auth } = await supabase.auth.getUser();
+      await supabase.from("boq_remarks_audit_log").insert({
+        boq_id: currentBoq.id,
+        item_id: oldRow.id,
+        item_no: oldRow.item_no || null,
+        model_number: nextRow.model_number || null,
+        old_remarks: oldRow.remarks || null,
+        new_remarks: patch.remarks,
+        changed_by: auth.user?.id || null,
+        changed_by_email: auth.user?.email || null,
+      } as never);
+    }
+    setCurrentBoq({ ...currentBoq, line_items: nextItems } as BoqRecord);
+    toast({ title: "Applied to BOQ", description: `Updated ${keys.map((k) => (k === "model_number" ? "Model" : "Remarks")).join(" & ")} on ${currentBoq.boq_number}.` });
+  }
+
   async function save(finalize: boolean) {
     if (!isNew && !isCurrent) {
       toast({ title: "Read-only revision", description: "This is a superseded OA revision. Open the current revision to edit.", variant: "destructive" });
