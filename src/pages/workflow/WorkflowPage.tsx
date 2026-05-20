@@ -213,7 +213,12 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const csEx = (f.costSheet?.extracted || {}) as Record<string, unknown>;
   const csNumber = String((csEx.cost_sheet_number || csEx.number || f.current.cost_sheet_number || "") as string) || "—";
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
-  const csTotal = Number((csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
+  const csTotalA = Number((csEx.total_a as number) || 0) || 0;
+  const csTotalB = Number((csEx.total_other_b as number) || 0) || 0;
+  // Fallback: if AI didn't extract A/B but did extract a cost_of_project total, use that.
+  const csCopPrinted = Number((csEx.cost_of_project || csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
+  const csTotal = (csTotalA + csTotalB) || csCopPrinted;
+  const csClientScope = Number((csEx.client_scope_amount as number) || 0) || 0;
 
   const mrBasic = f.mrOa?.totals?.subtotal || f.mrOa?.totals?.net_payable || 0;
   const gmsAmt = f.gmsOa?.totals?.net_payable || f.gmsOa?.totals?.subtotal || 0;
@@ -228,8 +233,8 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const finalToken = (f.currentBoq as unknown as { final_share_token?: string | null } | null)?.final_share_token || null;
 
   const activity = useMemo(
-    () => buildActivity(f, csNumber, csDate, csTotal),
-    [f, csNumber, csDate, csTotal],
+    () => buildActivity(f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope),
+    [f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope],
   );
 
   return (
@@ -251,7 +256,14 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
 
         <Step n={1} icon={<FileSpreadsheet className="h-4 w-4" />} label="Cost Sheet Upload"
           done={!!f.costSheet}
-          meta={[`CS#: ${csNumber}`, `Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null]} />
+          meta={[
+            `CS#: ${csNumber}`,
+            `Date: ${fmtDate(csDate)}`,
+            csTotalA ? `Total A: ${fmtINR(csTotalA)}` : null,
+            csTotalB ? `Total (Other B): ${fmtINR(csTotalB)}` : null,
+            csTotal ? `Cost of Project (A+B): ${fmtINR(csTotal)}` : null,
+            csClientScope ? `Client Scope: ${fmtINR(csClientScope)}` : null,
+          ]} />
 
         <Step n={2} icon={<FileText className="h-4 w-4" />} label="MR OA"
           done={!!f.mrOa}
