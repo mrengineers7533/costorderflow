@@ -227,6 +227,11 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const revisedBoq = (f.boqs.length > 1 && approved) ? (f.currentBoq || null) : null;
   const finalToken = (f.currentBoq as unknown as { final_share_token?: string | null } | null)?.final_share_token || null;
 
+  const activity = useMemo(
+    () => buildActivity(f, csNumber, csDate, csTotal),
+    [f, csNumber, csDate, csTotal],
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -236,6 +241,14 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activity Timeline</div>
+            <div className="text-[11px] text-muted-foreground">{activity.length} event(s)</div>
+          </div>
+          <ActivityTimeline events={activity} showHistory={historyOpen} />
+        </div>
+
         <Step n={1} icon={<FileSpreadsheet className="h-4 w-4" />} label="Cost Sheet Upload"
           done={!!f.costSheet}
           meta={[`CS#: ${csNumber}`, `Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null]} />
