@@ -255,7 +255,46 @@ export default function DesignReview() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">BOQ Items</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base">BOQ Items</CardTitle>
+              {meta?.kind === "approval" && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 h-8"
+                    onClick={() => {
+                      setDecisions((prev) => {
+                        const next: typeof prev = { ...prev };
+                        for (const k of Object.keys(next)) {
+                          next[k] = { ...next[k], decision: "approved" };
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    Approve all items
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => {
+                      setDecisions((prev) => {
+                        const next: typeof prev = { ...prev };
+                        for (const k of Object.keys(next)) {
+                          next[k] = { ...next[k], decision: "pending" };
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    Reset all
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardHeader>
           <CardContent>
             {(() => {
               const isComment = meta?.kind === "comment";
