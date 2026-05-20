@@ -328,6 +328,34 @@ export default function OrderEditor() {
   // no effect on totals, charges, saved payload, PDFs, BOQ, or PI.
   const designReview = useLatestDesignReview(currentBoq?.id || null);
   const oaEditable = isNew || isCurrent;
+  // Read-only mirror of per-item BOQ approval_status for the "Approved by
+  // Design" column. Matches on normalized description, with positional
+  // fallback. Pure UI — never written back to OA.
+  const approvalByOaItem = useMemo(() => {
+    const map = new Map<string, "approved" | "rejected" | "pending">();
+    const boqItems = (currentBoq?.line_items as BoqLineItem[] | undefined) || [];
+    if (!boqItems.length) return map;
+    const norm = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const byDesc = new Map<string, BoqLineItem[]>();
+    boqItems.forEach((b) => {
+      const k = norm(b.description);
+      if (!k) return;
+      const arr = byDesc.get(k) || [];
+      arr.push(b);
+      byDesc.set(k, arr);
+    });
+    items.forEach((it, idx) => {
+      const k = norm(it.description);
+      const candidates = k ? byDesc.get(k) || [] : [];
+      const match = candidates.length === 1 ? candidates[0]
+        : candidates.length > 1 ? candidates[Math.min(idx, candidates.length - 1)]
+        : boqItems[idx];
+      const s = (match?.approval_status || "pending") as "approved" | "rejected" | "pending";
+      map.set(it.id, s === "approved" || s === "rejected" ? s : "pending");
+    });
+    return map;
+  }, [currentBoq, items]);
   // Debounced auto-save trigger used by the design "Apply" buttons. Defers
   // to allow React state (model/remarks) to flush before save() reads it.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -895,9 +923,9 @@ export default function OrderEditor() {
                 size="sm"
                 variant={showItemExtras ? "secondary" : "outline"}
                 onClick={() => setShowItemExtras((v) => !v)}
-                title="Show/hide Model & Remarks columns"
+                title="Show/hide Model, Remarks & Approval columns"
               >
-                {showItemExtras ? "Hide" : "Show"} Model & Remarks
+                {showItemExtras ? "Hide" : "Show"} Model, Remarks & Approval
               </Button>
               {(hasMR || hasGMS) && (
                 <ToggleGroup
@@ -930,7 +958,7 @@ export default function OrderEditor() {
               </div>
             )}
             <div className="space-y-2">
-              <div className="grid gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 18 : 14}, minmax(0, 1fr))` }}>
+              <div className="grid gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 20 : 14}, minmax(0, 1fr))` }}>
                 <div className="col-span-4">Description</div>
                 <div className="col-span-2">Make</div>
                 <div className="col-span-1">Qty</div>
@@ -940,11 +968,12 @@ export default function OrderEditor() {
                 <div className="col-span-2 text-right">Amount</div>
                 {showItemExtras && <div className="col-span-2">Model</div>}
                 {showItemExtras && <div className="col-span-2">Remarks</div>}
+                {showItemExtras && <div className="col-span-2">Approved by Design</div>}
                 <div className="col-span-1" />
               </div>
               {editorItems.map((it, idx) => (
                 <div key={it.id} className="space-y-1.5">
-                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 18 : 14}, minmax(0, 1fr))` }}>
+                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 20 : 14}, minmax(0, 1fr))` }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
@@ -975,6 +1004,20 @@ export default function OrderEditor() {
                       placeholder="Remarks"
                     />
                   )}
+                  {showItemExtras && (() => {
+                    const s = approvalByOaItem.get(it.id) || "pending";
+                    const label = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
+                    const cls = s === "approved"
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                      : s === "rejected"
+                      ? "bg-red-100 text-red-700 border-red-200"
+                      : "bg-amber-100 text-amber-700 border-amber-200";
+                    return (
+                      <div className="col-span-2 flex justify-center">
+                        <Badge variant="outline" className={cls}>{label}</Badge>
+                      </div>
+                    );
+                  })()}
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
                 {designReview && (
