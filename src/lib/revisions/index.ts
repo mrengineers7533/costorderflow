@@ -171,7 +171,7 @@ export async function reviseBoqFromOrder(
 
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const desc = it.description || "";
-    const model = it.hsn_code || "";
+    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
     const prev = prevByKey.get(key);
     return {
@@ -181,7 +181,7 @@ export async function reviseBoqFromOrder(
       description: desc,
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
-      remarks: prev?.remarks || "",
+      remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
     };
   });
 
