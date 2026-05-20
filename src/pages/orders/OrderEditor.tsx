@@ -328,6 +328,17 @@ export default function OrderEditor() {
   // no effect on totals, charges, saved payload, PDFs, BOQ, or PI.
   const designReview = useLatestDesignReview(currentBoq?.id || null);
   const oaEditable = isNew || isCurrent;
+  // Debounced auto-save trigger used by the design "Apply" buttons. Defers
+  // to allow React state (model/remarks) to flush before save() reads it.
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRef = useRef<((finalize: boolean) => Promise<void>) | null>(null);
+  function scheduleAutoSave() {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      saveRef.current?.(false).catch(() => {});
+    }, 500);
+  }
   // Keep the editor view in sync with the OA format when the order has both
   // makes — first time we detect a split, default the toggle to the current
   // format so behavior matches what users saw before.
