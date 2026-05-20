@@ -46,8 +46,8 @@ interface Family {
   rootId: string;
   company: string;
   orders: OrderRecord[];
-  current: OrderRecord;
-  original: OrderRecord;
+  current: OrderRecord | null;
+  original: OrderRecord | null;
   mrOa: OrderRecord | null;
   gmsOa: OrderRecord | null;
   costSheet: CostSheetRow | null;
@@ -55,6 +55,7 @@ interface Family {
   currentBoq: BoqRecord | null;
   reviews: DesignReviewLite[];
   pis: PiRecord[];
+  costSheetNumber: string;
 }
 
 function copy(text: string, label = "Link copied") {
