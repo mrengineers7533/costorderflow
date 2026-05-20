@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  Search, Eye, EyeOff, ChevronDown, ChevronRight, FileSpreadsheet,
+  Search, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, FileSpreadsheet,
   FileText, ClipboardList, Link2, Send, RefreshCw, CheckCircle2, Share2, Receipt, Copy,
+  ClipboardCheck, ShoppingCart, Factory, Truck,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
