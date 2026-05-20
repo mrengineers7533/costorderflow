@@ -46,8 +46,8 @@ interface Family {
   rootId: string;
   company: string;
   orders: OrderRecord[];
-  current: OrderRecord;
-  original: OrderRecord;
+  current: OrderRecord | null;
+  original: OrderRecord | null;
   mrOa: OrderRecord | null;
   gmsOa: OrderRecord | null;
   costSheet: CostSheetRow | null;
@@ -55,6 +55,7 @@ interface Family {
   currentBoq: BoqRecord | null;
   reviews: DesignReviewLite[];
   pis: PiRecord[];
+  costSheetNumber: string;
 }
 
 function copy(text: string, label = "Link copied") {
@@ -111,15 +112,26 @@ export default function WorkflowPage() {
       piByOaId.get(p.reference_oa_id)!.push(p);
     }
     const csByNumber = new Map<string, CostSheetRow>();
-    const csByFile = new Map<string, CostSheetRow>();
     for (const c of costSheets) {
       const ex = (c.extracted || {}) as Record<string, unknown>;
       const num = String((ex.cost_sheet_number || ex.number || "") as string).trim();
       if (num) csByNumber.set(num.toLowerCase(), c);
-      if (c.original_filename) csByFile.set(c.original_filename.toLowerCase(), c);
     }
 
-    const rows: Family[] = [];
+    // Build per-OA-family aggregates first (preserving revision groupings),
+    // then merge them into rows keyed by Cost Sheet so each CS = one row.
+    type FamAgg = {
+      rootId: string;
+      orders: OrderRecord[];
+      current: OrderRecord;
+      original: OrderRecord;
+      boqs: BoqRecord[];
+      currentBoq: BoqRecord | null;
+      reviews: DesignReviewLite[];
+      pis: PiRecord[];
+      csNum: string; // lowercased, "" if none
+    };
+    const aggs: FamAgg[] = [];
     for (const [rootId, fam] of byRoot.entries()) {
       const sorted = [...fam].sort((a, b) => (a.revision || 0) - (b.revision || 0));
       const original = sorted[0];
@@ -132,33 +144,76 @@ export default function WorkflowPage() {
       const famReviews = reviews.filter((r) => boqIds.has(r.boq_id));
       const famPis: PiRecord[] = [];
       for (const oa of sorted) famPis.push(...(piByOaId.get(oa.id) || []));
-      const cs = (() => {
-        const num = (current.cost_sheet_number || "").trim().toLowerCase();
-        if (num && csByNumber.has(num)) return csByNumber.get(num)!;
-        return null;
-      })();
-      // MR vs GMS picks: use the latest revision of each format in the family
-      const currentByFormat = (fmt: "MR" | "GMS"): OrderRecord | null => {
-        const list = sorted.filter((o) => o.format === fmt);
+      const csNum = (current.cost_sheet_number || "").trim().toLowerCase();
+      aggs.push({ rootId, orders: sorted, current, original, boqs: famBoqs, currentBoq, reviews: famReviews, pis: famPis, csNum });
+    }
+
+    // Group aggregates by cost sheet number. Aggregates with no CS become
+    // their own per-family row (key = `__none__:${rootId}`) so nothing is lost.
+    const rowsByKey = new Map<string, { cs: CostSheetRow | null; csNum: string; aggs: FamAgg[] }>();
+    for (const a of aggs) {
+      const key = a.csNum ? `cs:${a.csNum}` : `__none__:${a.rootId}`;
+      if (!rowsByKey.has(key)) {
+        rowsByKey.set(key, { cs: a.csNum ? csByNumber.get(a.csNum) || null : null, csNum: a.csNum, aggs: [] });
+      }
+      rowsByKey.get(key)!.aggs.push(a);
+    }
+    // Cost sheets with no linked OAs → empty row so user sees them too.
+    for (const [num, cs] of csByNumber.entries()) {
+      const key = `cs:${num}`;
+      if (!rowsByKey.has(key)) {
+        rowsByKey.set(key, { cs, csNum: num, aggs: [] });
+      }
+    }
+
+    const rows: Family[] = [];
+    for (const [key, bucket] of rowsByKey.entries()) {
+      const allOrders = bucket.aggs.flatMap((a) => a.orders);
+      const allBoqs = bucket.aggs.flatMap((a) => a.boqs);
+      const allReviews = bucket.aggs.flatMap((a) => a.reviews);
+      const allPis = bucket.aggs.flatMap((a) => a.pis);
+      // Latest current order across the bucket (drives header + Convert-to-PI link)
+      const currents = bucket.aggs.map((a) => a.current).filter(Boolean);
+      currents.sort((a, b) => (b.order_date || "").localeCompare(a.order_date || ""));
+      const current = currents[0] || null;
+      const original = bucket.aggs[0]?.original || null;
+      const pickByFormat = (fmt: "MR" | "GMS"): OrderRecord | null => {
+        const list = allOrders.filter((o) => o.format === fmt);
         if (!list.length) return null;
         return list.find((o) => o.is_current !== false) || list[list.length - 1];
       };
+      const currentBoq =
+        allBoqs.find((b) => b.is_current !== false) ||
+        allBoqs[allBoqs.length - 1] ||
+        null;
+      const csEx = (bucket.cs?.extracted || {}) as Record<string, unknown>;
+      const csNumberPretty =
+        String((csEx.cost_sheet_number || csEx.number || "") as string).trim() ||
+        bucket.csNum.toUpperCase() ||
+        "";
+      const company =
+        current?.company_name || current?.bill_to?.name || "(No OA yet)";
       rows.push({
-        rootId,
-        company: current.company_name || current.bill_to?.name || "—",
-        orders: sorted,
+        rootId: key,
+        company,
+        orders: allOrders,
         current,
         original,
-        mrOa: currentByFormat("MR"),
-        gmsOa: currentByFormat("GMS"),
-        costSheet: cs,
-        boqs: famBoqs,
+        mrOa: pickByFormat("MR"),
+        gmsOa: pickByFormat("GMS"),
+        costSheet: bucket.cs,
+        boqs: allBoqs,
         currentBoq,
-        reviews: famReviews,
-        pis: famPis,
+        reviews: allReviews,
+        pis: allPis,
+        costSheetNumber: csNumberPretty,
       });
     }
-    rows.sort((a, b) => (b.current.order_date || "").localeCompare(a.current.order_date || ""));
+    rows.sort((a, b) => {
+      const ad = a.current?.order_date || a.costSheet?.created_at || "";
+      const bd = b.current?.order_date || b.costSheet?.created_at || "";
+      return bd.localeCompare(ad);
+    });
     return rows;
   }, [orders, boqs, pis, costSheets, reviews]);
 
@@ -167,8 +222,11 @@ export default function WorkflowPage() {
     return families.filter((f) => {
       if (q) {
         const hay = [
-          f.company, f.current.oa_number, f.original.oa_number,
-          f.current.cost_sheet_number,
+          f.company,
+          f.current?.oa_number,
+          f.original?.oa_number,
+          f.current?.cost_sheet_number,
+          f.costSheetNumber,
           f.boqs.map((b) => b.boq_number).join(" "),
           f.pis.map((p) => p.pi_number).join(" "),
         ].join(" ").toLowerCase();
@@ -257,7 +315,9 @@ export default function WorkflowPage() {
 function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: boolean }) {
   const f = family;
   const csEx = (f.costSheet?.extracted || {}) as Record<string, unknown>;
-  const csNumber = String((csEx.cost_sheet_number || csEx.number || f.current.cost_sheet_number || "") as string) || "—";
+  const csNumber =
+    String((csEx.cost_sheet_number || csEx.number || f.current?.cost_sheet_number || f.costSheetNumber || "") as string) ||
+    "—";
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
   const csTotalA = Number((csEx.total_a as number) || 0) || 0;
   const csTotalB = Number((csEx.total_other_b as number) || 0) || 0;
@@ -567,7 +627,9 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
             <EmptyDetail text="No PI converted yet." />
           )}
           <DetailActions>
-            <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
+            {f.current && (
+              <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
+            )}
             {f.pis.slice(0, 3).map((p) => (
               <Link key={p.id} to={`/pi/${p.id}`}><Button size="sm" variant="outline">{p.pi_number}</Button></Link>
             ))}
@@ -595,7 +657,9 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <CardTitle className="text-base">{f.company}</CardTitle>
-          <div className="text-xs text-muted-foreground font-mono">{f.current.oa_number}</div>
+          <div className="text-xs text-muted-foreground font-mono">
+            {f.current?.oa_number || (f.costSheetNumber ? `CS# ${f.costSheetNumber}` : "—")}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
