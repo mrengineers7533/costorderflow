@@ -73,6 +73,9 @@ export default function OrderEditor() {
   const [billTo, setBillTo] = useState<Address>(emptyAddress);
   const [shipTo, setShipTo] = useState<Address>(emptyAddress);
   const [sameAsBill, setSameAsBill] = useState(true);
+  // Toggle for the optional Model & Remarks columns in the OA item table.
+  // Hidden by default; click "Show Model & Remarks" to reveal them.
+  const [showItemExtras, setShowItemExtras] = useState(false);
   const [reference, setReference] = useState("");
   const [costSheetNumber, setCostSheetNumber] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
