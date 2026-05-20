@@ -451,7 +451,7 @@ export default function OrderEditor() {
     const ship = sameAsBill ? billTo : shipTo;
 
     const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
-      const summarized = buildClientCopyItems(subsetItems);
+      const summarized = buildClientCopyItems(subsetItems, { grouped: clientCopyGrouped });
       const subTotals = calcTotals(summarized, sideCharges);
       const subWords = amountInWords(subTotals.net_payable);
       const record: OrderRecord = {
