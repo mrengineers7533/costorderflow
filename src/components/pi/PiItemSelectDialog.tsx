@@ -321,7 +321,29 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                         </div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {it.quantity} {it.unit || "Nos"}
+                        {isMR ? (
+                          <div className="flex items-center justify-end gap-1.5 w-32 ml-auto">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={
+                                qtyMap[it.id] !== undefined
+                                  ? qtyMap[it.id]
+                                  : isSelected
+                                  ? String(piQtyForMR(it))
+                                  : ""
+                              }
+                              onChange={(e) => setQtyMR(it, e.target.value)}
+                              disabled={done || !isSelected}
+                              className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
+                              placeholder={done ? "—" : String(it.quantity)}
+                            />
+                            <span className="text-muted-foreground text-xs">{it.unit || "Nos"}</span>
+                          </div>
+                        ) : (
+                          <>{it.quantity} {it.unit || "Nos"}</>
+                        )}
                       </TableCell>
                       {isMR ? (
                         <>
@@ -341,15 +363,13 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                               max={balanceAmt}
                               step="any"
                               value={
-                                qtyMap[it.id] !== undefined
-                                  ? qtyMap[it.id]
+                                amtMap[it.id] !== undefined
+                                  ? amtMap[it.id]
                                   : isSelected
                                   ? String(balanceAmt)
                                   : ""
                               }
-                              onChange={(e) =>
-                                setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
-                              }
+                              onChange={(e) => setAmtMR(it, e.target.value)}
                               disabled={done || !isSelected}
                               className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
                               placeholder={done ? "—" : String(balanceAmt)}
