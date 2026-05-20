@@ -73,6 +73,9 @@ export default function WorkflowPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [fmtFilter, setFmtFilter] = useState<"ALL" | "MR" | "GMS">("ALL");
+  const [stageFilter, setStageFilter] = useState<"ALL" | "no_boq" | "in_design" | "approved" | "has_pi" | "no_pi">("ALL");
+  const [csFilter, setCsFilter] = useState<"ALL" | "with" | "without">("ALL");
 
   useEffect(() => {
     (async () => {
@@ -161,14 +164,34 @@ export default function WorkflowPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return families;
-    return families.filter((f) =>
-      [f.company, f.current.oa_number, f.original.oa_number,
-        f.boqs.map((b) => b.boq_number).join(" "),
-        f.pis.map((p) => p.pi_number).join(" ")]
-        .join(" ").toLowerCase().includes(q),
-    );
-  }, [families, search]);
+    return families.filter((f) => {
+      if (q) {
+        const hay = [
+          f.company, f.current.oa_number, f.original.oa_number,
+          f.current.cost_sheet_number,
+          f.boqs.map((b) => b.boq_number).join(" "),
+          f.pis.map((p) => p.pi_number).join(" "),
+        ].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (fmtFilter !== "ALL") {
+        const hasFmt = f.orders.some((o) => o.format === fmtFilter);
+        if (!hasFmt) return false;
+      }
+      if (csFilter === "with" && !f.costSheet) return false;
+      if (csFilter === "without" && f.costSheet) return false;
+      if (stageFilter !== "ALL") {
+        const approved = f.reviews.some((r) => r.kind === "approval" && r.overall_outcome === "approved");
+        const inDesign = f.reviews.length > 0 && !approved;
+        if (stageFilter === "no_boq" && f.boqs.length > 0) return false;
+        if (stageFilter === "in_design" && !inDesign) return false;
+        if (stageFilter === "approved" && !approved) return false;
+        if (stageFilter === "has_pi" && f.pis.length === 0) return false;
+        if (stageFilter === "no_pi" && f.pis.length > 0) return false;
+      }
+      return true;
+    });
+  }, [families, search, fmtFilter, csFilter, stageFilter]);
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
@@ -181,7 +204,7 @@ export default function WorkflowPage() {
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search company, OA, BOQ, PI…"
+              placeholder="Search company, CS#, OA, BOQ, PI…"
               className="h-8 pl-7 w-64"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -191,6 +214,29 @@ export default function WorkflowPage() {
             {showHistory ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hide Revision History</> : <><Eye className="h-3.5 w-3.5 mr-1" />Show Revision History</>}
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="text-muted-foreground mr-1">Format:</span>
+        {(["ALL", "MR", "GMS"] as const).map((v) => (
+          <Button key={v} size="sm" variant={fmtFilter === v ? "default" : "outline"} className="h-7" onClick={() => setFmtFilter(v)}>{v}</Button>
+        ))}
+        <span className="text-muted-foreground ml-3 mr-1">Cost Sheet:</span>
+        {([["ALL", "All"], ["with", "With CS"], ["without", "Without CS"]] as const).map(([v, l]) => (
+          <Button key={v} size="sm" variant={csFilter === v ? "default" : "outline"} className="h-7" onClick={() => setCsFilter(v)}>{l}</Button>
+        ))}
+        <span className="text-muted-foreground ml-3 mr-1">Stage:</span>
+        {([
+          ["ALL", "All"],
+          ["no_boq", "No BOQ"],
+          ["in_design", "In Design"],
+          ["approved", "Approved"],
+          ["has_pi", "Has PI"],
+          ["no_pi", "No PI"],
+        ] as const).map(([v, l]) => (
+          <Button key={v} size="sm" variant={stageFilter === v ? "default" : "outline"} className="h-7" onClick={() => setStageFilter(v)}>{l}</Button>
+        ))}
+        <div className="ml-auto text-muted-foreground">{filtered.length} of {families.length}</div>
       </div>
 
       {loading ? (
@@ -213,7 +259,12 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const csEx = (f.costSheet?.extracted || {}) as Record<string, unknown>;
   const csNumber = String((csEx.cost_sheet_number || csEx.number || f.current.cost_sheet_number || "") as string) || "—";
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
-  const csTotal = Number((csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
+  const csTotalA = Number((csEx.total_a as number) || 0) || 0;
+  const csTotalB = Number((csEx.total_other_b as number) || 0) || 0;
+  // Fallback: if AI didn't extract A/B but did extract a cost_of_project total, use that.
+  const csCopPrinted = Number((csEx.cost_of_project || csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
+  const csTotal = (csTotalA + csTotalB) || csCopPrinted;
+  const csClientScope = Number((csEx.client_scope_amount as number) || 0) || 0;
 
   const mrBasic = f.mrOa?.totals?.subtotal || f.mrOa?.totals?.net_payable || 0;
   const gmsAmt = f.gmsOa?.totals?.net_payable || f.gmsOa?.totals?.subtotal || 0;
@@ -228,8 +279,8 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const finalToken = (f.currentBoq as unknown as { final_share_token?: string | null } | null)?.final_share_token || null;
 
   const activity = useMemo(
-    () => buildActivity(f, csNumber, csDate, csTotal),
-    [f, csNumber, csDate, csTotal],
+    () => buildActivity(f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope),
+    [f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope],
   );
 
   return (
@@ -251,7 +302,14 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
 
         <Step n={1} icon={<FileSpreadsheet className="h-4 w-4" />} label="Cost Sheet Upload"
           done={!!f.costSheet}
-          meta={[`CS#: ${csNumber}`, `Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null]} />
+          meta={[
+            `CS#: ${csNumber}`,
+            `Date: ${fmtDate(csDate)}`,
+            csTotalA ? `Total A: ${fmtINR(csTotalA)}` : null,
+            csTotalB ? `Total (Other B): ${fmtINR(csTotalB)}` : null,
+            csTotal ? `Cost of Project (A+B): ${fmtINR(csTotal)}` : null,
+            csClientScope ? `Client Scope: ${fmtINR(csClientScope)}` : null,
+          ]} />
 
         <Step n={2} icon={<FileText className="h-4 w-4" />} label="MR OA"
           done={!!f.mrOa}
@@ -358,7 +416,15 @@ type ActivityEvent = {
   isHistory?: boolean;
 };
 
-function buildActivity(f: Family, csNumber: string, csDate: string | undefined, csTotal: number): ActivityEvent[] {
+function buildActivity(
+  f: Family,
+  csNumber: string,
+  csDate: string | undefined,
+  csTotal: number,
+  csTotalA = 0,
+  csTotalB = 0,
+  csClientScope = 0,
+): ActivityEvent[] {
   const evs: ActivityEvent[] = [];
 
   if (f.costSheet) {
@@ -367,7 +433,15 @@ function buildActivity(f: Family, csNumber: string, csDate: string | undefined, 
       ts: f.costSheet.created_at,
       icon: <FileSpreadsheet className="h-4 w-4" />,
       title: "Cost Sheet uploaded",
-      details: [`CS#: ${csNumber}`, `CS Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null, `File: ${f.costSheet.original_filename}`],
+      details: [
+        `CS#: ${csNumber}`,
+        `CS Date: ${fmtDate(csDate)}`,
+        csTotalA ? `Total A: ${fmtINR(csTotalA)}` : null,
+        csTotalB ? `Total (Other B): ${fmtINR(csTotalB)}` : null,
+        csTotal ? `Cost of Project (A+B): ${fmtINR(csTotal)}` : null,
+        csClientScope ? `Client Scope: ${fmtINR(csClientScope)}` : null,
+        `File: ${f.costSheet.original_filename}`,
+      ],
       status: { label: "Uploaded", tone: "ok" },
     });
   }
