@@ -1983,7 +1983,7 @@ function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: 
  *  to OA fields (Description, Qty, Unit). Model & Remarks are shown read-only
  *  because they have no OA-row counterpart. Pure UI — no calc impact. */
 function OaDesignSuggestionRow({
-  reviewItem, round, canApply, onApply, boqLinked, onApplyToBoq,
+  reviewItem, round, canApply, onApply, boqLinked, onApplyToBoq, onAutoSave,
 }: {
   reviewItem: DesignReviewItemRow | null;
   round: DesignReviewRow;
@@ -1991,16 +1991,17 @@ function OaDesignSuggestionRow({
   onApply: (patch: Partial<LineItem>) => void;
   boqLinked: boolean;
   onApplyToBoq: (reviewItem: DesignReviewItemRow, patch: { model_number?: string; remarks?: string }) => Promise<void>;
+  onAutoSave?: () => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   if (!reviewItem) return null;
   const cols = parseColumnComments(reviewItem);
   const tiles: { key: ColKey; label: string; target: "oa" | "boq" }[] = [
-    { key: "model", label: "Model", target: "boq" },
+    { key: "model", label: "Model", target: "oa" },
     { key: "description", label: "Description", target: "oa" },
     { key: "quantity", label: "Qty", target: "oa" },
     { key: "unit", label: "Unit", target: "oa" },
-    { key: "remarks", label: "Remarks", target: "boq" },
+    { key: "remarks", label: "Remarks", target: "oa" },
   ];
   const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
   const present = tiles.filter(({ key }) => val(key) !== "");
@@ -2013,6 +2014,10 @@ function OaDesignSuggestionRow({
       if (t.key === "description") onApply({ description: v });
       else if (t.key === "quantity") onApply({ quantity: Number(v) || 0 });
       else if (t.key === "unit") onApply({ unit: v });
+      else if (t.key === "model") onApply({ model: v });
+      else if (t.key === "remarks") onApply({ remarks: v });
+      // Auto-save the OA after applying — BOQ auto-syncs from OA on save.
+      onAutoSave?.();
     } else {
       if (!boqLinked) return;
       if (t.key === "model") void onApplyToBoq(reviewItem, { model_number: v });
