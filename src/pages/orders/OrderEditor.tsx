@@ -319,6 +319,11 @@ export default function OrderEditor() {
       : allItemsWithAmounts.filter((i) => i.make === lineItemsView),
     [allItemsWithAmounts, lineItemsView]
   );
+  // Design-team comments on the linked BOQ — surfaced item-wise under the
+  // matching OA row so the OA creator can update the OA directly. Pure UI:
+  // no effect on totals, charges, saved payload, PDFs, BOQ, or PI.
+  const designReview = useLatestDesignReview(currentBoq?.id || null);
+  const oaEditable = isNew || isCurrent;
   // Keep the editor view in sync with the OA format when the order has both
   // makes — first time we detect a split, default the toggle to the current
   // format so behavior matches what users saw before.
