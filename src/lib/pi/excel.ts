@@ -47,7 +47,11 @@ export function buildPiXlsx(pi: PiRecord): Blob {
     ["S.No", "Description", "HSN/Model", "Qty", "Unit", `Rate (${cur})`, `Amount (${cur})`],
   ];
 
-  const items = (pi.line_items || []).map((it, i) => [
+  // Items table mirrors the Client Copy: MHE / Fan / Magnet / Spouting are
+  // consolidated into single rows. Calculation totals below still use the
+  // raw pi.line_items so values match the main OA exactly.
+  const displayItems = buildClientCopyItems(pi.line_items || []);
+  const items = displayItems.map((it, i) => [
     i + 1,
     it.description || "",
     it.hsn_code || "",
