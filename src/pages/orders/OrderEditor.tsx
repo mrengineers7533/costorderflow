@@ -25,6 +25,7 @@ import { OrderPreview } from "@/components/orders/OrderPreview";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
+import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
 import { reviseOrder, syncBoqsAndPisForOrder, createInitialBoqForOrder } from "@/lib/revisions";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
@@ -1020,6 +1021,15 @@ export default function OrderEditor() {
                   })()}
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
+                {!isNew && parentOrderId && (
+                  <div className="flex justify-end -mt-1">
+                    <ItemChangeHistoryButton
+                      rootOrderId={parentOrderId}
+                      item={it}
+                      approvalStatus={approvalByOaItem.get(it.id)}
+                    />
+                  </div>
+                )}
                 {designReview && (
                   <OaDesignSuggestionRow
                     reviewItem={findReviewItemForOaItem(designReview.items, it, idx)}
