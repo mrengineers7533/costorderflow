@@ -131,7 +131,7 @@ export default function BoqEditor() {
                 const k = norm(r.description);
                 if (k) decisionByDesc.set(k, map(r.decision));
               });
-              for (const sib of (sibs || []) as Array<{ id: string; line_items: BoqLineItem[] }>) {
+              for (const sib of (sibs || []) as unknown as Array<{ id: string; line_items: BoqLineItem[] }>) {
                 if (sib.id === boqId) continue;
                 let touched = false;
                 const updated = (sib.line_items || []).map((it) => {
