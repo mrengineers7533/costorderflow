@@ -14,6 +14,7 @@ import {
 import { Receipt, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import {
   createPiFromOaItems,
   fetchOaItemPiStatus,
@@ -53,16 +54,34 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
       .finally(() => setLoading(false));
   }, [open, oa]);
 
-  const items = oa?.line_items || [];
+  // MR uses the Client Copy grouped view (MHE / Fan / Magnet / Spouting +
+  // passthrough rows). Partial PIs are tracked by amount so multiple PIs
+  // can be raised against the same grouped row until its Client Copy total
+  // is fully invoiced. GMS keeps the legacy qty-based flow.
+  const isMR = oa?.format === "MR";
+  const items = useMemo(
+    () => (isMR ? buildClientCopyItems(oa?.line_items || []) : (oa?.line_items || [])),
+    [oa, isMR],
+  );
+  function totalAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const q = Number(it.quantity) || 0;
+    const r = Number(it.unit_rate) || 0;
+    return Number(it.amount) || q * r;
+  }
   function balanceFor(it: { id: string; quantity: number }) {
     const oaQty = Number(it.quantity) || 0;
     const already = statusMap[it.id]?.pi_qty || 0;
     return Math.max(0, oaQty - already);
   }
+  function balanceAmtFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const total = totalAmountFor(it);
+    const already = statusMap[it.id]?.pi_amount || 0;
+    return Math.max(0, total - already);
+  }
   const pendingItems = useMemo(
-    () => items.filter((it) => balanceFor(it) > 0),
+    () => items.filter((it) => (isMR ? balanceAmtFor(it) > 0.5 : balanceFor(it) > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, statusMap],
+    [items, statusMap, isMR],
   );
   const doneCount = items.length - pendingItems.length;
 
@@ -92,12 +111,23 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     const n = Number(raw);
     return isNaN(n) ? 0 : n;
   }
+  function piAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const raw = qtyMap[it.id];
+    if (raw === undefined || raw === "") return balanceAmtFor(it);
+    const n = Number(raw);
+    return isNaN(n) ? 0 : n;
+  }
   const selectedItems = items.filter((it) => selected.has(it.id));
   const selectedTotal = selectedItems.reduce(
-    (sum, it) => sum + piQtyFor(it) * (it.unit_rate || 0),
+    (sum, it) =>
+      sum + (isMR ? piAmountFor(it) : piQtyFor(it) * (it.unit_rate || 0)),
     0,
   );
   const hasInvalidQty = selectedItems.some((it) => {
+    if (isMR) {
+      const a = piAmountFor(it);
+      return !(a > 0) || a > balanceAmtFor(it) + 1e-6;
+    }
     const q = piQtyFor(it);
     return !(q > 0) || q > balanceFor(it) + 1e-9;
   });
@@ -106,9 +136,16 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     if (!oa || selected.size === 0) return;
     setGenerating(true);
     try {
-      const overrides: Record<string, number> = {};
-      for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
-      const pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
+      let pi;
+      if (isMR) {
+        const amtOverrides: Record<string, number> = {};
+        for (const it of selectedItems) amtOverrides[it.id] = piAmountFor(it);
+        pi = await createPiFromOaItems(oa, Array.from(selected), undefined, amtOverrides);
+      } else {
+        const overrides: Record<string, number> = {};
+        for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
+        pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
+      }
       toast({
         title: `PI ${pi.pi_number} created`,
         description: `${selectedItems.length} item(s) included.`,
@@ -170,19 +207,24 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                   Qty
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Already PI Qty
+                  {isMR ? "Total Amount" : "Already PI Qty"}
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Balance Qty
+                  {isMR ? "Already PI Amount" : "Balance Qty"}
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
-                  PI Qty
+                  {isMR ? "Balance Amount" : "PI Qty"}
                 </TableHead>
+                {isMR && (
+                  <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
+                    PI Amount
+                  </TableHead>
+                )}
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
                   Rate
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
-                  PI Amount
+                  {isMR ? "PI Subtotal" : "PI Amount"}
                 </TableHead>
                 <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   PI Status
@@ -195,14 +237,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="inline h-4 w-4 mr-2 animate-spin" />
                     Checking PI status for items…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
                     This OA has no line items.
                   </TableCell>
                 </TableRow>
@@ -210,16 +252,22 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                 items.map((it, idx) => {
                   const st = statusMap[it.id];
                   const alreadyQty = st?.pi_qty || 0;
+                  const alreadyAmt = st?.pi_amount || 0;
                   const balance = balanceFor(it);
-                  const done = balance <= 0;
-                  const partial = !done && alreadyQty > 0;
-                  const overage = alreadyQty > (Number(it.quantity) || 0);
+                  const totalAmt = totalAmountFor(it);
+                  const balanceAmt = balanceAmtFor(it);
+                  const done = isMR ? balanceAmt <= 0.5 : balance <= 0;
+                  const partial = !done && (isMR ? alreadyAmt > 0 : alreadyQty > 0);
+                  const overage = isMR
+                    ? alreadyAmt > totalAmt + 1
+                    : alreadyQty > (Number(it.quantity) || 0);
                   const isSelected = selected.has(it.id);
                   const piQty = piQtyFor(it);
                   const rate = it.unit_rate || 0;
-                  const piAmount = piQty * rate;
-                  const invalid =
-                    isSelected && (!(piQty > 0) || piQty > balance + 1e-9);
+                  const piAmount = isMR ? piAmountFor(it) : piQty * rate;
+                  const invalid = isSelected && (isMR
+                    ? (!(piAmount > 0) || piAmount > balanceAmt + 1e-6)
+                    : (!(piQty > 0) || piQty > balance + 1e-9));
                   return (
                     <TableRow
                       key={it.id}
@@ -244,35 +292,70 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                       <TableCell className="text-right tabular-nums">
                         {it.quantity} {it.unit || "Nos"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {alreadyQty}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {balance}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums w-28">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={balance}
-                          step="any"
-                          value={
-                            qtyMap[it.id] !== undefined
-                              ? qtyMap[it.id]
-                              : isSelected
-                              ? String(balance)
-                              : ""
-                          }
-                          onChange={(e) =>
-                            setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
-                          }
-                          disabled={done || !isSelected}
-                          className={`h-8 text-right ${
-                            invalid ? "border-destructive" : ""
-                          }`}
-                          placeholder={done ? "—" : String(balance)}
-                        />
-                      </TableCell>
+                      {isMR ? (
+                        <>
+                          <TableCell className="text-right tabular-nums">
+                            ₹ {totalAmt.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            ₹ {alreadyAmt.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            ₹ {balanceAmt.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums w-32">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={balanceAmt}
+                              step="any"
+                              value={
+                                qtyMap[it.id] !== undefined
+                                  ? qtyMap[it.id]
+                                  : isSelected
+                                  ? String(balanceAmt)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
+                              }
+                              disabled={done || !isSelected}
+                              className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
+                              placeholder={done ? "—" : String(balanceAmt)}
+                            />
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {alreadyQty}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {balance}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums w-28">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={balance}
+                              step="any"
+                              value={
+                                qtyMap[it.id] !== undefined
+                                  ? qtyMap[it.id]
+                                  : isSelected
+                                  ? String(balance)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
+                              }
+                              disabled={done || !isSelected}
+                              className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
+                              placeholder={done ? "—" : String(balance)}
+                            />
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell className="text-right tabular-nums">
                         ₹ {rate.toLocaleString("en-IN")}
                       </TableCell>
@@ -285,9 +368,9 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                             <Badge
                               variant="outline"
                               className="text-[10px] uppercase border-destructive text-destructive"
-                              title="Already PI quantity is greater than revised OA quantity. Please review."
+                              title="Already invoiced exceeds OA value. Please review."
                             >
-                              Review ({alreadyQty}/{it.quantity})
+                              Review {isMR ? `(₹${alreadyAmt.toLocaleString("en-IN")}/₹${totalAmt.toLocaleString("en-IN")})` : `(${alreadyQty}/${it.quantity})`}
                             </Badge>
                           ) : (
                           <Badge
@@ -303,7 +386,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                             variant="outline"
                             className="text-[10px] uppercase border-amber-500 text-amber-700"
                           >
-                            Partial ({alreadyQty}/{it.quantity})
+                            Partial {isMR ? `(₹${alreadyAmt.toLocaleString("en-IN")}/₹${totalAmt.toLocaleString("en-IN")})` : `(${alreadyQty}/${it.quantity})`}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] uppercase">

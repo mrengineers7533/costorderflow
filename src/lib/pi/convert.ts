@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
 
@@ -10,6 +11,8 @@ export interface OaItemPiStatus {
   pi_id?: string;
   /** Sum of quantities for this OA line item across all current PIs. */
   pi_qty: number;
+  /** Sum of amounts (qty × rate) for this OA line item across all current PIs. */
+  pi_amount: number;
   /** All PI numbers that include this item (most recent first not guaranteed). */
   pi_numbers: string[];
 }
@@ -56,6 +59,7 @@ export async function fetchOaItemPiStatus(
     for (const item of pi.line_items || []) {
       if (!item?.id) continue;
       const qty = Number(item.quantity) || 0;
+      const amt = Number(item.amount) || qty * (Number(item.unit_rate) || 0);
       const existing = map[item.id];
       if (!existing) {
         map[item.id] = {
@@ -63,10 +67,12 @@ export async function fetchOaItemPiStatus(
           pi_number: pi.pi_number,
           pi_id: pi.id,
           pi_qty: qty,
+          pi_amount: amt,
           pi_numbers: [pi.pi_number],
         };
       } else {
         existing.pi_qty += qty;
+        existing.pi_amount += amt;
         if (!existing.pi_numbers.includes(pi.pi_number)) {
           existing.pi_numbers.push(pi.pi_number);
         }
@@ -87,6 +93,10 @@ export async function createPiFromOaItems(
   /** Optional partial quantities keyed by line item id. Defaults to the
    *  remaining balance qty for each selected item. */
   qtyOverrides?: Record<string, number>,
+  /** Optional partial amounts (₹) keyed by line item id. Takes precedence
+   *  over `qtyOverrides`. Used by the MR Client-Copy partial-PI flow where
+   *  the user enters an amount rather than a qty. */
+  amountOverrides?: Record<string, number>,
 ): Promise<PiRecord> {
   if (!selectedItemIds || selectedItemIds.length === 0) {
     throw new Error("Select at least one item to generate a PI.");
@@ -96,26 +106,54 @@ export async function createPiFromOaItems(
   const status = await fetchOaItemPiStatus(oa.id);
 
   const wantedIds = new Set(selectedItemIds);
-  const sourceItems = (oa.line_items || []).filter((it) => wantedIds.has(it.id));
+  // For MR format, partial-PI selection happens against the Client Copy
+  // grouped rows (MHE/Fan/Magnet/Spouting + passthrough). Build that view
+  // here so synthesized IDs (e.g. `client-copy-mhe`) resolve correctly.
+  const sourcePool: LineItem[] =
+    oa.format === "MR"
+      ? buildClientCopyItems(oa.line_items || [])
+      : (oa.line_items || []);
+  const sourceItems = sourcePool.filter((it) => wantedIds.has(it.id));
   const filteredItems: LineItem[] = sourceItems.map((it) => {
     const oaQty = Number(it.quantity) || 0;
-    const alreadyQty = status[it.id]?.pi_qty || 0;
-    const balance = Math.max(0, oaQty - alreadyQty);
-    const requested = qtyOverrides?.[it.id];
-    const piQty = requested == null ? balance : Number(requested);
-    if (!(piQty > 0)) {
-      throw new Error(`Invalid PI quantity for "${it.description}".`);
-    }
-    if (piQty > balance + 1e-9) {
-      throw new Error(
-        `PI qty ${piQty} exceeds balance ${balance} for "${it.description}".`,
-      );
-    }
     const rate = Number(it.unit_rate) || 0;
+    const totalAmt = (Number(it.amount) || oaQty * rate);
+    const alreadyAmt = status[it.id]?.pi_amount || 0;
+    const balanceAmt = Math.max(0, totalAmt - alreadyAmt);
+    const alreadyQty = status[it.id]?.pi_qty || 0;
+    const balanceQty = Math.max(0, oaQty - alreadyQty);
+
+    const amtReq = amountOverrides?.[it.id];
+    let piQty: number;
+    let piAmt: number;
+    if (amtReq != null) {
+      piAmt = Number(amtReq);
+      if (!(piAmt > 0)) {
+        throw new Error(`Invalid PI amount for "${it.description}".`);
+      }
+      if (piAmt > balanceAmt + 1e-6) {
+        throw new Error(
+          `PI amount ${piAmt} exceeds balance ${balanceAmt} for "${it.description}".`,
+        );
+      }
+      piQty = rate > 0 ? piAmt / rate : oaQty;
+    } else {
+      const requested = qtyOverrides?.[it.id];
+      piQty = requested == null ? balanceQty : Number(requested);
+      if (!(piQty > 0)) {
+        throw new Error(`Invalid PI quantity for "${it.description}".`);
+      }
+      if (piQty > balanceQty + 1e-9) {
+        throw new Error(
+          `PI qty ${piQty} exceeds balance ${balanceQty} for "${it.description}".`,
+        );
+      }
+      piAmt = piQty * rate;
+    }
     return {
       ...it,
       quantity: piQty,
-      amount: piQty * rate,
+      amount: piAmt,
     };
   });
   if (filteredItems.length === 0) {
