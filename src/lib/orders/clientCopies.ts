@@ -72,20 +72,18 @@ export async function saveClientCopy(args: {
   const idx = existing.length;
   const versionLabel = idx === 0 ? "Original" : `R${idx}`;
 
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id || null;
-  if (!userId) throw new Error("Sign in required to save Client Copy");
-
   const safe = (args.oaNumber || "OA").replace(/[/\\]/g, "_");
   const fileName = `${safe}-CLIENT-COPY-${versionLabel}.pdf`;
-  // Storage RLS requires the first folder to equal auth.uid().
-  const filePath = `${userId}/client-copies/${args.rootOrderId}/${Date.now()}-${fileName}`;
+  const filePath = `client-copies/${args.rootOrderId}/${Date.now()}-${fileName}`;
 
   const up = await supabase.storage.from(BUCKET).upload(filePath, args.pdfBlob, {
     contentType: "application/pdf",
     upsert: false,
   });
   if (up.error) throw up.error;
+
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData?.user?.id || null;
 
   const insertRes = await supabase
     .from("client_copies" as never)

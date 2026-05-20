@@ -1,48 +1,20 @@
-## Issue
+## Update Client Copy Make labels
 
-Network + console logs show the **Client Copy** upload to Supabase Storage is being rejected:
+Set the `make_label` field on the four summarized Client Copy rows in `src/lib/orders/clientCopy.ts` so the "Make" column displays the correct value per group.
 
-```
-POST .../storage/v1/object/oa-documents/client-copies/<rootOrderId>/...
-→ 403  "new row violates row-level security policy"
-```
+### Change
 
-The `oa-documents` bucket has this INSERT policy:
+In `buildClientCopyItems`, when constructing the summarized rows, attach a fixed `make_label` per group:
 
-```
-bucket_id = 'oa-documents' AND auth.uid()::text = storage.foldername(name)[1]
-```
+- `MHE` (Material Handling Equipments) → `"M.R. Engg"`
+- `SPOUTING` (Spouting, Aspiration Ducting & Pneumatic Manifold) → `"M.R. Engg"`
+- `FAN` (Centrifugal Fans (Ferrari)) → `"Ferrari"`
+- `MAGNET` (Magnets (J. K.)) → `"J. K."`
 
-i.e. the **first folder of the object path must equal the user's UID**. Our current upload path starts with `client-copies/...` (see `src/lib/orders/clientCopies.ts`), so every Client Copy save is blocked. The PDF is generated, `doc.save()` writes the local file, then the upload throws and the catch shows a destructive toast — to the user this looks like "download failed".
+Implementation: add a `GROUP_MAKE: Record<GroupKey, string>` map next to `GROUP_LABEL`, and include `make_label: GROUP_MAKE[g]` in the synthesized line item returned by the `FIXED_ORDER.map(...)` block.
 
-The plain **Export PDF** button (`downloadPDF` in `OrderEditor.tsx`) does not touch storage, so it should already work. We'll re-test after the fix to confirm.
+### Scope guard
 
-## Fix
-
-1. **Prefix the storage path with the user's UID** in `saveClientCopy` (`src/lib/orders/clientCopies.ts`):
-
-   ```
-   client-copies/<rootOrderId>/<ts>-<file>.pdf
-   →
-   <userId>/client-copies/<rootOrderId>/<ts>-<file>.pdf
-   ```
-
-   This satisfies all four `oa_docs_*` policies (INSERT / SELECT / UPDATE / DELETE) which all key off `storage.foldername(name)[1] = auth.uid()`.
-
-   - Fetch `auth.getUser()` before computing the path (already done later in the function — move it up).
-   - Throw a clear error if no user is signed in.
-   - Existing rows already in the DB keep working because download uses the stored `file_path` + signed URL (SELECT policy allows admin or owner; legacy rows uploaded under the previous broken path don't exist since every prior insert was rejected).
-
-2. **No DB or policy migration needed** — RLS stays as-is.
-
-3. **No change to `downloadPDF`** — it only calls `doc.save()`. After fix, re-test both buttons.
-
-## Verification
-
-- Click **Export PDF** on an existing OA → file downloads, no toast error.
-- Click **Client Copy PDF** on a finalized OA with `parentOrderId` → file downloads AND a row appears in `client_copies` with `file_path` starting `<uid>/client-copies/...`. No 403 in network tab.
-- Open the saved copy from `RevisionsPanel` → signed URL view/download works.
-
-## Out of scope
-
-- The previous (unanswered) request about USD-vs-INR insurance base in EXW Murthal — not part of this bug fix.
+- Only `src/lib/orders/clientCopy.ts` is touched.
+- No changes to grouping logic, totals, qty/rate math, passthrough items, ordering, PDF/Excel renderers, or any OA/BOQ/PI calculations.
+- Non-grouped passthrough items keep their original `make_label` unchanged.

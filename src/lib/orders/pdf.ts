@@ -692,8 +692,7 @@ async function renderGmsPdf(
     }
   } else if (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled) {
     const m = calcExMurthal(t.basic_total, c);
-    const baseIsUsd = usdDisplay || forcedUsd;
-    totalsRows.push({ label: baseIsUsd ? "Base Amount (EXW Turkey)" : "Base Amount", value: m.base_amount });
+    totalsRows.push({ label: "Base Amount (EXW Murthal)", value: m.base_amount });
     if (c.sea_freight_enabled) totalsRows.push({ label: "Sea Freight", value: m.sea_freight });
     if (c.custom_enabled) totalsRows.push({ label: "Custom Duty", value: m.custom });
     if (c.clearing_enabled) totalsRows.push({ label: "Clearing Charge / CHA & Port", value: m.clearing });
