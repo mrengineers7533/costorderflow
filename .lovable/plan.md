@@ -1,20 +1,11 @@
-## Update Client Copy Make labels
+Replace the label "Base Amount (EXW Murthal)" with "Base Amount (EXW Turkey)" in the EXW Murthal (Full Landed Cost) totals chain.
 
-Set the `make_label` field on the four summarized Client Copy rows in `src/lib/orders/clientCopy.ts` so the "Make" column displays the correct value per group.
+### Changes
 
-### Change
-
-In `buildClientCopyItems`, when constructing the summarized rows, attach a fixed `make_label` per group:
-
-- `MHE` (Material Handling Equipments) → `"M.R. Engg"`
-- `SPOUTING` (Spouting, Aspiration Ducting & Pneumatic Manifold) → `"M.R. Engg"`
-- `FAN` (Centrifugal Fans (Ferrari)) → `"Ferrari"`
-- `MAGNET` (Magnets (J. K.)) → `"J. K."`
-
-Implementation: add a `GROUP_MAKE: Record<GroupKey, string>` map next to `GROUP_LABEL`, and include `make_label: GROUP_MAKE[g]` in the synthesized line item returned by the `FIXED_ORDER.map(...)` block.
+- `src/lib/orders/pdf.ts` line 695: `"Base Amount (EXW Murthal)"` → `"Base Amount (EXW Turkey)"` (PDF / Print / Download).
+- `src/lib/pi/excel.ts` line 97: same string replacement (Excel export, kept in sync so labels match across exports).
 
 ### Scope guard
 
-- Only `src/lib/orders/clientCopy.ts` is touched.
-- No changes to grouping logic, totals, qty/rate math, passthrough items, ordering, PDF/Excel renderers, or any OA/BOQ/PI calculations.
-- Non-grouped passthrough items keep their original `make_label` unchanged.
+- Pure text-only change. No edits to calculations, values, formats, or any other functionality.
+- All other "EXW Murthal" references elsewhere in the codebase (mode names, UI selects, comments, sidebar headings) remain untouched.

@@ -94,7 +94,7 @@ export function buildPiXlsx(pi: PiRecord): Blob {
     chain.push(["Net Payable", fmt(tk.net_payable)]);
   } else if (pi.format === "GMS" && (c.gms_mode === "EXW_MURTHAL" || c.ex_murthal_enabled)) {
     const m = calcExMurthal(basic, c);
-    chain.push(["Base Amount (EXW Murthal)", fmt(m.base_amount)]);
+    chain.push(["Base Amount (EXW Turkey)", fmt(m.base_amount)]);
     if (c.sea_freight_enabled) chain.push(["Sea Freight", fmt(m.sea_freight)]);
     if (c.custom_enabled) chain.push(["Custom Duty", fmt(m.custom)]);
     if (c.clearing_enabled) chain.push(["Clearing Charge / CHA & Port", fmt(m.clearing)]);
