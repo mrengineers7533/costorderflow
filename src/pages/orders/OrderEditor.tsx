@@ -1004,6 +1004,20 @@ export default function OrderEditor() {
                       placeholder="Remarks"
                     />
                   )}
+                  {showItemExtras && (() => {
+                    const s = approvalByOaItem.get(it.id) || "pending";
+                    const label = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
+                    const cls = s === "approved"
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                      : s === "rejected"
+                      ? "bg-red-100 text-red-700 border-red-200"
+                      : "bg-amber-100 text-amber-700 border-amber-200";
+                    return (
+                      <div className="col-span-2 flex justify-center">
+                        <Badge variant="outline" className={cls}>{label}</Badge>
+                      </div>
+                    );
+                  })()}
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
                 {designReview && (
