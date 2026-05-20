@@ -319,11 +319,20 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
     String((csEx.cost_sheet_number || csEx.number || f.current?.cost_sheet_number || f.costSheetNumber || "") as string) ||
     "—";
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
-  const csTotalA = Number((csEx.total_a as number) || 0) || 0;
-  const csTotalB = Number((csEx.total_other_b as number) || 0) || 0;
-  // Fallback: if AI didn't extract A/B but did extract a cost_of_project total, use that.
+  // Derive A / B from line_items when the AI parser didn't return them explicitly.
+  const csItems = Array.isArray(csEx.line_items)
+    ? (csEx.line_items as Array<{ amount?: number; make?: string }>)
+    : [];
+  const sumA = csItems
+    .filter((i) => (i.make || "").toUpperCase() !== "GMS")
+    .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const sumB = csItems
+    .filter((i) => (i.make || "").toUpperCase() === "GMS")
+    .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const csTotalA = (Number(csEx.total_a as number) || 0) || sumA;
+  const csTotalB = (Number(csEx.total_other_b as number) || 0) || sumB;
   const csCopPrinted = Number((csEx.cost_of_project || csEx.total_cost || csEx.total || csEx.grand_total) as number) || 0;
-  const csTotal = (csTotalA + csTotalB) || csCopPrinted;
+  const csTotal = csCopPrinted || (csTotalA + csTotalB);
   const csClientScope = Number((csEx.client_scope_amount as number) || 0) || 0;
 
   const mrBasic = f.mrOa?.totals?.basic_total || f.mrOa?.totals?.subtotal || 0;
