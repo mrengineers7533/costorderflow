@@ -481,45 +481,54 @@ function ActivityTimeline({ events, showHistory }: { events: ActivityEvent[]; sh
   if (!visible.length) return <p className="text-xs text-muted-foreground">No activity yet.</p>;
   return (
     <div className="space-y-2">
-      {visible.map((e, i) => (
-        <div key={e.id} className="flex gap-3">
-          <div className="flex flex-col items-center pt-1">
-            <div className="h-7 w-7 rounded-full bg-muted grid place-items-center text-muted-foreground">{e.icon}</div>
-            {i < visible.length - 1 && <div className="w-px flex-1 bg-border my-1" />}
-          </div>
-          <div className="flex-1 min-w-0 rounded-md border bg-card p-2.5">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{e.title}</div>
+      <div className="overflow-x-auto pb-2">
+        <div className="flex items-stretch gap-2 min-w-min">
+          {visible.map((e, i) => (
+            <div key={e.id} className="flex items-stretch gap-2 shrink-0">
+              <div className="w-64 shrink-0 rounded-md border bg-card p-2.5 flex flex-col">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-full bg-muted grid place-items-center text-muted-foreground shrink-0">
+                    <span className="text-[11px] font-semibold tabular-nums">{i + 1}</span>
+                  </div>
+                  <div className="text-muted-foreground">{e.icon}</div>
+                  {e.status && (
+                    <Badge
+                      variant={e.status.tone === "ok" ? "default" : e.status.tone === "warn" ? "secondary" : "outline"}
+                      className={`ml-auto ${e.status.tone === "ok" ? "bg-emerald-600 hover:bg-emerald-600" : ""}`}
+                    >
+                      {e.status.label}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-2 text-sm font-medium leading-snug">{e.title}</div>
                 <div className="text-[11px] text-muted-foreground">{fmtDateTime(e.ts)}</div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {e.status && (
-                  <Badge
-                    variant={e.status.tone === "ok" ? "default" : e.status.tone === "warn" ? "secondary" : "outline"}
-                    className={e.status.tone === "ok" ? "bg-emerald-600 hover:bg-emerald-600" : ""}
-                  >
-                    {e.status.label}
-                  </Badge>
+                {e.details.filter(Boolean).length > 0 && (
+                  <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                    {e.details.filter(Boolean).map((d, idx) => <span key={idx} className="truncate">{d}</span>)}
+                  </div>
                 )}
-                {e.copyText && (
-                  <Button size="sm" variant="outline" onClick={() => copy(e.copyText!, e.copyLabel || "Link copied")}>
-                    <Copy className="h-3.5 w-3.5 mr-1" />Copy
-                  </Button>
+                {(e.copyText || e.href) && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    {e.copyText && (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => copy(e.copyText!, e.copyLabel || "Link copied")}>
+                        <Copy className="h-3.5 w-3.5 mr-1" />Copy
+                      </Button>
+                    )}
+                    {e.href && <Link to={e.href}><Button size="sm" variant="outline" className="h-7">Open</Button></Link>}
+                  </div>
                 )}
-                {e.href && <Link to={e.href}><Button size="sm" variant="outline">Open</Button></Link>}
               </div>
+              {i < visible.length - 1 && (
+                <div className="flex items-center text-muted-foreground shrink-0">
+                  <ChevronRight className="h-5 w-5" />
+                </div>
+              )}
             </div>
-            {e.details.filter(Boolean).length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                {e.details.filter(Boolean).map((d, idx) => <span key={idx}>{d}</span>)}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
-      ))}
+      </div>
       {!showHistory && hiddenCount > 0 && (
-        <p className="text-[11px] text-muted-foreground pl-10">
+        <p className="text-[11px] text-muted-foreground">
           {hiddenCount} revision/historical entr{hiddenCount === 1 ? "y" : "ies"} hidden. Use "Show Revision History" to view.
         </p>
       )}
