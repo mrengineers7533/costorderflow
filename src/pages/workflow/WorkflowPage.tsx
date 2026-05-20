@@ -326,8 +326,8 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const csTotal = (csTotalA + csTotalB) || csCopPrinted;
   const csClientScope = Number((csEx.client_scope_amount as number) || 0) || 0;
 
-  const mrBasic = f.mrOa?.totals?.subtotal || f.mrOa?.totals?.net_payable || 0;
-  const gmsAmt = f.gmsOa?.totals?.net_payable || f.gmsOa?.totals?.subtotal || 0;
+  const mrBasic = f.mrOa?.totals?.basic_total || f.mrOa?.totals?.subtotal || 0;
+  const gmsAmt = f.gmsOa?.totals?.basic_total || f.gmsOa?.totals?.subtotal || 0;
 
   const commentRound = [...f.reviews].reverse().find((r) => r.kind === "comment");
   const commentSubmitted = [...f.reviews].reverse().find((r) => r.kind === "comment" && r.status === "submitted");
