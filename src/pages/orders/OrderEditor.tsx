@@ -475,6 +475,9 @@ export default function OrderEditor() {
     toast({ title: "OA data saved successfully", description: `OA ${oa} · ${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"} saved` });
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
+  // Keep a stable ref to the latest save() so auto-save (from design-Apply)
+  // can call it without needing to be re-bound on every render.
+  saveRef.current = save;
 
   function applyCurrencyConversion(target: CurrencyMode, factor: number) {
     setItems((prev) => convertItems(prev, factor));
