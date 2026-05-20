@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
 import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/convert";
+import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
+import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -316,6 +319,11 @@ export default function OrderEditor() {
       : allItemsWithAmounts.filter((i) => i.make === lineItemsView),
     [allItemsWithAmounts, lineItemsView]
   );
+  // Design-team comments on the linked BOQ — surfaced item-wise under the
+  // matching OA row so the OA creator can update the OA directly. Pure UI:
+  // no effect on totals, charges, saved payload, PDFs, BOQ, or PI.
+  const designReview = useLatestDesignReview(currentBoq?.id || null);
+  const oaEditable = isNew || isCurrent;
   // Keep the editor view in sync with the OA format when the order has both
   // makes — first time we detect a split, default the toggle to the current
   // format so behavior matches what users saw before.
@@ -848,8 +856,9 @@ export default function OrderEditor() {
                 <div className="col-span-2 text-right">Amount</div>
                 <div className="col-span-1" />
               </div>
-              {editorItems.map((it) => (
-                <div key={it.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
+              {editorItems.map((it, idx) => (
+                <div key={it.id} className="space-y-1.5">
+                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
@@ -865,6 +874,15 @@ export default function OrderEditor() {
                   </Select>
                   <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+                {designReview && (
+                  <OaDesignSuggestionRow
+                    reviewItem={findReviewItemForOaItem(designReview.items, it, idx)}
+                    round={designReview.round}
+                    canApply={oaEditable}
+                    onApply={(patch) => updateItemById(it.id, patch)}
+                  />
+                )}
                 </div>
               ))}
               {editorItems.length === 0 && (
@@ -1853,4 +1871,63 @@ function ModeToggleRow({
 function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: (n: number) => string }) {
   const text = fmt ? fmt(v) : `₹ ${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return <div className={`flex justify-between ${bold ? "font-bold text-base" : "text-sm"}`}><span>{k}</span><span>{text}</span></div>;
+}
+
+/** Inline "Design Suggested Update" block shown below an OA item row. Surfaces
+ *  the design team's per-column comments on the linked BOQ. Apply buttons map
+ *  to OA fields (Description, Qty, Unit). Model & Remarks are shown read-only
+ *  because they have no OA-row counterpart. Pure UI — no calc impact. */
+function OaDesignSuggestionRow({
+  reviewItem, round, canApply, onApply,
+}: {
+  reviewItem: DesignReviewItemRow | null;
+  round: DesignReviewRow;
+  canApply: boolean;
+  onApply: (patch: Partial<LineItem>) => void;
+}) {
+  if (!reviewItem) return null;
+  const cols = parseColumnComments(reviewItem);
+  const tiles: { key: ColKey; label: string; apply?: (v: string) => Partial<LineItem> }[] = [
+    { key: "model", label: "Model" },
+    { key: "description", label: "Description", apply: (v) => ({ description: v }) },
+    { key: "quantity", label: "Qty", apply: (v) => ({ quantity: Number(v) || 0 }) },
+    { key: "unit", label: "Unit", apply: (v) => ({ unit: v }) },
+    { key: "remarks", label: "Remarks" },
+  ];
+  const hasAny = tiles.some(({ key }) => ((cols as Record<string, string>)[key] || "").trim() !== "");
+  if (!hasAny) return null;
+  return (
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 text-xs">
+      <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-primary font-semibold">
+        Design Suggested Update · R{round.round_no}
+        {round.reviewer_name && <span className="ml-1 text-muted-foreground font-normal">· {round.reviewer_name}</span>}
+      </div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
+        {tiles.map(({ key, label, apply }) => {
+          const v = ((cols as Record<string, string>)[key] || "").trim();
+          return (
+            <div key={key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
+              <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+              {v ? (
+                <>
+                  <div className="whitespace-pre-wrap text-foreground">{v}</div>
+                  {apply && canApply && (
+                    <button
+                      type="button"
+                      onClick={() => onApply(apply(v))}
+                      className="mt-1 text-[10px] underline text-primary hover:opacity-80"
+                    >
+                      Apply
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="text-muted-foreground">—</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
