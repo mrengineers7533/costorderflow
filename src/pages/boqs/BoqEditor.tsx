@@ -17,11 +17,10 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
-import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
-import { statusLabel, snapshotRevision, parseColumnComments, diffItemsAgainstBaseline, buildChangeLog, type ColKey } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
