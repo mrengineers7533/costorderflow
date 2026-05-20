@@ -20,7 +20,7 @@ import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
-import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestSubmittedRound } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -79,6 +79,46 @@ export default function BoqEditor() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
   }, []);
+
+  // Sync per-item approval_status from the latest submitted Approval round.
+  // approved -> approved, change_required -> rejected, pending -> pending.
+  useEffect(() => {
+    if (!boqId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const latest = await fetchLatestSubmittedRound(boqId);
+        if (!latest || cancelled) return;
+        if (latest.round.kind !== "approval") return;
+        const byId = new Map(latest.items.map((r) => [r.boq_item_id, r]));
+        const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+        const byDesc = new Map<string, typeof latest.items[number]>();
+        latest.items.forEach((r) => { const k = norm(r.description); if (k && !byDesc.has(k)) byDesc.set(k, r); });
+        const map = (d: string | null | undefined): "approved" | "rejected" | "pending" =>
+          d === "approved" ? "approved" : d === "change_required" ? "rejected" : "pending";
+        let changed = false;
+        const next = items.map((it) => {
+          const r = byId.get(it.id) || byDesc.get(norm(it.description));
+          if (!r) return it;
+          const ns = map(r.decision);
+          if ((it as BoqLineItem & { approval_status?: string }).approval_status === ns) return it;
+          changed = true;
+          return { ...it, approval_status: ns } as BoqLineItem;
+        });
+        if (!changed || cancelled) return;
+        setItems(next);
+        setOriginalItems((prev) => prev.map((it) => {
+          const r = byId.get(it.id) || byDesc.get(norm(it.description));
+          return r ? ({ ...it, approval_status: map(r.decision) } as BoqLineItem) : it;
+        }));
+        await supabase.from("boqs").update({ line_items: next } as never).eq("id", boqId);
+      } catch (e) {
+        console.warn("approval_status sync failed", e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boqId, refreshKey, designReviewStatus]);
 
   // Load existing BOQ or initialize from order
   useEffect(() => {
