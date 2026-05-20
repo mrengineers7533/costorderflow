@@ -37,6 +37,7 @@ import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
+import type { BoqLineItem } from "@/lib/boq/types";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -343,6 +344,64 @@ export default function OrderEditor() {
       const next = prev.filter((it) => it.id !== itemId);
       return next.length === 0 ? [newItem()] : next;
     });
+  }
+
+  /** Apply Model / Remarks (BOQ-only design suggestions) directly to the
+   *  current linked BOQ row. Looks up the BOQ row by `boq_item_id` first,
+   *  then falls back to normalized-description match. Writes a single
+   *  `line_items` patch — no calc / totals / PI / PDF impact. */
+  async function applyDesignToBoq(
+    reviewItem: DesignReviewItemRow,
+    patch: { model_number?: string; remarks?: string },
+  ): Promise<void> {
+    if (!currentBoq?.id) {
+      toast({ title: "No linked BOQ", description: "Save the OA first so a BOQ exists, then try again.", variant: "destructive" });
+      return;
+    }
+    const keys = Object.keys(patch) as (keyof typeof patch)[];
+    if (!keys.length) return;
+    const lineItems = (currentBoq.line_items as BoqLineItem[]) || [];
+    const normDesc = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    let idx = lineItems.findIndex((r) => r.id === reviewItem.boq_item_id);
+    if (idx < 0 && reviewItem.description) {
+      const key = normDesc(reviewItem.description);
+      idx = lineItems.findIndex((r) => normDesc(r.description) === key);
+    }
+    if (idx < 0) {
+      toast({ title: "Matching BOQ item not found", description: "Save the OA so the BOQ re-syncs, then retry.", variant: "destructive" });
+      return;
+    }
+    const oldRow = lineItems[idx];
+    const nextRow: BoqLineItem = { ...oldRow };
+    if (patch.model_number !== undefined) nextRow.model_number = patch.model_number;
+    if (patch.remarks !== undefined) nextRow.remarks = patch.remarks;
+    const nextItems = lineItems.slice();
+    nextItems[idx] = nextRow;
+    const { error } = await supabase
+      .from("boqs")
+      .update({ line_items: nextItems as never, updated_at: new Date().toISOString() })
+      .eq("id", currentBoq.id);
+    if (error) {
+      toast({ title: "BOQ update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    // Audit-log remarks change (matches inline BOQ remarks-edit behavior).
+    if (patch.remarks !== undefined && (oldRow.remarks || "") !== patch.remarks) {
+      const { data: auth } = await supabase.auth.getUser();
+      await supabase.from("boq_remarks_audit_log").insert({
+        boq_id: currentBoq.id,
+        item_id: oldRow.id,
+        item_no: oldRow.item_no || null,
+        model_number: nextRow.model_number || null,
+        old_remarks: oldRow.remarks || null,
+        new_remarks: patch.remarks,
+        changed_by: auth.user?.id || null,
+        changed_by_email: auth.user?.email || null,
+      } as never);
+    }
+    setCurrentBoq({ ...currentBoq, line_items: nextItems } as BoqRecord);
+    toast({ title: "Applied to BOQ", description: `Updated ${keys.map((k) => (k === "model_number" ? "Model" : "Remarks")).join(" & ")} on ${currentBoq.boq_number}.` });
   }
 
   async function save(finalize: boolean) {
@@ -881,6 +940,8 @@ export default function OrderEditor() {
                     round={designReview.round}
                     canApply={oaEditable}
                     onApply={(patch) => updateItemById(it.id, patch)}
+                    boqLinked={!!currentBoq?.id}
+                    onApplyToBoq={applyDesignToBoq}
                   />
                 )}
                 </div>
@@ -1878,24 +1939,36 @@ function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: 
  *  to OA fields (Description, Qty, Unit). Model & Remarks are shown read-only
  *  because they have no OA-row counterpart. Pure UI — no calc impact. */
 function OaDesignSuggestionRow({
-  reviewItem, round, canApply, onApply,
+  reviewItem, round, canApply, onApply, boqLinked, onApplyToBoq,
 }: {
   reviewItem: DesignReviewItemRow | null;
   round: DesignReviewRow;
   canApply: boolean;
   onApply: (patch: Partial<LineItem>) => void;
+  boqLinked: boolean;
+  onApplyToBoq: (reviewItem: DesignReviewItemRow, patch: { model_number?: string; remarks?: string }) => Promise<void>;
 }) {
   if (!reviewItem) return null;
   const cols = parseColumnComments(reviewItem);
-  const tiles: { key: ColKey; label: string; apply?: (v: string) => Partial<LineItem> }[] = [
+  const tiles: { key: ColKey; label: string }[] = [
     { key: "model", label: "Model" },
-    { key: "description", label: "Description", apply: (v) => ({ description: v }) },
-    { key: "quantity", label: "Qty", apply: (v) => ({ quantity: Number(v) || 0 }) },
-    { key: "unit", label: "Unit", apply: (v) => ({ unit: v }) },
+    { key: "description", label: "Description" },
+    { key: "quantity", label: "Qty" },
+    { key: "unit", label: "Unit" },
     { key: "remarks", label: "Remarks" },
   ];
-  const hasAny = tiles.some(({ key }) => ((cols as Record<string, string>)[key] || "").trim() !== "");
+  const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
+  const hasAny = tiles.some(({ key }) => val(key) !== "");
   if (!hasAny) return null;
+  const oaPatch: Partial<LineItem> = {};
+  if (val("description")) oaPatch.description = val("description");
+  if (val("quantity")) oaPatch.quantity = Number(val("quantity")) || 0;
+  if (val("unit")) oaPatch.unit = val("unit");
+  const hasOaFields = Object.keys(oaPatch).length > 0;
+  const boqPatch: { model_number?: string; remarks?: string } = {};
+  if (val("model")) boqPatch.model_number = val("model");
+  if (val("remarks")) boqPatch.remarks = val("remarks");
+  const hasBoqFields = Object.keys(boqPatch).length > 0;
   return (
     <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 text-xs">
       <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-primary font-semibold">
@@ -1903,30 +1976,45 @@ function OaDesignSuggestionRow({
         {round.reviewer_name && <span className="ml-1 text-muted-foreground font-normal">· {round.reviewer_name}</span>}
       </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
-        {tiles.map(({ key, label, apply }) => {
-          const v = ((cols as Record<string, string>)[key] || "").trim();
+        {tiles.map(({ key, label }) => {
+          const v = val(key);
           return (
             <div key={key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
               <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
               {v ? (
-                <>
-                  <div className="whitespace-pre-wrap text-foreground">{v}</div>
-                  {apply && canApply && (
-                    <button
-                      type="button"
-                      onClick={() => onApply(apply(v))}
-                      className="mt-1 text-[10px] underline text-primary hover:opacity-80"
-                    >
-                      Apply
-                    </button>
-                  )}
-                </>
+                <div className="whitespace-pre-wrap text-foreground">{v}</div>
               ) : (
                 <div className="text-muted-foreground">—</div>
               )}
             </div>
           );
         })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+        <button
+          type="button"
+          disabled={!hasOaFields || !canApply}
+          onClick={() => onApply(oaPatch)}
+          className="rounded border border-primary/50 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={!canApply ? "Open the current OA revision to edit" : !hasOaFields ? "No OA-mappable fields suggested" : "Apply Description / Qty / Unit to this OA item"}
+        >
+          Apply Comment to OA
+        </button>
+        <button
+          type="button"
+          disabled={!hasBoqFields || !boqLinked}
+          onClick={() => onApplyToBoq(reviewItem, boqPatch)}
+          className="rounded border border-primary/50 bg-background px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={!boqLinked ? "Save the OA first so a linked BOQ exists" : !hasBoqFields ? "No Model / Remarks suggested" : "Apply Model & Remarks to the linked BOQ"}
+        >
+          Apply Model &amp; Remarks to BOQ
+        </button>
+        {!canApply && hasOaFields && (
+          <span className="text-[10px] text-muted-foreground">OA is a read-only revision — open the current revision to apply.</span>
+        )}
+        {!boqLinked && hasBoqFields && (
+          <span className="text-[10px] text-muted-foreground">Save the OA first — BOQ auto-syncs on save.</span>
+        )}
       </div>
     </div>
   );
