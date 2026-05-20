@@ -18,6 +18,7 @@ import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { amountInWords, calcLineAmount, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { Charges } from "@/lib/orders/types";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -1152,7 +1153,7 @@ export default function PiEditor() {
               costSheetNumber=""
               orderDate={pi.pi_date}
               preparedBy={pi.prepared_by || ""}
-              items={pi.line_items}
+              items={buildClientCopyItems(pi.line_items)}
               charges={{ ...pi.charges, discount_percent: 0 }}
               totals={{
                 basic_total: totals.basic_total,

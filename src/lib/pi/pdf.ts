@@ -4,6 +4,7 @@ import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 
 /**
@@ -18,6 +19,9 @@ export async function generatePiPDF(
   opts?: { terms?: string; bank?: BankDetails; gmsTerms?: GMSTerms; currencyMode?: "INR" | "USD"; hiddenColumns?: PdfColumnKey[] },
 ): Promise<jsPDF> {
   // Map PI → OrderRecord-shape so we can reuse generateOrderPDF.
+  // Items are rendered in Client-Copy grouped form (MHE / Fan / Magnet /
+  // Spouting consolidated) — calculations still use pi.line_items below.
+  const displayItems = buildClientCopyItems(pi.line_items || []);
   const orderLike: OrderRecord = {
     id: pi.id,
     user_id: pi.user_id || "",
@@ -31,7 +35,7 @@ export async function generatePiPDF(
     cost_sheet_number: null,
     order_date: pi.pi_date,
     prepared_by: pi.prepared_by,
-    line_items: pi.line_items,
+    line_items: displayItems,
     charges: pi.charges,
     totals: pi.totals,
     amount_in_words: pi.amount_in_words,
