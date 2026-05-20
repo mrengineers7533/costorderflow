@@ -661,6 +661,36 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
             {f.current?.oa_number || (f.costSheetNumber ? `CS# ${f.costSheetNumber}` : "—")}
           </div>
         </div>
+        {f.costSheet && (csTotal > 0 || mrBasic > 0 || gmsAmt > 0) && (() => {
+          const oaSum = (mrBasic || 0) + (gmsAmt || 0);
+          const diff = Math.abs(csTotal - oaSum);
+          const matched = csTotal > 0 && oaSum > 0 && diff <= 1;
+          return (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+              {matched ? (
+                <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1">
+                  <CheckCircle2 className="h-3 w-3" />Matched
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="gap-1">Not Matched</Badge>
+              )}
+              <span className="text-muted-foreground">
+                Cost Sheet <span className="font-medium text-foreground">{fmtINR(csTotal)}</span>
+                <span className="mx-1">=</span>
+                MR OA <span className="font-medium text-foreground">{fmtINR(mrBasic)}</span>
+                <span className="mx-1">+</span>
+                GMS OA <span className="font-medium text-foreground">{fmtINR(gmsAmt)}</span>
+                <span className="mx-1">=</span>
+                <span className="font-medium text-foreground">{fmtINR(oaSum)}</span>
+              </span>
+              {!matched && (
+                <span className="text-destructive">
+                  · Difference {fmtINR(Math.abs(csTotal - oaSum))} ({csTotal > oaSum ? "OA short" : "OA exceeds CS"})
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </CardHeader>
       <CardContent>
         <HorizontalStageStrip stages={stages} globalRevisionsOpen={historyOpen} />
