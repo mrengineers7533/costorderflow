@@ -734,6 +734,13 @@ export default function OrderEditor() {
       else setCharges((c) => apply(c));
     }
     if (data.notes) setNotes(data.notes);
+    // Auto-save right after a Cost Sheet is applied so the data survives
+    // refresh / reopen. For a new OA this creates the row (and the page
+    // navigates to /orders/<id>); for an existing OA it persists the
+    // updated line items / charges via the standard save() path.
+    if (isNew || isCurrent) {
+      scheduleAutoSave();
+    }
   }
 
   return (
