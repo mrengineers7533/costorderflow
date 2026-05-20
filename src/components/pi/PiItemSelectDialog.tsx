@@ -342,7 +342,28 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                             <span className="text-muted-foreground text-xs">{it.unit || "Nos"}</span>
                           </div>
                         ) : (
-                          <>{it.quantity} {it.unit || "Nos"}</>
+                          <div className="flex items-center justify-end gap-1.5 w-28 ml-auto">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={balance}
+                              step="any"
+                              value={
+                                qtyMap[it.id] !== undefined
+                                  ? qtyMap[it.id]
+                                  : isSelected
+                                  ? String(balance)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
+                              }
+                              disabled={done || !isSelected}
+                              className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
+                              placeholder={done ? "—" : String(it.quantity)}
+                            />
+                            <span className="text-muted-foreground text-xs">{it.unit || "Nos"}</span>
+                          </div>
                         )}
                       </TableCell>
                       {isMR ? (
