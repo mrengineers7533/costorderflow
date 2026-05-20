@@ -328,6 +328,34 @@ export default function OrderEditor() {
   // no effect on totals, charges, saved payload, PDFs, BOQ, or PI.
   const designReview = useLatestDesignReview(currentBoq?.id || null);
   const oaEditable = isNew || isCurrent;
+  // Read-only mirror of per-item BOQ approval_status for the "Approved by
+  // Design" column. Matches on normalized description, with positional
+  // fallback. Pure UI — never written back to OA.
+  const approvalByOaItem = useMemo(() => {
+    const map = new Map<string, "approved" | "rejected" | "pending">();
+    const boqItems = (currentBoq?.line_items as BoqLineItem[] | undefined) || [];
+    if (!boqItems.length) return map;
+    const norm = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const byDesc = new Map<string, BoqLineItem[]>();
+    boqItems.forEach((b) => {
+      const k = norm(b.description);
+      if (!k) return;
+      const arr = byDesc.get(k) || [];
+      arr.push(b);
+      byDesc.set(k, arr);
+    });
+    items.forEach((it, idx) => {
+      const k = norm(it.description);
+      const candidates = k ? byDesc.get(k) || [] : [];
+      const match = candidates.length === 1 ? candidates[0]
+        : candidates.length > 1 ? candidates[Math.min(idx, candidates.length - 1)]
+        : boqItems[idx];
+      const s = (match?.approval_status || "pending") as "approved" | "rejected" | "pending";
+      map.set(it.id, s === "approved" || s === "rejected" ? s : "pending");
+    });
+    return map;
+  }, [currentBoq, items]);
   // Debounced auto-save trigger used by the design "Apply" buttons. Defers
   // to allow React state (model/remarks) to flush before save() reads it.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
