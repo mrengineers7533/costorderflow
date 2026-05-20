@@ -137,7 +137,7 @@ export async function createPiFromOaItems(
   });
   if (numErr || !piNum) throw numErr || new Error("Failed to allocate PI number");
 
-  const totals = calcPiTotals(filteredItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
+  const totals = calcPiTotals(piItems, oa.charges, 0, { mode: "percent", value: 0 }, 0);
 
   // GMS landed-cost overrides — when the OA uses an EXW Turkey/Murthal/CIF
   // breakdown, the PI must carry the exact same calculation chain & totals
@@ -183,7 +183,7 @@ export async function createPiFromOaItems(
     company_name: oa.company_name,
     bill_to: oa.bill_to,
     ship_to: oa.ship_to,
-    line_items: filteredItems,
+    line_items: piItems,
     charges: oa.charges,
     totals: {
       basic_total: totals.basic_total,
