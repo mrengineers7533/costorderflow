@@ -315,7 +315,9 @@ export default function WorkflowPage() {
 function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: boolean }) {
   const f = family;
   const csEx = (f.costSheet?.extracted || {}) as Record<string, unknown>;
-  const csNumber = String((csEx.cost_sheet_number || csEx.number || f.current.cost_sheet_number || "") as string) || "—";
+  const csNumber =
+    String((csEx.cost_sheet_number || csEx.number || f.current?.cost_sheet_number || f.costSheetNumber || "") as string) ||
+    "—";
   const csDate = (csEx.cost_sheet_date || csEx.date) as string | undefined;
   const csTotalA = Number((csEx.total_a as number) || 0) || 0;
   const csTotalB = Number((csEx.total_other_b as number) || 0) || 0;
@@ -653,7 +655,9 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <CardTitle className="text-base">{f.company}</CardTitle>
-          <div className="text-xs text-muted-foreground font-mono">{f.current.oa_number}</div>
+          <div className="text-xs text-muted-foreground font-mono">
+            {f.current?.oa_number || (f.costSheetNumber ? `CS# ${f.costSheetNumber}` : "—")}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
