@@ -372,6 +372,7 @@ export default function OrderEditor() {
       tc_note: tcNote,
       currency_mode: currencyMode,
       exchange_rate: exchangeRate || null,
+      client_copy_grouping: clientCopyGrouped,
       ...(isNew ? { user_id: currentUserId } : {}),
     };
 
