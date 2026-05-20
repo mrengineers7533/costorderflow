@@ -683,10 +683,19 @@ export default function OrderEditor() {
                   variant="outline"
                   className="rounded-lg"
                   onClick={downloadClientCopy}
-                  title="Generate a customer-facing PDF with summarized item groups"
+                  title="Generate a customer-facing PDF mirroring the main OA"
                 >
                   <Users className="mr-1 h-4 w-4" />Create Client Copy
                 </Button>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer" title="When ON, MHE / Spouting / Fan / Magnet rows are collapsed into summary lines in the Client Copy & PI. When OFF, every item shows individually like the main OA.">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5"
+                    checked={clientCopyGrouped}
+                    onChange={(e) => setClientCopyGrouped(e.target.checked)}
+                  />
+                  Group items
+                </label>
               </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>
