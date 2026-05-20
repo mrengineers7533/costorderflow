@@ -140,22 +140,37 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
     it.quantity ? String(it.quantity) : "",
     it.unit || "",
     it.remarks || "",
+    (() => {
+      const s = (it.approval_status || "pending").toLowerCase();
+      if (s === "approved") return "Approved";
+      if (s === "rejected") return "Rejected";
+      return "Pending";
+    })(),
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"]],
-    body: rows.length ? rows : [["", "", "(no items)", "", "", ""]],
+    head: [["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]],
+    body: rows.length ? rows : [["", "", "(no items)", "", "", "", ""]],
     theme: "grid",
     styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles: {
       0: { cellWidth: 16, halign: "center" },
-      1: { cellWidth: 32 },
+      1: { cellWidth: 28 },
       2: { cellWidth: "auto" },
-      3: { cellWidth: 14, halign: "center" },
-      4: { cellWidth: 14, halign: "center" },
-      5: { cellWidth: 50 },
+      3: { cellWidth: 12, halign: "center" },
+      4: { cellWidth: 12, halign: "center" },
+      5: { cellWidth: 38 },
+      6: { cellWidth: 24, halign: "center", fontStyle: "bold" },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 6) {
+        const v = String(data.cell.raw || "").toLowerCase();
+        if (v === "approved") data.cell.styles.textColor = [22, 128, 51];
+        else if (v === "rejected") data.cell.styles.textColor = [200, 30, 30];
+        else data.cell.styles.textColor = [180, 120, 0];
+      }
     },
     margin: { left: M, right: M },
   });
