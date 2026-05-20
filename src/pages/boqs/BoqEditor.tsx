@@ -112,13 +112,51 @@ export default function BoqEditor() {
           return r ? ({ ...it, approval_status: map(r.decision) } as BoqLineItem) : it;
         }));
         await supabase.from("boqs").update({ line_items: next } as never).eq("id", boqId);
+        // Propagate approval_status to sibling BOQs in the same OA family so
+        // the main/other BOQ revisions reflect the latest item-wise decisions.
+        try {
+          if (orderId) {
+            const { data: oaRow } = await supabase
+              .from("orders").select("id,parent_order_id").eq("id", orderId).maybeSingle();
+            const root = (oaRow as { id: string; parent_order_id: string | null } | null)?.parent_order_id
+              || (oaRow as { id: string } | null)?.id || orderId;
+            const { data: fam } = await supabase
+              .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+            const familyIds = (fam || []).map((r: { id: string }) => r.id);
+            if (familyIds.length) {
+              const { data: sibs } = await supabase
+                .from("boqs").select("id,line_items").in("order_id", familyIds);
+              const decisionByDesc = new Map<string, "approved" | "rejected" | "pending">();
+              latest.items.forEach((r) => {
+                const k = norm(r.description);
+                if (k) decisionByDesc.set(k, map(r.decision));
+              });
+              for (const sib of (sibs || []) as unknown as Array<{ id: string; line_items: BoqLineItem[] }>) {
+                if (sib.id === boqId) continue;
+                let touched = false;
+                const updated = (sib.line_items || []).map((it) => {
+                  const ns = decisionByDesc.get(norm(it.description));
+                  if (!ns) return it;
+                  if ((it as BoqLineItem & { approval_status?: string }).approval_status === ns) return it;
+                  touched = true;
+                  return { ...it, approval_status: ns } as BoqLineItem;
+                });
+                if (touched) {
+                  await supabase.from("boqs").update({ line_items: updated } as never).eq("id", sib.id);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("approval_status sibling propagation failed", e);
+        }
       } catch (e) {
         console.warn("approval_status sync failed", e);
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boqId, refreshKey, designReviewStatus]);
+  }, [boqId, orderId, refreshKey, designReviewStatus]);
 
   // Load existing BOQ or initialize from order
   useEffect(() => {
