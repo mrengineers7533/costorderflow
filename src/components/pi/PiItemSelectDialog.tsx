@@ -34,6 +34,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   const [statusMap, setStatusMap] = useState<Record<string, OaItemPiStatus>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [qtyMap, setQtyMap] = useState<Record<string, string>>({});
+  const [amtMap, setAmtMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -41,6 +42,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     if (!open || !oa) return;
     setSelected(new Set());
     setQtyMap({});
+    setAmtMap({});
     setLoading(true);
     fetchOaItemPiStatus(oa.id)
       .then((m) => setStatusMap(m))
@@ -112,10 +114,39 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     return isNaN(n) ? 0 : n;
   }
   function piAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
-    const raw = qtyMap[it.id];
+    const raw = amtMap[it.id];
     if (raw === undefined || raw === "") return balanceAmtFor(it);
     const n = Number(raw);
     return isNaN(n) ? 0 : n;
+  }
+  function piQtyForMR(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const raw = qtyMap[it.id];
+    if (raw === undefined || raw === "") {
+      const rate = Number(it.unit_rate) || 0;
+      return rate > 0 ? balanceAmtFor(it) / rate : 0;
+    }
+    const n = Number(raw);
+    return isNaN(n) ? 0 : n;
+  }
+  function setQtyMR(it: { id: string; unit_rate: number }, value: string) {
+    setQtyMap((m) => ({ ...m, [it.id]: value }));
+    const rate = Number(it.unit_rate) || 0;
+    const n = Number(value);
+    if (value === "" || isNaN(n)) {
+      setAmtMap((m) => ({ ...m, [it.id]: "" }));
+    } else {
+      setAmtMap((m) => ({ ...m, [it.id]: String(+(n * rate).toFixed(2)) }));
+    }
+  }
+  function setAmtMR(it: { id: string; unit_rate: number }, value: string) {
+    setAmtMap((m) => ({ ...m, [it.id]: value }));
+    const rate = Number(it.unit_rate) || 0;
+    const n = Number(value);
+    if (value === "" || isNaN(n) || rate <= 0) {
+      setQtyMap((m) => ({ ...m, [it.id]: "" }));
+    } else {
+      setQtyMap((m) => ({ ...m, [it.id]: String(+(n / rate).toFixed(6)) }));
+    }
   }
   const selectedItems = items.filter((it) => selected.has(it.id));
   const selectedTotal = selectedItems.reduce(
@@ -290,7 +321,29 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                         </div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {it.quantity} {it.unit || "Nos"}
+                        {isMR ? (
+                          <div className="flex items-center justify-end gap-1.5 w-32 ml-auto">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={
+                                qtyMap[it.id] !== undefined
+                                  ? qtyMap[it.id]
+                                  : isSelected
+                                  ? String(piQtyForMR(it))
+                                  : ""
+                              }
+                              onChange={(e) => setQtyMR(it, e.target.value)}
+                              disabled={done || !isSelected}
+                              className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
+                              placeholder={done ? "—" : String(it.quantity)}
+                            />
+                            <span className="text-muted-foreground text-xs">{it.unit || "Nos"}</span>
+                          </div>
+                        ) : (
+                          <>{it.quantity} {it.unit || "Nos"}</>
+                        )}
                       </TableCell>
                       {isMR ? (
                         <>
@@ -310,15 +363,13 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                               max={balanceAmt}
                               step="any"
                               value={
-                                qtyMap[it.id] !== undefined
-                                  ? qtyMap[it.id]
+                                amtMap[it.id] !== undefined
+                                  ? amtMap[it.id]
                                   : isSelected
                                   ? String(balanceAmt)
                                   : ""
                               }
-                              onChange={(e) =>
-                                setQtyMap((m) => ({ ...m, [it.id]: e.target.value }))
-                              }
+                              onChange={(e) => setAmtMR(it, e.target.value)}
                               disabled={done || !isSelected}
                               className={`h-8 text-right ${invalid ? "border-destructive" : ""}`}
                               placeholder={done ? "—" : String(balanceAmt)}
