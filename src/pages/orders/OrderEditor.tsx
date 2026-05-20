@@ -940,6 +940,8 @@ export default function OrderEditor() {
                     round={designReview.round}
                     canApply={oaEditable}
                     onApply={(patch) => updateItemById(it.id, patch)}
+                    boqLinked={!!currentBoq?.id}
+                    onApplyToBoq={applyDesignToBoq}
                   />
                 )}
                 </div>
