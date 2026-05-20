@@ -14,6 +14,7 @@ import {
 import { Receipt, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import {
   createPiFromOaItems,
   fetchOaItemPiStatus,
@@ -53,16 +54,34 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
       .finally(() => setLoading(false));
   }, [open, oa]);
 
-  const items = oa?.line_items || [];
+  // MR uses the Client Copy grouped view (MHE / Fan / Magnet / Spouting +
+  // passthrough rows). Partial PIs are tracked by amount so multiple PIs
+  // can be raised against the same grouped row until its Client Copy total
+  // is fully invoiced. GMS keeps the legacy qty-based flow.
+  const isMR = oa?.format === "MR";
+  const items = useMemo(
+    () => (isMR ? buildClientCopyItems(oa?.line_items || []) : (oa?.line_items || [])),
+    [oa, isMR],
+  );
+  function totalAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const q = Number(it.quantity) || 0;
+    const r = Number(it.unit_rate) || 0;
+    return Number(it.amount) || q * r;
+  }
   function balanceFor(it: { id: string; quantity: number }) {
     const oaQty = Number(it.quantity) || 0;
     const already = statusMap[it.id]?.pi_qty || 0;
     return Math.max(0, oaQty - already);
   }
+  function balanceAmtFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const total = totalAmountFor(it);
+    const already = statusMap[it.id]?.pi_amount || 0;
+    return Math.max(0, total - already);
+  }
   const pendingItems = useMemo(
-    () => items.filter((it) => balanceFor(it) > 0),
+    () => items.filter((it) => (isMR ? balanceAmtFor(it) > 0.5 : balanceFor(it) > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, statusMap],
+    [items, statusMap, isMR],
   );
   const doneCount = items.length - pendingItems.length;
 
@@ -92,12 +111,23 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     const n = Number(raw);
     return isNaN(n) ? 0 : n;
   }
+  function piAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
+    const raw = qtyMap[it.id];
+    if (raw === undefined || raw === "") return balanceAmtFor(it);
+    const n = Number(raw);
+    return isNaN(n) ? 0 : n;
+  }
   const selectedItems = items.filter((it) => selected.has(it.id));
   const selectedTotal = selectedItems.reduce(
-    (sum, it) => sum + piQtyFor(it) * (it.unit_rate || 0),
+    (sum, it) =>
+      sum + (isMR ? piAmountFor(it) : piQtyFor(it) * (it.unit_rate || 0)),
     0,
   );
   const hasInvalidQty = selectedItems.some((it) => {
+    if (isMR) {
+      const a = piAmountFor(it);
+      return !(a > 0) || a > balanceAmtFor(it) + 1e-6;
+    }
     const q = piQtyFor(it);
     return !(q > 0) || q > balanceFor(it) + 1e-9;
   });
@@ -106,9 +136,16 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
     if (!oa || selected.size === 0) return;
     setGenerating(true);
     try {
-      const overrides: Record<string, number> = {};
-      for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
-      const pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
+      let pi;
+      if (isMR) {
+        const amtOverrides: Record<string, number> = {};
+        for (const it of selectedItems) amtOverrides[it.id] = piAmountFor(it);
+        pi = await createPiFromOaItems(oa, Array.from(selected), undefined, amtOverrides);
+      } else {
+        const overrides: Record<string, number> = {};
+        for (const it of selectedItems) overrides[it.id] = piQtyFor(it);
+        pi = await createPiFromOaItems(oa, Array.from(selected), overrides);
+      }
       toast({
         title: `PI ${pi.pi_number} created`,
         description: `${selectedItems.length} item(s) included.`,
