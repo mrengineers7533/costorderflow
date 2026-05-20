@@ -184,6 +184,11 @@ Deno.serve(async (req) => {
             },
             cost_sheet_number: { type: "string" },
             reference: { type: "string" },
+            cost_sheet_date: { type: "string", description: "Date printed on the cost sheet, as-is." },
+            total_a: { type: "number", description: "Sub-total against 'Total (A)' on the Cost of Project page (machinery sections)." },
+            total_other_b: { type: "number", description: "Sub-total against 'Total (Other B)' / 'Other Charges Total' on the Cost of Project page." },
+            cost_of_project: { type: "number", description: "Printed 'Cost of Project' / 'Total (A+B)' amount, if shown." },
+            client_scope_amount: { type: "number", description: "Total amount of the Client Scope / Customer Scope section, if shown (or sum of its items)." },
             line_items: {
               type: "array",
               items: {
