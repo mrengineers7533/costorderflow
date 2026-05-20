@@ -73,6 +73,9 @@ export default function OrderEditor() {
   const [billTo, setBillTo] = useState<Address>(emptyAddress);
   const [shipTo, setShipTo] = useState<Address>(emptyAddress);
   const [sameAsBill, setSameAsBill] = useState(true);
+  // Toggle for the optional Model & Remarks columns in the OA item table.
+  // Hidden by default; click "Show Model & Remarks" to reveal them.
+  const [showItemExtras, setShowItemExtras] = useState(false);
   const [reference, setReference] = useState("");
   const [costSheetNumber, setCostSheetNumber] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
@@ -874,6 +877,14 @@ export default function OrderEditor() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2"><CardTitle>Line Items</CardTitle>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={showItemExtras ? "secondary" : "outline"}
+                onClick={() => setShowItemExtras((v) => !v)}
+                title="Show/hide Model & Remarks columns"
+              >
+                {showItemExtras ? "Hide" : "Show"} Model & Remarks
+              </Button>
               {(hasMR || hasGMS) && (
                 <ToggleGroup
                   type="single"
@@ -905,7 +916,7 @@ export default function OrderEditor() {
               </div>
             )}
             <div className="space-y-2">
-              <div className="grid grid-cols-14 gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
+              <div className="grid gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 18 : 14}, minmax(0, 1fr))` }}>
                 <div className="col-span-4">Description</div>
                 <div className="col-span-2">Make</div>
                 <div className="col-span-1">Qty</div>
@@ -913,11 +924,13 @@ export default function OrderEditor() {
                 <div className="col-span-2">Rate</div>
                 <div className="col-span-1">Make</div>
                 <div className="col-span-2 text-right">Amount</div>
+                {showItemExtras && <div className="col-span-2">Model</div>}
+                {showItemExtras && <div className="col-span-2">Remarks</div>}
                 <div className="col-span-1" />
               </div>
               {editorItems.map((it, idx) => (
                 <div key={it.id} className="space-y-1.5">
-                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }}>
+                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 18 : 14}, minmax(0, 1fr))` }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
@@ -932,6 +945,22 @@ export default function OrderEditor() {
                     </SelectContent>
                   </Select>
                   <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
+                  {showItemExtras && (
+                    <Input
+                      className="col-span-2"
+                      value={it.model || ""}
+                      onChange={(e) => updateItemById(it.id, { model: e.target.value })}
+                      placeholder="Model"
+                    />
+                  )}
+                  {showItemExtras && (
+                    <Input
+                      className="col-span-2"
+                      value={it.remarks || ""}
+                      onChange={(e) => updateItemById(it.id, { remarks: e.target.value })}
+                      placeholder="Remarks"
+                    />
+                  )}
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
                 {designReview && (

@@ -27,6 +27,10 @@ export interface LineItem {
   amount: number;
   /** Which company makes this item. Drives MR vs GMS OA split. */
   make?: "MR" | "GMS" | "OTHER";
+  /** Optional Model & Remarks — surfaced in OA editor (hidden by default)
+   *  and propagated to the BOQ. Do not affect calculations or PDF totals. */
+  model?: string;
+  remarks?: string;
 }
 
 export interface Charges {
