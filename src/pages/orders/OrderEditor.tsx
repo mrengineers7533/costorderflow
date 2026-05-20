@@ -97,6 +97,10 @@ export default function OrderEditor() {
   // Columns hidden from the rendered PDF / preview only. Not persisted —
   // it's an export-time toggle and does not affect saved data.
   const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
+  // Client Copy: when true, MHE / Spouting / Fan / Magnet rows are collapsed
+  // into a single labelled summary row. Default OFF so Client Copy mirrors
+  // the main OA item-by-item. Persisted on the order row.
+  const [clientCopyGrouped, setClientCopyGrouped] = useState<boolean>(false);
 
   // PI item-selection dialog state (opened from "Convert to PI" button).
   const [piDialogOpen, setPiDialogOpen] = useState(false);
