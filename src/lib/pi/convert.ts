@@ -3,6 +3,7 @@ import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurtha
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 
 export interface OaItemPiStatus {
   done: boolean;
@@ -121,6 +122,13 @@ export async function createPiFromOaItems(
   if (filteredItems.length === 0) {
     throw new Error("Selected items were not found on this OA.");
   }
+
+  // Apply the OA's Client Copy grouping preference so the PI mirrors the
+  // Client Copy view (PI is generated from the Client Copy OA).
+  const grouped = Boolean(
+    (oa as unknown as { client_copy_grouping?: boolean }).client_copy_grouping,
+  );
+  const piItems = buildClientCopyItems(filteredItems, { grouped });
 
   const fy = getFinancialYear(new Date());
   const { data: piNum, error: numErr } = await supabase.rpc("next_pi_number", {
