@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import type { PiRecord } from "./types";
 import { calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import { calcPiTotals } from "./calc";
+import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 
 /**
  * Build a PI .xlsx that mirrors the OA layout for the same revision:
