@@ -37,6 +37,7 @@ import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
+import type { BoqLineItem } from "@/lib/boq/types";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
