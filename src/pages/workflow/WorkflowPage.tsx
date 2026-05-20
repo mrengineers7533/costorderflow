@@ -222,8 +222,11 @@ export default function WorkflowPage() {
     return families.filter((f) => {
       if (q) {
         const hay = [
-          f.company, f.current.oa_number, f.original.oa_number,
-          f.current.cost_sheet_number,
+          f.company,
+          f.current?.oa_number,
+          f.original?.oa_number,
+          f.current?.cost_sheet_number,
+          f.costSheetNumber,
           f.boqs.map((b) => b.boq_number).join(" "),
           f.pis.map((p) => p.pi_number).join(" "),
         ].join(" ").toLowerCase();
