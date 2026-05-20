@@ -605,3 +605,270 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   );
 }
 
+
+// ============================================================================
+// Horizontal Stage Strip
+// ============================================================================
+
+type StageStatus = "done" | "awaiting" | "pending";
+
+interface RevisionItem {
+  id: string;
+  label: string;
+  sub: string;
+  href?: string;
+  copyText?: string;
+  copyLabel?: string;
+  current?: boolean;
+}
+
+interface StageDef {
+  id: number;
+  label: string;
+  icon: React.ReactNode;
+  status: StageStatus;
+  summary: string;
+  detail: React.ReactNode;
+  revisions: RevisionItem[];
+}
+
+function fmtShortINR(n: number): string {
+  if (!n) return "—";
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)}Cr`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(1)}L`;
+  if (n >= 1e3) return `₹${(n / 1e3).toFixed(0)}k`;
+  return `₹${n}`;
+}
+
+function HorizontalStageStrip({
+  stages,
+  globalRevisionsOpen,
+}: {
+  stages: StageDef[];
+  globalRevisionsOpen: boolean;
+}) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [revisionsOpenId, setRevisionsOpenId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (globalRevisionsOpen && expandedId != null) {
+      setRevisionsOpenId(expandedId);
+    }
+  }, [globalRevisionsOpen, expandedId]);
+
+  const expanded = stages.find((s) => s.id === expandedId) || null;
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto pb-2">
+        <div className="flex items-stretch gap-1.5 min-w-min">
+          {stages.map((s, i) => (
+            <div key={s.id} className="flex items-stretch gap-1.5 shrink-0">
+              <StageCard
+                stage={s}
+                expanded={expandedId === s.id}
+                onToggle={() =>
+                  setExpandedId((prev) => (prev === s.id ? null : s.id))
+                }
+                showRevisionsHint={globalRevisionsOpen}
+              />
+              {i < stages.length - 1 && (
+                <div className="flex items-center text-muted-foreground shrink-0">
+                  <ChevronRight className="h-4 w-4" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-background border grid place-items-center text-[11px] font-semibold tabular-nums">
+              {expanded.id}
+            </div>
+            <div className="text-muted-foreground">{expanded.icon}</div>
+            <div className="text-sm font-semibold">{expanded.label}</div>
+            <StatusBadge status={expanded.status} />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7"
+              onClick={() => setExpandedId(null)}
+            >
+              <ChevronUp className="h-3.5 w-3.5 mr-1" />
+              Close
+            </Button>
+          </div>
+          <div>{expanded.detail}</div>
+          {expanded.revisions.length > 0 && (
+            <div className="pt-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() =>
+                  setRevisionsOpenId((prev) =>
+                    prev === expanded.id ? null : expanded.id,
+                  )
+                }
+              >
+                {revisionsOpenId === expanded.id ? (
+                  <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 mr-1" />
+                )}
+                Revisions ({expanded.revisions.length})
+              </Button>
+              {revisionsOpenId === expanded.id && (
+                <RevisionsChips items={expanded.revisions} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StageCard({
+  stage,
+  expanded,
+  onToggle,
+  showRevisionsHint,
+}: {
+  stage: StageDef;
+  expanded: boolean;
+  onToggle: () => void;
+  showRevisionsHint: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-44 shrink-0 rounded-md border bg-card p-2.5 text-left flex flex-col gap-1.5 transition-colors hover:bg-accent/50 ${
+        expanded ? "ring-2 ring-primary" : ""
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        <div className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[11px] font-semibold tabular-nums shrink-0">
+          {stage.id}
+        </div>
+        <div className="text-muted-foreground shrink-0">{stage.icon}</div>
+        <div className="ml-auto">
+          {expanded ? (
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </div>
+      </div>
+      <div className="text-xs font-medium leading-snug line-clamp-2">
+        {stage.label}
+      </div>
+      <div className="flex items-center justify-between gap-1">
+        <StatusBadge status={stage.status} />
+        {showRevisionsHint && stage.revisions.length > 0 && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0">
+            {stage.revisions.length} rev
+          </Badge>
+        )}
+      </div>
+      <div className="text-[11px] text-muted-foreground truncate">
+        {stage.summary}
+      </div>
+    </button>
+  );
+}
+
+function StatusBadge({ status }: { status: StageStatus }) {
+  if (status === "done") {
+    return (
+      <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[9px] px-1.5 py-0">
+        Done
+      </Badge>
+    );
+  }
+  if (status === "awaiting") {
+    return (
+      <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+        Awaiting
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+      Pending
+    </Badge>
+  );
+}
+
+function DetailGrid({ items }: { items: [string, string | null | undefined][] }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+      {items.map(([k, v], i) => (
+        <div key={i} className="rounded border bg-card px-2 py-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {k}
+          </div>
+          <div className="font-medium truncate">{v || "—"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetailActions({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-1.5 pt-2">{children}</div>;
+}
+
+function EmptyDetail({ text }: { text: string }) {
+  return <div className="text-xs text-muted-foreground italic">{text}</div>;
+}
+
+function RevisionsChips({ items }: { items: RevisionItem[] }) {
+  return (
+    <div className="overflow-x-auto pt-1.5">
+      <div className="flex items-center gap-1.5 min-w-min">
+        {items.map((r, i) => (
+          <div key={r.id} className="flex items-center gap-1.5 shrink-0">
+            <div
+              className={`rounded border bg-card px-2 py-1 text-[11px] flex items-center gap-1.5 ${
+                r.current ? "border-primary" : ""
+              }`}
+            >
+              <span className="font-mono font-semibold">{r.label}</span>
+              <span className="text-muted-foreground">{r.sub}</span>
+              {r.current && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0">
+                  current
+                </Badge>
+              )}
+              {r.href && (
+                <Link to={r.href}>
+                  <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]">
+                    Open
+                  </Button>
+                </Link>
+              )}
+              {r.copyText && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-5 px-1.5 text-[10px]"
+                  onClick={() => copy(r.copyText!, r.copyLabel || "Link copied")}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            {i < items.length - 1 && (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
