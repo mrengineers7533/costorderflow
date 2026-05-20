@@ -525,7 +525,8 @@ export default function OrderEditor() {
       created_at: "", updated_at: "",
       parent_order_id: parentOrderId || orderId || "",
       revision, is_current: isCurrent,
-    };
+      ...( { client_copy_grouping: clientCopyGrouped } as Record<string, unknown> ),
+    } as OrderRecord;
   }
 
   async function handleReviseOa() {
