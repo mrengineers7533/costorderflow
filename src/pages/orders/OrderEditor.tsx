@@ -1021,6 +1021,15 @@ export default function OrderEditor() {
                   })()}
                   <Button size="icon" variant="ghost" className="col-span-1" onClick={() => removeItemById(it.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
+                {!isNew && parentOrderId && (
+                  <div className="flex justify-end -mt-1">
+                    <ItemChangeHistoryButton
+                      rootOrderId={parentOrderId}
+                      item={it}
+                      approvalStatus={approvalByOaItem.get(it.id)}
+                    />
+                  </div>
+                )}
                 {designReview && (
                   <OaDesignSuggestionRow
                     reviewItem={findReviewItemForOaItem(designReview.items, it, idx)}
