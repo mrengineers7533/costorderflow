@@ -331,7 +331,7 @@ export default function OrderEditor() {
   // Debounced auto-save trigger used by the design "Apply" buttons. Defers
   // to allow React state (model/remarks) to flush before save() reads it.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveRef = useRef<((finalize: boolean) => Promise<void>) | null>(null);
+  const saveRef = useRef<((finalize: boolean) => Promise<unknown>) | null>(null);
   function scheduleAutoSave() {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
