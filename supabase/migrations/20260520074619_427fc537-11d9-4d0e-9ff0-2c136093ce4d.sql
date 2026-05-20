@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS client_copy_grouping boolean NOT NULL DEFAULT false;
