@@ -48,6 +48,14 @@ CRITICAL EXTRACTION RULES:
    - "OTHER" → anything else (third-party bought-out items). Default unknowns to "OTHER".
    The user will generate a separate OA per make (one MR OA, one GMS OA), so accuracy here matters more than the description text.
 
+9. SUMMARY TOTALS (mandatory when present on the Cost of Project / summary page):
+   a. total_a — the sub-total printed against "Total (A)" / "Total A" / "Sub Total A" on the Cost of Project page (machinery / equipment sections sub-total).
+   b. total_other_b — the sub-total printed against "Total (Other B)" / "Total Other B" / "Total B" / "Other Charges Total" on the Cost of Project / Other Charges page.
+   c. cost_of_project — the printed "Cost of Project" / "Total Cost of Project" / "Total (A + B)" amount, if shown. If only A and B are shown, leave cost_of_project blank — the app will compute A+B itself.
+   d. client_scope_amount — the total amount printed against "Client Scope" / "Customer Scope" / "By Client" section (if a total is shown). If the Client Scope page lists individual items with prices but no total, sum those prices and return the sum.
+   e. cost_sheet_date — the date printed on the cost sheet (any standard format; return as-is).
+   All five fields must be plain numbers (no commas, no currency symbols); date is a string. Omit a field only if it is genuinely not printed anywhere on the PDF.
+
 Return your output by calling the extract_cost_sheet function. If a field is not present, omit it. Numbers must be plain numbers (no currency symbols, no commas).`;
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
