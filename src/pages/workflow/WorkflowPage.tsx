@@ -227,6 +227,11 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const revisedBoq = (f.boqs.length > 1 && approved) ? (f.currentBoq || null) : null;
   const finalToken = (f.currentBoq as unknown as { final_share_token?: string | null } | null)?.final_share_token || null;
 
+  const activity = useMemo(
+    () => buildActivity(f, csNumber, csDate, csTotal),
+    [f, csNumber, csDate, csTotal],
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -236,6 +241,14 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activity Timeline</div>
+            <div className="text-[11px] text-muted-foreground">{activity.length} event(s)</div>
+          </div>
+          <ActivityTimeline events={activity} showHistory={historyOpen} />
+        </div>
+
         <Step n={1} icon={<FileSpreadsheet className="h-4 w-4" />} label="Cost Sheet Upload"
           done={!!f.costSheet}
           meta={[`CS#: ${csNumber}`, `Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null]} />
@@ -329,6 +342,188 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
         <HistorySection family={f} defaultOpen={historyOpen} />
       </CardContent>
     </Card>
+  );
+}
+
+type ActivityEvent = {
+  id: string;
+  ts: string;
+  icon: React.ReactNode;
+  title: string;
+  details: (string | null | undefined)[];
+  status?: { label: string; tone: "ok" | "warn" | "muted" };
+  href?: string;
+  copyText?: string;
+  copyLabel?: string;
+  isHistory?: boolean;
+};
+
+function buildActivity(f: Family, csNumber: string, csDate: string | undefined, csTotal: number): ActivityEvent[] {
+  const evs: ActivityEvent[] = [];
+
+  if (f.costSheet) {
+    evs.push({
+      id: `cs-${f.costSheet.id}`,
+      ts: f.costSheet.created_at,
+      icon: <FileSpreadsheet className="h-4 w-4" />,
+      title: "Cost Sheet uploaded",
+      details: [`CS#: ${csNumber}`, `CS Date: ${fmtDate(csDate)}`, csTotal ? `Total: ${fmtINR(csTotal)}` : null, `File: ${f.costSheet.original_filename}`],
+      status: { label: "Uploaded", tone: "ok" },
+    });
+  }
+
+  // Each OA creation / revision (chronological)
+  for (const o of f.orders) {
+    const amt = o.totals?.net_payable || o.totals?.subtotal || 0;
+    const isRev = (o.revision ?? 0) > 0;
+    evs.push({
+      id: `oa-${o.id}`,
+      ts: o.created_at || o.order_date,
+      icon: <FileText className="h-4 w-4" />,
+      title: isRev
+        ? `${o.format} OA revised to R${o.revision}`
+        : `${o.format} OA created`,
+      details: [o.oa_number, `Date: ${fmtDate(o.order_date)}`, amt ? `Amount: ${fmtINR(amt)}` : null],
+      status: { label: o.is_current ? "Current" : `R${o.revision ?? 0}`, tone: o.is_current ? "ok" : "muted" },
+      href: `/orders/${o.id}`,
+      isHistory: isRev && !o.is_current,
+    });
+  }
+
+  // Each BOQ creation / revision
+  for (const b of f.boqs) {
+    const isRev = (b.revision ?? 0) > 0;
+    evs.push({
+      id: `boq-${b.id}`,
+      ts: b.created_at || b.boq_date,
+      icon: <ClipboardList className="h-4 w-4" />,
+      title: isRev ? `BOQ auto-revised to R${b.revision}` : "BOQ auto-generated",
+      details: [b.boq_number, `Date: ${fmtDate(b.boq_date)}`, `Status: ${b.status}`],
+      status: { label: b.is_current ? "Current" : `R${b.revision ?? 0}`, tone: b.is_current ? "ok" : "muted" },
+      href: `/boqs/${b.id}`,
+      isHistory: isRev && !b.is_current,
+    });
+    const fst = (b as unknown as { final_share_token?: string | null; final_sent_at?: string | null });
+    if (fst.final_sent_at) {
+      evs.push({
+        id: `boq-final-${b.id}`,
+        ts: fst.final_sent_at,
+        icon: <Share2 className="h-4 w-4" />,
+        title: "Final BOQ link sent (Purchase & Manufacturing)",
+        details: [b.boq_number, fst.final_share_token ? "Share link active" : null],
+        status: { label: "Sent", tone: "ok" },
+        copyText: fst.final_share_token ? finalBoqLink(fst.final_share_token) : undefined,
+        copyLabel: "Final BOQ link copied",
+        href: `/boqs/${b.id}`,
+        isHistory: !b.is_current,
+      });
+    }
+  }
+
+  // Each design review: sent + submitted as separate events
+  for (const r of f.reviews) {
+    const isCommentR1 = r.kind === "comment" && r.round_no === 1;
+    const kindLabel = r.kind === "approval" ? "Approval" : "Comment";
+    evs.push({
+      id: `dr-sent-${r.id}`,
+      ts: r.sent_at,
+      icon: <Send className="h-4 w-4" />,
+      title: r.kind === "approval"
+        ? `OA sent for Design Approval (R${r.round_no})`
+        : `Design ${kindLabel} link sent (R${r.round_no})`,
+      details: [`Round R${r.round_no}`, `Expires: ${fmtDate(r.expires_at)}`],
+      status: { label: r.status === "submitted" ? "Submitted" : "Sent", tone: r.status === "submitted" ? "ok" : "warn" },
+      copyText: reviewLink(r.token),
+      copyLabel: `${kindLabel} link copied`,
+      isHistory: !isCommentR1 && r.kind === "comment" && r.round_no > 1,
+    });
+    if (r.submitted_at) {
+      evs.push({
+        id: `dr-sub-${r.id}`,
+        ts: r.submitted_at,
+        icon: <RefreshCw className="h-4 w-4" />,
+        title: r.kind === "approval"
+          ? (r.overall_outcome === "approved" ? `Design Approval received (R${r.round_no})` : `Design Approval response (R${r.round_no})`)
+          : `Design Team submitted comments (R${r.round_no})`,
+        details: [`Outcome: ${r.overall_outcome || "—"}`],
+        status: {
+          label: r.overall_outcome === "approved" ? "Approved" : (r.overall_outcome || "Submitted"),
+          tone: r.overall_outcome === "approved" ? "ok" : "warn",
+        },
+        isHistory: !isCommentR1 && r.kind === "comment" && r.round_no > 1,
+      });
+    }
+  }
+
+  // PIs
+  for (const p of f.pis) {
+    const isRev = (p.revision ?? 0) > 0;
+    const amt = p.totals?.net_payable || p.totals?.subtotal || 0;
+    evs.push({
+      id: `pi-${p.id}`,
+      ts: p.created_at || p.pi_date,
+      icon: <Receipt className="h-4 w-4" />,
+      title: isRev ? `PI revised to R${p.revision}` : "Converted to PI",
+      details: [p.pi_number, `Date: ${fmtDate(p.pi_date)}`, amt ? `Amount: ${fmtINR(amt)}` : null],
+      status: { label: p.is_current ? "Current" : `R${p.revision ?? 0}`, tone: p.is_current ? "ok" : "muted" },
+      href: `/pi/${p.id}`,
+      isHistory: isRev && !p.is_current,
+    });
+  }
+
+  evs.sort((a, b) => (a.ts || "").localeCompare(b.ts || ""));
+  return evs;
+}
+
+function ActivityTimeline({ events, showHistory }: { events: ActivityEvent[]; showHistory: boolean }) {
+  const visible = showHistory ? events : events.filter((e) => !e.isHistory);
+  const hiddenCount = events.length - visible.length;
+  if (!visible.length) return <p className="text-xs text-muted-foreground">No activity yet.</p>;
+  return (
+    <div className="space-y-2">
+      {visible.map((e, i) => (
+        <div key={e.id} className="flex gap-3">
+          <div className="flex flex-col items-center pt-1">
+            <div className="h-7 w-7 rounded-full bg-muted grid place-items-center text-muted-foreground">{e.icon}</div>
+            {i < visible.length - 1 && <div className="w-px flex-1 bg-border my-1" />}
+          </div>
+          <div className="flex-1 min-w-0 rounded-md border bg-card p-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">{e.title}</div>
+                <div className="text-[11px] text-muted-foreground">{fmtDateTime(e.ts)}</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {e.status && (
+                  <Badge
+                    variant={e.status.tone === "ok" ? "default" : e.status.tone === "warn" ? "secondary" : "outline"}
+                    className={e.status.tone === "ok" ? "bg-emerald-600 hover:bg-emerald-600" : ""}
+                  >
+                    {e.status.label}
+                  </Badge>
+                )}
+                {e.copyText && (
+                  <Button size="sm" variant="outline" onClick={() => copy(e.copyText!, e.copyLabel || "Link copied")}>
+                    <Copy className="h-3.5 w-3.5 mr-1" />Copy
+                  </Button>
+                )}
+                {e.href && <Link to={e.href}><Button size="sm" variant="outline">Open</Button></Link>}
+              </div>
+            </div>
+            {e.details.filter(Boolean).length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                {e.details.filter(Boolean).map((d, idx) => <span key={idx}>{d}</span>)}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {!showHistory && hiddenCount > 0 && (
+        <p className="text-[11px] text-muted-foreground pl-10">
+          {hiddenCount} revision/historical entr{hiddenCount === 1 ? "y" : "ies"} hidden. Use "Show Revision History" to view.
+        </p>
+      )}
+    </div>
   );
 }
 
