@@ -277,11 +277,318 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
   const updatedOa = f.orders.length > 1 ? f.current : null;
   const revisedBoq = (f.boqs.length > 1 && approved) ? (f.currentBoq || null) : null;
   const finalToken = (f.currentBoq as unknown as { final_share_token?: string | null } | null)?.final_share_token || null;
+  const finalSentAt = (f.currentBoq as unknown as { final_sent_at?: string | null } | null)?.final_sent_at || null;
 
-  const activity = useMemo(
-    () => buildActivity(f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope),
-    [f, csNumber, csDate, csTotal, csTotalA, csTotalB, csClientScope],
-  );
+  const oaRevs = f.orders.filter((o) => (o.revision ?? 0) > 0);
+  const boqRevs = f.boqs.filter((b) => (b.revision ?? 0) > 0);
+  const commentReviews = f.reviews.filter((r) => r.kind === "comment");
+  const approvalReviews = f.reviews.filter((r) => r.kind === "approval");
+
+  const stages: StageDef[] = [
+    {
+      id: 1, label: "Cost Sheet Upload", icon: <FileSpreadsheet className="h-4 w-4" />,
+      status: f.costSheet ? "done" : "pending",
+      summary: f.costSheet ? `CS#${csNumber}` : "—",
+      detail: (
+        <DetailGrid items={[
+          ["CS Number", csNumber],
+          ["CS Date", fmtDate(csDate)],
+          ["Total (A)", csTotalA ? fmtINR(csTotalA) : "—"],
+          ["Total (Other B)", csTotalB ? fmtINR(csTotalB) : "—"],
+          ["Cost of Project (A+B)", csTotal ? fmtINR(csTotal) : "—"],
+          ["Client Scope", csClientScope ? fmtINR(csClientScope) : "—"],
+          ["File", f.costSheet?.original_filename || "—"],
+        ]} />
+      ),
+      revisions: [],
+    },
+    {
+      id: 2, label: "MR OA", icon: <FileText className="h-4 w-4" />,
+      status: f.mrOa ? "done" : "pending",
+      summary: f.mrOa ? `${f.mrOa.oa_number} · ${fmtShortINR(mrBasic)}` : "—",
+      detail: f.mrOa ? (
+        <>
+          <DetailGrid items={[
+            ["OA Number", f.mrOa.oa_number],
+            ["Date", fmtDate(f.mrOa.order_date)],
+            ["Basic", fmtINR(mrBasic)],
+            ["Revision", `R${f.mrOa.revision ?? 0}`],
+          ]} />
+          <DetailActions>
+            <Link to={`/orders/${f.mrOa.id}`}><Button size="sm" variant="outline">Open MR OA</Button></Link>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="No MR OA yet." />,
+      revisions: f.orders.filter((o) => o.format === "MR").map((o) => ({
+        id: o.id, label: `R${o.revision ?? 0}`,
+        sub: `${o.oa_number} · ${fmtDate(o.order_date)} · ${fmtShortINR(o.totals?.net_payable || o.totals?.subtotal || 0)}`,
+        href: `/orders/${o.id}`,
+        current: !!o.is_current,
+      })),
+    },
+    {
+      id: 3, label: "GMS OA", icon: <FileText className="h-4 w-4" />,
+      status: f.gmsOa ? "done" : "pending",
+      summary: f.gmsOa ? `${f.gmsOa.oa_number} · ${fmtShortINR(gmsAmt)}` : "—",
+      detail: f.gmsOa ? (
+        <>
+          <DetailGrid items={[
+            ["OA Number", f.gmsOa.oa_number],
+            ["Date", fmtDate(f.gmsOa.order_date)],
+            ["Amount", fmtINR(gmsAmt)],
+            ["Revision", `R${f.gmsOa.revision ?? 0}`],
+          ]} />
+          <DetailActions>
+            <Link to={`/orders/${f.gmsOa.id}`}><Button size="sm" variant="outline">Open GMS OA</Button></Link>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="No GMS OA yet." />,
+      revisions: f.orders.filter((o) => o.format === "GMS").map((o) => ({
+        id: o.id, label: `R${o.revision ?? 0}`,
+        sub: `${o.oa_number} · ${fmtDate(o.order_date)} · ${fmtShortINR(o.totals?.net_payable || o.totals?.subtotal || 0)}`,
+        href: `/orders/${o.id}`,
+        current: !!o.is_current,
+      })),
+    },
+    (() => {
+      const firstBoq = f.boqs[0] || null;
+      return {
+        id: 4, label: "Auto BOQ", icon: <ClipboardList className="h-4 w-4" />,
+        status: firstBoq ? "done" : "pending",
+        summary: firstBoq ? `${firstBoq.boq_number}` : "No BOQ",
+        detail: firstBoq ? (
+          <>
+            <DetailGrid items={[
+              ["BOQ Number", firstBoq.boq_number],
+              ["Date", fmtDate(firstBoq.boq_date)],
+              ["Status", firstBoq.status],
+              ["Revision", `R${firstBoq.revision ?? 0}`],
+            ]} />
+            <DetailActions>
+              <Link to={`/boqs/${firstBoq.id}`}><Button size="sm" variant="outline">Open BOQ</Button></Link>
+            </DetailActions>
+          </>
+        ) : <EmptyDetail text="BOQ not generated yet." />,
+        revisions: [],
+      };
+    })(),
+    {
+      id: 5, label: "Design Link Sent", icon: <Send className="h-4 w-4" />,
+      status: commentRound ? "done" : "pending",
+      summary: commentRound ? `R${commentRound.round_no} sent` : "Not sent",
+      detail: commentRound ? (
+        <>
+          <DetailGrid items={[
+            ["Round", `R${commentRound.round_no}`],
+            ["Sent", fmtDateTime(commentRound.sent_at)],
+            ["Expires", fmtDate(commentRound.expires_at)],
+            ["Status", commentRound.status],
+          ]} />
+          <DetailActions>
+            <Button size="sm" variant="outline" onClick={() => copy(reviewLink(commentRound.token), "Comment link copied")}>
+              <Copy className="h-3.5 w-3.5 mr-1" />Copy Design Link
+            </Button>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="Design comment link not generated yet." />,
+      revisions: commentReviews.map((r) => ({
+        id: r.id, label: `R${r.round_no}`,
+        sub: `Sent ${fmtDateTime(r.sent_at)}${r.submitted_at ? ` · Submitted ${fmtDateTime(r.submitted_at)}` : ""}`,
+        copyText: reviewLink(r.token),
+        copyLabel: "Comment link copied",
+        current: r.id === commentRound?.id,
+      })),
+    },
+    {
+      id: 6, label: "Comments Received", icon: <RefreshCw className="h-4 w-4" />,
+      status: commentSubmitted ? "done" : commentRound ? "awaiting" : "pending",
+      summary: commentSubmitted ? `R${commentSubmitted.round_no} ${commentSubmitted.overall_outcome || "received"}` : commentRound ? "Awaiting" : "—",
+      detail: commentSubmitted ? (
+        <DetailGrid items={[
+          ["Round", `R${commentSubmitted.round_no}`],
+          ["Submitted", fmtDateTime(commentSubmitted.submitted_at)],
+          ["Outcome", commentSubmitted.overall_outcome || "—"],
+        ]} />
+      ) : <EmptyDetail text={commentRound ? "Awaiting design team response." : "Comments not received yet."} />,
+      revisions: commentReviews.filter((r) => r.submitted_at).map((r) => ({
+        id: `sub-${r.id}`, label: `R${r.round_no}`,
+        sub: `Submitted ${fmtDateTime(r.submitted_at)} · ${r.overall_outcome || "—"}`,
+        current: r.id === commentSubmitted?.id,
+      })),
+    },
+    {
+      id: 7, label: "Update OA", icon: <FileText className="h-4 w-4" />,
+      status: updatedOa ? "done" : "pending",
+      summary: updatedOa ? `${updatedOa.oa_number} R${updatedOa.revision ?? 0}` : "No revision",
+      detail: updatedOa ? (
+        <>
+          <DetailGrid items={[
+            ["OA Number", updatedOa.oa_number],
+            ["Format", updatedOa.format],
+            ["Revision", `R${updatedOa.revision ?? 0}`],
+            ["Date", fmtDate(updatedOa.order_date)],
+          ]} />
+          <DetailActions>
+            <Link to={`/orders/${updatedOa.id}`}><Button size="sm" variant="outline">Open Updated OA</Button></Link>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="OA not yet updated against design comments." />,
+      revisions: oaRevs.map((o) => ({
+        id: o.id, label: `R${o.revision}`,
+        sub: `${o.oa_number} · ${o.format} · ${fmtDate(o.order_date)}`,
+        href: `/orders/${o.id}`,
+        current: !!o.is_current,
+      })),
+    },
+    {
+      id: 8, label: "Auto-Revised BOQ", icon: <ClipboardList className="h-4 w-4" />,
+      status: boqRevs.length > 0 ? "done" : "pending",
+      summary: boqRevs.length > 0 ? `${boqRevs[boqRevs.length - 1].boq_number} R${boqRevs[boqRevs.length - 1].revision}` : "—",
+      detail: boqRevs.length > 0 ? (
+        <>
+          <DetailGrid items={[
+            ["BOQ Number", boqRevs[boqRevs.length - 1].boq_number],
+            ["Revision", `R${boqRevs[boqRevs.length - 1].revision}`],
+            ["Date", fmtDate(boqRevs[boqRevs.length - 1].boq_date)],
+            ["Status", boqRevs[boqRevs.length - 1].status],
+          ]} />
+          <DetailActions>
+            <Link to={`/boqs/${boqRevs[boqRevs.length - 1].id}`}><Button size="sm" variant="outline">Open Revised BOQ</Button></Link>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="BOQ not yet auto-revised." />,
+      revisions: boqRevs.map((b) => ({
+        id: b.id, label: `R${b.revision}`,
+        sub: `${b.boq_number} · ${fmtDate(b.boq_date)} · ${b.status}`,
+        href: `/boqs/${b.id}`,
+        current: !!b.is_current,
+      })),
+    },
+    {
+      id: 9, label: "Sent for Approval", icon: <Link2 className="h-4 w-4" />,
+      status: approvalRound ? "done" : "pending",
+      summary: approvalRound ? `R${approvalRound.round_no} sent` : "Not sent",
+      detail: approvalRound ? (
+        <>
+          <DetailGrid items={[
+            ["Round", `R${approvalRound.round_no}`],
+            ["Sent", fmtDateTime(approvalRound.sent_at)],
+            ["Expires", fmtDate(approvalRound.expires_at)],
+            ["Status", approvalSubmitted ? `Submitted · ${approvalSubmitted.overall_outcome || "—"}` : "Awaiting"],
+          ]} />
+          <DetailActions>
+            <Button size="sm" variant="outline" onClick={() => copy(reviewLink(approvalRound.token), "Approval link copied")}>
+              <Copy className="h-3.5 w-3.5 mr-1" />Copy Approval Link
+            </Button>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="Approval link not generated yet." />,
+      revisions: approvalReviews.map((r) => ({
+        id: r.id, label: `R${r.round_no}`,
+        sub: `Sent ${fmtDateTime(r.sent_at)}${r.submitted_at ? ` · ${r.overall_outcome || "submitted"}` : ""}`,
+        copyText: reviewLink(r.token),
+        copyLabel: "Approval link copied",
+        current: r.id === approvalRound?.id,
+      })),
+    },
+    {
+      id: 10, label: "Approval Received", icon: <CheckCircle2 className="h-4 w-4" />,
+      status: approved ? "done" : approvalRound ? "awaiting" : "pending",
+      summary: approved ? `R${approvalSubmitted?.round_no} approved` : approvalRound ? "Awaiting" : "—",
+      detail: approved ? (
+        <DetailGrid items={[
+          ["Round", `R${approvalSubmitted?.round_no}`],
+          ["Received", fmtDateTime(approvalSubmitted?.submitted_at)],
+          ["Outcome", approvalSubmitted?.overall_outcome || "approved"],
+          ["Revised BOQ", revisedBoq ? `${revisedBoq.boq_number} R${revisedBoq.revision ?? 0}` : "—"],
+        ]} />
+      ) : <EmptyDetail text={approvalRound ? "Awaiting design approval." : "Approval not received yet."} />,
+      revisions: approvalReviews.filter((r) => r.submitted_at).map((r) => ({
+        id: `sub-${r.id}`, label: `R${r.round_no}`,
+        sub: `${fmtDateTime(r.submitted_at)} · ${r.overall_outcome || "—"}`,
+        current: r.id === approvalSubmitted?.id,
+      })),
+    },
+    {
+      id: 11, label: "Purchase/Mfg Link", icon: <Share2 className="h-4 w-4" />,
+      status: finalToken ? "done" : "pending",
+      summary: finalToken ? "Link active" : "Not sent",
+      detail: finalToken ? (
+        <>
+          <DetailGrid items={[
+            ["BOQ", f.currentBoq?.boq_number || "—"],
+            ["Sent At", fmtDateTime(finalSentAt)],
+            ["Status", "Active"],
+          ]} />
+          <DetailActions>
+            <Button size="sm" variant="outline" onClick={() => copy(finalBoqLink(finalToken), "Final BOQ link copied")}>
+              <Copy className="h-3.5 w-3.5 mr-1" />Copy Final Link
+            </Button>
+          </DetailActions>
+        </>
+      ) : <EmptyDetail text="Final BOQ link not sent to Purchase/Manufacturing yet." />,
+      revisions: [],
+    },
+    {
+      id: 12, label: "Requisition", icon: <ClipboardCheck className="h-4 w-4" />,
+      status: "pending",
+      summary: "—",
+      detail: <EmptyDetail text="Requisition tracking will appear here once recorded." />,
+      revisions: [],
+    },
+    {
+      id: 13, label: "Purchase", icon: <ShoppingCart className="h-4 w-4" />,
+      status: "pending",
+      summary: "—",
+      detail: <EmptyDetail text="Purchase tracking will appear here once recorded." />,
+      revisions: [],
+    },
+    {
+      id: 14, label: "Manufacturing", icon: <Factory className="h-4 w-4" />,
+      status: "pending",
+      summary: "—",
+      detail: <EmptyDetail text="Manufacturing tracking will appear here once recorded." />,
+      revisions: [],
+    },
+    {
+      id: 15, label: "Make PI", icon: <Receipt className="h-4 w-4" />,
+      status: f.pis.length > 0 ? "done" : "pending",
+      summary: f.pis.length > 0 ? `${f.pis.length} PI(s)` : "No PI",
+      detail: (
+        <>
+          {f.pis.length > 0 ? (
+            <DetailGrid items={[
+              ["PI Numbers", f.pis.map((p) => p.pi_number).join(", ")],
+              ["Count", String(f.pis.length)],
+              ["Latest", f.pis[0]?.pi_number || "—"],
+              ["Date", fmtDate(f.pis[0]?.pi_date)],
+            ]} />
+          ) : (
+            <EmptyDetail text="No PI converted yet." />
+          )}
+          <DetailActions>
+            <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
+            {f.pis.slice(0, 3).map((p) => (
+              <Link key={p.id} to={`/pi/${p.id}`}><Button size="sm" variant="outline">{p.pi_number}</Button></Link>
+            ))}
+          </DetailActions>
+        </>
+      ),
+      revisions: f.pis.map((p) => ({
+        id: p.id, label: `R${p.revision ?? 0}`,
+        sub: `${p.pi_number} · ${fmtDate(p.pi_date)} · ${p.format}`,
+        href: `/pi/${p.id}`,
+        current: !!p.is_current,
+      })),
+    },
+    {
+      id: 16, label: "Dispatch", icon: <Truck className="h-4 w-4" />,
+      status: "pending",
+      summary: "—",
+      detail: <EmptyDetail text="Dispatch tracking will appear here once recorded." />,
+      revisions: [],
+    },
+  ];
 
   return (
     <Card>
@@ -291,113 +598,8 @@ function FamilyCard({ family, historyOpen }: { family: Family; historyOpen: bool
           <div className="text-xs text-muted-foreground font-mono">{f.current.oa_number}</div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activity Timeline</div>
-            <div className="text-[11px] text-muted-foreground">{activity.length} event(s)</div>
-          </div>
-          <ActivityTimeline events={activity} showHistory={historyOpen} />
-        </div>
-
-        <Step n={1} icon={<FileSpreadsheet className="h-4 w-4" />} label="Cost Sheet Upload"
-          done={!!f.costSheet}
-          meta={[
-            `CS#: ${csNumber}`,
-            `Date: ${fmtDate(csDate)}`,
-            csTotalA ? `Total A: ${fmtINR(csTotalA)}` : null,
-            csTotalB ? `Total (Other B): ${fmtINR(csTotalB)}` : null,
-            csTotal ? `Cost of Project (A+B): ${fmtINR(csTotal)}` : null,
-            csClientScope ? `Client Scope: ${fmtINR(csClientScope)}` : null,
-          ]} />
-
-        <Step n={2} icon={<FileText className="h-4 w-4" />} label="MR OA"
-          done={!!f.mrOa}
-          meta={f.mrOa
-            ? [f.mrOa.oa_number, `Date: ${fmtDate(f.mrOa.order_date)}`, `Basic: ${fmtINR(mrBasic)}`]
-            : ["—"]}
-          actions={f.mrOa ? <Link to={`/orders/${f.mrOa.id}`}><Button size="sm" variant="outline">Open</Button></Link> : null} />
-
-        <Step n={3} icon={<FileText className="h-4 w-4" />} label="GMS OA"
-          done={!!f.gmsOa}
-          meta={f.gmsOa
-            ? [f.gmsOa.oa_number, `Date: ${fmtDate(f.gmsOa.order_date)}`, `Amount: ${fmtINR(gmsAmt)}`]
-            : ["—"]}
-          actions={f.gmsOa ? <Link to={`/orders/${f.gmsOa.id}`}><Button size="sm" variant="outline">Open</Button></Link> : null} />
-
-        <Step n={4} icon={<ClipboardList className="h-4 w-4" />} label="Auto BOQ"
-          done={!!f.currentBoq}
-          meta={f.currentBoq
-            ? [f.currentBoq.boq_number, `Date: ${fmtDate(f.currentBoq.boq_date)}`, `R${f.currentBoq.revision ?? 0}`]
-            : ["No BOQ yet"]}
-          actions={f.currentBoq ? <Link to={`/boqs/${f.currentBoq.id}`}><Button size="sm" variant="outline">Open BOQ</Button></Link> : null} />
-
-        <Step n={5} icon={<Send className="h-4 w-4" />} label="Design Link Sent"
-          done={!!commentRound}
-          meta={commentRound
-            ? [`Round R${commentRound.round_no} (Comment)`, `Sent: ${fmtDateTime(commentRound.sent_at)}`]
-            : ["Not generated yet"]}
-          actions={commentRound
-            ? <Button size="sm" variant="outline" onClick={() => copy(reviewLink(commentRound.token), "Comment link copied")}><Copy className="h-3.5 w-3.5 mr-1" />Copy Link</Button>
-            : null} />
-
-        <Step n={6} icon={<RefreshCw className="h-4 w-4" />} label="Design Link Returned"
-          done={!!commentSubmitted}
-          meta={commentSubmitted
-            ? [`Submitted: ${fmtDateTime(commentSubmitted.submitted_at)}`, `Outcome: ${commentSubmitted.overall_outcome || "—"}`]
-            : ["Awaiting Design Team"]} />
-
-        <Step n={7} icon={<FileText className="h-4 w-4" />} label="Update OA"
-          done={!!updatedOa}
-          meta={updatedOa
-            ? [`${updatedOa.oa_number}`, `Revisions: R${updatedOa.revision ?? 0}`]
-            : ["No revision yet"]}
-          actions={updatedOa ? <Link to={`/orders/${updatedOa.id}`}><Button size="sm" variant="outline">Open Updated OA</Button></Link> : null} />
-
-        <Step n={8} icon={<Link2 className="h-4 w-4" />} label="Send Updated OA for Design Approval"
-          done={!!approvalRound}
-          meta={approvalRound
-            ? [
-                `Round R${approvalRound.round_no} (Approval)`,
-                `Sent: ${fmtDateTime(approvalRound.sent_at)}`,
-                approvalSubmitted
-                  ? `Submitted: ${fmtDateTime(approvalSubmitted.submitted_at)} · ${approvalSubmitted.overall_outcome || "—"}`
-                  : `Status: Awaiting`,
-              ]
-            : ["Not generated yet"]}
-          actions={approvalRound
-            ? <Button size="sm" variant="outline" onClick={() => copy(reviewLink(approvalRound.token), "Approval link copied")}><Copy className="h-3.5 w-3.5 mr-1" />Copy Link</Button>
-            : null} />
-
-        <Step n={9} icon={<CheckCircle2 className="h-4 w-4" />} label="After Approval"
-          done={approved}
-          meta={approved
-            ? [`OA revised`, revisedBoq ? `BOQ ${revisedBoq.boq_number} (R${revisedBoq.revision ?? 0})` : "BOQ auto-revised"]
-            : ["Pending design approval"]}
-          actions={approved && revisedBoq ? <Link to={`/boqs/${revisedBoq.id}`}><Button size="sm" variant="outline">Open Revised BOQ</Button></Link> : null} />
-
-        <Step n={10} icon={<Share2 className="h-4 w-4" />} label="Send Links (Purchase & Manufacturing)"
-          done={!!finalToken}
-          meta={finalToken ? ["Final BOQ link active"] : ["Not sent yet"]}
-          actions={finalToken
-            ? <Button size="sm" variant="outline" onClick={() => copy(finalBoqLink(finalToken), "Final BOQ link copied")}><Copy className="h-3.5 w-3.5 mr-1" />Copy Final Link</Button>
-            : null} />
-
-        <Step n={11} icon={<Receipt className="h-4 w-4" />} label="PI Convert"
-          done={f.pis.length > 0}
-          meta={f.pis.length
-            ? [f.pis.map((p) => p.pi_number).join(", "), `${f.pis.length} PI(s)`]
-            : ["No PI yet"]}
-          actions={
-            <div className="flex gap-1">
-              {f.pis.slice(0, 3).map((p) => (
-                <Link key={p.id} to={`/pi/${p.id}`}><Button size="sm" variant="outline">{p.pi_number}</Button></Link>
-              ))}
-              <Link to={`/orders/${f.current.id}`}><Button size="sm">Convert to PI</Button></Link>
-            </div>
-          } />
-
-        <HistorySection family={f} defaultOpen={historyOpen} />
+      <CardContent>
+        <HorizontalStageStrip stages={stages} globalRevisionsOpen={historyOpen} />
       </CardContent>
     </Card>
   );
