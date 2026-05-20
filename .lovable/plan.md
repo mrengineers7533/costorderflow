@@ -1,96 +1,86 @@
 ## Goal
+Rebuild the Workflow page so each project is shown as a single horizontal row of compact stage cards (Example 1 layout). Each stage has its own ▾/▴ toggle that expands an inline detail panel beneath the strip. Per-stage revision history is hidden by default and revealed either by the stage's own toggle or by the global "Show Revision History" button.
 
-Add a new top-level **Workflow** menu item that visualizes the full Cost Sheet → OA → BOQ → Design Review → PI lifecycle for each project family, with revision history kept collapsed by default.
+## Scope
+Edits only `src/pages/workflow/WorkflowPage.tsx`. No data model, RPC, edge function, or other page changes. Existing search, filter chips, routing, and data fetching are preserved.
 
-Read-only view. No changes to existing pages, schemas, RPCs, or business logic.
+## Stage list (16, left → right, horizontal scroll)
+1. Cost Sheet Upload
+2. MR OA
+3. GMS OA
+4. Auto BOQ
+5. Design Link Sent
+6. Comments Received
+7. Update OA (MR/GMS)
+8. Auto-Revised BOQ
+9. Sent for Design Approval
+10. Approval Received
+11. Purchase/Mfg Link Sent
+12. Requisition (placeholder)
+13. Purchase (placeholder)
+14. Manufacturing (placeholder)
+15. Make PI
+16. Dispatch (placeholder)
 
-## Sidebar + routing
+Stages 12, 13, 14, 16 have no backing data today and render as "Pending" placeholder cards — no business logic added.
 
-### `src/components/AppSidebar.tsx`
-Add a new entry between **Proforma Invoices** and **Flow Report**:
+## Compact card (default view, Example 1)
+Fixed width ~13rem, fixed height. Contents:
+- Step number (1–16) + stage icon
+- Stage label (1 line, truncated)
+- Status badge: Done / Sent / Awaiting / Pending
+- One short summary line (e.g. `CS#1187`, `₹12.4L`, `R2`, `2 PI(s)`)
+- ▾ toggle button
 
-```ts
-{ title: "Workflow", url: "/workflow", icon: Workflow }  // lucide "Workflow" icon
-```
+Cards are placed in `overflow-x-auto` flex row with `ChevronRight` separators between them.
 
-### `src/App.tsx`
-Register the route inside the existing protected `<Routes>`:
+## Expanded panel (per-stage)
+When a card's ▾ is clicked, an inline detail panel drops directly under that card (still inside the same horizontal strip's row container, using a second row that anchors under the clicked card). Panel shows:
+- All available fields (number, date, amount, link, status)
+- Action buttons (Open, Copy Link, Convert to PI, etc.)
+- A "▸ Revisions (N)" sub-toggle. When opened, revisions render as a **horizontal chip row** (left → right with arrows), never vertically.
 
-```tsx
-<Route path="/workflow" element={<WorkflowPage />} />
-```
+Only one stage may be expanded at a time per family card (simpler, avoids layout reflow). Closing happens via ▴ on the same card or by clicking another stage's ▾.
 
-## New page: `src/pages/workflow/WorkflowPage.tsx`
+## Global "Show Revision History" button
+Drives a `globalRevisionsOpen` boolean. When true:
+- Every expanded stage auto-opens its per-stage revisions chip row.
+- Collapsed stage cards get a small "Nrev" pill so users see which stages have history.
 
-### Data load (one effect, parallel queries — same pattern as `FlowReport.tsx`)
+## Data wiring (reuse existing `Family`)
+- Stage 1: `f.costSheet` + extracted A/B/COP/Client Scope.
+- Stage 2/3: `f.mrOa`, `f.gmsOa`; revisions = orders filtered by format with revision ≥ 0.
+- Stage 4: first BOQ in `f.boqs` (revision 0); revisions = none here.
+- Stage 5: first `comment` review (R1).
+- Stage 6: comment reviews where `submitted_at` is set; revisions = all comment rounds.
+- Stage 7: OA records with revision > 0; revisions = all such OAs.
+- Stage 8: BOQ records with revision > 0; revisions = all such BOQs.
+- Stage 9: any `approval` review.
+- Stage 10: approval review with `overall_outcome === 'approved'`.
+- Stage 11: `currentBoq.final_share_token` / `final_sent_at`.
+- Stage 15: `f.pis`; revisions = all PIs incl. revisions; primary action remains "Convert to PI" link to current OA.
+- Stages 12, 13, 14, 16: placeholder cards with "Pending" badge and short hint text in the expanded panel.
 
-- `orders` — all rows
-- `boqs` — all rows
-- `proforma_invoices` — all rows
-- `cost_sheets` — `id, original_filename, created_at, extracted` (cost sheet # / date / total live inside the `extracted` JSON; surface what is present)
-- `boq_design_reviews` — `id, boq_id, round_no, kind, status, sent_at, submitted_at, overall_outcome, token, expires_at`
-- `boqs.final_share_token` + `final_sent_at` are already on the BOQ row
+## Component changes inside `WorkflowPage.tsx`
+- Remove the vertical `<Step>` block (current lines 303–398).
+- Remove the existing `<HistorySection>` and `<HistoryList>` (replaced by per-stage revisions chip row inside each expanded panel).
+- Keep `ActivityTimeline` removed from the family card render so nothing displays vertically. The function may be deleted to keep the file tidy.
+- Add new components in the same file:
+  - `HorizontalStageStrip({ family, globalRevisionsOpen })` — renders the 16 compact cards + handles which one is expanded.
+  - `StageCard({ step, icon, label, status, summary, expanded, onToggle, revisionsCount })` — compact card UI.
+  - `StageDetailPanel({ stage, family, revisionsOpen, onToggleRevisions })` — switch by stage id; renders the right detail block.
+  - `RevisionsChips({ items })` — horizontal chip row with arrows.
+- Keep existing header, search input, filter chips (Format / Cost Sheet / Stage), `globalRevisionsOpen` toggle button (rename label to "Show All Revisions" / "Hide All Revisions" for clarity).
 
-### Family grouping (mirrors `FlowReport`)
-
-Group orders by `parent_order_id || id`. For each family compute:
-
-- `costSheet`: matched by `current.cost_sheet_number` against `cost_sheets.extracted->>'cost_sheet_number'` (fall back to filename match). Expose `cost_sheet_number`, `cost_sheet_date`, `total_cost`.
-- `mrOa` / `gmsOa`: pick the current OA per `format`. If the family has both formats split across two orders, show both; otherwise the missing side shows "—".
-- `boqs`: all BOQs whose `order_id ∈ familyIds`, sorted by `revision`.
-- `designReviews`: all `boq_design_reviews` whose `boq_id ∈ family BOQ ids`, sorted by `sent_at`.
-- `pis`: PIs joined via `reference_oa_id`.
-
-### Layout
-
-Top of page:
-- Title "Workflow"
-- Search input (company / OA / BOQ / PI), reusing the FlowReport pattern
-- One global "Show / Hide Revision History" toggle (default = hidden)
-
-Below: one **family card** per project. Each card renders an ordered, numbered step list. Each step is its own row with an icon, label, key meta, action chips, and an inline "Revisions" sub-list that is hidden unless the user expands either the global toggle or the per-card disclosure.
-
-#### Step layout (per family)
-
-```
-1. Cost Sheet Upload      | CS# • Date • ₹Total Cost           | [View]
-2. MR OA                  | MROA/… • Date • ₹Basic Amount      | [Open]   [+ History]
-3. GMS OA                 | 25-26/GMS/… • Date • ₹Amount       | [Open]   [+ History]
-4. Auto BOQ               | BOQ# • Created date                 | [Open BOQ]
-5. Design Link Sent       | Round R{n} comment • Sent at        | [Copy Link]
-6. Design Link Returned   | Submitted at • Outcome badge        | [View Round]
-7. Update OA              | Revision bump after comments        | [Open Updated OA]
-8. Approval Link Sent     | Round R{n} approval • Sent at       | [Copy Link]
-   Approval Received      | Submitted • Outcome (Approved / Partial / Changes)
-9. After Approval         | OA Revised → BOQ auto-revised       | [Open Revised BOQ]
-10. Send Links            | Final BOQ link to Purchase & Mfg    | [Copy Final Link]
-11. Convert to PI         | PI#(s) if any                       | [Convert to PI] / [Open PI]
-```
-
-Status rules per step (badge):
-
-- **Done** when the underlying record exists (e.g. cost sheet found, BOQ exists, review submitted, PI present).
-- **Pending** otherwise. No record creation from this page.
-
-#### Revision history (collapsed by default)
-
-Each step that has multiple revisions/rounds (OA, BOQ, design rounds, PI) gets a chevron disclosure. Collapsed → shows only the current item. Expanded → shows a small table of all revisions with date, number, status, and a link to open the editor at that revision.
-
-A page-level toggle "Show / Hide Revision History" sets the initial state for every disclosure on the page.
-
-### Linking out (uses existing routes — no editor changes)
-
-- Cost sheet — link not navigable in the app today; show meta only, no button if no route exists.
-- OA: `/orders/{id}`
-- BOQ: `/boqs/{id}`
-- PI: `/pi/{id}`
-- Design review round: copy the existing `reviewLink(token)` URL to clipboard (same helper used in `DesignReviewPanel`).
-- Final BOQ link: copy `finalBoqLink(token)` if `final_share_token` is set.
-- **Convert to PI** chip: link to `/pi/new?fromOa={currentOaId}` if that route already exists; otherwise link to the OA editor where the user already has a "Convert to PI" action. (Will confirm during implementation by reading `PiEditor` / `OrderEditor`; no behavior change either way.)
+## Visual rules
+- Use existing semantic tokens (`bg-card`, `border`, `text-muted-foreground`, `bg-emerald-600` for Done badge, `bg-muted` for placeholders). No new colors.
+- Cards: `w-52 shrink-0 rounded-md border bg-card p-2.5`.
+- Strip: `overflow-x-auto pb-2` containing `flex items-stretch gap-2 min-w-min`.
+- Separators: `<ChevronRight className="h-5 w-5 text-muted-foreground" />` between cards.
+- Expanded panel: rendered in a second flex row directly under the strip, full width of the family card; no vertical lists of fields — fields laid out in a responsive grid (`grid grid-cols-2 md:grid-cols-4 gap-2`) so info still reads left-to-right.
 
 ## Out of scope
-
-- No edits to OA / BOQ / PI editors, design-review flow, PDF, or RPCs.
-- No schema / migration / RLS changes.
-- No new mutating actions — page is read-only aggregation + deep links + copy-link buttons.
-- No changes to FlowReport.
+- No schema changes; no new tables for Requisition/Purchase/Manufacturing/Dispatch.
+- No edits to OrdersList, BoqList, PiList, FlowReport, sidebar, or edge functions.
+- No PDF/Excel export changes.
+- No new dependencies.
