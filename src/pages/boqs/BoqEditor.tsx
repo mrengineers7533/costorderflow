@@ -17,6 +17,9 @@ import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
+import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
+import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
@@ -633,12 +636,12 @@ function BoqItemsList({
   boqId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
 }) {
-  // Design-team suggestions are no longer shown inline in the BOQ — they now
-  // appear under the matching item in the linked Main OA editor instead.
-  void boqId;
+  // Latest submitted design-review round for this BOQ. Used to surface
+  // per-row comments and approval decisions inline beneath each item.
+  const designReview = useLatestDesignReview(boqId);
   return (
     <>
-      {items.map((it) => (
+      {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
             <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
@@ -679,9 +682,107 @@ function BoqItemsList({
                 )}
               </div>
             </div>
+            {designReview && (
+              <BoqDesignSuggestionRow
+                reviewItem={findReviewItemForOaItem(designReview.items, it as unknown as { description: string }, idx)}
+                round={designReview.round}
+                canApply={canEditFull || canEditRemarks}
+                onApply={(patch) => onUpdate(it.id, patch)}
+              />
+            )}
           </div>
       ))}
     </>
+  );
+}
+
+/** Inline "Design Suggested Update" block shown below a BOQ item row. Mirrors
+ *  the equivalent block in the OA editor: surfaces design-team per-column
+ *  comments, an Apply button per column, and the approval decision/change
+ *  note when the latest review round is of kind "approval". Pure UI — no
+ *  impact on BOQ save or revision flow. */
+function BoqDesignSuggestionRow({
+  reviewItem, round, canApply, onApply,
+}: {
+  reviewItem: DesignReviewItemRow | null;
+  round: DesignReviewRow;
+  canApply: boolean;
+  onApply: (patch: Partial<BoqLineItem>) => void;
+}) {
+  if (!reviewItem) return null;
+  const cols = parseColumnComments(reviewItem);
+  const tiles: { key: ColKey; label: string }[] = [
+    { key: "model", label: "Model" },
+    { key: "description", label: "Description" },
+    { key: "quantity", label: "Qty" },
+    { key: "unit", label: "Unit" },
+    { key: "remarks", label: "Remarks" },
+  ];
+  const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
+  const present = tiles.filter(({ key }) => val(key) !== "");
+  const isApproval = round.kind === "approval";
+  const decision = reviewItem.decision;
+  const changeNote = (reviewItem.design_change_note || "").trim();
+  if (!present.length && !isApproval && !changeNote) return null;
+
+  const applyCell = (k: ColKey) => {
+    if (!canApply) return;
+    const v = val(k);
+    if (k === "model") onApply({ model_number: v });
+    else if (k === "description") onApply({ description: v });
+    else if (k === "quantity") onApply({ quantity: Number(v) || 0 });
+    else if (k === "unit") onApply({ unit: v });
+    else if (k === "remarks") onApply({ remarks: v });
+  };
+
+  const decisionPill = isApproval ? (
+    decision === "approved" ? (
+      <span className="inline-flex items-center rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Approved</span>
+    ) : decision === "change_required" ? (
+      <span className="inline-flex items-center rounded-full bg-destructive/15 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Change Required</span>
+    ) : (
+      <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Pending</span>
+    )
+  ) : null;
+
+  return (
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">
+          Design {isApproval ? "Approval" : "Comments"} · R{round.round_no}
+        </span>
+        {decisionPill}
+        {round.reviewer_name && (
+          <span className="text-[10px] text-muted-foreground">· {round.reviewer_name}</span>
+        )}
+        {present.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            disabled={!canApply}
+            onClick={() => applyCell(t.key)}
+            title={canApply ? `Apply suggested ${t.label} → BOQ: ${val(t.key)}` : "You don't have permission to edit this field"}
+            className="rounded border border-primary/50 bg-background px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply {t.label}
+            <span className="ml-1 text-[10px] text-muted-foreground">→ BOQ</span>
+          </button>
+        ))}
+      </div>
+      {present.length > 0 && (
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${present.length}, minmax(0, 1fr))` }}>
+          {present.map((t) => (
+            <div key={t.key} className="px-1.5 py-1 rounded bg-background/60">
+              <div className="text-[10px] uppercase text-muted-foreground">{t.label}</div>
+              <div className="whitespace-pre-wrap text-foreground">{val(t.key)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {changeNote && (
+        <div className="text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Change note:</span> {changeNote}</div>
+      )}
+    </div>
   );
 }
 
