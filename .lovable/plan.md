@@ -1,44 +1,63 @@
 ## Goal
 
-In the Create Requisition → Review & Edit step, add a per-Finish-Good **RM Master search/select** control next to the existing "Load from RM Master" button, so the user can search any FG entry in the Raw Material Master and load its rows into the current FG — useful when auto-match missed or when manually building a requisition.
+Change the requisition Raw Material view to an **item-wise grouped format** matching the user's reference: one row per raw material, grouped under each Finish Good, with columns **Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit**.
 
-## Where it goes
+Apply this format consistently to:
+1. `RequisitionDetail.tsx` — "Raw Materials" tab (private view)
+2. `PublicRequisition.tsx` — public share page (same layout)
+3. `lib/requisition/pdf.ts` — PDF "Raw Material Indent" section
 
-File: `src/components/manufacturing/CreateRequisitionDialog.tsx`
+No backend / data model changes. Data is already grouped by `requisition_item_id` and `model_number` in `requisition_raw_materials`.
 
-Header strip of each FG card in the review step (around line 369–377):
+## Target layout (matches uploaded image)
 
 ```text
-[2. Aspiration Cyclone · MRAC-13 · Qty 1]   [Search RM Master ▾]  [⏻ Direct Purchase]  [Load from RM Master]
+| Finished Good                              | Raw Material   | Size / Spec       | Reqd Qty | Unit |
+| SCREW CONVEYOR SIZE-250MM TOTAL LENGTH-9.2M| MS SHEET       | 1250X2500X3MM     |     4.70 | NOS  |
+|                                            | MS SHEET       | 1250X2500X1.6MM   |     1.30 | NOS  |
+|                                            | MS FLAT        | 25X3MM            |    25.76 | MTR  |
+|                                            | KNOB           | 3" W/O BOLT       |     9.00 | NOS  |
+| (next FG)                                  | …              | …                 |        … | …    |
 ```
 
-The "Load from RM Master" button (auto-match by model/description) stays untouched. The new control is an additional, explicit picker.
+- **Finished Good** cell: shown once per group via `rowSpan`, displaying `model_number` + short description (or `description` if model is empty). Empty for following RM rows in the same group.
+- Rows ordered: by FG `item_no`, then by original RM insertion order within the group.
+- Source/status badges kept compact: an "Mapping Not Found" badge on the FG cell when the group is unmapped (placeholder row). Purchase status `Select` (Pending/Ordered/Received) remains on the right in the detail view only — NOT shown in PDF or public view.
+- Direct Purchase Finish Goods are excluded (they already have no RM rows).
 
-## Behavior
+## Files to change
 
-1. **Search input + dropdown** (popover-style combobox) populated from `fullMaps` (already loaded in `useEffect`, so no extra query).
-2. Filter list by case-insensitive substring against `model_number` as the user types.
-3. Show up to ~30 matches; each row displays the FG name and a small badge `N RM` or `Direct Purchase`.
-4. On select:
-   - Replace that FG's `edited[fgId].raw_materials` with the chosen mapping's rows (same shape mapping used by `loadFromMaster`).
-   - Set `edited[fgId].is_direct_purchase` from the selected mapping.
-   - Toast: `Loaded {N} raw material rows from "{model}"`.
-5. If `fullMaps` is empty → input is disabled with placeholder "RM Master is empty".
-6. If no matches → show "No FG found in RM Master" inside dropdown; user can keep manual rows or add new ones via existing `Add RM row`.
-7. **Direct Purchase** toggle behavior is unchanged: when ON, requisition skips that FG (existing logic in `toggleDirect` + edge function already handles this).
+### 1. `src/components/manufacturing/CreateRequisitionDialog.tsx`
+No change — the wizard already shows the item-wise layout.
 
-## Implementation notes
+### 2. `src/pages/requisitions/RequisitionDetail.tsx`
+- Replace the flat `<tr>` map in the "Raw Materials" tab with a grouping pass:
+  - Build `groups: Array<{ item: RequisitionItemRecord; rms: RequisitionRawMaterialRecord[] }>` from `items` + `rms`, keyed by `requisition_item_id`. Items with no RMs (direct purchase) are skipped.
+  - For each group render one row per RM; first row uses `rowSpan={group.rms.length}` on the Finished Good cell.
+- Columns: Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit · Status (status kept for purchase workflow).
+- Keep the unmapped warning banner.
 
-- Reuse existing shadcn `Popover` + `Command` (already in `src/components/ui/`) for the searchable combobox. No new dependencies.
-- Extract a small inline component `RmMasterPicker({ maps, onPick })` inside the same file to keep diff small.
-- `onPick(map)` calls a new helper `applyMappingTo(fgId, map)` that mirrors the body of `loadFromMaster` but takes an explicit `FullMap` instead of running `findMappingFor`.
-- Refactor `loadFromMaster` to call `applyMappingTo` to avoid duplication.
-- Keep all types, edge function payload, and save flow unchanged — the picker only mutates the in-memory `edited` state before the user clicks Create.
+### 3. `src/pages/requisitions/PublicRequisition.tsx`
+- Mirror the same grouped layout. Columns: Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit. No status column.
 
-## Out of scope (unchanged)
+### 4. `src/lib/requisition/pdf.ts`
+- Replace the current flat "Raw Material Indent" autoTable with a grouped table:
+  - Build the same group structure.
+  - Use autoTable `body` with `rowSpan` via cell objects: `{ content: fgLabel, rowSpan: group.rms.length, styles: { valign: "middle" } }` on the first row of each group; subsequent rows omit the FG cell.
+  - Columns: `["Finished Good", "Raw Material", "Size / Spec", "Reqd Qty", "Unit"]`.
+- Keep the upper Finish Good items table and footer notes unchanged.
 
-- OA, BOQ, approval, revision, pricing, calculation, workflow
-- Edge function `create-requisition` (already accepts manual `edited_items`)
-- RequisitionsList, RequisitionDetail, PDF, share link, Send to Purchase
-- Raw Material Master page
-- DB schema / migrations
+## What stays the same (untouched)
+
+- OA, BOQ, approval, revision, pricing, calculation, workflow.
+- Edge function `create-requisition`, RM Master matching, snapshots.
+- Database schema, RLS, share/family tokens, regenerate-for-latest-revision.
+- Items, Steel List, Outside Purchase tabs.
+- Purchase status updates (still editable in the detail view).
+- Wizard (Create Requisition dialog) — already item-wise.
+
+## Notes
+
+- "Size / Spec" maps to existing column `size_model`.
+- "Reqd Qty" maps to existing `required_qty` (computed = `qty_per_unit × fg_quantity`).
+- Finished Good label = `model_number` (fall back to truncated `description`) — taken from the joined `requisition_items` row so it always matches the BOQ snapshot.
