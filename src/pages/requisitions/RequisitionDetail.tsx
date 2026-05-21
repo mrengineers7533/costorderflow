@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Copy, Download, Link2 } from "lucide-react";
-import type { RequisitionItemRecord, RequisitionRecord } from "@/lib/requisition/types";
+import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 
@@ -18,6 +18,7 @@ export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
   const [req, setReq] = useState<RequisitionRecord | null>(null);
   const [items, setItems] = useState<RequisitionItemRecord[]>([]);
+  const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [latestRev, setLatestRev] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,8 @@ export default function RequisitionDetail() {
     if (!r) { setLoading(false); return; }
     const { data: its } = await sb.from("requisition_items").select("*").eq("requisition_id", id).order("item_no");
     setItems((its as RequisitionItemRecord[]) || []);
+    const { data: rmRows } = await sb.from("requisition_raw_materials").select("*").eq("requisition_id", id).order("material");
+    setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
     const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
     setBoq(b as unknown as BoqRecord);
     // latest approved revision for the family
@@ -72,6 +75,7 @@ export default function RequisitionDetail() {
     const doc = generateRequisitionPDF({
       requisition: req,
       items,
+      rawMaterials: rms,
       boqNumber: boq.boq_number,
       oaNumber: boq.reference_oa_number || "",
       clientName: boq.client_name || "",
@@ -86,6 +90,28 @@ export default function RequisitionDetail() {
     await sb.from("requisition_items").update(patch).eq("id", itemId);
     setItems((prev) => prev.map((it) => it.id === itemId ? { ...it, ...patch } : it));
   }
+
+  async function updateRm(rmId: string, patch: Partial<RequisitionRawMaterialRecord>) {
+    await sb.from("requisition_raw_materials").update(patch).eq("id", rmId);
+    setRms((prev) => prev.map((r) => r.id === rmId ? { ...r, ...patch } : r));
+  }
+
+  const rmAgg = useMemo(() => {
+    const m = new Map<string, { key: string; material: string; unit: string; total: number; sources: number; ids: string[]; placeholder: boolean }>();
+    for (const r of rms) {
+      const key = `${(r.material || "").toLowerCase()}|${(r.unit || "").toLowerCase()}`;
+      const prev = m.get(key);
+      const qty = Number(r.required_qty) || 0;
+      if (prev) {
+        prev.total += qty; prev.sources += 1; prev.ids.push(r.id);
+        prev.placeholder = prev.placeholder || r.source === "unmapped_placeholder";
+      } else {
+        m.set(key, { key, material: r.material, unit: r.unit ?? "", total: qty, sources: 1, ids: [r.id], placeholder: r.source === "unmapped_placeholder" });
+      }
+    }
+    return Array.from(m.values());
+  }, [rms]);
+  const hasUnmapped = rms.some((r) => r.source === "unmapped_placeholder");
 
   async function regenerate() {
     if (!boq) return;
@@ -143,10 +169,70 @@ export default function RequisitionDetail() {
 
       <Tabs defaultValue="items">
         <TabsList>
+          <TabsTrigger value="raw">Raw Materials</TabsTrigger>
           <TabsTrigger value="items">Items</TabsTrigger>
           <TabsTrigger value="steel">Steel List</TabsTrigger>
           <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="raw">
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Raw material indent</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto space-y-3">
+              {hasUnmapped && (
+                <div className="text-xs rounded border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2">
+                  Some Finish Good items have no Raw Material mapping. Configure them in
+                  {" "}<Link to="/admin/raw-materials" className="underline font-medium">Admin → Raw Materials</Link>.
+                </div>
+              )}
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground border-b">
+                  <tr>
+                    <th className="text-left py-2 pr-3">Material</th>
+                    <th className="text-right py-2 pr-3">Required Qty</th>
+                    <th className="text-left py-2 pr-3">Unit</th>
+                    <th className="text-left py-2 pr-3">FG Sources</th>
+                    <th className="text-left py-2 pr-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rmAgg.length === 0 ? (
+                    <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                  ) : rmAgg.map((r) => {
+                    // Use the first row's status as a representative; update all sibling rows together.
+                    const firstId = r.ids[0];
+                    const firstRow = rms.find((x) => x.id === firstId);
+                    const status = firstRow?.purchase_status || "pending";
+                    return (
+                      <tr key={r.key} className="border-b last:border-0">
+                        <td className="py-2 pr-3">
+                          {r.material}
+                          {r.placeholder && <Badge variant="outline" className="ml-2">Unmapped</Badge>}
+                        </td>
+                        <td className="py-2 pr-3 text-right">{r.total || "—"}</td>
+                        <td className="py-2 pr-3">{r.unit || "—"}</td>
+                        <td className="py-2 pr-3">{r.sources}</td>
+                        <td className="py-2 pr-3">
+                          <Select
+                            value={status}
+                            onValueChange={(v) => r.ids.forEach((id) => updateRm(id, { purchase_status: v as "pending" | "ordered" | "received" }))}
+                          >
+                            <SelectTrigger className="h-7 w-32"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="ordered">Ordered</SelectItem>
+                              <SelectItem value="received">Received</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="items">
           <Card>
