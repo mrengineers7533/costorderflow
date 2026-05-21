@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, Save } from "lucide-react";
+import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, Save, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
@@ -26,6 +26,7 @@ import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestSubmittedRound } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
+import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
 
 function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
@@ -66,6 +67,7 @@ export default function BoqEditor() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isCurrentBoq, setIsCurrentBoq] = useState<boolean>(true);
   const [boqRevision, setBoqRevision] = useState<number>(0);
+  const [distributeOpen, setDistributeOpen] = useState(false);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
@@ -597,6 +599,15 @@ export default function BoqEditor() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print</Button>
                 <Button variant="outline" size="sm" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />Download PDF</Button>
+                {verificationStatus === "approved" && boqId && (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => setDistributeOpen(true)}
+                  >
+                    <Send className="mr-1 h-4 w-4" />Distribute to Purchase & Factory
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -618,6 +629,13 @@ export default function BoqEditor() {
             <RemarksAuditPanel boqId={boqId} />
           </TabsContent>
         </Tabs>
+        {boqId && (
+          <DistributeBoqDialog
+            open={distributeOpen}
+            onOpenChange={setDistributeOpen}
+            boq={buildRecord()}
+          />
+        )}
       </div>
     </div>
   );
