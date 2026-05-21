@@ -18,6 +18,7 @@ import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { BoqItemChangeHistoryButton } from "@/components/boqs/BoqItemChangeHistoryButton";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
