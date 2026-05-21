@@ -668,6 +668,36 @@ export type Database = {
         }
         Relationships: []
       }
+      fg_raw_material_map: {
+        Row: {
+          created_at: string
+          id: string
+          model_number: string
+          notes: string | null
+          raw_materials: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model_number: string
+          notes?: string | null
+          raw_materials?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model_number?: string
+          notes?: string | null
+          raw_materials?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       login_activity: {
         Row: {
           created_at: string
@@ -1070,6 +1100,211 @@ export type Database = {
         }
         Relationships: []
       }
+      requisition_counters: {
+        Row: {
+          id: string
+          last_number: number
+          order_root_id: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          last_number?: number
+          order_root_id: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_number?: number
+          order_root_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      requisition_distribution_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          message: string | null
+          purchase_emails: string[]
+          requisition_id: string
+          sent_by: string | null
+          sent_by_email: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          message?: string | null
+          purchase_emails?: string[]
+          requisition_id: string
+          sent_by?: string | null
+          sent_by_email?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          message?: string | null
+          purchase_emails?: string[]
+          requisition_id?: string
+          sent_by?: string | null
+          sent_by_email?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      requisition_items: {
+        Row: {
+          boq_item_id: string
+          created_at: string
+          description: string | null
+          fg_snapshot: Json
+          id: string
+          item_no: string | null
+          lot_no: string | null
+          model_number: string | null
+          purchase_category: string | null
+          purchase_status: string
+          quantity: number | null
+          remarks: string | null
+          requisition_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          boq_item_id: string
+          created_at?: string
+          description?: string | null
+          fg_snapshot?: Json
+          id?: string
+          item_no?: string | null
+          lot_no?: string | null
+          model_number?: string | null
+          purchase_category?: string | null
+          purchase_status?: string
+          quantity?: number | null
+          remarks?: string | null
+          requisition_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boq_item_id?: string
+          created_at?: string
+          description?: string | null
+          fg_snapshot?: Json
+          id?: string
+          item_no?: string | null
+          lot_no?: string | null
+          model_number?: string | null
+          purchase_category?: string | null
+          purchase_status?: string
+          quantity?: number | null
+          remarks?: string | null
+          requisition_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requisition_items_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requisition_lots: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          lot_no: string
+          notes: string | null
+          requisition_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          lot_no: string
+          notes?: string | null
+          requisition_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          lot_no?: string
+          notes?: string | null
+          requisition_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requisition_lots_requisition_id_fkey"
+            columns: ["requisition_id"]
+            isOneToOne: false
+            referencedRelation: "requisitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requisitions: {
+        Row: {
+          boq_id: string
+          boq_revision: number
+          created_at: string
+          family_token: string | null
+          id: string
+          notes: string | null
+          order_root_id: string
+          pdf_path: string | null
+          requisition_number: string
+          share_token: string
+          status: string
+          superseded_by_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          boq_id: string
+          boq_revision?: number
+          created_at?: string
+          family_token?: string | null
+          id?: string
+          notes?: string | null
+          order_root_id: string
+          pdf_path?: string | null
+          requisition_number: string
+          share_token?: string
+          status?: string
+          superseded_by_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          boq_id?: string
+          boq_revision?: number
+          created_at?: string
+          family_token?: string | null
+          id?: string
+          notes?: string | null
+          order_root_id?: string
+          pdf_path?: string | null
+          requisition_number?: string
+          share_token?: string
+          status?: string
+          superseded_by_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1294,6 +1529,48 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_requisition_by_token: {
+        Args: { _token: string }
+        Returns: {
+          client_name: string
+          created_at: string
+          current_boq_id: string
+          current_boq_number: string
+          current_boq_revision: number
+          order_root_id: string
+          reference_oa_number: string
+          requisition_id: string
+          requisition_number: string
+          requisition_revision: number
+          requisition_status: string
+        }[]
+      }
+      get_requisition_items_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_item_id: string
+          created_at: string
+          description: string | null
+          fg_snapshot: Json
+          id: string
+          item_no: string | null
+          lot_no: string | null
+          model_number: string | null
+          purchase_category: string | null
+          purchase_status: string
+          quantity: number | null
+          remarks: string | null
+          requisition_id: string
+          unit: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "requisition_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1316,6 +1593,10 @@ export type Database = {
           _financial_year: string
           _format: Database["public"]["Enums"]["order_format"]
         }
+        Returns: string
+      }
+      next_requisition_number: {
+        Args: { _oa_number: string; _revision: number; _root: string }
         Returns: string
       }
       submit_design_review_with_token: {
