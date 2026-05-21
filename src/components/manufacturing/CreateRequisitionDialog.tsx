@@ -447,3 +447,44 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     </Dialog>
   );
 }
+
+function RmMasterPicker({ maps, onPick }: { maps: FullMap[]; onPick: (m: FullMap) => void }) {
+  const [open, setOpen] = useState(false);
+  const empty = !maps || maps.length === 0;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" size="sm" variant="outline" disabled={empty} className="h-8">
+          <Search className="h-3.5 w-3.5 mr-1" />
+          {empty ? "RM Master is empty" : "Search RM Master"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[360px]" align="end">
+        <Command>
+          <CommandInput placeholder="Search Finish Good in RM Master…" />
+          <CommandList>
+            <CommandEmpty>No FG found in RM Master</CommandEmpty>
+            <CommandGroup>
+              {maps.slice(0, 200).map((m, i) => {
+                const rmCount = Array.isArray(m.raw_materials) ? m.raw_materials.length : 0;
+                return (
+                  <CommandItem
+                    key={`${m.model_number}-${i}`}
+                    value={m.model_number}
+                    onSelect={() => { onPick(m); setOpen(false); }}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate">{m.model_number}</span>
+                    <Badge variant={m.is_direct_purchase ? "secondary" : "default"} className="shrink-0">
+                      {m.is_direct_purchase ? "Direct Purchase" : `${rmCount} RM`}
+                    </Badge>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
