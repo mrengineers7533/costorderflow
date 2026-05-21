@@ -208,7 +208,7 @@ export default function RawMaterialMaster() {
             />
             <Button disabled={!isAdmin || busy} onClick={() => fileRef.current?.click()}>
               <Upload className="h-4 w-4 mr-1" />
-              {latestUpload ? "Replace Excel" : "Upload Excel"}
+              {uploads.length > 0 ? "Replace Excel" : "Upload Excel"}
             </Button>
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
