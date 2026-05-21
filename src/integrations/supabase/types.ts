@@ -1265,6 +1265,7 @@ export type Database = {
           created_at: string
           fg_quantity: number | null
           id: string
+          make: string | null
           material: string
           model_number: string | null
           notes: string | null
@@ -1273,6 +1274,7 @@ export type Database = {
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          size_model: string | null
           source: string
           unit: string | null
           updated_at: string
@@ -1281,6 +1283,7 @@ export type Database = {
           created_at?: string
           fg_quantity?: number | null
           id?: string
+          make?: string | null
           material: string
           model_number?: string | null
           notes?: string | null
@@ -1289,6 +1292,7 @@ export type Database = {
           required_qty?: number | null
           requisition_id: string
           requisition_item_id?: string | null
+          size_model?: string | null
           source?: string
           unit?: string | null
           updated_at?: string
@@ -1297,6 +1301,7 @@ export type Database = {
           created_at?: string
           fg_quantity?: number | null
           id?: string
+          make?: string | null
           material?: string
           model_number?: string | null
           notes?: string | null
@@ -1305,6 +1310,7 @@ export type Database = {
           required_qty?: number | null
           requisition_id?: string
           requisition_item_id?: string | null
+          size_model?: string | null
           source?: string
           unit?: string | null
           updated_at?: string
@@ -1359,6 +1365,42 @@ export type Database = {
           superseded_by_id?: string | null
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      rm_master_uploads: {
+        Row: {
+          created_at: string
+          fg_count: number
+          file_path: string
+          id: string
+          original_filename: string
+          row_count: number
+          sheet_count: number
+          uploaded_by: string | null
+          uploaded_by_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          fg_count?: number
+          file_path: string
+          id?: string
+          original_filename: string
+          row_count?: number
+          sheet_count?: number
+          uploaded_by?: string | null
+          uploaded_by_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          fg_count?: number
+          file_path?: string
+          id?: string
+          original_filename?: string
+          row_count?: number
+          sheet_count?: number
+          uploaded_by?: string | null
+          uploaded_by_email?: string | null
         }
         Relationships: []
       }
@@ -1635,6 +1677,7 @@ export type Database = {
           created_at: string
           fg_quantity: number | null
           id: string
+          make: string | null
           material: string
           model_number: string | null
           notes: string | null
@@ -1643,6 +1686,7 @@ export type Database = {
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          size_model: string | null
           source: string
           unit: string | null
           updated_at: string
