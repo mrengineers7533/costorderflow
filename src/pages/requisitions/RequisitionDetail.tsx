@@ -116,11 +116,11 @@ export default function RequisitionDetail() {
       buckets.get(k)!.push(r);
     });
     // sort groups by FG item_no when available
-    order.sort((a, b) => {
-      const ia = itemById.get(a)?.item_no ?? 9999;
-      const ib = itemById.get(b)?.item_no ?? 9999;
-      return ia - ib;
-    });
+    const numKey = (s: string | null | undefined) => {
+      const n = parseFloat(String(s ?? ""));
+      return Number.isFinite(n) ? n : 9999;
+    };
+    order.sort((a, b) => numKey(itemById.get(a)?.item_no) - numKey(itemById.get(b)?.item_no));
     return order.map((k) => ({
       key: k,
       item: itemById.get(k) || null,
