@@ -1,73 +1,40 @@
+## What's already working
 
-# Column A first-line cleaning rule
+- `create-requisition` edge function already saves every new requisition into the `requisitions` table with items + raw materials.
+- `/requisitions` route already exists and lists all saved requisitions — so requisitions are *not* trapped on the BOQ/Manufacturing page; they already persist to the Requisition module.
+- Detail page (`/requisitions/:id`) already has PDF download, share link copy, and editable per-item purchase status.
 
-Apply a "first line only" normalization to Column A (Finish Good) everywhere it is read, stored as the matching key, displayed, or matched against BOQ items. Long spec/description text below the first line is ignored for matching and UI, but preserved as a separate field for reference.
+## What's missing (the actual gap)
 
-## 1. Normalization helper (single source of truth)
+The list view shows requisitions as cards but doesn't surface the columns and inline actions the user is asking for. We'll upgrade only that list page plus add a single status transition for "Send to Purchase".
 
-Add `firstLine(raw: string): string` in a shared util (e.g. `src/lib/requisition/types.ts` next to existing shared helpers, plus a Deno-side copy in the edge functions).
+## Changes
 
-Rules:
-- Split on `\n` or `\r`, take first non-empty segment.
-- Also split on common bullet markers if they appear on the same line (`•`, `:-`, ` - `, ` – `) — keep only the part before the first such marker.
-- `trim()` and collapse internal whitespace.
-- Cap at 120 chars as a safety net.
+### 1. `src/pages/requisitions/RequisitionsList.tsx` — rebuild as a table
 
-Used by both the importer (write path) and the matcher (read path) so legacy rows already in the DB also normalize on read.
+Replace the card layout with a proper table showing:
 
-## 2. Excel import (`supabase/functions/import-rm-master/index.ts` and the client-side parser in `src/pages/RawMaterialMaster.tsx`)
+| Requisition # | OA # | BOQ # | Rev | Client | Created | Status | Actions |
 
-When grouping by Column A:
-- Read the raw Column A cell as today (still used to detect "non-blank starts a new FG block").
-- Before using it as the FG key / `model_number`, run `firstLine()`.
-- Store:
-  - `model_number` = `firstLine(rawColA)` — this is the matching + display key.
-  - `raw_materials[].fg_full_text` (new optional field inside the existing jsonb) and/or a new top-level `fg_description_full text` column on `fg_raw_material_map` — preserves the full multi-line text for reference. Nullable, backward compatible.
-- Upsert keyed by `lower(firstLine)`, so two Excel rows whose Column A start with the same first line collapse into one FG. Last write wins (matches the "Overwrite mapping; no history" decision).
+Actions column (icon buttons, all inline — no navigation required for the quick ones):
+- **View** → `Link` to `/requisitions/:id`
+- **PDF** → reuses `generateRequisitionPDF` from `src/lib/requisition/pdf.ts`; loads the row's items + raw materials on demand (single click handler, lazy fetch per row)
+- **Link** → copies `${origin}/requisition/${share_token}` to clipboard, toast confirms
+- **Send to Purchase** → updates `requisitions.status` to `in_purchase` (status enum already supports it per `RequisitionRecord`), shows toast, refreshes row; hidden / disabled when status is already `in_purchase` or `closed`
 
-Migration: `ALTER TABLE fg_raw_material_map ADD COLUMN fg_description_full text;` (nullable, no backfill needed).
+Keep existing search input. Keep the "BOQ revised to Rn" stale badge inline in the Status cell.
 
-## 3. Matching (`CreateRequisitionDialog.tsx` + `create-requisition` edge function)
+### 2. No DB migration needed
 
-Wrap every `model_number` read from `fg_raw_material_map` with `firstLine()` before comparing — defensive against any legacy rows that still hold multi-line text.
+`status: "draft" | "issued" | "in_purchase" | "closed"` already exists on the requisitions table. RLS already lets the owning user update their requisitions (used by the detail page's status edits).
 
-The existing three-step match keeps the same priority order, but operates on the cleaned key:
-1. exact case-insensitive on `firstLine(model_number)` vs BOQ `model_number`
-2. `firstLine(model_number)` contains BOQ `model_number`
-3. `firstLine(model_number)` contains first 40 chars of BOQ `description`
+### 3. Nothing else changes
 
-No behavior change beyond using the cleaned key.
+- `CreateRequisitionDialog`, `create-requisition` function, BOQ/Manufacturing, OA, approval, revision, pricing, calculation, PDF layout, share-link routing — all untouched.
+- Sidebar entry for Requisitions already exists.
 
-## 4. UI
+## Technical notes
 
-- **Raw Material Master page** (`src/pages/RawMaterialMaster.tsx`): the FG column shows `firstLine(model_number)` only. Full text available via a small "Show full description" toggle / tooltip per row, sourced from `fg_description_full`. Table columns stay: `Finish Good | RM rows | Direct Purchase | Updated`.
-- **CreateRequisitionDialog**: status badges already key off the cleaned mapping, no further change.
-- **Requisition Detail / Public / PDF**: already display `model_number` from `requisition_items`, which comes from BOQ (untouched). No change needed.
-
-## 5. One-time cleanup of existing rows
-
-Inside the same migration, run an UPDATE that splits any current `model_number` containing a newline:
-```
-UPDATE fg_raw_material_map
-SET fg_description_full = model_number,
-    model_number = btrim(split_part(model_number, E'\n', 1))
-WHERE model_number ~ E'\n';
-```
-This normalizes data already imported under the previous rule. Duplicate-key collisions are handled by selecting `DISTINCT ON (lower(first_line))` first; if any collision exists, the older row's `raw_materials` is merged into the newer row before deletion. (Implemented as a small PL/pgSQL DO block in the migration.)
-
-## 6. Strictly unchanged
-
-OA, BOQ, approval/revision/pricing/calculation, requisition workflow, sidebar, design tokens, existing Admin RM tab UX, and all other modules.
-
-## 7. File map
-
-Edited:
-- `src/lib/requisition/types.ts` — add `firstLine()` helper + extend mapping type with `fg_description_full?: string`.
-- `src/pages/RawMaterialMaster.tsx` — apply `firstLine()` in parser; show cleaned name with optional full-text tooltip.
-- `src/components/manufacturing/CreateRequisitionDialog.tsx` — wrap `model_number` reads with `firstLine()` before matching.
-- `supabase/functions/create-requisition/index.ts` — same wrap; inline Deno copy of `firstLine()`.
-- `supabase/functions/import-rm-master/index.ts` — apply `firstLine()` when keying upserts; store full text in `fg_description_full`.
-- `src/integrations/supabase/types.ts` — regenerated by migration (auto).
-
-New:
-- `supabase/migrations/<ts>_fg_first_line_cleanup.sql` — add `fg_description_full` column + one-time cleanup UPDATE with collision merge.
+- The PDF action will issue two lightweight `select * where requisition_id = ?` queries (items + raw materials) and the BOQ fetch is already cached in the list's `boqs` map, so no extra round-trips for header fields.
+- "Send to Purchase" is a single `update({ status: "in_purchase" }).eq("id", r.id)` call followed by local state patch — no edge function needed.
+- Table uses existing shadcn `Table` primitives; status badge uses existing `Badge` variants.
