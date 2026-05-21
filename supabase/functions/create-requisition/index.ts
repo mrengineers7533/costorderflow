@@ -6,7 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface Body { boq_id: string; notes?: string }
+interface Body {
+  boq_id: string;
+  notes?: string;
+  selected_boq_item_ids?: string[];
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -94,9 +98,42 @@ Deno.serve(async (req) => {
     if (cErr) throw cErr;
 
     const lineItems = Array.isArray(boq.line_items) ? boq.line_items : [];
-    if (lineItems.length) {
+
+    // Determine selected items (default: all)
+    const selectedSet = body.selected_boq_item_ids && body.selected_boq_item_ids.length
+      ? new Set(body.selected_boq_item_ids)
+      : null;
+    // deno-lint-ignore no-explicit-any
+    const selectedItems = lineItems.filter((it: any) =>
+      selectedSet ? selectedSet.has(it.id) : true,
+    );
+
+    // Preload FG → RM map for these model numbers
+    const modelNumbers = Array.from(new Set(
       // deno-lint-ignore no-explicit-any
-      const rows = lineItems.map((it: any) => ({
+      selectedItems.map((it: any) => (it.model_number || "").trim()).filter(Boolean),
+    ));
+    let mapByModel = new Map<string, { is_direct_purchase: boolean; raw_materials: Array<{ material: string; qty_per_unit: number; unit?: string; notes?: string }> }>();
+    if (modelNumbers.length) {
+      const { data: maps } = await admin
+        .from("fg_raw_material_map")
+        .select("model_number, is_direct_purchase, raw_materials")
+        .in("model_number", modelNumbers);
+      // deno-lint-ignore no-explicit-any
+      for (const row of (maps as any[]) || []) {
+        mapByModel.set(String(row.model_number).toLowerCase(), {
+          is_direct_purchase: !!row.is_direct_purchase,
+          raw_materials: Array.isArray(row.raw_materials) ? row.raw_materials : [],
+        });
+      }
+    }
+
+    let raw_material_count = 0;
+    let unmapped_count = 0;
+
+    if (selectedItems.length) {
+      // deno-lint-ignore no-explicit-any
+      const rows = selectedItems.map((it: any) => ({
         requisition_id: created.id,
         boq_item_id: it.id,
         item_no: it.item_no ?? null,
@@ -106,12 +143,66 @@ Deno.serve(async (req) => {
         unit: it.unit ?? null,
         remarks: it.remarks ?? null,
         fg_snapshot: it,
+        included_in_requisition: true,
       }));
-      const { error: itErr } = await admin.from("requisition_items").insert(rows);
+      const { data: insertedItems, error: itErr } = await admin
+        .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, quantity");
       if (itErr) throw itErr;
+
+      // Generate raw material rows per inserted item
+      const rmRows: Array<Record<string, unknown>> = [];
+      // deno-lint-ignore no-explicit-any
+      for (const ri of (insertedItems as any[]) || []) {
+        const key = String(ri.model_number || "").toLowerCase();
+        const mapping = mapByModel.get(key);
+        const fgQty = Number(ri.quantity) || 0;
+        if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
+          for (const rm of mapping.raw_materials) {
+            const per = Number(rm.qty_per_unit) || 0;
+            rmRows.push({
+              requisition_id: created.id,
+              requisition_item_id: ri.id,
+              model_number: ri.model_number,
+              material: rm.material,
+              qty_per_unit: per,
+              fg_quantity: fgQty,
+              required_qty: per * fgQty,
+              unit: rm.unit ?? null,
+              source: "mapped",
+              purchase_status: "pending",
+              notes: rm.notes ?? null,
+            });
+          }
+          raw_material_count += mapping.raw_materials.length;
+        } else if (mapping && mapping.is_direct_purchase) {
+          // Direct purchase FG: no RM generated
+          continue;
+        } else {
+          // Unmapped — placeholder so Purchase sees the gap
+          rmRows.push({
+            requisition_id: created.id,
+            requisition_item_id: ri.id,
+            model_number: ri.model_number,
+            material: `[Unmapped] ${ri.model_number || "FG"}`,
+            qty_per_unit: null,
+            fg_quantity: fgQty,
+            required_qty: null,
+            unit: null,
+            source: "unmapped_placeholder",
+            purchase_status: "pending",
+            notes: "No raw material mapping found for this Finish Good.",
+          });
+          unmapped_count++;
+        }
+      }
+
+      if (rmRows.length) {
+        const { error: rmErr } = await admin.from("requisition_raw_materials").insert(rmRows);
+        if (rmErr) throw rmErr;
+      }
     }
 
-    return new Response(JSON.stringify({ requisition: created }), {
+    return new Response(JSON.stringify({ requisition: created, raw_material_count, unmapped_count }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
