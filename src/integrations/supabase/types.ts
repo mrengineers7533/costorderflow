@@ -672,6 +672,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_direct_purchase: boolean
           model_number: string
           notes: string | null
           raw_materials: Json
@@ -681,6 +682,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_direct_purchase?: boolean
           model_number: string
           notes?: string | null
           raw_materials?: Json
@@ -690,6 +692,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_direct_purchase?: boolean
           model_number?: string
           notes?: string | null
           raw_materials?: Json
@@ -1164,6 +1167,7 @@ export type Database = {
           description: string | null
           fg_snapshot: Json
           id: string
+          included_in_requisition: boolean
           item_no: string | null
           lot_no: string | null
           model_number: string | null
@@ -1181,6 +1185,7 @@ export type Database = {
           description?: string | null
           fg_snapshot?: Json
           id?: string
+          included_in_requisition?: boolean
           item_no?: string | null
           lot_no?: string | null
           model_number?: string | null
@@ -1198,6 +1203,7 @@ export type Database = {
           description?: string | null
           fg_snapshot?: Json
           id?: string
+          included_in_requisition?: boolean
           item_no?: string | null
           lot_no?: string | null
           model_number?: string | null
@@ -1253,6 +1259,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      requisition_raw_materials: {
+        Row: {
+          created_at: string
+          fg_quantity: number | null
+          id: string
+          material: string
+          model_number: string | null
+          notes: string | null
+          purchase_status: string
+          qty_per_unit: number | null
+          required_qty: number | null
+          requisition_id: string
+          requisition_item_id: string | null
+          source: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fg_quantity?: number | null
+          id?: string
+          material: string
+          model_number?: string | null
+          notes?: string | null
+          purchase_status?: string
+          qty_per_unit?: number | null
+          required_qty?: number | null
+          requisition_id: string
+          requisition_item_id?: string | null
+          source?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fg_quantity?: number | null
+          id?: string
+          material?: string
+          model_number?: string | null
+          notes?: string | null
+          purchase_status?: string
+          qty_per_unit?: number | null
+          required_qty?: number | null
+          requisition_id?: string
+          requisition_item_id?: string | null
+          source?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       requisitions: {
         Row: {
@@ -1553,6 +1610,7 @@ export type Database = {
           description: string | null
           fg_snapshot: Json
           id: string
+          included_in_requisition: boolean
           item_no: string | null
           lot_no: string | null
           model_number: string | null
@@ -1567,6 +1625,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requisition_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_requisition_raw_materials_by_token: {
+        Args: { _token: string }
+        Returns: {
+          created_at: string
+          fg_quantity: number | null
+          id: string
+          material: string
+          model_number: string | null
+          notes: string | null
+          purchase_status: string
+          qty_per_unit: number | null
+          required_qty: number | null
+          requisition_id: string
+          requisition_item_id: string | null
+          source: string
+          unit: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "requisition_raw_materials"
           isOneToOne: false
           isSetofReturn: true
         }
