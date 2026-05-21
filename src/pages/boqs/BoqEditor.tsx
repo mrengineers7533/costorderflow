@@ -628,12 +628,13 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, canEditFull, boqId, onUpdate,
+  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
   canEditFull: boolean;
   boqId: string | null;
+  orderId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
 }) {
   // Latest submitted design-review round for this BOQ. Used to surface
