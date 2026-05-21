@@ -76,6 +76,29 @@ export interface FgRawMaterialMapRow {
   }>;
   notes: string | null;
   updated_at: string;
+  fg_description_full?: string | null;
+}
+
+/**
+ * Normalize a Finish Good Column A cell to a single short name.
+ * Excel cells often contain "Name\n• long spec…" — keep only the first
+ * meaningful line so it can be used as a matching key and a UI label.
+ */
+export function firstLine(raw: unknown): string {
+  if (raw == null) return "";
+  let s = String(raw).replace(/\r/g, "\n");
+  // first non-empty line
+  const line = s.split("\n").map((p) => p.trim()).find((p) => p.length > 0) ?? "";
+  s = line;
+  // cut on common spec/bullet separators that sometimes share the first line
+  const cutMarkers = ["•", " :- ", ":- ", " - ", " – ", " — "];
+  for (const m of cutMarkers) {
+    const i = s.indexOf(m);
+    if (i > 0) s = s.slice(0, i);
+  }
+  s = s.replace(/\s+/g, " ").trim();
+  if (s.length > 120) s = s.slice(0, 120).trim();
+  return s;
 }
 
 export interface RmMasterUploadRow {

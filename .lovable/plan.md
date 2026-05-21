@@ -1,99 +1,73 @@
-# Raw Material Master (Excel) + Requisition module
 
-Additive extension. No changes to OA, BOQ, approval, revision, pricing, calculation, or existing UI flows. The existing `fg_raw_material_map`, `requisitions`, `requisition_items`, and `requisition_raw_materials` tables are reused. The existing Admin → Raw Material Master tab stays as a manual editor.
+# Column A first-line cleaning rule
 
----
+Apply a "first line only" normalization to Column A (Finish Good) everywhere it is read, stored as the matching key, displayed, or matched against BOQ items. Long spec/description text below the first line is ignored for matching and UI, but preserved as a separate field for reference.
 
-## 1. Excel format (confirmed from upload)
+## 1. Normalization helper (single source of truth)
 
-Two sheets, both header at row 2:
+Add `firstLine(raw: string): string` in a shared util (e.g. `src/lib/requisition/types.ts` next to existing shared helpers, plus a Deno-side copy in the edge functions).
 
-- **Sheet "Copy of FM MHE"** — cols: `Finished Good | Raw Material | Size/Model | Reqd Qty | Unit` (no Make column → Make stored as empty)
-- **Sheet "Copy of FM MC"** — cols: `Finished Good | Make | Raw Material | Size/Model | Reqd Qty | Unit | Price | Sell Price | Comments` (Price/Sell/Comments ignored)
+Rules:
+- Split on `\n` or `\r`, take first non-empty segment.
+- Also split on common bullet markers if they appear on the same line (`•`, `:-`, ` - `, ` – `) — keep only the part before the first such marker.
+- `trim()` and collapse internal whitespace.
+- Cap at 120 chars as a safety net.
 
-Column A holds the FG name only on the first row of each block; subsequent rows are blank and belong to the same FG until the next non-blank Column A cell. Parser groups by this rule.
+Used by both the importer (write path) and the matcher (read path) so legacy rows already in the DB also normalize on read.
 
-Per user's matching rule: only **Make, Raw Material, Size/Model, Reqd Qty, Unit** flow into the requisition.
+## 2. Excel import (`supabase/functions/import-rm-master/index.ts` and the client-side parser in `src/pages/RawMaterialMaster.tsx`)
 
----
+When grouping by Column A:
+- Read the raw Column A cell as today (still used to detect "non-blank starts a new FG block").
+- Before using it as the FG key / `model_number`, run `firstLine()`.
+- Store:
+  - `model_number` = `firstLine(rawColA)` — this is the matching + display key.
+  - `raw_materials[].fg_full_text` (new optional field inside the existing jsonb) and/or a new top-level `fg_description_full text` column on `fg_raw_material_map` — preserves the full multi-line text for reference. Nullable, backward compatible.
+- Upsert keyed by `lower(firstLine)`, so two Excel rows whose Column A start with the same first line collapse into one FG. Last write wins (matches the "Overwrite mapping; no history" decision).
 
-## 2. Database (one new migration)
+Migration: `ALTER TABLE fg_raw_material_map ADD COLUMN fg_description_full text;` (nullable, no backfill needed).
 
-- **Extend `fg_raw_material_map.raw_materials` jsonb schema** — each row: `{ make, material, size_model, qty_per_unit, unit }`. Fully backward compatible (existing rows missing `make`/`size_model` render as blanks; legacy `notes` ignored on read).
-- **New table `rm_master_uploads`** — stores latest Excel file pointer for the sidebar module:
-  - `id`, `file_path` (in `boq-documents` bucket, reuse existing), `original_filename`, `sheet_count`, `fg_count`, `row_count`, `uploaded_by`, `uploaded_at`. RLS: admin write, all-auth read. Only the latest row is shown; older rows kept but UI hides them ("no history" per answer 3 means functionally we don't surface them).
-- **Extend `requisition_raw_materials`** — add nullable `make text`, `size_model text`. Backfill defaults null.
+## 3. Matching (`CreateRequisitionDialog.tsx` + `create-requisition` edge function)
 
-No structural change to BOQ/OA/PI/approval tables.
+Wrap every `model_number` read from `fg_raw_material_map` with `firstLine()` before comparing — defensive against any legacy rows that still hold multi-line text.
 
----
+The existing three-step match keeps the same priority order, but operates on the cleaned key:
+1. exact case-insensitive on `firstLine(model_number)` vs BOQ `model_number`
+2. `firstLine(model_number)` contains BOQ `model_number`
+3. `firstLine(model_number)` contains first 40 chars of BOQ `description`
 
-## 3. New sidebar module: Raw Material Master
+No behavior change beyond using the cleaned key.
 
-Route `/raw-materials` (admin-only write, all-auth read), added to `AppSidebar` after **Requisitions** with `Boxes` icon.
+## 4. UI
 
-Page sections:
-- **Upload card**: Drag-and-drop `.xlsx`. Replace-only (overwrites mapping). Shows last upload filename + date + user.
-- **Action**: "Upload & Replace Mapping" → runs new edge function `import-rm-master`.
-- **Mappings table**: Searchable list of FG (model/name), # RM rows, Direct-Purchase flag, Source ("Excel" or "Manual"), Last updated. Row click opens existing editor drawer (reuses `AdminRawMaterials` editor component → extract to `src/components/admin/RawMaterialEditor.tsx`) so manual edits remain possible after import.
-- Banner reminding users this is the only Excel upload surface.
+- **Raw Material Master page** (`src/pages/RawMaterialMaster.tsx`): the FG column shows `firstLine(model_number)` only. Full text available via a small "Show full description" toggle / tooltip per row, sourced from `fg_description_full`. Table columns stay: `Finish Good | RM rows | Direct Purchase | Updated`.
+- **CreateRequisitionDialog**: status badges already key off the cleaned mapping, no further change.
+- **Requisition Detail / Public / PDF**: already display `model_number` from `requisition_items`, which comes from BOQ (untouched). No change needed.
 
-The existing Admin → Raw Material Master tab stays (per answer 2) for purely manual edits; both read/write the same `fg_raw_material_map`.
+## 5. One-time cleanup of existing rows
 
----
+Inside the same migration, run an UPDATE that splits any current `model_number` containing a newline:
+```
+UPDATE fg_raw_material_map
+SET fg_description_full = model_number,
+    model_number = btrim(split_part(model_number, E'\n', 1))
+WHERE model_number ~ E'\n';
+```
+This normalizes data already imported under the previous rule. Duplicate-key collisions are handled by selecting `DISTINCT ON (lower(first_line))` first; if any collision exists, the older row's `raw_materials` is merged into the newer row before deletion. (Implemented as a small PL/pgSQL DO block in the migration.)
 
-## 4. Edge function: `import-rm-master`
+## 6. Strictly unchanged
 
-- Accepts uploaded file path in `boq-documents`.
-- Reads with `xlsx` (npm) on Deno. Iterates both sheets, groups rows by Column A using "first non-blank starts a new FG" rule.
-- For each FG block: upsert into `fg_raw_material_map` keyed by trimmed FG name (case-insensitive). Stores Column A verbatim in `model_number` (this is the matching key per answer 1).
-- Records summary in `rm_master_uploads`. Returns `{ fg_count, row_count, skipped }`.
-- Admin-only (JWT role check via `has_role`).
-
----
-
-## 5. Matching rule (per user's spec)
-
-In `CreateRequisitionDialog` and `create-requisition` edge function:
-
-1. For each BOQ FG item, look up `fg_raw_material_map` where Column A (`model_number`) matches **first**:
-   - exact case-insensitive on the BOQ item's `model_number`
-   - else: first FG whose Column A contains the BOQ `model_number` substring
-   - else: first FG whose Column A contains the BOQ `description` (first 40 chars) substring
-2. If matched: pull that FG's RM rows into `requisition_raw_materials` (qty = `qty_per_unit * boq_quantity`), source `mapped`.
-3. If unmatched: insert a single placeholder row with material `"Raw Material Mapping Not Found"`, source `unmapped_placeholder`. UI shows amber warning with a "Open in Raw Material Master" deeplink. No blank/wrong RM lines generated.
-
-Existing direct-purchase toggle still excludes FG from requisition when checked off in selection dialog.
-
----
-
-## 6. Requisition module (already exists — small additions)
-
-Already present: list page, detail page, public link, PDF, send-to-purchase. Additions:
-- **Detail page RM tab**: show new `make` and `size_model` columns; highlight `unmapped_placeholder` rows in amber.
-- **PDF (`src/lib/requisition/pdf.ts`)**: RM Indent table columns become **Make | Raw Material | Size/Model | Reqd Qty | Unit | Status** (drop legacy "FG sources" column).
-- **List page**: already shows Requisition #, OA, BOQ, Revision, Client, Status, Created — no change. "Stale" badge already triggers on BOQ revision; Regenerate already pulls latest approved BOQ. Confirmed satisfies "always linked to latest approved BOQ".
-
----
+OA, BOQ, approval/revision/pricing/calculation, requisition workflow, sidebar, design tokens, existing Admin RM tab UX, and all other modules.
 
 ## 7. File map
 
+Edited:
+- `src/lib/requisition/types.ts` — add `firstLine()` helper + extend mapping type with `fg_description_full?: string`.
+- `src/pages/RawMaterialMaster.tsx` — apply `firstLine()` in parser; show cleaned name with optional full-text tooltip.
+- `src/components/manufacturing/CreateRequisitionDialog.tsx` — wrap `model_number` reads with `firstLine()` before matching.
+- `supabase/functions/create-requisition/index.ts` — same wrap; inline Deno copy of `firstLine()`.
+- `supabase/functions/import-rm-master/index.ts` — apply `firstLine()` when keying upserts; store full text in `fg_description_full`.
+- `src/integrations/supabase/types.ts` — regenerated by migration (auto).
+
 New:
-- `supabase/migrations/<ts>_rm_master_excel.sql`
-- `supabase/functions/import-rm-master/index.ts`
-- `src/pages/admin/RawMaterialMaster.tsx` (new top-level page; reuses editor component)
-- `src/components/rm/RmUploadCard.tsx`
-- `src/components/admin/RawMaterialEditor.tsx` (extract from existing AdminRawMaterials for reuse)
-
-Edited (additive only):
-- `src/components/AppSidebar.tsx` — add "Raw Material Master" entry
-- `src/App.tsx` — add `/raw-materials` route (auth-gated)
-- `src/components/manufacturing/CreateRequisitionDialog.tsx` — matching now uses new rule; selection table unchanged
-- `supabase/functions/create-requisition/index.ts` — same matching rule + write `make`/`size_model`
-- `src/lib/requisition/pdf.ts`, `src/pages/requisitions/RequisitionDetail.tsx`, `src/pages/requisitions/PublicRequisition.tsx`, `src/lib/requisition/types.ts` — new RM columns
-
----
-
-## 8. Strictly unchanged
-
-OA editor, BOQ editor, approval/revision/pricing/calculation, `boqs`/`orders`/`proforma_invoices` schemas and RLS, sidebar visual style, design tokens, existing Admin RM tab UX.
+- `supabase/migrations/<ts>_fg_first_line_cleanup.sql` — add `fg_description_full` column + one-time cleanup UPDATE with collision merge.

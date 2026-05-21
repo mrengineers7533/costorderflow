@@ -12,6 +12,20 @@ interface Body {
   selected_boq_item_ids?: string[];
 }
 
+function firstLine(raw: unknown): string {
+  if (raw == null) return "";
+  let s = String(raw).replace(/\r/g, "\n");
+  const line = s.split("\n").map((p) => p.trim()).find((p) => p.length > 0) ?? "";
+  s = line;
+  for (const m of ["•", " :- ", ":- ", " - ", " – ", " — "]) {
+    const i = s.indexOf(m);
+    if (i > 0) s = s.slice(0, i);
+  }
+  s = s.replace(/\s+/g, " ").trim();
+  if (s.length > 120) s = s.slice(0, 120).trim();
+  return s;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -115,18 +129,21 @@ Deno.serve(async (req) => {
       .order("model_number");
     type FgMap = { model_number: string; is_direct_purchase: boolean; raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }> };
     const fgMaps: FgMap[] = ((allMaps as unknown as FgMap[]) || []);
-    const fgByLower = new Map(fgMaps.map((m) => [m.model_number.toLowerCase(), m]));
+    // Normalize Column A to first line defensively, in case legacy rows still
+    // contain multi-line text. All matching keys below operate on this cleaned name.
+    const cleanedFgMaps = fgMaps.map((m) => ({ ...m, model_number: firstLine(m.model_number) || m.model_number }));
+    const fgByLower = new Map(cleanedFgMaps.map((m) => [m.model_number.toLowerCase(), m]));
     function matchFg(modelNumber?: string | null, description?: string | null): FgMap | null {
       const mn = (modelNumber || "").trim().toLowerCase();
       if (mn) {
         const exact = fgByLower.get(mn);
         if (exact) return exact;
-        const contains = fgMaps.find((m) => m.model_number.toLowerCase().includes(mn));
+        const contains = cleanedFgMaps.find((m) => m.model_number.toLowerCase().includes(mn));
         if (contains) return contains;
       }
       const desc = (description || "").trim().slice(0, 40).toLowerCase();
       if (desc) {
-        const contains = fgMaps.find((m) => m.model_number.toLowerCase().includes(desc));
+        const contains = cleanedFgMaps.find((m) => m.model_number.toLowerCase().includes(desc));
         if (contains) return contains;
       }
       return null;
