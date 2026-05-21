@@ -118,11 +118,12 @@ export function ItemChangeHistoryButton({
       rev: number;
       prevRev: number;
       when: string;
-      kind: "added" | "removed" | "modified" | "unchanged";
+      kind: "added" | "removed" | "modified" | "unchanged" | "baseline";
       changes: { field: FieldKey; label: string; oldV: unknown; newV: unknown }[];
       oldAmount: number;
       newAmount: number;
       delta: number;
+      snapshot?: { field: FieldKey; label: string; value: unknown }[];
     }[] = [];
     for (let i = 0; i < snapshots.length; i++) {
       const curr = snapshots[i];
@@ -144,20 +145,23 @@ export function ItemChangeHistoryButton({
         continue;
       }
       if (curr.item && !prev?.item) {
+        const snapshot = FIELDS.map((f) => ({
+          field: f.key,
+          label: f.label,
+          value: (curr.item as unknown as Record<string, unknown>)[f.key],
+        })).filter((c) => c.value != null && c.value !== "");
         out.push({
           rev: curr.rev,
           prevRev: prev?.rev ?? -1,
           when,
-          kind: i === 0 ? "added" : "added",
-          changes: FIELDS.map((f) => ({
-            field: f.key,
-            label: f.label,
-            oldV: undefined,
-            newV: (curr.item as unknown as Record<string, unknown>)[f.key],
-          })).filter((c) => c.newV != null && c.newV !== ""),
+          kind: i === 0 ? "baseline" : "added",
+          changes: snapshot.map((s) => ({
+            field: s.field, label: s.label, oldV: undefined, newV: s.value,
+          })),
           oldAmount: 0,
           newAmount: Number(curr.item.amount) || 0,
           delta: Number(curr.item.amount) || 0,
+          snapshot,
         });
         continue;
       }
@@ -174,26 +178,26 @@ export function ItemChangeHistoryButton({
           if (!eq(ov, nv))
             changes.push({ field: f.key, label: f.label, oldV: ov, newV: nv });
         }
-        if (changes.length) {
-          out.push({
-            rev: curr.rev,
-            prevRev: prev.rev,
-            when,
-            kind: "modified",
-            changes,
-            oldAmount: Number(prev.item.amount) || 0,
-            newAmount: Number(curr.item.amount) || 0,
-            delta:
-              (Number(curr.item.amount) || 0) -
-              (Number(prev.item.amount) || 0),
-          });
-        }
+        out.push({
+          rev: curr.rev,
+          prevRev: prev.rev,
+          when,
+          kind: changes.length ? "modified" : "unchanged",
+          changes,
+          oldAmount: Number(prev.item.amount) || 0,
+          newAmount: Number(curr.item.amount) || 0,
+          delta:
+            (Number(curr.item.amount) || 0) -
+            (Number(prev.item.amount) || 0),
+        });
       }
     }
     return out;
   }, [snapshots]);
 
-  const modifications = events.filter((e) => e.kind !== "unchanged").length;
+  const modifications = events.filter(
+    (e) => e.kind === "modified" || e.kind === "added" || e.kind === "removed",
+  ).length;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -248,10 +252,14 @@ export function ItemChangeHistoryButton({
                   ? "text-red-700 dark:text-red-400"
                   : "text-muted-foreground";
               const title =
-                ev.kind === "added"
+                ev.kind === "baseline"
+                  ? `Initial values in R${ev.rev}`
+                  : ev.kind === "added"
                   ? `Added in R${ev.rev}`
                   : ev.kind === "removed"
                   ? `Removed in R${ev.rev}`
+                  : ev.kind === "unchanged"
+                  ? `R${ev.prevRev} → R${ev.rev}`
                   : `Modified · R${ev.prevRev} → R${ev.rev}`;
               return (
                 <div key={i} className="rounded-md border bg-muted/20 p-3">
@@ -261,7 +269,32 @@ export function ItemChangeHistoryButton({
                       {ev.when}
                     </div>
                   </div>
-                  {ev.changes.length > 0 && (
+                  {ev.kind === "unchanged" && (
+                    <div className="text-[11px] text-muted-foreground italic">
+                      No changes to this item in R{ev.rev}.
+                    </div>
+                  )}
+                  {ev.kind === "baseline" && ev.snapshot && (
+                    <table className="w-full">
+                      <thead className="bg-muted/40">
+                        <tr className="text-left">
+                          <th className="p-2">Field</th>
+                          <th className="p-2">Current Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ev.snapshot.map((s) => (
+                          <tr key={s.field} className="border-t">
+                            <td className="p-2 font-medium">{s.label}</td>
+                            <td className="p-2 whitespace-pre-wrap">
+                              {fmt(s.field, s.value)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {ev.kind !== "baseline" && ev.kind !== "unchanged" && ev.changes.length > 0 && (
                     <table className="w-full">
                       <thead className="bg-muted/40">
                         <tr className="text-left">
@@ -285,6 +318,7 @@ export function ItemChangeHistoryButton({
                       </tbody>
                     </table>
                   )}
+                  {ev.kind !== "unchanged" && (
                   <div className="mt-2 flex items-center justify-between flex-wrap gap-2">
                     <div className="text-[11px] text-muted-foreground">
                       Amount: ₹{inr(ev.oldAmount)} → ₹{inr(ev.newAmount)}
@@ -295,6 +329,7 @@ export function ItemChangeHistoryButton({
                         : `${signed(ev.delta)} · OA ${ev.delta > 0 ? "increased" : "decreased"} by ₹${inr(Math.abs(ev.delta))}`}
                     </div>
                   </div>
+                  )}
                 </div>
               );
             })}

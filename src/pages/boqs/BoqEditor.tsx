@@ -18,6 +18,7 @@ import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { BoqItemChangeHistoryButton } from "@/components/boqs/BoqItemChangeHistoryButton";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
@@ -549,6 +550,7 @@ export default function BoqEditor() {
                   canEditRemarks={canEditRemarks}
                   canEditFull={canEditFull}
                   boqId={boqId}
+                  orderId={orderId || null}
                   onUpdate={updateItem}
                 />
               </CardContent>
@@ -628,12 +630,13 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, canEditFull, boqId, onUpdate,
+  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
   canEditFull: boolean;
   boqId: string | null;
+  orderId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
 }) {
   // Latest submitted design-review round for this BOQ. Used to surface
@@ -689,6 +692,11 @@ function BoqItemsList({
                 canApply={canEditFull || canEditRemarks}
                 onApply={(patch) => onUpdate(it.id, patch)}
               />
+            )}
+            {orderId && (
+              <div className="flex justify-end -mt-1">
+                <BoqItemChangeHistoryButton orderId={orderId} item={it} />
+              </div>
             )}
           </div>
       ))}
