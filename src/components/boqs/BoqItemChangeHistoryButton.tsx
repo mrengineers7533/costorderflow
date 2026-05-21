@@ -51,10 +51,27 @@ export function BoqItemChangeHistoryButton({ orderId, item }: Props) {
     (async () => {
       setLoading(true);
       try {
+        // Resolve the OA family (root + revisions) so we pull every BOQ
+        // generated across all OA revisions, not just the current one.
+        const { data: oaRow } = await supabase
+          .from("orders")
+          .select("id,parent_order_id")
+          .eq("id", orderId)
+          .maybeSingle();
+        const root = (oaRow as { id: string; parent_order_id: string | null } | null)
+          ?.parent_order_id
+          || (oaRow as { id: string } | null)?.id
+          || orderId;
+        const { data: family } = await supabase
+          .from("orders")
+          .select("id")
+          .or(`id.eq.${root},parent_order_id.eq.${root}`);
+        const familyIds = ((family as { id: string }[] | null) || []).map((r) => r.id);
+        if (!familyIds.length) { if (!cancelled) setRows([]); return; }
         const { data } = await supabase
           .from("boqs")
           .select("*")
-          .eq("order_id", orderId);
+          .in("order_id", familyIds);
         const list = ((data as unknown as BoqRecord[]) || []).slice()
           .sort((a, b) => (a.revision ?? 0) - (b.revision ?? 0));
         if (!cancelled) setRows(list);
