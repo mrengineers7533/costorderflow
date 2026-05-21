@@ -1,72 +1,35 @@
-## Goals
+## Goal
 
-1. Fix the error when Design Team submits the review link.
-2. Show Design Team feedback (comments + approval decision) **row-wise** under each line item in both **OA Editor** and **BOQ Editor**.
-3. Do not touch pricing, calc, OA flow, or any other feature.
+Make the Design Comments block under each OA item look and behave exactly like the BOQ screenshot you shared: a single dashed-orange band per row with `DESIGN COMMENTS · R{n} · {reviewer}`, inline `Apply {Col} → OA` buttons, and an always-visible value grid (MODEL / DESCRIPTION / QTY / UNIT / REMARKS). Applies to MR and GMS. Linking, calculations, pricing, PI, PDF, BOQ verification flow — all untouched.
 
----
+## What stays the same
 
-## 1. Fix Submit error on Design Review link
+- BOQ design row (already matches the screenshot) — no changes.
+- BOQ revisioning on OA save — already wired through `syncBoqsAndPisForOrder` + `createPendingBoqRevision`, no logic change needed. Re-confirmed: applying a value in OA → marking OA dirty → save (auto or manual) → BOQ family in-place syncs (description/qty/unit/remarks) and a pending BOQ revision is created when OA revision bumps. Works for both MR and GMS.
+- All matching is by `boq_item_id` first, then normalized description, then positional index — comments stay glued to the correct row.
 
-**Root cause:** In `src/pages/boqs/DesignReview.tsx` the submit call sends:
+## OA `OaDesignSuggestionRow` changes (single file: `src/pages/orders/OrderEditor.tsx`)
 
-```ts
-_reviewer_email: contact.includes("@") ? contact : (reviewerName + " <no-email>")
-```
+1. Visual layout to mirror the screenshot exactly:
+   - Header line: `DESIGN COMMENTS · R{round_no} · {reviewer_name?}` in uppercase orange, followed inline by one `Apply {Label} → OA` button per non-empty column (Model, Description, Qty, Unit, Remarks).
+   - Always-visible value grid below (drop the "View history" toggle), one tile per present column showing label + value, matching the BOQ block's style.
+   - Keep approval pill (Approved / Change Required / Pending) and `Change note:` line when the latest round is an approval round.
 
-When the reviewer leaves the "Email or Mobile" field empty or enters only a phone number, the RPC `submit_design_review_with_token` raises **"Invalid reviewer email"** because the string fails the email regex.
+2. Apply targets all route to OA (Model → `model`, Description → `description`, Qty → `quantity`, Unit → `unit`, Remarks → `remarks`) via the existing `updateItemById` patch — preserves all other fields on the row.
 
-**Fix (frontend only):**
-- If `contact` contains `@` → send as-is (validated by RPC).
-- Otherwise send a safe synthetic placeholder `noemail@noemail.local` so the RPC passes validation, and store the actual phone/contact in the existing `_reviewer_contact` parameter (already passed).
-- Update the field hint to clarify that email is optional but recommended.
+3. After any Apply, keep calling `onAutoSave` (debounced 500 ms `save(false)`), which:
+   - persists the OA,
+   - triggers `syncBoqsAndPisForOrder` → BOQ rows update in place,
+   - and `createPendingBoqRevision` runs when OA `revision` bumps, producing a fresh BOQ revision automatically.
 
-No DB/RPC changes required — submit will work for both email and non-email reviewers, and the original contact value is still saved on the review row.
+4. Remove the BOQ-target branch / `applyDesignToBoq` button paths from this row (BOQ side already has its own row-wise Apply → BOQ block in `BoqEditor`). Keep the `applyDesignToBoq` helper itself in the file (still imported elsewhere) but stop calling it from the OA inline buttons; OA → BOQ propagation now flows exclusively through the standard OA save → sync pipeline, which is the documented behavior the user is asking for.
 
----
-
-## 2. Row-wise Design feedback in BOQ Editor
-
-`src/pages/boqs/BoqEditor.tsx` → `BoqItemsList` currently renders just the item grid (a comment explicitly says inline suggestions were moved to OA). Re-introduce inline display **without removing the OA version**.
-
-Under each BOQ row, render a new compact `BoqDesignSuggestionRow`:
-- Pulls the latest submitted review via existing `useLatestDesignReview(boqId)`.
-- Matches the row using existing `findReviewItemForOaItem(reviewItems, item, idx)` helper (works for any item with `description` + index).
-- Shows, when present:
-  - **Per-column comments** (Model / Description / Qty / Unit / Remarks) via `parseColumnComments`, each with an **Apply → BOQ** button that calls the existing `onUpdate(id, patch)` so all related fields (Model, Description, Qty, Unit, Remarks) remain visible/editable.
-  - **Approval decision badge** (Approved / Change Required / Pending) and the reviewer's **Change Note** when the latest round is of kind `approval`.
-  - Round number + reviewer name (small caption).
-- Pure UI block — no impact on calculations or BOQ save flow.
-
-Edit only inside `BoqItemsList` (props extended with `boqId` already present and `onUpdate`). Show/hide automatically if no matching review item or no content to display.
-
----
-
-## 3. Approval decision row in OA Editor
-
-`OaDesignSuggestionRow` (in `src/pages/orders/OrderEditor.tsx`) already shows column comments row-wise. Extend it (no calc changes) so that when the latest round is an **approval** round, it also renders:
-- A small status pill: **Approved** / **Change Required** / **Pending** from `reviewItem.decision`.
-- The reviewer's **Change Note** (`reviewItem.design_change_note`) when present.
-
-This ensures the approval link result is visible below the related OA row, matching the BOQ side.
-
----
-
-## 4. Preserve OA fields on update
-
-No code change needed — the existing `onApply` in `OaDesignSuggestionRow` already calls `onApply({ field: value })` which spreads into the current item, keeping Model, Description, Qty, Unit, Remarks intact. The new BOQ apply buttons follow the same partial-patch pattern via the existing `onUpdate`. Auto-save behavior on OA is left unchanged.
-
----
+5. No prop changes that break callers other than this component's own interface; the call site at line 1040 simplifies (drop `boqLinked`, `onApplyToBoq`).
 
 ## Files to change
 
-- `src/pages/boqs/DesignReview.tsx` — submit email fallback + small label tweak.
-- `src/pages/boqs/BoqEditor.tsx` — add `BoqDesignSuggestionRow` inside `BoqItemsList`, wire `useLatestDesignReview(boqId)`.
-- `src/pages/orders/OrderEditor.tsx` — extend `OaDesignSuggestionRow` to also surface approval decision + change note row-wise.
+- `src/pages/orders/OrderEditor.tsx` — rewrite `OaDesignSuggestionRow` and update its single call site.
 
-## What stays untouched
+## Untouched
 
-- Pricing / totals / charges / currency / discounts.
-- All existing OA, BOQ, PI, Cost Sheet, Final BOQ, Verification flows.
-- Auto-save behavior (existing triggers only).
-- Database schema, RLS, RPC signatures.
+- `src/pages/boqs/BoqEditor.tsx`, `src/pages/boqs/DesignReview.tsx`, all of `src/lib/revisions/*`, `src/lib/orders/calc.ts`, RPCs, RLS, schema, all pricing/charges/totals/PI/PDF/Excel/Final BOQ/Verification paths.
