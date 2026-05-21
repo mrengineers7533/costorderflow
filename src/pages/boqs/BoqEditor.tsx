@@ -692,6 +692,11 @@ function BoqItemsList({
                 onApply={(patch) => onUpdate(it.id, patch)}
               />
             )}
+            {orderId && (
+              <div className="flex justify-end -mt-1">
+                <BoqItemChangeHistoryButton orderId={orderId} item={it} />
+              </div>
+            )}
           </div>
       ))}
     </>
