@@ -5,8 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-import type { RequisitionRecord } from "@/lib/requisition/types";
+import { Search, Eye, Download, Link2, Send } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { generateRequisitionPDF } from "@/lib/requisition/pdf";
+import type {
+  RequisitionRecord,
+  RequisitionItemRecord,
+  RequisitionRawMaterialRecord,
+} from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 
 const fmtDate = (s: string | null | undefined) =>
@@ -18,6 +24,7 @@ export default function RequisitionsList() {
   const [latestRevByRoot, setLatestRevByRoot] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +72,55 @@ export default function RequisitionsList() {
     });
   }, [reqs, boqs, search]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  async function copyLink(r: RequisitionRecord) {
+    const link = `${window.location.origin}/requisition/${r.share_token}`;
+    await navigator.clipboard.writeText(link);
+    toast({ title: "Link copied", description: link });
+  }
+
+  async function downloadPdf(r: RequisitionRecord) {
+    setBusyId(r.id);
+    try {
+      const b = boqs[r.boq_id];
+      const [{ data: its }, { data: rms }] = await Promise.all([
+        sb.from("requisition_items").select("*").eq("requisition_id", r.id).order("item_no"),
+        sb.from("requisition_raw_materials").select("*").eq("requisition_id", r.id).order("material"),
+      ]);
+      const shareLink = `${window.location.origin}/requisition/${r.share_token}`;
+      const familyLink = r.family_token ? `${window.location.origin}/boq/family/${r.family_token}` : "";
+      const doc = generateRequisitionPDF({
+        requisition: r,
+        items: (its as RequisitionItemRecord[]) || [],
+        rawMaterials: (rms as RequisitionRawMaterialRecord[]) || [],
+        boqNumber: b?.boq_number || "",
+        oaNumber: b?.reference_oa_number || "",
+        clientName: b?.client_name || "",
+        shareLink,
+        familyLink,
+      });
+      doc.save(`${r.requisition_number.replace(/[/\\]/g, "_")}.pdf`);
+    } catch (e) {
+      toast({ title: "PDF failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function sendToPurchase(r: RequisitionRecord) {
+    setBusyId(r.id);
+    const { error } = await sb.from("requisitions").update({ status: "in_purchase" }).eq("id", r.id);
+    setBusyId(null);
+    if (error) {
+      toast({ title: "Could not send", description: error.message, variant: "destructive" });
+      return;
+    }
+    setReqs((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: "in_purchase" } : x)));
+    toast({ title: "Sent to Purchase" });
+  }
+
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -90,32 +146,72 @@ export default function RequisitionsList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map((r) => {
-            const b = boqs[r.boq_id];
-            const latest = latestRevByRoot[r.order_root_id];
-            const stale = latest != null && latest > r.boq_revision;
-            return (
-              <Card key={r.id}>
-                <CardContent className="py-4 flex flex-wrap items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{r.requisition_number}</span>
-                      <Badge variant="secondary">BOQ R{r.boq_revision}</Badge>
-                      <Badge>{r.status}</Badge>
-                      {stale && <Badge variant="destructive">BOQ revised to R{latest}</Badge>}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 truncate">
-                      {b?.client_name || "—"} · OA {b?.reference_oa_number || "—"} · BOQ {b?.boq_number || "—"}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Created: {fmtDate(r.created_at)}</div>
-                  <Link to={`/requisitions/${r.id}`}><Button size="sm">Open</Button></Link>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b bg-muted/30">
+                <tr>
+                  <th className="text-left py-2 px-3">Requisition #</th>
+                  <th className="text-left py-2 px-3">OA #</th>
+                  <th className="text-left py-2 px-3">BOQ #</th>
+                  <th className="text-left py-2 px-3">Rev</th>
+                  <th className="text-left py-2 px-3">Client</th>
+                  <th className="text-left py-2 px-3">Created</th>
+                  <th className="text-left py-2 px-3">Status</th>
+                  <th className="text-right py-2 px-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => {
+                  const b = boqs[r.boq_id];
+                  const latest = latestRevByRoot[r.order_root_id];
+                  const stale = latest != null && latest > r.boq_revision;
+                  const sent = r.status === "in_purchase" || r.status === "closed";
+                  return (
+                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="py-2 px-3 font-medium">{r.requisition_number}</td>
+                      <td className="py-2 px-3">{b?.reference_oa_number || "—"}</td>
+                      <td className="py-2 px-3">{b?.boq_number || "—"}</td>
+                      <td className="py-2 px-3">R{r.boq_revision}</td>
+                      <td className="py-2 px-3 max-w-[220px] truncate">{b?.client_name || "—"}</td>
+                      <td className="py-2 px-3 text-xs text-muted-foreground">{fmtDate(r.created_at)}</td>
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge>{r.status}</Badge>
+                          {stale && <Badge variant="destructive">R{latest} avail</Badge>}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link to={`/requisitions/${r.id}`}>
+                            <Button size="sm" variant="ghost" title="View">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                          <Button size="sm" variant="ghost" title="Download PDF"
+                                  disabled={busyId === r.id}
+                                  onClick={() => downloadPdf(r)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Copy link"
+                                  onClick={() => copyLink(r)}>
+                            <Link2 className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant={sent ? "ghost" : "outline"} title="Send to Purchase"
+                                  disabled={sent || busyId === r.id}
+                                  onClick={() => sendToPurchase(r)}>
+                            <Send className="h-4 w-4 mr-1" />
+                            {sent ? "Sent" : "Send"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
