@@ -275,6 +275,81 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_distribution_log: {
+        Row: {
+          boq_id: string
+          created_at: string
+          error: string | null
+          factory_emails: string[]
+          family_token: string
+          id: string
+          message: string | null
+          order_root_id: string
+          purchase_emails: string[]
+          revision: number
+          sent_by: string | null
+          sent_by_email: string | null
+          status: string
+        }
+        Insert: {
+          boq_id: string
+          created_at?: string
+          error?: string | null
+          factory_emails?: string[]
+          family_token: string
+          id?: string
+          message?: string | null
+          order_root_id: string
+          purchase_emails?: string[]
+          revision: number
+          sent_by?: string | null
+          sent_by_email?: string | null
+          status?: string
+        }
+        Update: {
+          boq_id?: string
+          created_at?: string
+          error?: string | null
+          factory_emails?: string[]
+          family_token?: string
+          id?: string
+          message?: string | null
+          order_root_id?: string
+          purchase_emails?: string[]
+          revision?: number
+          sent_by?: string | null
+          sent_by_email?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      boq_family_share_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          order_root_id: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_root_id: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_root_id?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: []
+      }
       boq_remarks_audit_log: {
         Row: {
           boq_id: string
@@ -1140,6 +1215,46 @@ export type Database = {
         }
       }
       get_final_boq_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_date: string
+          boq_number: string
+          client_name: string | null
+          created_at: string
+          design_review_status: string
+          final_sent_at: string | null
+          final_share_token: string | null
+          format: Database["public"]["Enums"]["order_format"]
+          id: string
+          is_current: boolean
+          line_items: Json
+          notes: string | null
+          order_id: string
+          prepared_by: string | null
+          project_number: string | null
+          reference_oa_number: string | null
+          revised_from_id: string | null
+          revision: number
+          source_order_id: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          terms: string | null
+          updated_at: string
+          user_id: string | null
+          verification_requested_at: string | null
+          verification_status: string
+          verification_token: string | null
+          verified_at: string | null
+          verified_by_email: string | null
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "boqs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_latest_approved_boq_by_family_token: {
         Args: { _token: string }
         Returns: {
           boq_date: string

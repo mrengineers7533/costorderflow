@@ -29,6 +29,7 @@ import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
+import FamilyBoq from "./pages/boqs/FamilyBoq";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
           <Route path="/boq-verify/:token" element={<BoqVerify />} />
           <Route path="/design-review/:token" element={<DesignReview />} />
           <Route path="/boq/final/:token" element={<FinalBoq />} />
+          <Route path="/boq/family/:token" element={<FamilyBoq />} />
           <Route
             path="/*"
             element={
