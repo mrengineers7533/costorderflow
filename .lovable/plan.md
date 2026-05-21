@@ -1,40 +1,42 @@
-## What's already working
+## Scope
 
-- `create-requisition` edge function already saves every new requisition into the `requisitions` table with items + raw materials.
-- `/requisitions` route already exists and lists all saved requisitions — so requisitions are *not* trapped on the BOQ/Manufacturing page; they already persist to the Requisition module.
-- Detail page (`/requisitions/:id`) already has PDF download, share link copy, and editable per-item purchase status.
+Add delete + edit capabilities to **Raw Material Master** for admins. No schema changes — existing requisitions already store their own `requisition_items` + `requisition_raw_materials` snapshot rows, so deleting a mapping or upload record has zero impact on past requisitions.
 
-## What's missing (the actual gap)
+## Changes — all confined to `src/pages/RawMaterialMaster.tsx`
 
-The list view shows requisitions as cards but doesn't surface the columns and inline actions the user is asking for. We'll upgrade only that list page plus add a single status transition for "Send to Purchase".
+### 1. Row-level actions column (FG mappings table)
 
-## Changes
+Add a right-aligned **Actions** cell per row with three icon buttons:
 
-### 1. `src/pages/requisitions/RequisitionsList.tsx` — rebuild as a table
+- **View** — opens the existing detail Sheet (replaces the current row-click trigger).
+- **Edit** — opens an editable Sheet (new mode of the existing Sheet) where admin can:
+  - Toggle `is_direct_purchase`
+  - Edit `notes`
+  - Edit each raw-material row inline: `make`, `material`, `size_model`, `qty_per_unit`, `unit`
+  - Add a new RM row, remove an RM row
+  - Save → `update fg_raw_material_map set raw_materials, is_direct_purchase, notes, updated_at=now() where id=?`
+- **Delete** — confirm dialog → `delete from fg_raw_material_map where id=?`, then refresh.
 
-Replace the card layout with a proper table showing:
+Non-admins see View only; Edit/Delete hidden.
 
-| Requisition # | OA # | BOQ # | Rev | Client | Created | Status | Actions |
+### 2. Upload history with delete
 
-Actions column (icon buttons, all inline — no navigation required for the quick ones):
-- **View** → `Link` to `/requisitions/:id`
-- **PDF** → reuses `generateRequisitionPDF` from `src/lib/requisition/pdf.ts`; loads the row's items + raw materials on demand (single click handler, lazy fetch per row)
-- **Link** → copies `${origin}/requisition/${share_token}` to clipboard, toast confirms
-- **Send to Purchase** → updates `requisitions.status` to `in_purchase` (status enum already supports it per `RequisitionRecord`), shows toast, refreshes row; hidden / disabled when status is already `in_purchase` or `closed`
+Replace the single "Latest" info strip with a small **Upload history** card listing recent rows from `rm_master_uploads` (descending). Each row shows filename / date / uploader / counts and a **Delete** button (admin only) that removes the audit record (`delete from rm_master_uploads where id=?`). Deleting an upload record does **not** touch `fg_raw_material_map` — it only clears the history entry; a banner under the action button explains this.
 
-Keep existing search input. Keep the "BOQ revised to Rn" stale badge inline in the Status cell.
+### 3. Replace Excel button
 
-### 2. No DB migration needed
+Already exists ("Replace Excel" / "Upload Excel"). Leave behavior unchanged; reword the helper text to mention that replace upserts by Finish Good name and does not delete existing FG rows that aren't in the new file. Admin can use row-level Delete (or a future bulk action) for those.
 
-`status: "draft" | "issued" | "in_purchase" | "closed"` already exists on the requisitions table. RLS already lets the owning user update their requisitions (used by the detail page's status edits).
+### 4. Bulk wipe (optional, behind confirm)
 
-### 3. Nothing else changes
+Add a small **Delete all mappings** button next to Replace Excel (admin only, double-confirm dialog) that runs `delete from fg_raw_material_map`. Useful when a fully clean re-import is wanted. Existing requisitions still unaffected.
 
-- `CreateRequisitionDialog`, `create-requisition` function, BOQ/Manufacturing, OA, approval, revision, pricing, calculation, PDF layout, share-link routing — all untouched.
-- Sidebar entry for Requisitions already exists.
+## Safety notes
 
-## Technical notes
+- `requisition_raw_materials` and `requisition_items` are independent tables — they snapshot the FG/RM data at the time of requisition creation. No FK from those tables to `fg_raw_material_map`. Confirmed via existing schema.
+- All write operations gated by `isAdmin` state and by the existing `fgrmm_admin_write` / `rmu_admin_write` RLS policies.
+- Toast confirmations on every destructive action; AlertDialog (shadcn) for delete confirmations.
 
-- The PDF action will issue two lightweight `select * where requisition_id = ?` queries (items + raw materials) and the BOQ fetch is already cached in the list's `boqs` map, so no extra round-trips for header fields.
-- "Send to Purchase" is a single `update({ status: "in_purchase" }).eq("id", r.id)` call followed by local state patch — no edge function needed.
-- Table uses existing shadcn `Table` primitives; status badge uses existing `Badge` variants.
+## Not changed
+
+OA, BOQ, approvals, revisions, pricing, calculations, requisition creation flow, requisition list, PDF, share links, sidebar, edge functions.

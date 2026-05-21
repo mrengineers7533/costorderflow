@@ -6,10 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Search, RefreshCw } from "lucide-react";
+import { Upload, FileSpreadsheet, Search, RefreshCw, Eye, Pencil, Trash2, Plus } from "lucide-react";
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { FgRawMaterialMapRow, RmMasterUploadRow } from "@/lib/requisition/types";
 import { firstLine } from "@/lib/requisition/types";
 
@@ -75,12 +82,16 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
 
 export default function RawMaterialMaster() {
   const [rows, setRows] = useState<FgRawMaterialMapRow[]>([]);
-  const [latestUpload, setLatestUpload] = useState<RmMasterUploadRow | null>(null);
+  const [uploads, setUploads] = useState<RmMasterUploadRow[]>([]);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [viewing, setViewing] = useState<FgRawMaterialMapRow | null>(null);
+  const [editing, setEditing] = useState<FgRawMaterialMapRow | null>(null);
+  const [deletingMap, setDeletingMap] = useState<FgRawMaterialMapRow | null>(null);
+  const [deletingUpload, setDeletingUpload] = useState<RmMasterUploadRow | null>(null);
+  const [confirmWipe, setConfirmWipe] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -92,10 +103,10 @@ export default function RawMaterialMaster() {
     }
     const [{ data: maps }, { data: ups }] = await Promise.all([
       sb.from("fg_raw_material_map").select("*").order("model_number"),
-      sb.from("rm_master_uploads").select("*").order("created_at", { ascending: false }).limit(1),
+      sb.from("rm_master_uploads").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
     setRows((maps as FgRawMaterialMapRow[]) || []);
-    setLatestUpload(((ups as RmMasterUploadRow[]) || [])[0] || null);
+    setUploads((ups as RmMasterUploadRow[]) || []);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -197,21 +208,49 @@ export default function RawMaterialMaster() {
             />
             <Button disabled={!isAdmin || busy} onClick={() => fileRef.current?.click()}>
               <Upload className="h-4 w-4 mr-1" />
-              {latestUpload ? "Replace Excel" : "Upload Excel"}
+              {uploads.length > 0 ? "Replace Excel" : "Upload Excel"}
             </Button>
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
             </Button>
             {!isAdmin && <Badge variant="outline">View-only (admin can upload)</Badge>}
           </div>
-          {latestUpload && (
-            <div className="text-xs text-muted-foreground border rounded p-2 flex flex-wrap gap-4">
-              <span><b>Latest:</b> {latestUpload.original_filename}</span>
-              <span><b>Date:</b> {new Date(latestUpload.created_at).toLocaleString()}</span>
-              <span><b>By:</b> {latestUpload.uploaded_by_email || "—"}</span>
-              <span><b>Sheets:</b> {latestUpload.sheet_count}</span>
-              <span><b>Finish Goods:</b> {latestUpload.fg_count}</span>
-              <span><b>RM rows:</b> {latestUpload.row_count}</span>
+          {isAdmin && rows.length > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setConfirmWipe(true)} disabled={busy}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete all mappings
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Upload history</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {uploads.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No uploads yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {uploads.map((u) => (
+                <div key={u.id} className="text-xs border rounded p-2 flex flex-wrap items-center gap-4">
+                  <span className="font-medium">{u.original_filename}</span>
+                  <span className="text-muted-foreground">{new Date(u.created_at).toLocaleString()}</span>
+                  <span className="text-muted-foreground">By: {u.uploaded_by_email || "—"}</span>
+                  <Badge variant="outline">{u.sheet_count} sheets</Badge>
+                  <Badge variant="outline">{u.fg_count} FG</Badge>
+                  <Badge variant="outline">{u.row_count} RM rows</Badge>
+                  {isAdmin && (
+                    <Button variant="ghost" size="sm" className="ml-auto text-destructive"
+                            onClick={() => setDeletingUpload(u)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete entry
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">
+                Deleting an upload entry only clears the history record. It does not remove any Finish Good mappings or affect existing requisitions.
+              </p>
             </div>
           )}
         </CardContent>
@@ -239,19 +278,42 @@ export default function RawMaterialMaster() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">No mappings yet. Upload the Excel to begin.</td></tr>
+                <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No mappings yet. Upload the Excel to begin.</td></tr>
               ) : filtered.map((r) => (
-                <tr key={r.id} className="border-b last:border-0 cursor-pointer hover:bg-accent/30" onClick={() => setViewing(r)}>
+                <tr key={r.id} className="border-b last:border-0 hover:bg-accent/30">
                   <td className="py-2 pr-3 font-medium">{r.model_number}</td>
                   <td className="py-2 pr-3">{Array.isArray(r.raw_materials) ? r.raw_materials.length : 0}</td>
                   <td className="py-2 pr-3">{r.is_direct_purchase ? <Badge variant="secondary">Direct Purchase</Badge> : <Badge variant="outline">Manufactured</Badge>}</td>
                   <td className="py-2 pr-3 text-xs text-muted-foreground">{new Date(r.updated_at).toLocaleDateString()}</td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button size="sm" variant="ghost" title="View" onClick={() => setViewing(r)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {isAdmin && (
+                        <>
+                          <Button size="sm" variant="ghost" title="Edit"
+                                  onClick={() => setEditing(JSON.parse(JSON.stringify(r)))}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Delete"
+                                  className="text-destructive"
+                                  onClick={() => setDeletingMap(r)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <thead className="hidden">
+            <tr><th /></tr>
+          </thead>
         </CardContent>
       </Card>
 
@@ -294,6 +356,197 @@ export default function RawMaterialMaster() {
           )}
         </SheetContent>
       </Sheet>
+
+      <EditMappingSheet
+        editing={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); load(); }}
+      />
+
+      <AlertDialog open={!!deletingMap} onOpenChange={(o) => !o && setDeletingMap(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Finish Good mapping?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "<b>{deletingMap?.model_number}</b>" and its raw-material rows will be removed from the master.
+              Existing requisitions are snapshots and will not change. Future requisitions will skip or flag this Finish Good until it is re-added.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const target = deletingMap; setDeletingMap(null);
+                if (!target) return;
+                const { error } = await sb.from("fg_raw_material_map").delete().eq("id", target.id);
+                if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+                else { toast({ title: "Mapping deleted" }); load(); }
+              }}>
+              Delete mapping
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deletingUpload} onOpenChange={(o) => !o && setDeletingUpload(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete upload history entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Removes only the history record for "{deletingUpload?.original_filename}". Mappings are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const target = deletingUpload; setDeletingUpload(null);
+                if (!target) return;
+                const { error } = await sb.from("rm_master_uploads").delete().eq("id", target.id);
+                if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+                else { toast({ title: "History entry deleted" }); load(); }
+              }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmWipe} onOpenChange={setConfirmWipe}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ALL Finish Good mappings?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes every row in the Raw Material Master. Existing requisitions stay intact (they hold their own snapshot).
+              You will need to re-upload the Excel before new requisitions can match Finish Goods.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                setConfirmWipe(false);
+                const { error } = await sb.from("fg_raw_material_map").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+                if (error) toast({ title: "Wipe failed", description: error.message, variant: "destructive" });
+                else { toast({ title: "All mappings deleted" }); load(); }
+              }}>
+              Delete all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+function EditMappingSheet({
+  editing, onClose, onSaved,
+}: { editing: FgRawMaterialMapRow | null; onClose: () => void; onSaved: () => void }) {
+  const [draft, setDraft] = useState<FgRawMaterialMapRow | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(editing ? { ...editing, raw_materials: [...(editing.raw_materials || [])] } : null); }, [editing]);
+
+  if (!draft) return (
+    <Sheet open={false} onOpenChange={onClose}><SheetContent /></Sheet>
+  );
+
+  function patchRm(i: number, patch: Partial<NonNullable<FgRawMaterialMapRow["raw_materials"]>[number]>) {
+    setDraft((d) => d ? { ...d, raw_materials: d.raw_materials.map((rm, idx) => idx === i ? { ...rm, ...patch } : rm) } : d);
+  }
+  function removeRm(i: number) {
+    setDraft((d) => d ? { ...d, raw_materials: d.raw_materials.filter((_, idx) => idx !== i) } : d);
+  }
+  function addRm() {
+    setDraft((d) => d ? { ...d, raw_materials: [...d.raw_materials, { material: "", qty_per_unit: 0 }] } : d);
+  }
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    const { error } = await sb.from("fg_raw_material_map").update({
+      raw_materials: draft.raw_materials,
+      is_direct_purchase: draft.is_direct_purchase,
+      notes: draft.notes,
+    }).eq("id", draft.id);
+    setSaving(false);
+    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Mapping updated" });
+    onSaved();
+  }
+
+  return (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="break-words">Edit · {draft.model_number}</SheetTitle>
+          <SheetDescription>Updates apply to future requisitions only. Existing requisitions keep their snapshot.</SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between border rounded p-3">
+            <div>
+              <Label className="text-sm">Direct Purchase</Label>
+              <p className="text-xs text-muted-foreground">When on, no raw materials are generated for this FG.</p>
+            </div>
+            <Switch checked={draft.is_direct_purchase}
+                    onCheckedChange={(v) => setDraft((d) => d ? { ...d, is_direct_purchase: v } : d)} />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-sm">Notes</Label>
+            <Textarea rows={2} value={draft.notes ?? ""}
+                      onChange={(e) => setDraft((d) => d ? { ...d, notes: e.target.value } : d)} />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm">Raw materials</Label>
+              <Button size="sm" variant="outline" onClick={addRm}><Plus className="h-3.5 w-3.5 mr-1" /> Add row</Button>
+            </div>
+            <div className="border rounded overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground border-b bg-muted/30">
+                  <tr>
+                    <th className="text-left py-2 px-2">Make</th>
+                    <th className="text-left py-2 px-2">Raw Material</th>
+                    <th className="text-left py-2 px-2">Size / Model</th>
+                    <th className="text-right py-2 px-2 w-24">Reqd Qty</th>
+                    <th className="text-left py-2 px-2 w-20">Unit</th>
+                    <th className="py-2 px-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.raw_materials.length === 0 ? (
+                    <tr><td colSpan={6} className="py-4 text-center text-muted-foreground text-xs">No rows. Click "Add row".</td></tr>
+                  ) : draft.raw_materials.map((rm, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-1 px-1"><Input className="h-8" value={rm.make ?? ""} onChange={(e) => patchRm(i, { make: e.target.value })} /></td>
+                      <td className="py-1 px-1"><Input className="h-8" value={rm.material} onChange={(e) => patchRm(i, { material: e.target.value })} /></td>
+                      <td className="py-1 px-1"><Input className="h-8" value={rm.size_model ?? ""} onChange={(e) => patchRm(i, { size_model: e.target.value })} /></td>
+                      <td className="py-1 px-1"><Input type="number" className="h-8 text-right" value={rm.qty_per_unit} onChange={(e) => patchRm(i, { qty_per_unit: Number(e.target.value) || 0 })} /></td>
+                      <td className="py-1 px-1"><Input className="h-8" value={rm.unit ?? ""} onChange={(e) => patchRm(i, { unit: e.target.value })} /></td>
+                      <td className="py-1 px-1 text-right">
+                        <Button size="sm" variant="ghost" className="text-destructive h-7 w-7 p-0" onClick={() => removeRm(i)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
