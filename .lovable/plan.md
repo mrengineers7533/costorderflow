@@ -1,46 +1,48 @@
-## Root cause
+## Goal
+When an OA is revised (either via the "Revise OA" button or by saving after a revision-bumping change), the linked BOQ must be auto-created as a new revision that reflects the latest OA data on **every** item field (Description, Quantity, Model, Unit, Remarks), using the existing OA/BOQ number formats.
 
-On the main OA page, the inline `OaDesignSuggestionRow` is already wired under every line item, but it only renders when `designReview` resolves — and `designReview` depends on `currentBoq`. The current BOQ lookup is broken for OAs where the BOQ is linked to the **root** order (the common case for first revisions):
+## What already works
+- `handleReviseOa` → `reviseOrder` → `reviseBoqFromOrder` inserts a new BOQ row with `revision = OA.revision`, `boq_number` carried from the previous BOQ (so `26-27/GMSBOQ/0004` stays as the base and the revision suffix is added by `deriveBoqNumber` whenever the BOQ number is re-derived).
+- OA revision numbering (`/R{n}`) and BOQ revision numbering match the existing format. No format change.
+- `save()` already calls `syncBoqsAndPisForOrder` after every OA save.
 
-`src/pages/orders/OrderEditor.tsx` (lines 150–160):
+## Bug to fix
+`createPendingBoqRevision` (called from `syncBoqsAndPisForOrder` when a saved OA's revision is higher than the current BOQ's revision) builds line items with:
+- `description: prev?.description || it.description`  → prefers the **old** BOQ description, so updated OA descriptions don't propagate.
+- `model_number: it.hsn_code`  → ignores `it.model`, so the Model field on the OA item never reaches the BOQ.
+- Does not carry `quantity`/`unit` changes when prev row exists (these two are fine — already taken from OA — but Model/Description are not).
 
+This is the only path that produces the "new pending BOQ revision" row when the user revises the OA, so the new BOQ ends up looking like a copy of the previous one instead of the latest OA.
+
+## Fix (single file: `src/lib/revisions/index.ts`)
+
+In `createPendingBoqRevision`, build each line item the same way `reviseBoqFromOrder` already does:
 ```ts
-const { data: family } = await supabase
-  .from("orders").select("id").eq("parent_order_id", parentOrderId);
-const ids = (family || []).map((r) => r.id);
-if (!ids.length) { setCurrentBoq(null); return; }
-const { data } = await supabase.from("boqs")
-  .select("*").in("order_id", ids).eq("is_current", true).maybeSingle();
+const model = ((it as any).model || "").trim() || it.hsn_code || "";
+return {
+  id: crypto.randomUUID(),
+  item_no: String(i + 1),
+  model_number: model,              // was: it.hsn_code only
+  description: it.description || "",// was: prev?.description first
+  quantity: Number(it.quantity) || 0,
+  unit: it.unit || "Nos",
+  remarks: ((it as any).remarks || "").trim() || prev?.remarks || "",
+};
 ```
+This matches the field-mapping used in `reviseBoqFromOrder` and the in-place sync block, so every code path that produces a BOQ row reads the same way from the OA.
 
-`parentOrderId` is set to `o.parent_order_id || o.id` (the root). The query only fetches **child** revisions and excludes the root itself, so any BOQ that lives on the root order is never matched → `currentBoq` is `null` → `useLatestDesignReview` is called with `null` → no design comments row renders on OA. BOQ keeps showing the comments because the BOQ page queries its own id directly.
+Also:
+- Keep `prev?.remarks` as a fallback only when the OA item has no remarks (preserves manually entered BOQ remarks when the OA didn't override them).
+- Leave `boq_number`, `revision`, `verification_status`, `is_current`, terms/notes carry-over, and the verification-email side effect untouched.
 
-This explains exactly what the user reports: comments show in BOQ with Apply/Save, but not row-wise on OA.
-
-## Fix (single, surgical change)
-
-Include the root order's own id in the family list when looking up `currentBoq`:
-
-```ts
-const { data: family } = await supabase
-  .from("orders").select("id")
-  .or(`id.eq.${parentOrderId},parent_order_id.eq.${parentOrderId}`);
-```
-
-Everything else (`OaDesignSuggestionRow`, `findReviewItemForOaItem`, the apply-and-auto-save flow, and `syncBoqsAndPisForOrder` which auto-revises the BOQ) is already in place from prior turns and meets the rest of the requirements:
-
-- Row-wise tiles under every visible OA item (MR and GMS, in `ALL`/`MR`/`GMS` split views).
-- `Apply {Col} → OA` buttons patch the OA item and call `scheduleAutoSave`, which persists the OA, creates the OA revision (`… R1`), then runs `syncBoqsAndPisForOrder` to auto-create the matching BOQ revision (`…R1`).
-- Comments stay linked to the correct row via id → normalized description → positional fallback.
-- No pricing/calc/business-logic change.
-
-## Files to edit
-
-- `src/pages/orders/OrderEditor.tsx` — update the `useEffect` at line 151 only.
+## Out of scope (per user)
+- No change to OA/BOQ number string format.
+- No change to pricing, totals, charges, PI sync, RLS, or any UI.
+- No DB schema migration.
 
 ## Verification
-
-1. Open OA `2026-27/GMS/0004` (linked BOQ `26-27/GMSBOQ/0004` with a submitted design review) → the dashed primary-tinted `Design Comments · R{n}` block now appears under each item with `Apply Model/Description/Qty/Unit/Remarks → OA` buttons.
-2. Click an Apply → OA value updates, auto-save fires → OA bumps to `2026-27/GMS/0004 R1` and BOQ bumps to `26-27/GMSBOQ/0004R1` (visible in revisions panel).
-3. Repeat on an MR OA → same behavior.
-4. In split-mode orders toggle `ALL` / `MR` / `GMS` → block stays under each visible item.
+1. Open an existing OA with a current BOQ.
+2. Edit an OA item's Description, Model, Quantity, Unit, Remarks → click **Revise OA**.
+3. Confirm a new OA row `…/R{n+1}` is created and a new BOQ row `…/R{n+1}` (pending) appears in the BOQ list with all five fields matching the new OA.
+4. Repeat with the auto-revise-on-save path: edit fields on the current OA, save → confirm the new pending BOQ row mirrors the OA item fields exactly.
+5. Run for both MR and GMS formats.
