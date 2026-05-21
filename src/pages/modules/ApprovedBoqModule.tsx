@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, FilePlus2 } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
+import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
+import type { RequisitionRecord } from "@/lib/requisition/types";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -138,12 +140,18 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const { boqId } = useParams<{ boqId: string }>();
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
 
   useEffect(() => {
     if (!boqId) return;
     (async () => {
       const { data } = await supabase.from("boqs").select("*").eq("id", boqId).maybeSingle();
       setBoq((data as unknown as BoqRecord) || null);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      const { data: r } = await sb.from("requisitions").select("*").eq("boq_id", boqId).order("created_at", { ascending: false });
+      setReqs((r as RequisitionRecord[]) || []);
       setLoading(false);
     })();
   }, [boqId]);
@@ -167,10 +175,37 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
             {boq.client_name || "—"} · OA {boq.reference_oa_number || "—"} · BOQ date {fmtDate(boq.boq_date)}
           </p>
         </div>
-        <Link to={config.basePath}>
-          <Button variant="outline" size="sm">Back</Button>
-        </Link>
+        <div className="flex gap-2">
+          {config.kind === "manufacturing" && approved && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <FilePlus2 className="mr-1 h-4 w-4" /> Create Requisition
+            </Button>
+          )}
+          <Link to={config.basePath}>
+            <Button variant="outline" size="sm">Back</Button>
+          </Link>
+        </div>
       </div>
+
+      {reqs.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">
+            {config.kind === "purchase" ? "Incoming requisitions" : "Linked requisitions"}
+          </CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {reqs.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-2 text-sm border-b last:border-0 pb-2 last:pb-0">
+                <div className="min-w-0">
+                  <span className="font-medium">{r.requisition_number}</span>{" "}
+                  <Badge variant="secondary" className="ml-1">BOQ R{r.boq_revision}</Badge>{" "}
+                  <Badge className="ml-1">{r.status}</Badge>
+                </div>
+                <Link to={`/requisitions/${r.id}`}><Button size="sm" variant="outline">Open</Button></Link>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -224,6 +259,10 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
           </div>
         </CardContent>
       </Card>
+
+      {config.kind === "manufacturing" && (
+        <CreateRequisitionDialog open={createOpen} onOpenChange={setCreateOpen} boq={boq} />
+      )}
     </div>
   );
 }
