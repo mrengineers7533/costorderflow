@@ -151,7 +151,14 @@ export default function OrderEditor() {
   useEffect(() => {
     if (!parentOrderId) { setCurrentBoq(null); return; }
     (async () => {
-      const { data: family } = await supabase.from("orders").select("id").eq("parent_order_id", parentOrderId);
+      // Include the root order itself in the family — BOQs may be linked
+      // to the root OA (common for first revisions), not only to child
+      // revision rows. Without this, currentBoq stays null and the
+      // inline design-comments row never renders on the OA page.
+      const { data: family } = await supabase
+        .from("orders")
+        .select("id")
+        .or(`id.eq.${parentOrderId},parent_order_id.eq.${parentOrderId}`);
       const ids = (family || []).map((r) => (r as { id: string }).id);
       if (!ids.length) { setCurrentBoq(null); return; }
       const { data } = await supabase.from("boqs").select("*").in("order_id", ids).eq("is_current", true).maybeSingle();
