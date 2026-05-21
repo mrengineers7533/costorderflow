@@ -549,6 +549,7 @@ export default function BoqEditor() {
                   canEditRemarks={canEditRemarks}
                   canEditFull={canEditFull}
                   boqId={boqId}
+                  orderId={orderId || null}
                   onUpdate={updateItem}
                 />
               </CardContent>
