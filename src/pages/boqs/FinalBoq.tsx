@@ -18,11 +18,7 @@ export default function FinalBoq() {
     (async () => {
       if (!token) { setError("Missing token"); setLoading(false); return; }
       const { data, error } = await supabase
-        .from("boqs")
-        .select("*")
-        .eq("final_share_token", token)
-        .eq("design_review_status", "final_sent")
-        .maybeSingle();
+        .rpc("get_final_boq_by_token", { _token: token });
       if (error || !data) {
         setError("This Final BOQ link is invalid or has been revoked.");
         setLoading(false);

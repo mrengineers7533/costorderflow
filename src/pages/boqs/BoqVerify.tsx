@@ -26,9 +26,7 @@ export default function BoqVerify() {
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
-        .from("boqs").select("*")
-        .eq("verification_token", token)
-        .maybeSingle();
+        .rpc("get_boq_by_verification_token", { _token: token });
       if (error || !data) {
         setError("This verification link is invalid or has already been used.");
       } else {
