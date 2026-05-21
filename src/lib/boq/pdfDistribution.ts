@@ -61,7 +61,7 @@ async function fetchPreviousRevision(boqId: string, currentRevision: number): Pr
   if (!data) return null;
   return {
     revision_no: (data as { revision_no: number }).revision_no,
-    line_items: ((data as { line_items: BoqLineItem[] }).line_items) || [],
+    line_items: ((data as unknown as { line_items: BoqLineItem[] }).line_items) || [],
   };
 }
 
