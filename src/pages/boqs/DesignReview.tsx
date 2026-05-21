@@ -166,7 +166,7 @@ export default function DesignReview() {
       }));
       const { error } = await supabase.rpc("submit_design_review_with_token", {
         _token: token,
-        _reviewer_email: contact.includes("@") ? contact : (reviewerName + " <no-email>"),
+        _reviewer_email: contact.includes("@") ? contact.trim() : "noemail@noemail.local",
         _items: itemsPayload as never,
         _docs: docs as never,
         _reviewer_name: reviewerName,
