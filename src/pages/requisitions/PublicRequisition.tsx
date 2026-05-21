@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
-import type { RequisitionItemRecord } from "@/lib/requisition/types";
+import type { RequisitionItemRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 
 interface ReqView {
   requisition_id: string;
@@ -26,6 +26,7 @@ export default function PublicRequisition() {
   const { token } = useParams<{ token: string }>();
   const [view, setView] = useState<ReqView | null>(null);
   const [items, setItems] = useState<RequisitionItemRecord[]>([]);
+  const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +39,8 @@ export default function PublicRequisition() {
       setView(row as ReqView);
       const { data: its } = await sb.rpc("get_requisition_items_by_token", { _token: token });
       setItems((its as RequisitionItemRecord[]) || []);
+      const { data: rmRows } = await sb.rpc("get_requisition_raw_materials_by_token", { _token: token });
+      setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
       setLoading(false);
     })();
   }, [token]);
@@ -67,6 +70,7 @@ export default function PublicRequisition() {
         updated_at: view.created_at,
       },
       items,
+      rawMaterials: rms,
       boqNumber: view.current_boq_number || "",
       oaNumber: view.reference_oa_number || "",
       clientName: view.client_name || "",
@@ -133,6 +137,41 @@ export default function PublicRequisition() {
           </table>
         </CardContent>
       </Card>
+
+      {rms.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Raw material indent</CardTitle></CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b">
+                <tr>
+                  <th className="text-left py-2 pr-3">Material</th>
+                  <th className="text-right py-2 pr-3">Required Qty</th>
+                  <th className="text-left py-2 pr-3">Unit</th>
+                  <th className="text-left py-2 pr-3">FG Model</th>
+                  <th className="text-left py-2 pr-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rms.map((r) => (
+                  <tr key={r.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">
+                      {r.material}
+                      {r.source === "unmapped_placeholder" && (
+                        <Badge variant="outline" className="ml-2">Unmapped</Badge>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
+                    <td className="py-2 pr-3">{r.unit ?? "—"}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{r.model_number}</td>
+                    <td className="py-2 pr-3 capitalize">{r.purchase_status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

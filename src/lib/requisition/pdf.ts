@@ -1,10 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { RequisitionRecord, RequisitionItemRecord } from "./types";
+import type { RequisitionRecord, RequisitionItemRecord, RequisitionRawMaterialRecord } from "./types";
 
 export interface RequisitionPdfContext {
   requisition: RequisitionRecord;
   items: RequisitionItemRecord[];
+  rawMaterials?: RequisitionRawMaterialRecord[];
   boqNumber: string;
   oaNumber: string;
   clientName: string;
@@ -59,14 +60,63 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
 
   // @ts-expect-error lastAutoTable runtime
   const y = (doc.lastAutoTable?.finalY ?? 40) + 10;
+
+  // Raw Material Indent section
+  const rms = ctx.rawMaterials || [];
+  if (rms.length) {
+    // Aggregate by material+unit
+    const agg = new Map<string, { material: string; unit: string; required_qty: number; sources: number; placeholder: boolean }>();
+    for (const rm of rms) {
+      const key = `${(rm.material || "").toLowerCase()}|${(rm.unit || "").toLowerCase()}`;
+      const prev = agg.get(key);
+      const qty = Number(rm.required_qty) || 0;
+      if (prev) {
+        prev.required_qty += qty;
+        prev.sources += 1;
+        prev.placeholder = prev.placeholder || rm.source === "unmapped_placeholder";
+      } else {
+        agg.set(key, {
+          material: rm.material,
+          unit: rm.unit ?? "",
+          required_qty: qty,
+          sources: 1,
+          placeholder: rm.source === "unmapped_placeholder",
+        });
+      }
+    }
+    doc.setFont("helvetica", "bold").setFontSize(11);
+    doc.text("RAW MATERIAL INDENT", M, y);
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["#", "Material", "Required Qty", "Unit", "Source"]],
+      body: Array.from(agg.values()).map((r, idx) => [
+        String(idx + 1),
+        r.material,
+        r.required_qty ? r.required_qty.toString() : "—",
+        r.unit || "—",
+        r.placeholder ? "Unmapped — please confirm" : `${r.sources} FG`,
+      ]),
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 12, halign: "center" },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 28, halign: "right" },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 50 },
+      },
+      margin: { left: M, right: M },
+    });
+  }
+
+  // @ts-expect-error lastAutoTable runtime
+  const y2 = (doc.lastAutoTable?.finalY ?? y) + 8;
   doc.setFont("helvetica", "italic").setFontSize(8.5);
-  doc.text(
-    "Raw material breakdown will be auto-generated once the Finish Good → Raw Material mapping is uploaded.",
-    M, y,
-  );
+  doc.text("Direct-purchase Finish Good items are excluded from this requisition.", M, y2);
   doc.text(
     "This requisition links to the latest approved BOQ revision. Any future revisions update the source link automatically.",
-    M, y + 4,
+    M, y2 + 4,
   );
 
   return doc;
