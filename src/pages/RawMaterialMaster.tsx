@@ -18,6 +18,7 @@ const sb = supabase as any;
 
 type ParsedFg = {
   model_number: string;
+  fg_description_full?: string;
   raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string }>;
 };
 
@@ -46,10 +47,15 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
   let current: ParsedFg | null = null;
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i] || [];
-    const fg = String(row[cFg] ?? "").trim();
-    if (fg) {
-      // start new FG
-      current = { model_number: fg, raw_materials: [] };
+    const fgRaw = String(row[cFg] ?? "");
+    if (fgRaw.trim()) {
+      const clean = firstLine(fgRaw);
+      // start new FG (Column A first line only is the matching key)
+      current = {
+        model_number: clean || fgRaw.trim(),
+        fg_description_full: fgRaw.trim(),
+        raw_materials: [],
+      };
       out.push(current);
     }
     if (!current) continue;
@@ -96,8 +102,9 @@ export default function RawMaterialMaster() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => r.model_number.toLowerCase().includes(q));
+    const cleaned = rows.map((r) => ({ ...r, model_number: firstLine(r.model_number) || r.model_number }));
+    if (!q) return cleaned;
+    return cleaned.filter((r) => r.model_number.toLowerCase().includes(q));
   }, [rows, search]);
 
   async function handleUpload(file: File) {
@@ -130,6 +137,7 @@ export default function RawMaterialMaster() {
         model_number: f.model_number,
         is_direct_purchase: false,
         raw_materials: f.raw_materials,
+        fg_description_full: f.fg_description_full ?? null,
       }));
 
       // Wipe existing Excel-sourced mappings to truly "replace"
