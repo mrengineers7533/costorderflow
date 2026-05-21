@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,40 +142,67 @@ export default function PublicRequisition() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Raw material indent</CardTitle></CardHeader>
           <CardContent className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b">
-                <tr>
-                  <th className="text-left py-2 pr-3">Make</th>
-                  <th className="text-left py-2 pr-3">Raw Material</th>
-                  <th className="text-left py-2 pr-3">Size / Model</th>
-                  <th className="text-right py-2 pr-3">Reqd Qty</th>
-                  <th className="text-left py-2 pr-3">Unit</th>
-                  <th className="text-left py-2 pr-3">FG Model</th>
-                  <th className="text-left py-2 pr-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rms.map((r) => (
-                  <tr key={r.id} className={`border-b last:border-0 ${r.source === "unmapped_placeholder" ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
-                    <td className="py-2 pr-3">{r.make || "—"}</td>
-                    <td className="py-2 pr-3">
-                      {r.material}
-                      {r.source === "unmapped_placeholder" && (
-                        <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>
-                      )}
-                    </td>
-                    <td className="py-2 pr-3">{r.size_model || "—"}</td>
-                    <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
-                    <td className="py-2 pr-3">{r.unit ?? "—"}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{r.model_number}</td>
-                    <td className="py-2 pr-3 capitalize">{r.purchase_status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <RawMaterialGroupedTable items={items} rms={rms} />
           </CardContent>
         </Card>
       )}
     </div>
+  );
+}
+
+function RawMaterialGroupedTable({ items, rms }: { items: RequisitionItemRecord[]; rms: RequisitionRawMaterialRecord[] }) {
+  const groups = useMemo(() => {
+    const itemById = new Map(items.map((it) => [it.id, it] as const));
+    const order: string[] = [];
+    const buckets = new Map<string, RequisitionRawMaterialRecord[]>();
+    const keyOf = (r: RequisitionRawMaterialRecord) => r.requisition_item_id || `__model__:${r.model_number || "—"}`;
+    rms.forEach((r) => {
+      const k = keyOf(r);
+      if (!buckets.has(k)) { buckets.set(k, []); order.push(k); }
+      buckets.get(k)!.push(r);
+    });
+    const numKey = (s: string | null | undefined) => {
+      const n = parseFloat(String(s ?? ""));
+      return Number.isFinite(n) ? n : 9999;
+    };
+    order.sort((a, b) => numKey(itemById.get(a)?.item_no) - numKey(itemById.get(b)?.item_no));
+    return order.map((k) => ({
+      key: k,
+      fgLabel: itemById.get(k)?.model_number || itemById.get(k)?.description || buckets.get(k)![0].model_number || "—",
+      rms: buckets.get(k)!,
+    }));
+  }, [items, rms]);
+
+  return (
+    <table className="w-full text-sm border">
+      <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+        <tr>
+          <th className="text-left py-2 px-3 border-r">Finished Good</th>
+          <th className="text-left py-2 px-3 border-r">Raw Material</th>
+          <th className="text-left py-2 px-3 border-r">Size / Spec</th>
+          <th className="text-right py-2 px-3 border-r">Reqd Qty</th>
+          <th className="text-left py-2 px-3">Unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {groups.flatMap((g) => g.rms.map((r, idx) => {
+          const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
+          return (
+            <tr key={r.id} className={`border-b last:border-0 ${r.source === "unmapped_placeholder" ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
+              {idx === 0 && (
+                <td className="py-2 px-3 align-top border-r font-medium" rowSpan={g.rms.length}>
+                  {g.fgLabel}
+                  {unmapped && <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>}
+                </td>
+              )}
+              <td className="py-2 px-3 border-r">{r.material}</td>
+              <td className="py-2 px-3 border-r">{r.size_model || "—"}</td>
+              <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
+              <td className="py-2 px-3">{r.unit ?? "—"}</td>
+            </tr>
+          );
+        }))}
+      </tbody>
+    </table>
   );
 }
