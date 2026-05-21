@@ -2065,7 +2065,20 @@ function OaDesignSuggestionRow({
   ];
   const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
   const present = tiles.filter(({ key }) => val(key) !== "");
-  if (!present.length) return null;
+  const isApproval = round.kind === "approval";
+  const decision = reviewItem.decision;
+  const changeNote = (reviewItem.design_change_note || "").trim();
+  if (!present.length && !isApproval && !changeNote) return null;
+
+  const decisionPill = isApproval ? (
+    decision === "approved" ? (
+      <span className="inline-flex items-center rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Approved</span>
+    ) : decision === "change_required" ? (
+      <span className="inline-flex items-center rounded-full bg-destructive/15 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Change Required</span>
+    ) : (
+      <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">Pending</span>
+    )
+  ) : null;
 
   const applyCell = (t: { key: ColKey; target: "oa" | "boq" }) => {
     const v = val(t.key);
@@ -2091,8 +2104,9 @@ function OaDesignSuggestionRow({
     <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">
-          Design R{round.round_no}
+          Design {isApproval ? "Approval" : "Comments"} · R{round.round_no}
         </span>
+        {decisionPill}
         {present.map((t) => (
           <button
             key={t.key}
@@ -2120,6 +2134,9 @@ function OaDesignSuggestionRow({
           {showHistory ? "Hide" : "View"} history
         </button>
       </div>
+      {changeNote && (
+        <div className="mt-1 text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Change note:</span> {changeNote}</div>
+      )}
       {showHistory && (
         <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${present.length}, minmax(0, 1fr))` }}>
           {present.map((t) => (
