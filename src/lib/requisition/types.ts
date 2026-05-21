@@ -31,6 +31,7 @@ export interface RequisitionItemRecord {
   purchase_category: "steel" | "outside" | null;
   created_at: string;
   updated_at: string;
+  included_in_requisition?: boolean;
 }
 
 export interface RequisitionLotRecord {
@@ -40,4 +41,35 @@ export interface RequisitionLotRecord {
   category: "steel" | "outside";
   notes: string | null;
   created_at: string;
+}
+
+export interface RequisitionRawMaterialRecord {
+  id: string;
+  requisition_id: string;
+  requisition_item_id: string | null;
+  model_number: string | null;
+  material: string;
+  qty_per_unit: number | null;
+  fg_quantity: number | null;
+  required_qty: number | null;
+  unit: string | null;
+  source: "mapped" | "manual" | "unmapped_placeholder";
+  purchase_status: "pending" | "ordered" | "received";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FgRawMaterialMapRow {
+  id: string;
+  model_number: string;
+  is_direct_purchase: boolean;
+  raw_materials: Array<{
+    material: string;
+    qty_per_unit: number;
+    unit?: string;
+    notes?: string;
+  }>;
+  notes: string | null;
+  updated_at: string;
 }
