@@ -1,43 +1,72 @@
-## Goal
+## Goals
 
-When a Cost Sheet is parsed and applied to an Order Acceptance (OA), the system should automatically save the OA to the database — no manual "Save" click required. After a page refresh or reopening the page, the applied Cost Sheet data must still be there.
+1. Fix the error when Design Team submits the review link.
+2. Show Design Team feedback (comments + approval decision) **row-wise** under each line item in both **OA Editor** and **BOQ Editor**.
+3. Do not touch pricing, calc, OA flow, or any other feature.
 
-## What happens today
+---
 
-- **New OA (`/orders/new`)** — Parsed data is held in memory plus a `sessionStorage` cache (`oa-draft-extracted`). The OA row is created in the database only when the user clicks **Save**. A hard refresh recovers via session storage, but closing the tab / logging out loses everything.
-- **Existing OA (`/orders/:id`)** — `CostSheetPicker` applies parsed data to the on-screen state, but nothing is written to the database until the user clicks **Save**.
+## 1. Fix Submit error on Design Review link
 
-## What will change
+**Root cause:** In `src/pages/boqs/DesignReview.tsx` the submit call sends:
 
-A new auto-save trigger fires the moment `applyCostSheet(...)` finishes, in both flows:
+```ts
+_reviewer_email: contact.includes("@") ? contact : (reviewerName + " <no-email>")
+```
 
-1. **New OA flow** — After apply, schedule an auto-save (~600 ms debounce so all derived state — items, totals, format — settles first). The existing `save(false)` path:
-   - allocates an OA number via `next_oa_number` RPC,
-   - inserts the order row,
-   - clears the `oa-draft-extracted` session cache,
-   - navigates to `/orders/<new-id>`.
-   From that point on the URL points to the persisted record, so refresh / reopen reload from the DB.
+When the reviewer leaves the "Email or Mobile" field empty or enters only a phone number, the RPC `submit_design_review_with_token` raises **"Invalid reviewer email"** because the string fails the email regex.
 
-2. **Existing OA flow** — After apply, call the existing `scheduleAutoSave()` so the updated `line_items` / charges / addresses are persisted via `save(false)` → `orders.update(...)`. This already runs `syncBoqsAndPisForOrder` afterward, matching the manual save behaviour.
+**Fix (frontend only):**
+- If `contact` contains `@` → send as-is (validated by RPC).
+- Otherwise send a safe synthetic placeholder `noemail@noemail.local` so the RPC passes validation, and store the actual phone/contact in the existing `_reviewer_contact` parameter (already passed).
+- Update the field hint to clarify that email is optional but recommended.
 
-3. **Guards** (do not change any existing behaviour):
-   - Skip auto-save if the OA is a read-only / superseded revision (`isCurrent === false`).
-   - Skip if a save is already in flight (`saving` flag).
-   - Skip if `applyCostSheet` was called with empty data.
-   - Keep the session-storage cache exactly as-is — it still covers the tiny window between "apply" and "insert completes" on the new-OA page.
+No DB/RPC changes required — submit will work for both email and non-email reviewers, and the original contact value is still saved on the review row.
 
-4. **User feedback** — Reuse the existing toast from `save(false)` ("OA data saved successfully …"). No new UI.
+---
 
-## Files touched
+## 2. Row-wise Design feedback in BOQ Editor
 
-- `src/pages/orders/OrderEditor.tsx`
-  - `applyCostSheet(...)`: at the end, call `scheduleAutoSave()` (the debounced wrapper that already exists for design-Apply auto-saves).
-  - The router-state / sessionStorage recovery effect that calls `applyCostSheet` on mount will therefore also trigger the auto-save, so a Cost Sheet that was just applied on `/orders/new` is persisted within ~½ second and the URL flips to `/orders/<id>`.
-  - Add a small `savingRef` / `appliedOnceRef` guard so the auto-save can't loop.
+`src/pages/boqs/BoqEditor.tsx` → `BoqItemsList` currently renders just the item grid (a comment explicitly says inline suggestions were moved to OA). Re-introduce inline display **without removing the OA version**.
 
-## Out of scope (explicitly unchanged)
+Under each BOQ row, render a new compact `BoqDesignSuggestionRow`:
+- Pulls the latest submitted review via existing `useLatestDesignReview(boqId)`.
+- Matches the row using existing `findReviewItemForOaItem(reviewItems, item, idx)` helper (works for any item with `description` + index).
+- Shows, when present:
+  - **Per-column comments** (Model / Description / Qty / Unit / Remarks) via `parseColumnComments`, each with an **Apply → BOQ** button that calls the existing `onUpdate(id, patch)` so all related fields (Model, Description, Qty, Unit, Remarks) remain visible/editable.
+  - **Approval decision badge** (Approved / Change Required / Pending) and the reviewer's **Change Note** when the latest round is of kind `approval`.
+  - Round number + reviewer name (small caption).
+- Pure UI block — no impact on calculations or BOQ save flow.
 
-- Manual **Save** button, **Save & Finalize**, revision flow, BOQ / PI sync — all untouched.
-- Cost-sheet parsing edge function, storage bucket, and DB schema — untouched.
-- Workflow page matching, OA revision history, per-item change history — untouched.
-- No DB migration.
+Edit only inside `BoqItemsList` (props extended with `boqId` already present and `onUpdate`). Show/hide automatically if no matching review item or no content to display.
+
+---
+
+## 3. Approval decision row in OA Editor
+
+`OaDesignSuggestionRow` (in `src/pages/orders/OrderEditor.tsx`) already shows column comments row-wise. Extend it (no calc changes) so that when the latest round is an **approval** round, it also renders:
+- A small status pill: **Approved** / **Change Required** / **Pending** from `reviewItem.decision`.
+- The reviewer's **Change Note** (`reviewItem.design_change_note`) when present.
+
+This ensures the approval link result is visible below the related OA row, matching the BOQ side.
+
+---
+
+## 4. Preserve OA fields on update
+
+No code change needed — the existing `onApply` in `OaDesignSuggestionRow` already calls `onApply({ field: value })` which spreads into the current item, keeping Model, Description, Qty, Unit, Remarks intact. The new BOQ apply buttons follow the same partial-patch pattern via the existing `onUpdate`. Auto-save behavior on OA is left unchanged.
+
+---
+
+## Files to change
+
+- `src/pages/boqs/DesignReview.tsx` — submit email fallback + small label tweak.
+- `src/pages/boqs/BoqEditor.tsx` — add `BoqDesignSuggestionRow` inside `BoqItemsList`, wire `useLatestDesignReview(boqId)`.
+- `src/pages/orders/OrderEditor.tsx` — extend `OaDesignSuggestionRow` to also surface approval decision + change note row-wise.
+
+## What stays untouched
+
+- Pricing / totals / charges / currency / discounts.
+- All existing OA, BOQ, PI, Cost Sheet, Final BOQ, Verification flows.
+- Auto-save behavior (existing triggers only).
+- Database schema, RLS, RPC signatures.
