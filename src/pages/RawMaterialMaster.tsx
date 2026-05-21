@@ -11,6 +11,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import type { FgRawMaterialMapRow, RmMasterUploadRow } from "@/lib/requisition/types";
+import { firstLine } from "@/lib/requisition/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
