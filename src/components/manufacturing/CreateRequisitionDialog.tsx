@@ -12,8 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Search } from "lucide-react";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
 import { firstLine } from "@/lib/requisition/types";
 
@@ -196,6 +198,10 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     if (!it) return;
     const mapping = findMappingFor(it);
     if (!mapping) { toast({ title: "No mapping found in RM Master", variant: "destructive" }); return; }
+    applyMappingTo(fgId, mapping);
+  }
+
+  function applyMappingTo(fgId: string, mapping: FullMap) {
     setEdited((prev) => ({
       ...prev,
       [fgId]: {
@@ -211,6 +217,11 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         })),
       },
     }));
+    toast({
+      title: mapping.is_direct_purchase
+        ? `Marked as Direct Purchase from "${mapping.model_number}"`
+        : `Loaded ${mapping.raw_materials.length} raw material row(s) from "${mapping.model_number}"`,
+    });
   }
 
   async function create() {
@@ -367,6 +378,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         <span className="text-muted-foreground"> · Qty {fgQty}</span>
                       </div>
                       <div className="flex items-center gap-3">
+                        <RmMasterPicker maps={fullMaps} onPick={(m) => applyMappingTo(efg.boq_item_id, m)} />
                         <label className="flex items-center gap-2 text-xs">
                           <Switch checked={efg.is_direct_purchase} onCheckedChange={(v) => toggleDirect(efg.boq_item_id, v)} />
                           Direct Purchase
