@@ -407,16 +407,16 @@ export async function createPendingBoqRevision(
     if (k) prevByModel.set(k, it);
   });
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
-    const model = it.hsn_code || "";
+    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const prev = prevByModel.get(model.trim().toLowerCase());
     return {
       id: crypto.randomUUID(),
       item_no: String(i + 1),
       model_number: model,
-      description: prev?.description || it.description || "",
+      description: it.description || "",
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
-      remarks: prev?.remarks || "",
+      remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
     };
   });
   const token = crypto.randomUUID();
