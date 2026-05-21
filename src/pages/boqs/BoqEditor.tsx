@@ -684,7 +684,7 @@ function BoqItemsList({
             </div>
             {designReview && (
               <BoqDesignSuggestionRow
-                reviewItem={findReviewItemForOaItem(designReview.items, it as unknown as { description: string }, idx)}
+                reviewItem={findReviewItemForOaItem(designReview.items, it as never, idx)}
                 round={designReview.round}
                 canApply={canEditFull || canEditRemarks}
                 onApply={(patch) => onUpdate(it.id, patch)}
