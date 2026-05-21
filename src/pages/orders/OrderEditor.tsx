@@ -734,13 +734,13 @@ export default function OrderEditor() {
       else setCharges((c) => apply(c));
     }
     if (data.notes) setNotes(data.notes);
-    // Auto-save right after a Cost Sheet is applied so the data survives
-    // refresh / reopen. For a new OA this creates the row (and the page
-    // navigates to /orders/<id>); for an existing OA it persists the
-    // updated line items / charges via the standard save() path.
-    if (isNew || isCurrent) {
-      scheduleAutoSave();
-    }
+    // NOTE: We intentionally do NOT auto-save here. Auto-saving on apply
+    // caused the page to navigate / re-sync mid-edit (BOQ / Link Generate
+    // flows perceived this as an unwanted "refresh" that wiped in-progress
+    // work). The applied data is preserved across hard refresh via the
+    // `oa-draft-extracted` sessionStorage cache, and is persisted to the
+    // DB the moment the user clicks Save (or any existing auto-save
+    // trigger such as the design "Apply" buttons fires).
   }
 
   return (
