@@ -64,47 +64,31 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
   // Raw Material Indent section
   const rms = ctx.rawMaterials || [];
   if (rms.length) {
-    // Aggregate by material+unit
-    const agg = new Map<string, { material: string; unit: string; required_qty: number; sources: number; placeholder: boolean }>();
-    for (const rm of rms) {
-      const key = `${(rm.material || "").toLowerCase()}|${(rm.unit || "").toLowerCase()}`;
-      const prev = agg.get(key);
-      const qty = Number(rm.required_qty) || 0;
-      if (prev) {
-        prev.required_qty += qty;
-        prev.sources += 1;
-        prev.placeholder = prev.placeholder || rm.source === "unmapped_placeholder";
-      } else {
-        agg.set(key, {
-          material: rm.material,
-          unit: rm.unit ?? "",
-          required_qty: qty,
-          sources: 1,
-          placeholder: rm.source === "unmapped_placeholder",
-        });
-      }
-    }
     doc.setFont("helvetica", "bold").setFontSize(11);
     doc.text("RAW MATERIAL INDENT", M, y);
     autoTable(doc, {
       startY: y + 2,
-      head: [["#", "Material", "Required Qty", "Unit", "Source"]],
-      body: Array.from(agg.values()).map((r, idx) => [
+      head: [["#", "Make", "Raw Material", "Size / Model", "Reqd Qty", "Unit", "Status"]],
+      body: rms.map((r, idx) => [
         String(idx + 1),
+        r.make ?? "",
         r.material,
-        r.required_qty ? r.required_qty.toString() : "—",
+        r.size_model ?? "",
+        r.required_qty != null ? String(r.required_qty) : "—",
         r.unit || "—",
-        r.placeholder ? "Unmapped — please confirm" : `${r.sources} FG`,
+        r.source === "unmapped_placeholder" ? "Mapping Not Found" : r.purchase_status,
       ]),
       theme: "grid",
       styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       columnStyles: {
-        0: { cellWidth: 12, halign: "center" },
-        1: { cellWidth: "auto" },
-        2: { cellWidth: 28, halign: "right" },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 50 },
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 25 },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 18, halign: "right" },
+        5: { cellWidth: 14 },
+        6: { cellWidth: 24 },
       },
       margin: { left: M, right: M },
     });

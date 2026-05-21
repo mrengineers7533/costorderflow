@@ -108,24 +108,28 @@ Deno.serve(async (req) => {
       selectedSet ? selectedSet.has(it.id) : true,
     );
 
-    // Preload FG → RM map for these model numbers
-    const modelNumbers = Array.from(new Set(
-      // deno-lint-ignore no-explicit-any
-      selectedItems.map((it: any) => (it.model_number || "").trim()).filter(Boolean),
-    ));
-    let mapByModel = new Map<string, { is_direct_purchase: boolean; raw_materials: Array<{ material: string; qty_per_unit: number; unit?: string; notes?: string }> }>();
-    if (modelNumbers.length) {
-      const { data: maps } = await admin
-        .from("fg_raw_material_map")
-        .select("model_number, is_direct_purchase, raw_materials")
-        .in("model_number", modelNumbers);
-      // deno-lint-ignore no-explicit-any
-      for (const row of (maps as any[]) || []) {
-        mapByModel.set(String(row.model_number).toLowerCase(), {
-          is_direct_purchase: !!row.is_direct_purchase,
-          raw_materials: Array.isArray(row.raw_materials) ? row.raw_materials : [],
-        });
+    // Load full FG → RM master so we can fuzzy-match Column A entries
+    const { data: allMaps } = await admin
+      .from("fg_raw_material_map")
+      .select("model_number, is_direct_purchase, raw_materials")
+      .order("model_number");
+    type FgMap = { model_number: string; is_direct_purchase: boolean; raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }> };
+    const fgMaps: FgMap[] = ((allMaps as unknown as FgMap[]) || []);
+    const fgByLower = new Map(fgMaps.map((m) => [m.model_number.toLowerCase(), m]));
+    function matchFg(modelNumber?: string | null, description?: string | null): FgMap | null {
+      const mn = (modelNumber || "").trim().toLowerCase();
+      if (mn) {
+        const exact = fgByLower.get(mn);
+        if (exact) return exact;
+        const contains = fgMaps.find((m) => m.model_number.toLowerCase().includes(mn));
+        if (contains) return contains;
       }
+      const desc = (description || "").trim().slice(0, 40).toLowerCase();
+      if (desc) {
+        const contains = fgMaps.find((m) => m.model_number.toLowerCase().includes(desc));
+        if (contains) return contains;
+      }
+      return null;
     }
 
     let raw_material_count = 0;
@@ -146,15 +150,14 @@ Deno.serve(async (req) => {
         included_in_requisition: true,
       }));
       const { data: insertedItems, error: itErr } = await admin
-        .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, quantity");
+        .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
       if (itErr) throw itErr;
 
       // Generate raw material rows per inserted item
       const rmRows: Array<Record<string, unknown>> = [];
       // deno-lint-ignore no-explicit-any
       for (const ri of (insertedItems as any[]) || []) {
-        const key = String(ri.model_number || "").toLowerCase();
-        const mapping = mapByModel.get(key);
+        const mapping = matchFg(ri.model_number, ri.description);
         const fgQty = Number(ri.quantity) || 0;
         if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
           for (const rm of mapping.raw_materials) {
@@ -163,7 +166,9 @@ Deno.serve(async (req) => {
               requisition_id: created.id,
               requisition_item_id: ri.id,
               model_number: ri.model_number,
+              make: rm.make ?? null,
               material: rm.material,
+              size_model: rm.size_model ?? null,
               qty_per_unit: per,
               fg_quantity: fgQty,
               required_qty: per * fgQty,
@@ -183,14 +188,16 @@ Deno.serve(async (req) => {
             requisition_id: created.id,
             requisition_item_id: ri.id,
             model_number: ri.model_number,
-            material: `[Unmapped] ${ri.model_number || "FG"}`,
+            make: null,
+            material: "Raw Material Mapping Not Found",
+            size_model: null,
             qty_per_unit: null,
             fg_quantity: fgQty,
             required_qty: null,
             unit: null,
             source: "unmapped_placeholder",
             purchase_status: "pending",
-            notes: "No raw material mapping found for this Finish Good.",
+            notes: `No mapping found in Raw Material Master for "${ri.model_number || ri.description || "FG"}". Please review the mapping.`,
           });
           unmapped_count++;
         }

@@ -19,7 +19,7 @@ interface Props {
   boq: BoqRecord;
 }
 
-type MapInfo = { is_direct_purchase: boolean; rm_count: number };
+type MapInfo = { is_direct_purchase: boolean; rm_count: number; matched_model: string };
 
 export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [notes, setNotes] = useState("");
@@ -38,18 +38,24 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     if (!open) return;
     (async () => {
       setLoadingMap(true);
-      const models = Array.from(new Set(items.map((i) => (i.model_number || "").trim()).filter(Boolean)));
+      // Load whole master so we can fuzzy match against Column A
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("fg_raw_material_map")
+        .select("model_number, is_direct_purchase, raw_materials");
+      const all = (data as Array<{ model_number: string; is_direct_purchase: boolean; raw_materials: unknown[] }>) || [];
       const info: Record<string, MapInfo> = {};
-      if (models.length) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data } = await (supabase as any)
-          .from("fg_raw_material_map")
-          .select("model_number, is_direct_purchase, raw_materials")
-          .in("model_number", models);
-        for (const row of (data as Array<{ model_number: string; is_direct_purchase: boolean; raw_materials: unknown[] }>) || []) {
-          info[row.model_number.toLowerCase()] = {
-            is_direct_purchase: !!row.is_direct_purchase,
-            rm_count: Array.isArray(row.raw_materials) ? row.raw_materials.length : 0,
+      for (const it of items) {
+        const mn = (it.model_number || "").trim().toLowerCase();
+        const desc = (it.description || "").trim().slice(0, 40).toLowerCase();
+        let match = mn ? all.find((m) => m.model_number.toLowerCase() === mn) : undefined;
+        if (!match && mn) match = all.find((m) => m.model_number.toLowerCase().includes(mn));
+        if (!match && desc) match = all.find((m) => m.model_number.toLowerCase().includes(desc));
+        if (match) {
+          info[it.id] = {
+            is_direct_purchase: !!match.is_direct_purchase,
+            rm_count: Array.isArray(match.raw_materials) ? match.raw_materials.length : 0,
+            matched_model: match.model_number,
           };
         }
       }
@@ -57,8 +63,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       // default selection: everything except direct purchase
       const sel: Record<string, boolean> = {};
       for (const it of items) {
-        const key = (it.model_number || "").toLowerCase();
-        const m = info[key];
+        const m = info[it.id];
         sel[it.id] = !(m?.is_direct_purchase);
       }
       setSelected(sel);
@@ -67,10 +72,10 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   }, [open, items]);
 
   function statusFor(it: BoqLineItem): { label: string; tone: "default" | "secondary" | "destructive" | "outline" } {
-    const m = mapInfo[(it.model_number || "").toLowerCase()];
+    const m = mapInfo[it.id];
     if (m?.is_direct_purchase) return { label: "Direct Purchase", tone: "secondary" };
     if (m && m.rm_count > 0) return { label: `Mapped · ${m.rm_count} RM`, tone: "default" };
-    return { label: "Unmapped", tone: "outline" };
+    return { label: "Mapping Not Found", tone: "outline" };
   }
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
