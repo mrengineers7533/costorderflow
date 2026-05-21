@@ -671,6 +671,7 @@ export type Database = {
       fg_raw_material_map: {
         Row: {
           created_at: string
+          fg_description_full: string | null
           id: string
           is_direct_purchase: boolean
           model_number: string
@@ -681,6 +682,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          fg_description_full?: string | null
           id?: string
           is_direct_purchase?: boolean
           model_number: string
@@ -691,6 +693,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          fg_description_full?: string | null
           id?: string
           is_direct_purchase?: boolean
           model_number?: string
