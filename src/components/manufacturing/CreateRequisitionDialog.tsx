@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
+import { firstLine } from "@/lib/requisition/types";
 
 interface Props {
   open: boolean;
@@ -44,13 +45,15 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         .from("fg_raw_material_map")
         .select("model_number, is_direct_purchase, raw_materials");
       const all = (data as Array<{ model_number: string; is_direct_purchase: boolean; raw_materials: unknown[] }>) || [];
+      // normalize Column A to first line for matching + display
+      const cleaned = all.map((m) => ({ ...m, model_number: firstLine(m.model_number) || m.model_number }));
       const info: Record<string, MapInfo> = {};
       for (const it of items) {
         const mn = (it.model_number || "").trim().toLowerCase();
         const desc = (it.description || "").trim().slice(0, 40).toLowerCase();
-        let match = mn ? all.find((m) => m.model_number.toLowerCase() === mn) : undefined;
-        if (!match && mn) match = all.find((m) => m.model_number.toLowerCase().includes(mn));
-        if (!match && desc) match = all.find((m) => m.model_number.toLowerCase().includes(desc));
+        let match = mn ? cleaned.find((m) => m.model_number.toLowerCase() === mn) : undefined;
+        if (!match && mn) match = cleaned.find((m) => m.model_number.toLowerCase().includes(mn));
+        if (!match && desc) match = cleaned.find((m) => m.model_number.toLowerCase().includes(desc));
         if (match) {
           info[it.id] = {
             is_direct_purchase: !!match.is_direct_purchase,
