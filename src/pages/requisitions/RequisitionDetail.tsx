@@ -96,21 +96,6 @@ export default function RequisitionDetail() {
     setRms((prev) => prev.map((r) => r.id === rmId ? { ...r, ...patch } : r));
   }
 
-  const rmAgg = useMemo(() => {
-    const m = new Map<string, { key: string; material: string; unit: string; total: number; sources: number; ids: string[]; placeholder: boolean }>();
-    for (const r of rms) {
-      const key = `${(r.material || "").toLowerCase()}|${(r.unit || "").toLowerCase()}`;
-      const prev = m.get(key);
-      const qty = Number(r.required_qty) || 0;
-      if (prev) {
-        prev.total += qty; prev.sources += 1; prev.ids.push(r.id);
-        prev.placeholder = prev.placeholder || r.source === "unmapped_placeholder";
-      } else {
-        m.set(key, { key, material: r.material, unit: r.unit ?? "", total: qty, sources: 1, ids: [r.id], placeholder: r.source === "unmapped_placeholder" });
-      }
-    }
-    return Array.from(m.values());
-  }, [rms]);
   const hasUnmapped = rms.some((r) => r.source === "unmapped_placeholder");
 
   async function regenerate() {
@@ -188,46 +173,44 @@ export default function RequisitionDetail() {
               <table className="w-full text-sm">
                 <thead className="text-xs text-muted-foreground border-b">
                   <tr>
-                    <th className="text-left py-2 pr-3">Material</th>
-                    <th className="text-right py-2 pr-3">Required Qty</th>
+                    <th className="text-left py-2 pr-3">Make</th>
+                    <th className="text-left py-2 pr-3">Raw Material</th>
+                    <th className="text-left py-2 pr-3">Size / Model</th>
+                    <th className="text-right py-2 pr-3">Reqd Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
-                    <th className="text-left py-2 pr-3">FG Sources</th>
+                    <th className="text-left py-2 pr-3">FG Model</th>
                     <th className="text-left py-2 pr-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rmAgg.length === 0 ? (
-                    <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
-                  ) : rmAgg.map((r) => {
-                    // Use the first row's status as a representative; update all sibling rows together.
-                    const firstId = r.ids[0];
-                    const firstRow = rms.find((x) => x.id === firstId);
-                    const status = firstRow?.purchase_status || "pending";
-                    return (
-                      <tr key={r.key} className="border-b last:border-0">
-                        <td className="py-2 pr-3">
-                          {r.material}
-                          {r.placeholder && <Badge variant="outline" className="ml-2">Unmapped</Badge>}
-                        </td>
-                        <td className="py-2 pr-3 text-right">{r.total || "—"}</td>
-                        <td className="py-2 pr-3">{r.unit || "—"}</td>
-                        <td className="py-2 pr-3">{r.sources}</td>
-                        <td className="py-2 pr-3">
-                          <Select
-                            value={status}
-                            onValueChange={(v) => r.ids.forEach((id) => updateRm(id, { purchase_status: v as "pending" | "ordered" | "received" }))}
-                          >
-                            <SelectTrigger className="h-7 w-32"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="ordered">Ordered</SelectItem>
-                              <SelectItem value="received">Received</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {rms.length === 0 ? (
+                    <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                  ) : rms.map((r) => (
+                    <tr key={r.id} className={`border-b last:border-0 ${r.source === "unmapped_placeholder" ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
+                      <td className="py-2 pr-3">{r.make || "—"}</td>
+                      <td className="py-2 pr-3">
+                        {r.material}
+                        {r.source === "unmapped_placeholder" && <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>}
+                      </td>
+                      <td className="py-2 pr-3">{r.size_model || "—"}</td>
+                      <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
+                      <td className="py-2 pr-3">{r.unit || "—"}</td>
+                      <td className="py-2 pr-3 text-xs text-muted-foreground">{r.model_number || "—"}</td>
+                      <td className="py-2 pr-3">
+                        <Select
+                          value={r.purchase_status}
+                          onValueChange={(v) => updateRm(r.id, { purchase_status: v as "pending" | "ordered" | "received" })}
+                        >
+                          <SelectTrigger className="h-7 w-28"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="ordered">Ordered</SelectItem>
+                            <SelectItem value="received">Received</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </CardContent>

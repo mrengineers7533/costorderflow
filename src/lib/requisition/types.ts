@@ -58,6 +58,8 @@ export interface RequisitionRawMaterialRecord {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  make?: string | null;
+  size_model?: string | null;
 }
 
 export interface FgRawMaterialMapRow {
@@ -65,11 +67,25 @@ export interface FgRawMaterialMapRow {
   model_number: string;
   is_direct_purchase: boolean;
   raw_materials: Array<{
+    make?: string;
     material: string;
     qty_per_unit: number;
+    size_model?: string;
     unit?: string;
     notes?: string;
   }>;
   notes: string | null;
   updated_at: string;
+}
+
+export interface RmMasterUploadRow {
+  id: string;
+  file_path: string;
+  original_filename: string;
+  sheet_count: number;
+  fg_count: number;
+  row_count: number;
+  uploaded_by: string | null;
+  uploaded_by_email: string | null;
+  created_at: string;
 }

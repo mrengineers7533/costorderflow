@@ -145,8 +145,10 @@ export default function PublicRequisition() {
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground border-b">
                 <tr>
-                  <th className="text-left py-2 pr-3">Material</th>
-                  <th className="text-right py-2 pr-3">Required Qty</th>
+                  <th className="text-left py-2 pr-3">Make</th>
+                  <th className="text-left py-2 pr-3">Raw Material</th>
+                  <th className="text-left py-2 pr-3">Size / Model</th>
+                  <th className="text-right py-2 pr-3">Reqd Qty</th>
                   <th className="text-left py-2 pr-3">Unit</th>
                   <th className="text-left py-2 pr-3">FG Model</th>
                   <th className="text-left py-2 pr-3">Status</th>
@@ -154,13 +156,15 @@ export default function PublicRequisition() {
               </thead>
               <tbody>
                 {rms.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
+                  <tr key={r.id} className={`border-b last:border-0 ${r.source === "unmapped_placeholder" ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
+                    <td className="py-2 pr-3">{r.make || "—"}</td>
                     <td className="py-2 pr-3">
                       {r.material}
                       {r.source === "unmapped_placeholder" && (
-                        <Badge variant="outline" className="ml-2">Unmapped</Badge>
+                        <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>
                       )}
                     </td>
+                    <td className="py-2 pr-3">{r.size_model || "—"}</td>
                     <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
                     <td className="py-2 pr-3">{r.unit ?? "—"}</td>
                     <td className="py-2 pr-3 text-muted-foreground">{r.model_number}</td>

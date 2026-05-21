@@ -22,6 +22,7 @@ import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
 import RequisitionDetail from "./pages/requisitions/RequisitionDetail";
 import PublicRequisition from "./pages/requisitions/PublicRequisition";
+import RawMaterialMaster from "./pages/RawMaterialMaster";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -75,6 +76,7 @@ const App = () => (
                       <Route path="/manufacturing/:boqId" element={<ManufacturingDetail />} />
                       <Route path="/requisitions" element={<RequisitionsList />} />
                       <Route path="/requisitions/:id" element={<RequisitionDetail />} />
+                      <Route path="/raw-materials" element={<RawMaterialMaster />} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
