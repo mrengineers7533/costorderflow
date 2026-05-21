@@ -10,6 +10,19 @@ interface Body {
   boq_id: string;
   notes?: string;
   selected_boq_item_ids?: string[];
+  mode?: "auto" | "manual";
+  edited_items?: Array<{
+    boq_item_id: string;
+    is_direct_purchase?: boolean;
+    raw_materials: Array<{
+      make?: string | null;
+      material: string;
+      size_model?: string | null;
+      qty_per_unit: number | null;
+      unit?: string | null;
+      notes?: string | null;
+    }>;
+  }>;
 }
 
 function firstLine(raw: unknown): string {
@@ -170,12 +183,43 @@ Deno.serve(async (req) => {
         .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
       if (itErr) throw itErr;
 
+      // Build a lookup of edited payloads by boq_item_id (string keys)
+      const editedByBoqItem = new Map<string, NonNullable<Body["edited_items"]>[number]>();
+      for (const e of (body.edited_items || [])) {
+        editedByBoqItem.set(String(e.boq_item_id), e);
+      }
+
       // Generate raw material rows per inserted item
       const rmRows: Array<Record<string, unknown>> = [];
       // deno-lint-ignore no-explicit-any
       for (const ri of (insertedItems as any[]) || []) {
-        const mapping = matchFg(ri.model_number, ri.description);
         const fgQty = Number(ri.quantity) || 0;
+        const edited = editedByBoqItem.get(String(ri.boq_item_id));
+        if (edited) {
+          if (edited.is_direct_purchase) continue;
+          for (const rm of (edited.raw_materials || [])) {
+            if (!rm || !rm.material) continue;
+            const per = Number(rm.qty_per_unit) || 0;
+            rmRows.push({
+              requisition_id: created.id,
+              requisition_item_id: ri.id,
+              model_number: ri.model_number,
+              make: rm.make ?? null,
+              material: rm.material,
+              size_model: rm.size_model ?? null,
+              qty_per_unit: per,
+              fg_quantity: fgQty,
+              required_qty: per * fgQty,
+              unit: rm.unit ?? null,
+              source: "manual",
+              purchase_status: "pending",
+              notes: rm.notes ?? null,
+            });
+            raw_material_count++;
+          }
+          continue;
+        }
+        const mapping = matchFg(ri.model_number, ri.description);
         if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
           for (const rm of mapping.raw_materials) {
             const per = Number(rm.qty_per_unit) || 0;
