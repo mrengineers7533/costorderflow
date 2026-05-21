@@ -2041,25 +2041,22 @@ function Row({ k, v, bold, fmt }: { k: string; v: number; bold?: boolean; fmt?: 
  *  to OA fields (Description, Qty, Unit). Model & Remarks are shown read-only
  *  because they have no OA-row counterpart. Pure UI — no calc impact. */
 function OaDesignSuggestionRow({
-  reviewItem, round, canApply, onApply, boqLinked, onApplyToBoq, onAutoSave,
+  reviewItem, round, canApply, onApply, onAutoSave,
 }: {
   reviewItem: DesignReviewItemRow | null;
   round: DesignReviewRow;
   canApply: boolean;
   onApply: (patch: Partial<LineItem>) => void;
-  boqLinked: boolean;
-  onApplyToBoq: (reviewItem: DesignReviewItemRow, patch: { model_number?: string; remarks?: string }) => Promise<void>;
   onAutoSave?: () => void;
 }) {
-  const [showHistory, setShowHistory] = useState(false);
   if (!reviewItem) return null;
   const cols = parseColumnComments(reviewItem);
-  const tiles: { key: ColKey; label: string; target: "oa" | "boq" }[] = [
-    { key: "model", label: "Model", target: "oa" },
-    { key: "description", label: "Description", target: "oa" },
-    { key: "quantity", label: "Qty", target: "oa" },
-    { key: "unit", label: "Unit", target: "oa" },
-    { key: "remarks", label: "Remarks", target: "oa" },
+  const tiles: { key: ColKey; label: string }[] = [
+    { key: "model", label: "Model" },
+    { key: "description", label: "Description" },
+    { key: "quantity", label: "Qty" },
+    { key: "unit", label: "Unit" },
+    { key: "remarks", label: "Remarks" },
   ];
   const val = (k: ColKey) => ((cols as Record<string, string>)[k] || "").trim();
   const present = tiles.filter(({ key }) => val(key) !== "");
@@ -2078,86 +2075,54 @@ function OaDesignSuggestionRow({
     )
   ) : null;
 
-  const applyCell = (t: { key: ColKey; target: "oa" | "boq" }) => {
-    const v = val(t.key);
-    if (t.target === "oa") {
-      if (!canApply) return;
-      if (t.key === "description") onApply({ description: v });
-      else if (t.key === "quantity") onApply({ quantity: Number(v) || 0 });
-      else if (t.key === "unit") onApply({ unit: v });
-      else if (t.key === "model") onApply({ model: v });
-      else if (t.key === "remarks") onApply({ remarks: v });
-      // Auto-save the OA after applying — BOQ auto-syncs from OA on save.
-      onAutoSave?.();
-    } else {
-      if (!boqLinked) return;
-      if (t.key === "model") void onApplyToBoq(reviewItem, { model_number: v });
-      else if (t.key === "remarks") void onApplyToBoq(reviewItem, { remarks: v });
-    }
+  const applyCell = (k: ColKey) => {
+    if (!canApply) return;
+    const v = val(k);
+    if (k === "description") onApply({ description: v });
+    else if (k === "quantity") onApply({ quantity: Number(v) || 0 });
+    else if (k === "unit") onApply({ unit: v });
+    else if (k === "model") onApply({ model: v });
+    else if (k === "remarks") onApply({ remarks: v });
+    // Auto-save OA so BOQ auto-syncs (and revises) through syncBoqsAndPisForOrder.
+    onAutoSave?.();
   };
-  const cellDisabled = (t: { target: "oa" | "boq" }) =>
-    t.target === "oa" ? !canApply : !boqLinked;
 
   return (
-    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs">
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5 text-xs space-y-1">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">
           Design {isApproval ? "Approval" : "Comments"} · R{round.round_no}
         </span>
         {decisionPill}
+        {round.reviewer_name && (
+          <span className="text-[10px] text-muted-foreground">· {round.reviewer_name}</span>
+        )}
         {present.map((t) => (
           <button
             key={t.key}
             type="button"
-            disabled={cellDisabled(t)}
-            onClick={() => applyCell(t)}
-            title={
-              cellDisabled(t)
-                ? t.target === "oa"
-                  ? "Open the current OA revision to apply"
-                  : "Save the OA first — BOQ auto-syncs on save"
-                : `Apply suggested ${t.label} → ${t.target === "oa" ? "OA" : "BOQ"}: ${val(t.key)}`
-            }
+            disabled={!canApply}
+            onClick={() => applyCell(t.key)}
+            title={canApply ? `Apply suggested ${t.label} → OA: ${val(t.key)}` : "Open the current OA revision to apply"}
             className="rounded border border-primary/50 bg-background px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Apply {t.label}
-            <span className="ml-1 text-[10px] text-muted-foreground">→ {t.target === "oa" ? "OA" : "BOQ"}</span>
+            <span className="ml-1 text-[10px] text-muted-foreground">→ OA</span>
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => setShowHistory((s) => !s)}
-          className="ml-auto rounded border border-border bg-background px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:bg-muted"
-        >
-          {showHistory ? "Hide" : "View"} history
-        </button>
       </div>
-      {changeNote && (
-        <div className="mt-1 text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Change note:</span> {changeNote}</div>
-      )}
-      {showHistory && (
-        <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${present.length}, minmax(0, 1fr))` }}>
+      {present.length > 0 && (
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${present.length}, minmax(0, 1fr))` }}>
           {present.map((t) => (
-            <div key={t.key} className="px-1.5 py-1 rounded bg-background/60 min-h-9">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] uppercase text-muted-foreground">{t.label}</span>
-                <span className="text-[9px] uppercase text-muted-foreground">{t.target === "oa" ? "OA" : "BOQ"}</span>
-              </div>
+            <div key={t.key} className="px-1.5 py-1 rounded bg-background/60">
+              <div className="text-[10px] uppercase text-muted-foreground">{t.label}</div>
               <div className="whitespace-pre-wrap text-foreground">{val(t.key)}</div>
-              <button
-                type="button"
-                disabled={cellDisabled(t)}
-                onClick={() => applyCell(t)}
-                className="mt-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Apply
-              </button>
             </div>
           ))}
-          {round.reviewer_name && (
-            <div className="col-span-full text-[10px] text-muted-foreground">Reviewer: {round.reviewer_name}</div>
-          )}
         </div>
+      )}
+      {changeNote && (
+        <div className="text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Change note:</span> {changeNote}</div>
       )}
     </div>
   );
