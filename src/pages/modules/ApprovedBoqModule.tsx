@@ -1,0 +1,260 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import type { BoqRecord } from "@/lib/boq/types";
+import type { OrderRecord } from "@/lib/orders/types";
+
+const fmtINR = (n: number) =>
+  `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const fmtDate = (s: string | null | undefined) =>
+  s ? new Date(s).toLocaleDateString("en-IN") : "—";
+
+export interface ModuleConfig {
+  kind: "purchase" | "manufacturing";
+  title: string;
+  subtitle: string;
+  basePath: string;
+  futureSteps: string[];
+}
+
+/** Pick the latest approved BOQ per OA family (parent_order_id || id). */
+function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
+  const familyOf = new Map<string, string>();
+  for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
+  const approved = boqs.filter(
+    (b) => (b.verification_status ?? "approved") === "approved",
+  );
+  const byFamily = new Map<string, BoqRecord>();
+  for (const b of approved) {
+    const fam = familyOf.get(b.order_id) || b.order_id;
+    const existing = byFamily.get(fam);
+    if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) {
+      byFamily.set(fam, b);
+    }
+  }
+  return Array.from(byFamily.values()).sort((a, b) =>
+    (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
+  );
+}
+
+export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
+  const [boqs, setBoqs] = useState<BoqRecord[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const [b, o] = await Promise.all([
+        supabase.from("boqs").select("*").order("created_at", { ascending: false }),
+        supabase.from("orders").select("*"),
+      ]);
+      setBoqs((b.data as unknown as BoqRecord[]) || []);
+      setOrders((o.data as unknown as OrderRecord[]) || []);
+      setLoading(false);
+    })();
+  }, []);
+
+  const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((b) =>
+      [b.boq_number, b.client_name, b.reference_oa_number, b.project_number]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [rows, search]);
+
+  return (
+    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{config.title}</h1>
+          <p className="text-xs text-muted-foreground">{config.subtitle}</p>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search BOQ, OA, client…"
+            className="h-8 pl-7 w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No approved BOQs available yet. Once a BOQ is approved, it will appear here automatically.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3">
+          {filtered.map((b) => {
+            const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
+            return (
+              <Card key={b.id} className="hover:shadow-sm transition-shadow">
+                <CardContent className="py-4 flex flex-wrap items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{b.boq_number}</span>
+                      <Badge variant="secondary">R{b.revision ?? 0}</Badge>
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 truncate">
+                      {b.client_name || "—"} · OA {b.reference_oa_number || "—"}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <div>Items: <span className="font-medium text-foreground">{itemsCount}</span></div>
+                    <div>Approved: {fmtDate(b.verified_at || b.updated_at)}</div>
+                  </div>
+                  <Link to={`${config.basePath}/${b.id}`}>
+                    <Button size="sm">Open</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
+  const { boqId } = useParams<{ boqId: string }>();
+  const [boq, setBoq] = useState<BoqRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!boqId) return;
+    (async () => {
+      const { data } = await supabase.from("boqs").select("*").eq("id", boqId).maybeSingle();
+      setBoq((data as unknown as BoqRecord) || null);
+      setLoading(false);
+    })();
+  }, [boqId]);
+
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (!boq) return <div className="p-6 text-sm text-muted-foreground">BOQ not found.</div>;
+
+  const items = Array.isArray(boq.line_items) ? boq.line_items : [];
+  const approved = (boq.verification_status ?? "approved") === "approved";
+
+  return (
+    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">{config.title} · {boq.boq_number}</h1>
+            {approved && <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>}
+            <Badge variant="secondary">R{boq.revision ?? 0}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {boq.client_name || "—"} · OA {boq.reference_oa_number || "—"} · BOQ date {fmtDate(boq.boq_date)}
+          </p>
+        </div>
+        <Link to={config.basePath}>
+          <Button variant="outline" size="sm">Back</Button>
+        </Link>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Approved BOQ items (read-only)</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b">
+              <tr>
+                <th className="text-left py-2 pr-3">#</th>
+                <th className="text-left py-2 pr-3">Description</th>
+                <th className="text-left py-2 pr-3">Model</th>
+                <th className="text-right py-2 pr-3">Qty</th>
+                <th className="text-left py-2 pr-3">Unit</th>
+                <th className="text-left py-2 pr-3">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
+              ) : items.map((it, idx) => (
+                <tr key={it.id || idx} className="border-b last:border-0">
+                  <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
+                  <td className="py-2 pr-3">{it.description}</td>
+                  <td className="py-2 pr-3">{it.model_number}</td>
+                  <td className="py-2 pr-3 text-right">{it.quantity}</td>
+                  <td className="py-2 pr-3">{it.unit}</td>
+                  <td className="py-2 pr-3 text-muted-foreground">{it.remarks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Upcoming {config.kind === "purchase" ? "Purchase" : "Manufacturing"} workflow</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {config.futureSteps.map((step) => (
+              <div
+                key={step}
+                className="rounded-md border border-dashed p-3 text-sm text-muted-foreground bg-muted/30"
+              >
+                <div className="font-medium text-foreground">{step}</div>
+                <div className="text-xs mt-1">Coming soon</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export const PURCHASE_CONFIG: ModuleConfig = {
+  kind: "purchase",
+  title: "Purchase",
+  subtitle: "Approved BOQs ready for purchase workflow.",
+  basePath: "/purchase",
+  futureSteps: [
+    "Raw Material Mapping",
+    "Requisition",
+    "Lot Marking",
+    "PI Linkage",
+    "Invoice",
+    "Dispatch",
+  ],
+};
+
+export const MANUFACTURING_CONFIG: ModuleConfig = {
+  kind: "manufacturing",
+  title: "Manufacturing",
+  subtitle: "Approved BOQs ready for manufacturing workflow.",
+  basePath: "/manufacturing",
+  futureSteps: [
+    "Raw Material Mapping",
+    "Requisition",
+    "Lot Marking",
+    "Manufacturing Planning",
+    "PI Linkage",
+    "Invoice",
+    "Dispatch",
+  ],
+};

@@ -15,6 +15,10 @@ import PiList from "./pages/pi/PiList";
 import PiEditor from "./pages/pi/PiEditor";
 import FlowReport from "./pages/reports/FlowReport";
 import WorkflowPage from "./pages/workflow/WorkflowPage";
+import PurchaseList from "./pages/purchase/PurchaseList";
+import PurchaseDetail from "./pages/purchase/PurchaseDetail";
+import ManufacturingList from "./pages/manufacturing/ManufacturingList";
+import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -58,6 +62,10 @@ const App = () => (
                       <Route path="/pi/:id" element={<PiEditor />} />
                       <Route path="/reports" element={<FlowReport />} />
                       <Route path="/workflow" element={<WorkflowPage />} />
+                      <Route path="/purchase" element={<PurchaseList />} />
+                      <Route path="/purchase/:boqId" element={<PurchaseDetail />} />
+                      <Route path="/manufacturing" element={<ManufacturingList />} />
+                      <Route path="/manufacturing/:boqId" element={<ManufacturingDetail />} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
