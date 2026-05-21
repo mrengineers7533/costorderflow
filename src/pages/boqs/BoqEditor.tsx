@@ -841,8 +841,19 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
         )}
 
         {/* ===== BOQ title bar ===== */}
-        <div style={{ background: "rgb(200,200,200)", textAlign: "center", fontWeight: 700, fontSize: "12pt", padding: "1.5mm 0" }}>
+        <div style={{ position: "relative", background: "rgb(200,200,200)", textAlign: "center", fontWeight: 700, fontSize: "12pt", padding: "1.5mm 0" }}>
           BOQ
+          {(() => {
+            const vs = (rec.verification_status || "").toLowerCase();
+            let label = "", bg = "";
+            if (vs === "approved") { label = "APPROVED"; bg = "rgb(22,128,51)"; }
+            else if (vs === "rejected") { label = "CHANGES REQUESTED"; bg = "rgb(200,30,30)"; }
+            else if (vs === "pending_verification") { label = "PENDING APPROVAL"; bg = "rgb(180,120,0)"; }
+            if (!label) return null;
+            return (
+              <span style={{ position: "absolute", right: "2mm", top: "50%", transform: "translateY(-50%)", background: bg, color: "white", fontSize: "7.5pt", fontWeight: 700, padding: "0.6mm 2mm", borderRadius: "1mm", letterSpacing: "0.3px" }}>{label}</span>
+            );
+          })()}
         </div>
 
         {/* ===== Meta two-column ===== */}
@@ -863,18 +874,19 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
             <col />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
-            <col style={{ width: "50mm" }} />
+            <col style={{ width: "38mm" }} />
+            <col style={{ width: "24mm" }} />
           </colgroup>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
-              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"].map((h, i) => (
-                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 ? "center" : "left" }}>{h}</th>
+              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"].map((h, i) => (
+                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 || i === 6 ? "center" : "left" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={6} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
@@ -883,6 +895,14 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
+                {(() => {
+                  const s = ((it as { approval_status?: string }).approval_status || "pending").toLowerCase();
+                  const txt = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
+                  const color = s === "approved" ? "rgb(22,128,51)" : s === "rejected" ? "rgb(200,30,30)" : "rgb(180,120,0)";
+                  return (
+                    <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center", fontWeight: 700, color }}>{txt}</td>
+                  );
+                })()}
               </tr>
             ))}
           </tbody>

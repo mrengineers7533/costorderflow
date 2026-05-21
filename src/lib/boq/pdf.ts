@@ -104,6 +104,26 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
   doc.rect(M, y, W - M * 2, 7, "F");
   doc.setTextColor(0, 0, 0).setFont("helvetica", "bold").setFontSize(13);
   doc.text("BOQ", W / 2, y + 5, { align: "center" });
+  // Overall approval status pill (right side of title bar)
+  {
+    const vs = (boq.verification_status || "").toLowerCase();
+    let label = "", fill: [number, number, number] | null = null;
+    if (vs === "approved") { label = "APPROVED"; fill = [22, 128, 51]; }
+    else if (vs === "rejected") { label = "CHANGES REQUESTED"; fill = [200, 30, 30]; }
+    else if (vs === "pending_verification") { label = "PENDING APPROVAL"; fill = [180, 120, 0]; }
+    if (label && fill) {
+      doc.setFont("helvetica", "bold").setFontSize(8);
+      const pw = doc.getTextWidth(label) + 4;
+      const ph = 5;
+      const px = W - M - pw - 1.5;
+      const py = y + (7 - ph) / 2;
+      doc.setFillColor(...fill);
+      doc.roundedRect(px, py, pw, ph, 1, 1, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.text(label, px + pw / 2, py + ph - 1.4, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+    }
+  }
   y += 11;
 
   // Header meta — two-column layout
