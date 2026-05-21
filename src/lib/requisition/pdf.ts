@@ -66,29 +66,52 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
   if (rms.length) {
     doc.setFont("helvetica", "bold").setFontSize(11);
     doc.text("RAW MATERIAL INDENT", M, y);
+    // Group RM rows by Finish Good
+    const itemById = new Map(ctx.items.map((it) => [it.id, it] as const));
+    const order: string[] = [];
+    const buckets = new Map<string, typeof rms>();
+    rms.forEach((r) => {
+      const k = r.requisition_item_id || `__model__:${r.model_number || "—"}`;
+      if (!buckets.has(k)) { buckets.set(k, []); order.push(k); }
+      buckets.get(k)!.push(r);
+    });
+    const numKey = (s: string | null | undefined) => {
+      const n = parseFloat(String(s ?? ""));
+      return Number.isFinite(n) ? n : 9999;
+    };
+    order.sort((a, b) => numKey(itemById.get(a)?.item_no) - numKey(itemById.get(b)?.item_no));
+
+    const body: Array<Array<string | { content: string; rowSpan: number; styles?: Record<string, unknown> }>> = [];
+    order.forEach((k) => {
+      const list = buckets.get(k)!;
+      const fg = itemById.get(k);
+      const fgLabel = fg?.model_number || fg?.description || list[0].model_number || "—";
+      list.forEach((r, idx) => {
+        const row: Array<string | { content: string; rowSpan: number; styles?: Record<string, unknown> }> = [];
+        if (idx === 0) {
+          row.push({ content: fgLabel, rowSpan: list.length, styles: { valign: "middle", fontStyle: "bold" } });
+        }
+        row.push(r.material);
+        row.push(r.size_model ?? "—");
+        row.push(r.required_qty != null ? String(r.required_qty) : "—");
+        row.push(r.unit || "—");
+        body.push(row);
+      });
+    });
+
     autoTable(doc, {
       startY: y + 2,
-      head: [["#", "Make", "Raw Material", "Size / Model", "Reqd Qty", "Unit", "Status"]],
-      body: rms.map((r, idx) => [
-        String(idx + 1),
-        r.make ?? "",
-        r.material,
-        r.size_model ?? "",
-        r.required_qty != null ? String(r.required_qty) : "—",
-        r.unit || "—",
-        r.source === "unmapped_placeholder" ? "Mapping Not Found" : r.purchase_status,
-      ]),
+      head: [["Finished Good", "Raw Material", "Size / Spec", "Reqd Qty", "Unit"]],
+      body,
       theme: "grid",
       styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       columnStyles: {
-        0: { cellWidth: 10, halign: "center" },
-        1: { cellWidth: 25 },
+        0: { cellWidth: 60 },
+        1: { cellWidth: 40 },
         2: { cellWidth: "auto" },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 18, halign: "right" },
-        5: { cellWidth: 14 },
-        6: { cellWidth: 24 },
+        3: { cellWidth: 20, halign: "right" },
+        4: { cellWidth: 16 },
       },
       margin: { left: M, right: M },
     });
