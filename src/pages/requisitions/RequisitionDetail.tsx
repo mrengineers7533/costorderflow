@@ -82,8 +82,9 @@ export default function RequisitionDetail() {
     toast({ title: "Link copied" });
   }
 
-  function downloadPDF() {
+  function downloadPDF(format: "default" | "generated" = "default") {
     if (!req || !boq) return;
+    const generatedRows = format === "generated" ? buildGeneratedRows() : undefined;
     const doc = generateRequisitionPDF({
       requisition: req,
       items,
@@ -94,9 +95,11 @@ export default function RequisitionDetail() {
       shareLink,
       familyLink,
       showMake,
+      format,
+      generatedRows,
     });
     const safe = req.requisition_number.replace(/[/\\]/g, "_");
-    doc.save(`${safe}.pdf`);
+    doc.save(`${safe}${format === "generated" ? "_generated" : ""}.pdf`);
   }
 
   async function updateItem(itemId: string, patch: Partial<RequisitionItemRecord>) {
@@ -197,7 +200,8 @@ export default function RequisitionDetail() {
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
           {stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
-          <Button size="sm" variant="outline" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>
+          <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>
         </div>
       </div>
 
