@@ -182,6 +182,7 @@ export async function reviseBoqFromOrder(
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
       remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+      make: (it.make_label || "").trim() || prev?.make || "",
     };
   });
 
@@ -291,6 +292,7 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
         remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+        make: (it.make_label || "").trim() || prev?.make || "",
         // Reset per-item approval whenever OA changes (sync resets review).
         approval_status: isOpen ? "pending" : prev?.approval_status,
         approval_comment: isOpen ? "" : prev?.approval_comment,
@@ -417,6 +419,7 @@ export async function createPendingBoqRevision(
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
       remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+      make: (it.make_label || "").trim() || prev?.make || "",
     };
   });
   const token = crypto.randomUUID();
@@ -500,6 +503,7 @@ export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqR
     quantity: Number(it.quantity) || 0,
     unit: it.unit || "Nos",
     remarks: "",
+    make: (it.make_label || "").trim() || "",
   }));
 
   const payload = {
