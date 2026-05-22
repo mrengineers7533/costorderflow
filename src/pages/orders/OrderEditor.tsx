@@ -27,6 +27,7 @@ import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
 import { reviseOrder, syncBoqsAndPisForOrder, createInitialBoqForOrder } from "@/lib/revisions";
+import { logEvent } from "@/lib/activity/log";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
@@ -509,6 +510,20 @@ export default function OrderEditor() {
     // Clear the cost-sheet draft cache — data is now persisted in the DB.
     try { sessionStorage.removeItem("oa-draft-extracted"); } catch { /* ignore */ }
     toast({ title: "OA data saved successfully", description: `OA ${oa} · ${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"} saved` });
+    {
+      const saved = res.data as { id: string; parent_order_id: string | null; oa_number: string } | null;
+      if (saved) {
+        logEvent({
+          module: "oa",
+          event_type: isNew ? "oa.created" : "oa.edited",
+          status: "info",
+          title: isNew ? `OA ${saved.oa_number} created` : `OA ${saved.oa_number} edited`,
+          message: `${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"}`,
+          order_id: saved.id,
+          order_root_id: saved.parent_order_id ?? saved.id,
+        });
+      }
+    }
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
   // Keep a stable ref to the latest save() so auto-save (from design-Apply)
