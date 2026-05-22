@@ -49,7 +49,10 @@ export default function PiEditor() {
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
-  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>([]);
+  // PI hides the Make column by default. User can flip it on per-session via
+  // the PdfColumnVisibility popover; the choice is honored by both the
+  // preview and the exported PDF.
+  const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>(["make"]);
 
   useEffect(() => {
     if (!id) return;
