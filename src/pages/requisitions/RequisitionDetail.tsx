@@ -9,10 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Download, Link2 } from "lucide-react";
+import { Columns3, Copy, Download, Link2 } from "lucide-react";
 import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function RequisitionDetail() {
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [latestRev, setLatestRev] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showMake, setShowMake] = useColumnToggle("requisition.columns.make", false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
@@ -81,6 +83,7 @@ export default function RequisitionDetail() {
       clientName: boq.client_name || "",
       shareLink,
       familyLink,
+      showMake,
     });
     const safe = req.requisition_number.replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
