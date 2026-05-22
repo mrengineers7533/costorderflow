@@ -17,7 +17,6 @@ export function useUserAccess(userId: string | undefined | null) {
     setLoading(true);
     const [{ data: roles }, { data: access }] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      // @ts-expect-error - types regenerated after migration
       supabase.from("user_module_access").select("module").eq("user_id", userId),
     ]);
     const admin = (roles ?? []).some((r: { role: string }) => r.role === "admin");
