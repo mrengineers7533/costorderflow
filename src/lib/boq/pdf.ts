@@ -38,7 +38,14 @@ function fitInBox(natW: number, natH: number, maxW: number, maxH: number) {
   return { w: natW * r, h: natH * r };
 }
 
-export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
+export interface BoqPdfOptions {
+  /** When true, inserts a "Make" column between Model Number and Description.
+   *  Defaults to false so existing exports stay byte-identical. */
+  showMake?: boolean;
+}
+
+export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): Promise<jsPDF> {
+  const showMake = !!opts.showMake;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
@@ -152,40 +159,62 @@ export async function generateBoqPDF(boq: BoqRecord): Promise<jsPDF> {
   });
   y += leftRows.length * 5 + 4;
 
-  // Items table — only the 6 BOQ columns (no pricing!)
-  const rows = sortByItemNo(boq.line_items).map((it, i) => [
-    it.item_no || String(i + 1),
-    it.model_number || "",
-    it.description || "",
-    it.quantity ? String(it.quantity) : "",
-    it.unit || "",
-    it.remarks || "",
-    (() => {
+  // Items table — Make column inserted only when explicitly requested.
+  const headRow = showMake
+    ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+    : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"];
+  const approvalIdx = showMake ? 7 : 6;
+  const rows = sortByItemNo(boq.line_items).map((it, i) => {
+    const approval = (() => {
       const s = (it.approval_status || "pending").toLowerCase();
       if (s === "approved") return "Approved";
       if (s === "rejected") return "Rejected";
       return "Pending";
-    })(),
-  ]);
+    })();
+    const base = [
+      it.item_no || String(i + 1),
+      it.model_number || "",
+      it.description || "",
+      it.quantity ? String(it.quantity) : "",
+      it.unit || "",
+      it.remarks || "",
+      approval,
+    ];
+    if (showMake) base.splice(2, 0, (it.make || "").trim());
+    return base;
+  });
+  const emptyRow = headRow.map((_, i) => (i === (showMake ? 3 : 2) ? "(no items)" : ""));
+  const columnStyles: Record<number, { cellWidth?: number | "auto"; halign?: "center" | "left" | "right"; fontStyle?: string }> = showMake
+    ? {
+        0: { cellWidth: 14, halign: "center" },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: "auto" },
+        4: { cellWidth: 12, halign: "center" },
+        5: { cellWidth: 12, halign: "center" },
+        6: { cellWidth: 32 },
+        7: { cellWidth: 22, halign: "center", fontStyle: "bold" },
+      }
+    : {
+        0: { cellWidth: 16, halign: "center" },
+        1: { cellWidth: 28 },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 12, halign: "center" },
+        4: { cellWidth: 12, halign: "center" },
+        5: { cellWidth: 38 },
+        6: { cellWidth: 24, halign: "center", fontStyle: "bold" },
+      };
 
   autoTable(doc, {
     startY: y,
-    head: [["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]],
-    body: rows.length ? rows : [["", "", "(no items)", "", "", "", ""]],
+    head: [headRow],
+    body: rows.length ? rows : [emptyRow],
     theme: "grid",
     styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 16, halign: "center" },
-      1: { cellWidth: 28 },
-      2: { cellWidth: "auto" },
-      3: { cellWidth: 12, halign: "center" },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 38 },
-      6: { cellWidth: 24, halign: "center", fontStyle: "bold" },
-    },
+    columnStyles,
     didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 6) {
+      if (data.section === "body" && data.column.index === approvalIdx) {
         const v = String(data.cell.raw || "").toLowerCase();
         if (v === "approved") data.cell.styles.textColor = [22, 128, 51];
         else if (v === "rejected") data.cell.styles.textColor = [200, 30, 30];
