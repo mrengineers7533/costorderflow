@@ -12,6 +12,7 @@ import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequis
 import type { RequisitionRecord } from "@/lib/requisition/types";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -172,9 +173,11 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const items = Array.isArray(boq.line_items) ? boq.line_items : [];
   const approved = (boq.verification_status ?? "approved") === "approved";
   const resolveMake = buildMakeResolver(order?.line_items);
+  const orderRootId = order ? (order as { parent_order_id?: string | null; id: string }).parent_order_id || order.id : null;
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <EntityActivityBanner orderRootId={orderRootId} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">

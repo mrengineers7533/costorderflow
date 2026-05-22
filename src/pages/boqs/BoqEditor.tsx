@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, Save, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { logEvent } from "@/lib/activity/log";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
@@ -46,6 +48,7 @@ export default function BoqEditor() {
 
   const [boqId, setBoqId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>("");
+  const [orderRootId, setOrderRootId] = useState<string | null>(null);
   const [boqNumber, setBoqNumber] = useState("");
   const [version, setVersion] = useState(1);
   const [format, setFormat] = useState<"MR" | "GMS">("MR");
@@ -195,6 +198,11 @@ export default function BoqEditor() {
         if (b.order_id) {
           const { data: oa } = await supabase.from("orders").select("user_id").eq("id", b.order_id).maybeSingle();
           if (oa) setOaOwnerId((oa as { user_id: string | null }).user_id || null);
+          const { data: oa2 } = await supabase.from("orders").select("id,parent_order_id").eq("id", b.order_id).maybeSingle();
+          if (oa2) {
+            const r = oa2 as { id: string; parent_order_id: string | null };
+            setOrderRootId(r.parent_order_id || r.id);
+          }
         }
         const finalItems = sortByItemNo(nextItems.length ? nextItems : [newBoqItem(1)]);
         setItems(finalItems);
@@ -319,6 +327,19 @@ export default function BoqEditor() {
       }
     }
     toast({ title: "Saved", description: `BOQ ${payload.boq_number}` });
+    {
+      const saved = res.data as { id: string; order_id: string; boq_number: string } | null;
+      if (saved) {
+        logEvent({
+          module: "boq",
+          event_type: isNew ? "boq.created" : "boq.edited",
+          status: "info",
+          title: isNew ? `BOQ ${saved.boq_number} created` : `BOQ ${saved.boq_number} updated`,
+          boq_id: saved.id,
+          order_id: saved.order_id,
+        });
+      }
+    }
     if (isNew) navigate(`/boqs/${res.data.id}`, { replace: true });
   }
 
@@ -417,6 +438,7 @@ export default function BoqEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
+        {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
             Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.

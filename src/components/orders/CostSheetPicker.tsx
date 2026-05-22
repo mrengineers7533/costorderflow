@@ -127,6 +127,16 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
     if (ins.error) return toast({ title: "Save failed", description: ins.error.message, variant: "destructive" });
 
     await refresh();
+    {
+      // Fire-and-forget activity log
+      import("@/lib/activity/log").then(({ logEvent }) => logEvent({
+        module: "cost_sheet",
+        event_type: "cost_sheet.uploaded",
+        status: "info",
+        title: "Cost sheet uploaded",
+        message: file.name,
+      }));
+    }
     // Auto-parse the freshly uploaded sheet
     parseSheet((ins.data as { id: string }).id);
   }

@@ -27,6 +27,8 @@ import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
 import { reviseOrder, syncBoqsAndPisForOrder, createInitialBoqForOrder } from "@/lib/revisions";
+import { logEvent } from "@/lib/activity/log";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
@@ -509,6 +511,20 @@ export default function OrderEditor() {
     // Clear the cost-sheet draft cache — data is now persisted in the DB.
     try { sessionStorage.removeItem("oa-draft-extracted"); } catch { /* ignore */ }
     toast({ title: "OA data saved successfully", description: `OA ${oa} · ${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"} saved` });
+    {
+      const saved = res.data as { id: string; parent_order_id: string | null; oa_number: string } | null;
+      if (saved) {
+        logEvent({
+          module: "oa",
+          event_type: isNew ? "oa.created" : "oa.edited",
+          status: "info",
+          title: isNew ? `OA ${saved.oa_number} created` : `OA ${saved.oa_number} edited`,
+          message: `${itemsWithAmounts.length} item${itemsWithAmounts.length === 1 ? "" : "s"}`,
+          order_id: saved.id,
+          order_root_id: saved.parent_order_id ?? saved.id,
+        });
+      }
+    }
     if (isNew) navigate(`/orders/${res.data.id}`, { replace: true });
   }
   // Keep a stable ref to the latest save() so auto-save (from design-Apply)
@@ -651,6 +667,30 @@ export default function OrderEditor() {
         title: `OA Rev ${newOrder.revision} created`,
         description: newBoq ? `Linked BOQ Rev ${newBoq.revision} also created.` : "No existing BOQ to revise.",
       });
+      {
+        const root = (newOrder as { parent_order_id?: string | null }).parent_order_id ?? newOrder.id;
+        logEvent({
+          module: "oa",
+          event_type: "oa.revised",
+          status: "warning",
+          title: `OA ${newOrder.oa_number} revised to Rev ${newOrder.revision}`,
+          message: newBoq ? `BOQ auto-revised to Rev ${newBoq.revision}.` : undefined,
+          order_id: newOrder.id,
+          order_root_id: root,
+        });
+        if (newBoq) {
+          logEvent({
+            module: "boq",
+            event_type: "boq.auto_revised",
+            status: "warning",
+            title: `BOQ ${newBoq.boq_number} auto-revised to Rev ${newBoq.revision}`,
+            message: `Triggered by OA revision Rev ${newOrder.revision}.`,
+            order_id: newOrder.id,
+            order_root_id: root,
+            boq_id: newBoq.id,
+          });
+        }
+      }
       navigate(`/orders/${newOrder.id}`);
     } catch (e) {
       toast({ title: "Revise failed", description: (e as Error).message, variant: "destructive" });
@@ -815,6 +855,9 @@ export default function OrderEditor() {
         </div>
 
         {/* Revision badge banner when viewing a non-current revision */}
+        {!isNew && (
+          <EntityActivityBanner orderRootId={parentOrderId || orderId || null} />
+        )}
         {!isNew && !isCurrent && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2 text-sm flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">

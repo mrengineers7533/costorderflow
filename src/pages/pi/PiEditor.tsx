@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { logEvent } from "@/lib/activity/log";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PiRecord } from "@/lib/pi/types";
 import { calcPiTotals } from "@/lib/pi/calc";
@@ -253,6 +254,13 @@ export default function PiEditor() {
       if (error) throw error;
       if (finalize) update("status", "finalized");
       toast({ title: finalize ? "PI finalized" : "PI saved" });
+      logEvent({
+        module: "pi",
+        event_type: finalize ? "pi.finalized" : "pi.saved",
+        status: "info",
+        title: finalize ? `PI ${pi.pi_number} finalized` : `PI ${pi.pi_number} saved`,
+        pi_id: pi.id,
+      });
     } catch (e: any) {
       toast({ title: "Save failed", description: e?.message || String(e), variant: "destructive" });
     } finally {

@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_event_reads: {
+        Row: {
+          event_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          event_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          event_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_event_reads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "activity_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_events: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          actor_name: string | null
+          boq_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          message: string | null
+          metadata: Json
+          module: string
+          order_id: string | null
+          order_root_id: string | null
+          pi_id: string | null
+          requisition_id: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          boq_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+          module: string
+          order_id?: string | null
+          order_root_id?: string | null
+          pi_id?: string | null
+          requisition_id?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          boq_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+          module?: string
+          order_id?: string | null
+          order_root_id?: string | null
+          pi_id?: string | null
+          requisition_id?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: []
+      }
       allowed_domains: {
         Row: {
           created_at: string
@@ -443,6 +526,13 @@ export type Database = {
             referencedRelation: "boqs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "boq_revisions_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
         ]
       }
       boqs: {
@@ -553,6 +643,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "boqs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boqs_revised_from_id_fkey"
+            columns: ["revised_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
           },
           {
             foreignKeyName: "boqs_source_order_id_fkey"
@@ -1540,7 +1637,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_entity_pending_state: {
+        Row: {
+          design_review_status: string | null
+          has_stale_requisition: boolean | null
+          latest_boq_id: string | null
+          latest_boq_revision: number | null
+          order_root_id: string | null
+          verification_status: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_boq_by_verification_token: {

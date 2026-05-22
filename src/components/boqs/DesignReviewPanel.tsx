@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { logEvent } from "@/lib/activity/log";
 import { Copy, Download, FileSpreadsheet, Link2, Loader2, RefreshCw } from "lucide-react";
 import { exportDesignReviewRoundExcel, exportDesignReviewRoundPDF } from "@/lib/boq/designReviewExport";
 import {
@@ -109,6 +110,14 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
       }
       const r = await createReviewRound(boq, items, { kind });
       toast({ title: `${kind === "comment" ? "Comment" : "Approval"} link generated (R${r.round_no})` });
+      logEvent({
+        module: "design",
+        event_type: kind === "approval" ? "approval.requested" : "design.link_sent",
+        status: "pending",
+        title: `${kind === "approval" ? "Approval" : "Design"} link generated (R${r.round_no})`,
+        message: `BOQ ${boq.boq_number}`,
+        boq_id: boq.id,
+      });
       const url = reviewLink(r.token);
       await navigator.clipboard.writeText(url).catch(() => {});
       await load();
@@ -130,6 +139,14 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
       const url = finalBoqLink(token);
       await navigator.clipboard.writeText(url).catch(() => {});
       toast({ title: "Final BOQ link copied", description: url });
+      logEvent({
+        module: "boq",
+        event_type: "boq.final_sent",
+        status: "approved",
+        title: `Final BOQ link sent`,
+        message: `BOQ ${boq.boq_number}`,
+        boq_id: boq.id,
+      });
       onChange?.();
     } catch (e) {
       toast({ title: "Failed to send final BOQ", description: String((e as Error).message || e), variant: "destructive" });
