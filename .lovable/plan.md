@@ -1,44 +1,50 @@
-# Plan — Place Make column right after Description (BOQ + PI)
+## Goal
 
-## 1. BOQ — move the Make column to immediately after Description
+Make the OA `Make` value flow end-to-end and surface as a hidden-by-default column on every downstream surface, without touching any existing calculation, layout, workflow, or print output unless the column is explicitly enabled.
 
-Today the hidden Make column renders between **Model Number** and **Description**. Reorder it so the columns become:
+## Root cause (why Make is missing today)
 
-`Item No. | Model Number | Description | Make | Qty | Unit | Remarks | Approved by Design`
+- **BOQ Editor — new BOQ from OA** (`src/pages/boqs/BoqEditor.tsx` lines 232–240): the mapper that converts OA line items → BOQ items drops `make_label`. So a freshly-created BOQ has empty Make values; toggling the column on shows blanks. The revision flow already propagates it (`src/lib/revisions/index.ts` line 185) — only the initial create is broken.
+- **PI Item Select Dialog** (`src/components/pi/PiItemSelectDialog.tsx`): has no Make column at all. (The selected items already carry `make_label` into the saved PI via the spread in `createPiFromOaItems`, so once the column is added the data is already there.)
+- **Requisition Detail — Items / Steel / Outside tabs** (`src/pages/requisitions/RequisitionDetail.tsx`): no FG Make column. `requisition_items.fg_snapshot` already stores the full BOQ item (including `make`), so no migration is needed.
+- **Purchase / Manufacturing detail** (`ApprovedBoqModule.tsx`): already has the hidden Make column wired against `it.make` — it will start showing values automatically once BOQ items carry Make.
 
-Make stays **hidden by default** — only the position changes when it is toggled on.
+## Plan
 
-Files touched:
+### 1. BOQ — carry `make` from OA on new-BOQ creation
+**File:** `src/pages/boqs/BoqEditor.tsx` (lines ~232–240)
 
-- `src/pages/boqs/BoqEditor.tsx`
-  - `BoqItemsList` grid: move the `showMake` cell to sit between Description and Quantity. Update the `grid-cols-[...]` template so the Make column slot moves accordingly.
-  - Live HTML preview block (`<td>` around line 957): move the Make `<td>` to right after the Description `<td>`.
-- `src/lib/boq/pdf.ts`: change `base.splice(2, …)` → `base.splice(3, …)` and update `headRow`, `approvalIdx`, `columnStyles`, and the `emptyRow` "(no items)" index so Make sits after Description.
-- `src/lib/boq/pdfDistribution.ts`: same column reorder for the distribution PDF.
-- `src/lib/boq/excel.ts`: same column reorder for the Excel export.
+Add `make: ((it.make_label || "") as string).trim()` to the OA → BOQ item map so every newly created BOQ inherits the OA's Make. No layout or default-visibility change.
 
-No column widths, totals, or default-hidden behaviour change. When `showMake` is false the output is byte-identical to today.
+### 2. PI Select Items dialog — add hidden-by-default Make column
+**File:** `src/components/pi/PiItemSelectDialog.tsx`
 
-## 2. PI — inherit Make from OA, hidden by default in print
+- Add a `useColumnToggle("pi.select.columns.make", false)` toggle button (`Columns3` icon, same pattern used elsewhere) in the dialog header next to "Convert OA to PI — Select Items".
+- When `showMake` is on, insert one extra `<TableHead>Make</TableHead>` immediately after Description, and a matching `<TableCell>{it.make_label || "—"}</TableCell>` in each row. Bump the loading/empty `colSpan` by 1 when `showMake`.
+- No change to selection logic, qty/amount math, balance checks, or PI generation — these are presentation-only.
 
-PI line items already use the OA `LineItem` type, which carries `make_label`. `convertOaToPi` / `syncPiFromOa` in `src/lib/pi/convert.ts` pass `line_items` through unchanged, so OA's Make value is already preserved on the PI record.
+PI line items already carry `make_label` end-to-end because `createPiFromOaItems` spreads `...it` into `filteredItems` (no code change there). PI editor / PDF Make column toggle already exists from earlier work.
 
-The PI PDF also already supports a Make column through the shared `pdfColumns` (`src/lib/orders/pdf.ts` → `case "make": displayMake(it)`), and `PiEditor.tsx` defaults `hiddenPdfColumns` to include `"make"` so it stays hidden on the printable until the user explicitly enables it.
+### 3. Requisition Detail — hidden Make column on FG Items + Steel/Outside tabs
+**File:** `src/pages/requisitions/RequisitionDetail.tsx`
 
-Verification-only step (no code change expected):
+- Reuse the existing `showMake` toggle (already wired against `"requisition.columns.make"`) — move/duplicate the toggle button so it controls the Items, Steel, and Outside tabs too (or render the toggle once at the page header). Simplest: render the same toggle button in the header of each of those tab cards (they share the same `showMake` state).
+- In the **Items** tab table, when `showMake` is true, insert a `Make` `<th>` between Description and Qty and `<td>{(it.fg_snapshot as { make?: string })?.make || "—"}</td>` in each row. Bump empty-row `colSpan` accordingly.
+- In the **Steel** and **Outside** tab tables, same treatment: read from `(it.fg_snapshot as { make?: string })?.make`. (No new DB column — `fg_snapshot` already stores the BOQ item including `make`.)
+- Raw Materials tab Make column (RM-level make) stays exactly as it is — separate from FG Make.
 
-- Confirm `convertOaToPi` does not strip `make_label` — re-read `src/lib/pi/convert.ts` and the `buildClientCopyItems` helper used at lines 114–115 to make sure `make_label` survives the mapping. If either drops it, add a one-line passthrough (`make_label: item.make_label`) so the OA Make value reaches the PI line item.
-- Confirm the PI PDF columns place Make immediately after Description in the on-screen `PdfColumnVisibility` toggle order; if the shared `pdfColumns` order in `src/lib/orders/pdfColumns.ts` puts Make elsewhere for the PI surface, reorder only the PI usage (not OA) so the printable shows Make right after Description.
+### 4. Purchase / Manufacturing detail — no code change
+`ApprovedBoqModule.tsx` already shows a hidden-by-default Make column reading `(it as { make?: string }).make`. It will populate automatically once step 1 ships.
 
-## 3. Consistency guarantee
+### Out of scope (explicitly not touched)
 
-- BOQ Make continues to come from OA via existing propagation in `src/lib/revisions/index.ts` (`make: it.make_label || prev?.make || ""`).
-- PI Make comes directly from OA `LineItem.make_label` on every convert/sync.
-- Single source of truth = OA item. No new storage, no new write paths.
+- No DB migrations, no RLS changes, no edge function changes (`create-requisition` already stores the BOQ item verbatim in `fg_snapshot`).
+- No changes to OA editor / OA PDF / OA Excel.
+- No changes to PI/BOQ/Requisition PDFs (the PDF Make toggles wired in earlier work continue to drive print output independently).
+- No calculation, workflow, approval, revision, notification, or default-visibility change. Every Make column stays hidden until the user toggles it on per surface (`localStorage`-persisted via `useColumnToggle`).
 
-## Out of scope / untouched
+## Files touched
 
-- No DB migrations, no RLS changes, no edge-function changes.
-- No changes to OA editor / OA PDF, calculations, approval rules, revisions, or notifications.
-- No repositioning of the Make column in Requisition / Purchase / Manufacturing surfaces (not requested in this round).
-- Default visibility stays **hidden** on every surface; existing PDFs/Excel without the toggle remain byte-identical.
+- `src/pages/boqs/BoqEditor.tsx` — 1-line addition to the OA→BOQ map.
+- `src/components/pi/PiItemSelectDialog.tsx` — toggle button + 1 header + 1 cell per row + colSpan bumps.
+- `src/pages/requisitions/RequisitionDetail.tsx` — toggle button(s) on Items/Steel/Outside cards + 1 header + 1 cell per row + colSpan bumps.

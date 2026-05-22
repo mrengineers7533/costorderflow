@@ -237,6 +237,7 @@ export default function BoqEditor() {
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
         remarks: "",
+        make: ((it.make_label || "") as string).trim(),
       }));
       const finalItems = mapped.length ? mapped : [newBoqItem(1)];
       setItems(finalItems);
