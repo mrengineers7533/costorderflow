@@ -238,6 +238,7 @@ export default function RequisitionDetail() {
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
