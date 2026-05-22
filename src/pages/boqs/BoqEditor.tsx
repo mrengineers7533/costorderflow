@@ -676,7 +676,7 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate,
+  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
@@ -684,6 +684,7 @@ function BoqItemsList({
   boqId: string | null;
   orderId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
+  showMake?: boolean;
 }) {
   // Latest submitted design-review round for this BOQ. Used to surface
   // per-row comments and approval decisions inline beneath each item.
@@ -692,12 +693,19 @@ function BoqItemsList({
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
+            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
               {canEditFull ? (
                 <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
               ) : (
                 <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              )}
+              {showMake && (
+                canEditFull ? (
+                  <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
+                )
               )}
               {canEditFull ? (
                 <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
