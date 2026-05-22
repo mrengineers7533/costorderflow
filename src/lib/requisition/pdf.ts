@@ -11,6 +11,9 @@ export interface RequisitionPdfContext {
   clientName: string;
   shareLink: string;
   familyLink?: string;
+  /** When true, inserts a "Make" column in the Raw Material Indent table.
+   *  Defaults to false so the PDF stays byte-identical to today's output. */
+  showMake?: boolean;
 }
 
 export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
@@ -81,6 +84,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
     };
     order.sort((a, b) => numKey(itemById.get(a)?.item_no) - numKey(itemById.get(b)?.item_no));
 
+    const showMake = !!ctx.showMake;
     const body: Array<Array<string | { content: string; rowSpan: number; styles?: Record<string, unknown> }>> = [];
     order.forEach((k) => {
       const list = buckets.get(k)!;
@@ -92,6 +96,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
           row.push({ content: fgLabel, rowSpan: list.length, styles: { valign: "middle", fontStyle: "bold" } });
         }
         row.push(r.material);
+        if (showMake) row.push((r.make ?? "").toString() || "—");
         row.push(r.size_model ?? "—");
         row.push(r.required_qty != null ? String(r.required_qty) : "—");
         row.push(r.unit || "—");
@@ -101,18 +106,31 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
 
     autoTable(doc, {
       startY: y + 2,
-      head: [["Finished Good", "Raw Material", "Size / Spec", "Reqd Qty", "Unit"]],
+      head: [
+        showMake
+          ? ["Finished Good", "Raw Material", "Make", "Size / Spec", "Reqd Qty", "Unit"]
+          : ["Finished Good", "Raw Material", "Size / Spec", "Reqd Qty", "Unit"],
+      ],
       body,
       theme: "grid",
       styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
-      columnStyles: {
-        0: { cellWidth: 60 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: "auto" },
-        3: { cellWidth: 20, halign: "right" },
-        4: { cellWidth: 16 },
-      },
+      columnStyles: showMake
+        ? {
+            0: { cellWidth: 54 },
+            1: { cellWidth: 36 },
+            2: { cellWidth: 22 },
+            3: { cellWidth: "auto" },
+            4: { cellWidth: 20, halign: "right" },
+            5: { cellWidth: 16 },
+          }
+        : {
+            0: { cellWidth: 60 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: "auto" },
+            3: { cellWidth: 20, halign: "right" },
+            4: { cellWidth: 16 },
+          },
       margin: { left: M, right: M },
     });
   }
