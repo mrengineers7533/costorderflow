@@ -12,8 +12,10 @@ import { toast } from "@/hooks/use-toast";
 import { Columns3, Copy, Download, Link2 } from "lucide-react";
 import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import type { OrderRecord } from "@/lib/orders/types";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { buildMakeResolver } from "@/lib/boq/makeResolver";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +23,7 @@ export default function RequisitionDetail() {
   const [items, setItems] = useState<RequisitionItemRecord[]>([]);
   const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
   const [boq, setBoq] = useState<BoqRecord | null>(null);
+  const [order, setOrder] = useState<OrderRecord | null>(null);
   const [latestRev, setLatestRev] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMake, setShowMake] = useColumnToggle("requisition.columns.make", false);
@@ -42,6 +45,13 @@ export default function RequisitionDetail() {
     // latest approved revision for the family
     const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
     const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
+    // also fetch the linked OA revision in full so we can resolve Make from OA
+    const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
+      || (b as { order_id?: string } | null)?.order_id;
+    if (oaId) {
+      const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
+      setOrder((full as unknown as OrderRecord) || null);
+    }
     if (root) {
       const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
       const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
