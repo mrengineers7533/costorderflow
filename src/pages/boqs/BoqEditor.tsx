@@ -48,6 +48,7 @@ export default function BoqEditor() {
 
   const [boqId, setBoqId] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>("");
+  const [orderRootId, setOrderRootId] = useState<string | null>(null);
   const [boqNumber, setBoqNumber] = useState("");
   const [version, setVersion] = useState(1);
   const [format, setFormat] = useState<"MR" | "GMS">("MR");
@@ -197,6 +198,11 @@ export default function BoqEditor() {
         if (b.order_id) {
           const { data: oa } = await supabase.from("orders").select("user_id").eq("id", b.order_id).maybeSingle();
           if (oa) setOaOwnerId((oa as { user_id: string | null }).user_id || null);
+          const { data: oa2 } = await supabase.from("orders").select("id,parent_order_id").eq("id", b.order_id).maybeSingle();
+          if (oa2) {
+            const r = oa2 as { id: string; parent_order_id: string | null };
+            setOrderRootId(r.parent_order_id || r.id);
+          }
         }
         const finalItems = sortByItemNo(nextItems.length ? nextItems : [newBoqItem(1)]);
         setItems(finalItems);
