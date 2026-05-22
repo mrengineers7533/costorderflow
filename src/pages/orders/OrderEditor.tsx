@@ -666,6 +666,30 @@ export default function OrderEditor() {
         title: `OA Rev ${newOrder.revision} created`,
         description: newBoq ? `Linked BOQ Rev ${newBoq.revision} also created.` : "No existing BOQ to revise.",
       });
+      {
+        const root = (newOrder as { parent_order_id?: string | null }).parent_order_id ?? newOrder.id;
+        logEvent({
+          module: "oa",
+          event_type: "oa.revised",
+          status: "warning",
+          title: `OA ${newOrder.oa_number} revised to Rev ${newOrder.revision}`,
+          message: newBoq ? `BOQ auto-revised to Rev ${newBoq.revision}.` : undefined,
+          order_id: newOrder.id,
+          order_root_id: root,
+        });
+        if (newBoq) {
+          logEvent({
+            module: "boq",
+            event_type: "boq.auto_revised",
+            status: "warning",
+            title: `BOQ ${newBoq.boq_number} auto-revised to Rev ${newBoq.revision}`,
+            message: `Triggered by OA revision Rev ${newOrder.revision}.`,
+            order_id: newOrder.id,
+            order_root_id: root,
+            boq_id: newBoq.id,
+          });
+        }
+      }
       navigate(`/orders/${newOrder.id}`);
     } catch (e) {
       toast({ title: "Revise failed", description: (e as Error).message, variant: "destructive" });
