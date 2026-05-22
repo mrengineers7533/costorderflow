@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, Save, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { logEvent } from "@/lib/activity/log";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
@@ -319,6 +321,19 @@ export default function BoqEditor() {
       }
     }
     toast({ title: "Saved", description: `BOQ ${payload.boq_number}` });
+    {
+      const saved = res.data as { id: string; order_id: string; boq_number: string } | null;
+      if (saved) {
+        logEvent({
+          module: "boq",
+          event_type: isNew ? "boq.created" : "boq.edited",
+          status: "info",
+          title: isNew ? `BOQ ${saved.boq_number} created` : `BOQ ${saved.boq_number} updated`,
+          boq_id: saved.id,
+          order_id: saved.order_id,
+        });
+      }
+    }
     if (isNew) navigate(`/boqs/${res.data.id}`, { replace: true });
   }
 
