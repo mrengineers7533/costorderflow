@@ -1,82 +1,41 @@
-# Role-Based Access Control
+## Add "Create User" to Access Control (admin-only)
 
-Add a permission layer on top of existing admin/user roles. Admins keep full access. Non-admins see only modules assigned to them by an admin.
+Extend the existing **Admin → Access Control** page (`/admin/access`) with a new **+ Add User** button, plus inline controls to disable/block users and quick-edit access. Existing per-module checkbox grid, `AdminUsers` page, edit dialog, reset-password dialog, and delete flow remain untouched.
 
-## Modules (access units)
+### What admin can do from Access Control
+1. **+ Add User** (top-right button) opens a dialog:
+   - Email (required, validated, must be from an allowed domain)
+   - Full name (optional)
+   - Auth method (radio):
+     - **Set password now** — type a password (min 8 chars)
+     - **Send invite / reset email** — uses Supabase invite/reset link
+   - Module access checkboxes (same `MODULES` list used in the grid). Optional preset shortcuts: *Purchase only*, *Manufacturing only*, *Requisition only*, *Costing only*, *Full access (admin)*.
+   - Make admin? (switch) — grants `admin` role instead of per-module rows.
+2. **Disable / Enable** toggle per row (uses existing `admin-set-user-active` edge function — also revokes sessions).
+3. **Edit access** is already the checkbox grid; no change needed.
+4. Quick links per row to existing **Edit / Reset / Delete** actions (reuse dialogs from `AdminUsers.tsx`).
 
-Each route maps to one module key:
+### Access enforcement
+- Page already sits behind `RequireAdmin`. All new mutations additionally check `useUserRole().isAdmin` client-side; server-side enforcement is handled by edge functions (service-role) and existing RLS on `user_module_access` / `user_roles` (admin-only writes).
 
-- `dashboard` → `/`
-- `orders` → `/orders/*` (Costing/OA)
-- `boqs` → `/boqs/*`
-- `pi` → `/pi/*`
-- `workflow` → `/workflow`
-- `purchase` → `/purchase/*`
-- `manufacturing` → `/manufacturing/*`
-- `requisitions` → `/requisitions/*`
-- `raw_materials` → `/raw-materials`
-- `reports` → `/reports`
+### Backend
+- **New edge function `admin-create-user`** (verify_jwt = false; validates caller is admin via JWT + service-role client):
+  - Input: `{ email, full_name?, password?, send_invite?: boolean, is_admin?: boolean, modules?: string[] }`
+  - Validates email domain against `allowed_domains`.
+  - If `password` provided → `auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } })`.
+  - Else → `auth.admin.inviteUserByEmail(email, { data: { full_name } })`.
+  - On success, inserts role row (`admin` or `user`) and any `user_module_access` rows.
+  - Returns created `user_id` or structured error (e.g. `email_in_use`, `domain_not_allowed`).
+- No DB migration required — uses existing `user_module_access`, `user_roles`, `profiles`, `allowed_domains` tables. `handle_new_user` trigger will auto-create the profile row.
 
-Admins (role `admin` in `user_roles`) bypass all checks. The two seed admins `it@mrengineers.com` and `pc.2@mrengineers.com` are granted admin role on signup (existing `handle_new_user` trigger already handles `it@`; we extend it for `pc.2@`).
+### Frontend changes
+- **`src/pages/admin/AdminAccess.tsx`**: add toolbar with **+ Add User** button and per-row Active toggle + action menu (Edit / Reset / Delete). Refresh list after mutations.
+- **New `src/components/admin/CreateUserDialog.tsx`**: form described above; calls `admin-create-user` edge function; on success calls `onCreated()` to refresh.
+- Reuse existing `EditUserDialog`, `ResetPasswordDialog`, delete `AlertDialog` from `AdminUsers.tsx` by extracting them into `src/components/admin/UserRowActions.tsx` (pure refactor — `AdminUsers` keeps working identically).
 
-## Database
+### Out of scope (unchanged)
+- Existing `/admin/users` page, role logic, RLS policies, module gating, sidebar filtering, notifications, business workflows.
 
-New table `user_module_access`:
-
-- `user_id uuid` (FK auth.users, cascade)
-- `module text` (one of the keys above)
-- `granted_at timestamptz default now()`
-- `granted_by uuid`
-- PK `(user_id, module)`
-
-RLS:
-- SELECT: own rows OR admin
-- INSERT/UPDATE/DELETE: admin only
-
-Security-definer function `has_module_access(_user uuid, _module text) returns boolean` — true if admin OR row exists.
-
-Seed rows for the requested users (insert tool, idempotent):
-- `purchase1@mrengineers.com` → `purchase`
-- `office.5@mrengineers.com` → `manufacturing`
-
-Costing/requisition users aren't named yet — admin assigns them via the UI.
-
-Trigger update: extend `handle_new_user` so `pc.2@mrengineers.com` also gets `admin`.
-
-## Frontend
-
-**Hook** `useUserAccess(userId)` — returns `{ isAdmin, modules: Set<string>, loading, canAccess(module) }`. Single query to `user_roles` + `user_module_access`. Realtime channel optional.
-
-**Guard component** `<RequireModule module="purchase">` — wraps each protected route. Shows `<AccessDenied />` if not allowed (not a redirect, so deep links surface a clear message). Admins always pass.
-
-**`App.tsx`** — wrap each module route with `RequireModule`. Dashboard left open to all signed-in users. `/admin/*` stays under existing `RequireAdmin`.
-
-**`AppSidebar.tsx`** — filter `items` array by `canAccess(module)`. Add `module` key to each item.
-
-**Admin UI** new page `/admin/access` (added to `AdminTabs`):
-- Lists all users from `profiles` with email + name
-- For each user, checkbox grid of all modules
-- Toggling inserts/deletes `user_module_access` rows
-- Admins shown with all boxes locked checked + "Full access" badge
-- Uses existing admin patterns (same shadcn Table + Checkbox)
-
-**Access Denied page** `src/components/AccessDenied.tsx` — simple centered card with title, message, and "Back to Dashboard" button.
-
-## Files
-
-New:
-- `supabase/migrations/<ts>_user_module_access.sql` (table, RLS, function, trigger update)
-- `src/hooks/useUserAccess.ts`
-- `src/components/RequireModule.tsx`
-- `src/components/AccessDenied.tsx`
-- `src/pages/admin/AdminAccess.tsx`
-
-Edited (additive only):
-- `src/App.tsx` — wrap routes
-- `src/components/AppSidebar.tsx` — filter nav
-- `src/components/admin/AdminTabs.tsx` — add "Access" tab
-- Seed data via insert tool after migration approval
-
-## Out of scope (unchanged)
-
-No changes to existing features, calculations, workflows, RLS on business tables, layouts, or the public token routes (`/boq-verify`, `/design-review`, `/requisition/:token`, etc.). Data-level RLS stays as-is — this is a UI/route access layer.
+### Files
+- New: `supabase/functions/admin-create-user/index.ts`, `src/components/admin/CreateUserDialog.tsx`, `src/components/admin/UserRowActions.tsx`
+- Edited (additive): `src/pages/admin/AdminAccess.tsx`, `src/pages/admin/AdminUsers.tsx` (import shared row actions)
