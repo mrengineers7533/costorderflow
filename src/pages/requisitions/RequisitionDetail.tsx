@@ -16,6 +16,7 @@ import type { OrderRecord } from "@/lib/orders/types";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
