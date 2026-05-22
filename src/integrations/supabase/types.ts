@@ -1614,6 +1614,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_module_access: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          module: string
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          module: string
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          module?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1917,6 +1938,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      has_module_access: {
+        Args: { _module: string; _user: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
