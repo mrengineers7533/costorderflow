@@ -145,6 +145,59 @@ export default function RequisitionDetail() {
     }));
   }, [rms, itemById]);
 
+  // Map UI status labels to the existing purchase_status enum so the
+  // "Generated" view can use the user's vocabulary without a DB migration.
+  const STATUS_TO_ENUM: Record<string, "pending" | "ordered" | "received"> = {
+    "Pending": "pending",
+    "Inhouse": "received",
+    "Outside Purchase": "ordered",
+  };
+  const ENUM_TO_STATUS: Record<string, string> = {
+    pending: "Pending",
+    received: "Inhouse",
+    ordered: "Outside Purchase",
+  };
+
+  function buildGeneratedRows() {
+    const rows: Array<{
+      fgLabel: string;
+      fgMake: string;
+      fgQty: string;
+      material: string;
+      size: string;
+      rmQty: string;
+      rmMake: string;
+      uom: string;
+      lot: string;
+      status: string;
+      span: number;
+      first: boolean;
+    }> = [];
+    rmGroups.forEach((g) => {
+      const it = g.item;
+      const fgLabel = it?.model_number || it?.description || g.fgLabel;
+      const fgMake = it ? resolveReqMake(it) : "";
+      const fgQty = it?.quantity != null ? String(it.quantity) : "";
+      g.rms.forEach((r, idx) => {
+        rows.push({
+          fgLabel,
+          fgMake: fgMake || "—",
+          fgQty: fgQty || "—",
+          material: r.material,
+          size: r.size_model || "—",
+          rmQty: r.required_qty != null ? String(r.required_qty) : "—",
+          rmMake: r.make || "—",
+          uom: r.unit || "—",
+          lot: it?.lot_no || "",
+          status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
+          span: g.rms.length,
+          first: idx === 0,
+        });
+      });
+    });
+    return rows;
+  }
+
   // Resolve Make for a requisition item: prefer fg_snapshot.make, then
   // the BOQ item's stored Make, then the linked OA's Make (by description
   // /model match or row index).
