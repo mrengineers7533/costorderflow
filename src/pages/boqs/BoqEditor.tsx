@@ -562,12 +562,12 @@ export default function BoqEditor() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <div
-                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
                 >
                   <div>Item</div>
                   <div>Model</div>
-                  {showMake && <div>Make</div>}
                   <div>Description</div>
+                  {showMake && <div>Make</div>}
                   <div>Qty</div>
                   <div>Unit</div>
                   <div>Remarks</div>
@@ -693,12 +693,17 @@ function BoqItemsList({
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
+            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
               {canEditFull ? (
                 <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
               ) : (
                 <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              )}
+              {canEditFull ? (
+                <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
+              ) : (
+                <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
               )}
               {showMake && (
                 canEditFull ? (
@@ -706,11 +711,6 @@ function BoqItemsList({
                 ) : (
                   <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
                 )
-              )}
-              {canEditFull ? (
-                <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
-              ) : (
-                <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
               )}
               {canEditFull ? (
                 <Input type="number" value={it.quantity ?? 0} onChange={(e) => onUpdate(it.id, { quantity: Number(e.target.value) || 0 })} className="h-9" />
@@ -925,8 +925,8 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
           <colgroup>
             <col style={{ width: "16mm" }} />
             <col style={{ width: "32mm" }} />
-            {showMake && <col style={{ width: "22mm" }} />}
             <col />
+            {showMake && <col style={{ width: "22mm" }} />}
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "38mm" }} />
@@ -935,7 +935,7 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
               {(showMake
-                ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+                ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks", "Approved by Design"]
                 : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
               ).map((h, i) => {
                 const center = showMake
@@ -954,8 +954,8 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
-                {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
+                {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>

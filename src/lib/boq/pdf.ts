@@ -161,7 +161,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
 
   // Items table — Make column inserted only when explicitly requested.
   const headRow = showMake
-    ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+    ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks", "Approved by Design"]
     : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"];
   const approvalIdx = showMake ? 7 : 6;
   const rows = sortByItemNo(boq.line_items).map((it, i) => {
@@ -180,16 +180,16 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       it.remarks || "",
       approval,
     ];
-    if (showMake) base.splice(2, 0, (it.make || "").trim());
+    if (showMake) base.splice(3, 0, (it.make || "").trim());
     return base;
   });
-  const emptyRow = headRow.map((_, i) => (i === (showMake ? 3 : 2) ? "(no items)" : ""));
+  const emptyRow = headRow.map((_, i) => (i === 2 ? "(no items)" : ""));
   const columnStyles: Record<number, Partial<{ cellWidth: number | "auto"; halign: "center" | "left" | "right"; fontStyle: "bold" | "normal" | "italic" | "bolditalic" }>> = showMake
     ? {
         0: { cellWidth: 14, halign: "center" },
         1: { cellWidth: 26 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: "auto" },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 20 },
         4: { cellWidth: 12, halign: "center" },
         5: { cellWidth: 12, halign: "center" },
         6: { cellWidth: 32 },

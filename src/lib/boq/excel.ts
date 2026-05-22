@@ -17,7 +17,7 @@ export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): B
     [`Prepared By: ${b.prepared_by || ""}`],
     [],
     showMake
-      ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks"]
+      ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks"]
       : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"],
   ];
   const body = (b.line_items || []).map((it, i) => {
@@ -29,7 +29,7 @@ export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): B
       it.unit || "",
       it.remarks || "",
     ];
-    if (showMake) base.splice(2, 0, (it.make || "").trim());
+    if (showMake) base.splice(3, 0, (it.make || "").trim());
     return base;
   });
   const tail: (string | number)[][] = [];
@@ -41,7 +41,7 @@ export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): B
   }
   const ws = XLSX.utils.aoa_to_sheet([...header, ...body, ...tail]);
   ws["!cols"] = showMake
-    ? [{ wch: 10 }, { wch: 24 }, { wch: 18 }, { wch: 60 }, { wch: 8 }, { wch: 8 }, { wch: 40 }]
+    ? [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 40 }]
     : [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 8 }, { wch: 8 }, { wch: 40 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "BOQ");
