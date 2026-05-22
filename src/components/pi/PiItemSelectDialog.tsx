@@ -250,6 +250,11 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                 <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   Description
                 </TableHead>
+                {showMake && (
+                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Make
+                  </TableHead>
+                )}
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
                   Qty
                 </TableHead>
@@ -284,14 +289,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={(isMR ? 12 : 11) + (showMake ? 1 : 0)} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="inline h-4 w-4 mr-2 animate-spin" />
                     Checking PI status for items…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={(isMR ? 12 : 11) + (showMake ? 1 : 0)} className="text-center py-10 text-muted-foreground">
                     This OA has no line items.
                   </TableCell>
                 </TableRow>
