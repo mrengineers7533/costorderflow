@@ -14,10 +14,19 @@ export interface RequisitionPdfContext {
   /** When true, inserts a "Make" column in the Raw Material Indent table.
    *  Defaults to false so the PDF stays byte-identical to today's output. */
   showMake?: boolean;
+  /** Output format. "default" preserves the legacy two-table layout.
+   *  "generated" emits the 10-column unified table requested by the user. */
+  format?: "default" | "generated";
+  generatedRows?: Array<{
+    fgLabel: string; fgMake: string; fgQty: string;
+    material: string; size: string; rmQty: string;
+    rmMake: string; uom: string; lot: string; status: string;
+    span: number; first: boolean;
+  }>;
 }
 
 export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = new jsPDF({ unit: "mm", format: ctx.format === "generated" ? "a3" : "a4", orientation: ctx.format === "generated" ? "landscape" : "portrait" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
 
@@ -35,6 +44,37 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
     `Requisition link: ${ctx.shareLink}`,
   ];
   headerLines.forEach((line, idx) => doc.text(line, M, 24 + idx * 4.5));
+
+  if (ctx.format === "generated") {
+    const rows = ctx.generatedRows || [];
+    const body: Array<Array<string | { content: string; rowSpan: number; styles?: Record<string, unknown> }>> = [];
+    rows.forEach((r) => {
+      const row: Array<string | { content: string; rowSpan: number; styles?: Record<string, unknown> }> = [];
+      if (r.first) {
+        row.push({ content: r.fgLabel, rowSpan: r.span, styles: { valign: "middle", fontStyle: "bold" } });
+        row.push({ content: r.fgMake, rowSpan: r.span, styles: { valign: "middle" } });
+        row.push({ content: r.fgQty, rowSpan: r.span, styles: { valign: "middle", halign: "right" } });
+      }
+      row.push(r.material);
+      row.push(r.size);
+      row.push(r.rmQty);
+      row.push(r.rmMake);
+      row.push(r.uom);
+      row.push(r.lot || "—");
+      row.push(r.status);
+      body.push(row);
+    });
+    autoTable(doc, {
+      startY: 24 + headerLines.length * 4.5 + 4,
+      head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Status"]],
+      body,
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255 },
+      margin: { left: M, right: M },
+    });
+    return doc;
+  }
 
   autoTable(doc, {
     startY: 24 + headerLines.length * 4.5 + 4,

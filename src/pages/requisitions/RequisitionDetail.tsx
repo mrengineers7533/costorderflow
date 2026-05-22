@@ -82,8 +82,9 @@ export default function RequisitionDetail() {
     toast({ title: "Link copied" });
   }
 
-  function downloadPDF() {
+  function downloadPDF(format: "default" | "generated" = "default") {
     if (!req || !boq) return;
+    const generatedRows = format === "generated" ? buildGeneratedRows() : undefined;
     const doc = generateRequisitionPDF({
       requisition: req,
       items,
@@ -94,9 +95,11 @@ export default function RequisitionDetail() {
       shareLink,
       familyLink,
       showMake,
+      format,
+      generatedRows,
     });
     const safe = req.requisition_number.replace(/[/\\]/g, "_");
-    doc.save(`${safe}.pdf`);
+    doc.save(`${safe}${format === "generated" ? "_generated" : ""}.pdf`);
   }
 
   async function updateItem(itemId: string, patch: Partial<RequisitionItemRecord>) {
@@ -141,6 +144,59 @@ export default function RequisitionDetail() {
       rms: buckets.get(k)!,
     }));
   }, [rms, itemById]);
+
+  // Map UI status labels to the existing purchase_status enum so the
+  // "Generated" view can use the user's vocabulary without a DB migration.
+  const STATUS_TO_ENUM: Record<string, "pending" | "ordered" | "received"> = {
+    "Pending": "pending",
+    "Inhouse": "received",
+    "Outside Purchase": "ordered",
+  };
+  const ENUM_TO_STATUS: Record<string, string> = {
+    pending: "Pending",
+    received: "Inhouse",
+    ordered: "Outside Purchase",
+  };
+
+  function buildGeneratedRows() {
+    const rows: Array<{
+      fgLabel: string;
+      fgMake: string;
+      fgQty: string;
+      material: string;
+      size: string;
+      rmQty: string;
+      rmMake: string;
+      uom: string;
+      lot: string;
+      status: string;
+      span: number;
+      first: boolean;
+    }> = [];
+    rmGroups.forEach((g) => {
+      const it = g.item;
+      const fgLabel = it?.model_number || it?.description || g.fgLabel;
+      const fgMake = it ? resolveReqMake(it) : "";
+      const fgQty = it?.quantity != null ? String(it.quantity) : "";
+      g.rms.forEach((r, idx) => {
+        rows.push({
+          fgLabel,
+          fgMake: fgMake || "—",
+          fgQty: fgQty || "—",
+          material: r.material,
+          size: r.size_model || "—",
+          rmQty: r.required_qty != null ? String(r.required_qty) : "—",
+          rmMake: r.make || "—",
+          uom: r.unit || "—",
+          lot: it?.lot_no || "",
+          status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
+          span: g.rms.length,
+          first: idx === 0,
+        });
+      });
+    });
+    return rows;
+  }
 
   // Resolve Make for a requisition item: prefer fg_snapshot.make, then
   // the BOQ item's stored Make, then the linked OA's Make (by description
@@ -197,7 +253,8 @@ export default function RequisitionDetail() {
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
           {stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
-          <Button size="sm" variant="outline" onClick={downloadPDF}><Download className="mr-1 h-4 w-4" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>
+          <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>
         </div>
       </div>
 
@@ -212,13 +269,93 @@ export default function RequisitionDetail() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="items">
+      <Tabs defaultValue="generated">
         <TabsList>
+          <TabsTrigger value="generated">Generated</TabsTrigger>
           <TabsTrigger value="raw">Raw Materials</TabsTrigger>
           <TabsTrigger value="items">Items</TabsTrigger>
           <TabsTrigger value="steel">Steel List</TabsTrigger>
           <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="generated">
+          <Card>
+            <CardHeader className="space-y-0 py-3">
+              <CardTitle className="text-sm">Generated requisition</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm border">
+                <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+                  <tr>
+                    <th className="text-left py-2 px-2 border-r">Finished Good</th>
+                    <th className="text-left py-2 px-2 border-r">Make</th>
+                    <th className="text-right py-2 px-2 border-r">Qty</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material</th>
+                    <th className="text-left py-2 px-2 border-r">Size</th>
+                    <th className="text-right py-2 px-2 border-r">RM Qty</th>
+                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">UOM</th>
+                    <th className="text-left py-2 px-2 border-r">Lot</th>
+                    <th className="text-left py-2 px-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rmGroups.length === 0 ? (
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                  ) : rmGroups.flatMap((g) => {
+                    const it = g.item;
+                    const fgLabel = it?.model_number || it?.description || g.fgLabel;
+                    const fgMake = it ? resolveReqMake(it) : "";
+                    const fgQty = it?.quantity != null ? String(it.quantity) : "—";
+                    return g.rms.map((r, idx) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        {idx === 0 && (
+                          <>
+                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
+                            <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
+                            <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
+                          </>
+                        )}
+                        <td className="py-2 px-2 border-r">{r.material}</td>
+                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
+                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
+                        {idx === 0 ? (
+                          <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
+                            <Input
+                              className="h-7 w-24"
+                              defaultValue={it?.lot_no || ""}
+                              onBlur={(e) => {
+                                if (!it) return;
+                                const v = e.target.value;
+                                if ((it.lot_no || "") === v) return;
+                                updateItem(it.id, { lot_no: v || null, purchase_status: v ? "lotted" : it.purchase_status });
+                              }}
+                            />
+                          </td>
+                        ) : null}
+                        <td className="py-2 px-2">
+                          <Select
+                            value={ENUM_TO_STATUS[r.purchase_status] || "Pending"}
+                            onValueChange={(v) => updateRm(r.id, { purchase_status: STATUS_TO_ENUM[v] })}
+                          >
+                            <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Pending">Pending</SelectItem>
+                              <SelectItem value="Inhouse">Inhouse</SelectItem>
+                              <SelectItem value="Outside Purchase">Outside Purchase</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    ));
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="raw">
           <Card>
