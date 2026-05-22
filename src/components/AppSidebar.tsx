@@ -3,6 +3,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useUserAccess } from "@/hooks/useUserAccess";
+import type { ModuleKey } from "@/lib/access/modules";
 import { useProfileName } from "@/hooks/useProfileName";
 import {
   Sidebar,
@@ -16,17 +18,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const items = [
-  { title: "Dashboard", url: "/", icon: LayoutGrid },
-  { title: "Orders",    url: "/orders",     icon: FileText },
-  { title: "BOQs",      url: "/boqs",       icon: ClipboardList },
-  { title: "Proforma Invoices", url: "/pi", icon: Receipt },
-  { title: "Workflow",  url: "/workflow",   icon: Workflow },
-  { title: "Purchase",  url: "/purchase",   icon: ShoppingCart },
-  { title: "Manufacturing", url: "/manufacturing", icon: Factory },
-  { title: "Requisitions", url: "/requisitions", icon: ClipboardCheck },
-  { title: "Raw Material Master", url: "/raw-materials", icon: Boxes },
-  { title: "Flow Report", url: "/reports", icon: BarChart3 },
+const items: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Dashboard", url: "/", icon: LayoutGrid, module: "dashboard" },
+  { title: "Orders",    url: "/orders",     icon: FileText, module: "orders" },
+  { title: "BOQs",      url: "/boqs",       icon: ClipboardList, module: "boqs" },
+  { title: "Proforma Invoices", url: "/pi", icon: Receipt, module: "pi" },
+  { title: "Workflow",  url: "/workflow",   icon: Workflow, module: "workflow" },
+  { title: "Purchase",  url: "/purchase",   icon: ShoppingCart, module: "purchase" },
+  { title: "Manufacturing", url: "/manufacturing", icon: Factory, module: "manufacturing" },
+  { title: "Requisitions", url: "/requisitions", icon: ClipboardCheck, module: "requisitions" },
+  { title: "Raw Material Master", url: "/raw-materials", icon: Boxes, module: "raw_materials" },
+  { title: "Flow Report", url: "/reports", icon: BarChart3, module: "reports" },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {
@@ -34,6 +36,10 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
   const { isAdmin } = useUserRole(user?.id);
+  const { canAccess } = useUserAccess(user?.id);
+  const visibleItems = items.filter((it) =>
+    it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
+  );
   const displayName = useProfileName(user ?? null);
   const initials = (displayName || user?.email || "?")
     .split(/[\s@.]+/)
@@ -67,7 +73,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
         <SidebarGroup className="px-3 pt-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const active =
                   item.url === "/"
                     ? pathname === "/"
