@@ -28,6 +28,7 @@ import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
 import { reviseOrder, syncBoqsAndPisForOrder, createInitialBoqForOrder } from "@/lib/revisions";
 import { logEvent } from "@/lib/activity/log";
+import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import {
@@ -854,6 +855,9 @@ export default function OrderEditor() {
         </div>
 
         {/* Revision badge banner when viewing a non-current revision */}
+        {!isNew && (
+          <EntityActivityBanner orderRootId={parentOrderId || orderId || null} />
+        )}
         {!isNew && !isCurrent && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2 text-sm flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
