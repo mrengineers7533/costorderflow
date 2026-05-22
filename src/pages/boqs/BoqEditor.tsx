@@ -70,6 +70,7 @@ export default function BoqEditor() {
   const [isCurrentBoq, setIsCurrentBoq] = useState<boolean>(true);
   const [boqRevision, setBoqRevision] = useState<number>(0);
   const [distributeOpen, setDistributeOpen] = useState(false);
+  const [showMake, setShowMake] = useColumnToggle("boq.columns.make", false);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
