@@ -15,9 +15,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, Search } from "lucide-react";
+import { Loader2, Plus, Trash2, Search, Columns3 } from "lucide-react";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
 import { firstLine } from "@/lib/requisition/types";
+import type { OrderRecord } from "@/lib/orders/types";
+import { buildMakeResolver } from "@/lib/boq/makeResolver";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 interface Props {
   open: boolean;
@@ -58,6 +61,8 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [step, setStep] = useState<"select" | "review">("select");
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [edited, setEdited] = useState<Record<string, EditedFg>>({});
+  const [order, setOrder] = useState<OrderRecord | null>(null);
+  const [showMake, setShowMake] = useColumnToggle("req.create.columns.make", false);
   const navigate = useNavigate();
 
   const items: BoqLineItem[] = useMemo(
@@ -73,6 +78,12 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     setNotes("");
     (async () => {
       setLoadingMap(true);
+      // Fetch linked OA so we can resolve Make even when BOQ items are legacy.
+      const oaId = (boq as { source_order_id?: string }).source_order_id || boq.order_id;
+      if (oaId) {
+        const { data: o } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
+        setOrder((o as unknown as OrderRecord) || null);
+      }
       // Load whole master so we can fuzzy match against Column A
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
@@ -107,7 +118,9 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       setSelected(sel);
       setLoadingMap(false);
     })();
-  }, [open, items]);
+  }, [open, items, boq]);
+
+  const resolveMake = useMemo(() => buildMakeResolver(order?.line_items), [order]);
 
   function statusFor(it: BoqLineItem): { label: string; tone: "default" | "secondary" | "destructive" | "outline" } {
     const m = mapInfo[it.id];
@@ -282,6 +295,16 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>BOQ {boq.boq_number} · R{boq.revision ?? 0} · {items.length} items · {selectedCount} selected</span>
           <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={showMake ? "secondary" : "ghost"}
+              className="gap-1"
+              onClick={() => setShowMake(!showMake)}
+            >
+              <Columns3 className="h-3.5 w-3.5" />
+              {showMake ? "Hide Make" : "Show Make"}
+            </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => toggleAll(true)}>All</Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => toggleAll(false)}>None</Button>
           </div>
@@ -295,16 +318,17 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                 <th className="text-left py-2 pr-3">#</th>
                 <th className="text-left py-2 pr-3">Model</th>
                 <th className="text-left py-2 pr-3">Description</th>
+                {showMake && <th className="text-left py-2 pr-3">Make</th>}
                 <th className="text-right py-2 pr-3">Qty</th>
                 <th className="text-left py-2 pr-3">Status</th>
               </tr>
             </thead>
             <tbody>
               {loadingMap ? (
-                <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Loading mapping…</td></tr>
+                <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">Loading mapping…</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No items.</td></tr>
-              ) : items.map((it) => {
+                <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No items.</td></tr>
+              ) : items.map((it, idx) => {
                 const s = statusFor(it);
                 return (
                   <tr key={it.id} className="border-b last:border-0">
@@ -317,6 +341,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                     <td className="py-1.5 pr-3">{it.item_no}</td>
                     <td className="py-1.5 pr-3">{it.model_number}</td>
                     <td className="py-1.5 pr-3 truncate max-w-[280px]">{it.description}</td>
+                    {showMake && <td className="py-1.5 pr-3">{resolveMake(it, idx) || "—"}</td>}
                     <td className="py-1.5 pr-3 text-right">{it.quantity}</td>
                     <td className="py-1.5 pr-3"><Badge variant={s.tone}>{s.label}</Badge></td>
                   </tr>
