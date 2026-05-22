@@ -562,12 +562,12 @@ export default function BoqEditor() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <div
-                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
                 >
                   <div>Item</div>
                   <div>Model</div>
-                  {showMake && <div>Make</div>}
                   <div>Description</div>
+                  {showMake && <div>Make</div>}
                   <div>Qty</div>
                   <div>Unit</div>
                   <div>Remarks</div>
