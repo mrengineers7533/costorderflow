@@ -1,111 +1,49 @@
-## Goal
+# Plan — Add hidden "Make" column across OA-linked modules
 
-Add a notification trigger that fires whenever an OA is revised, capturing recipients across Design, Purchase, Manufacturing, and the OA Creator. No delivery channel is wired up yet — only the storage + dispatch hook so email / SMS / WhatsApp / in‑app can be plugged in later.
+Mirror the existing OA **Make** column (the verbatim `make_label` per item) into BOQ, PI, Requisition, Purchase and Manufacturing views. Column stays **hidden by default** everywhere and can be toggled on-screen and in print/export.
 
-Nothing in existing OA, BOQ, PI, Requisition, approval, revision, pricing, calculation, or workflow code changes behavior.
+## Scope summary
 
----
+| Module | Source of "Make" | Work needed |
+|---|---|---|
+| OA (orders) | `LineItem.make_label` | Already exists — no change |
+| PI | Reuses `LineItem` → already carries `make_label` from OA | Add column (hidden by default) to PI editor table + PDF/Excel toggle |
+| BOQ | New optional `make` field on `BoqLineItem` | Propagate from OA on generation/sync; add hidden column to BOQ editor, PDF, Excel, design review, distribution PDFs |
+| Requisition | `requisition_raw_materials.make` already exists | Add hidden column in `RequisitionDetail`, `PublicRequisition`, and `requisition/pdf.ts` |
+| Purchase / Manufacturing | Reads BOQ + Requisition | Inherits via the BOQ + Requisition changes; add hidden column in `ApprovedBoqDetailPage` items table and any purchase/manufacturing tables |
 
-## What gets added
+## Behavior contract (applies everywhere)
 
-### 1. New table: `order_revision_notifications`
+- Column is **off by default** for both on-screen tables and PDF/Excel exports.
+- Each table gets a small "Columns" toggle (reuse `PdfColumnVisibility` pattern) where the user can flip "Make" on per-session. Preference is stored in `localStorage` per surface (e.g. `boq.columns.make`, `req.columns.make`) so the choice survives reloads but does not affect other users or saved records.
+- PDF / Excel export honors the same toggle: if user enables Make before exporting, the column is included; otherwise the output is **byte-identical to today**.
+- No changes to totals, calculations, layouts of other columns, RLS, workflows, or stored snapshots. The column simply renders if a value is present and the toggle is on.
 
-Stores one row per revision event. Acts as an outbox so a future delivery worker can pick pending rows and send via any channel.
+## Technical details
 
-Fields (domain):
-- `order_id` (the new revision row)
-- `order_root_id`
-- `oa_number`, `revision`, `previous_revision`
-- `revised_from_id`
-- `client_name`, `format`
-- `recipients` jsonb — array of `{ role, user_id, email, name, channels: ["email","sms","whatsapp","in_app"] }`
-- `audience` jsonb — `{ design: [...], purchase: [...], manufacturing: [...], creator: {...} }`
-- `status` text — `pending | queued | sent | failed | skipped` (default `pending`)
-- `channel_status` jsonb — per-channel delivery state (default `{}`)
-- `payload` jsonb — snapshot of summary fields for the future sender
-- `error` text, `triggered_by` uuid, `sent_at`, `created_at`, `updated_at`
+### 1. BOQ
+- `src/lib/boq/types.ts`: add optional `make?: string` to `BoqLineItem`. Backward compatible (existing rows have it `undefined`).
+- BOQ generator (`src/lib/revisions/index.ts` `syncBoqsAndPisForOrder` / `createPendingBoqRevision` and any `deriveBoqLineItems` helper): copy `make_label` from OA `LineItem` → `make` on the new `BoqLineItem`. Existing BOQs untouched until next sync/revision.
+- `src/pages/boqs/BoqEditor.tsx`: add a "Make" column gated by a column-visibility state (default hidden) with a toggle button.
+- `src/lib/boq/pdf.ts` + `src/lib/boq/excel.ts` + `src/lib/boq/pdfDistribution.ts`: accept a `showMake` flag (default `false`); when `true`, insert a "Make" column. Existing callers that don't pass it behave exactly as today.
+- `src/components/boqs/DesignReviewPanel.tsx` and `DistributeBoqDialog.tsx`: surface the same toggle when triggering exports.
 
-RLS: owner of the underlying order OR admin can read; insert via the trigger (security definer) and via owner/admin. No client UPDATE/DELETE needed yet (admin only).
+### 2. PI
+- `src/pages/pi/PiEditor.tsx`: add a hidden "Make" column (reads `line_items[].make_label`) with a column-visibility toggle.
+- `src/lib/pi/pdf.ts` + `src/lib/pi/excel.ts`: accept and respect a `showMake` flag.
 
-### 2. New table: `notification_recipients` (config-only, no delivery)
+### 3. Requisition
+- `src/pages/requisitions/RequisitionDetail.tsx` and `src/pages/requisitions/PublicRequisition.tsx`: add hidden "Make" column inside the grouped RM table (renders `rrm.make`).
+- `src/lib/requisition/pdf.ts`: optional `showMake` flag adding a Make column to the grouped autoTable.
 
-So admins can later assign which users belong to Design / Purchase / Manufacturing groups without touching code.
+### 4. Purchase / Manufacturing
+- `src/pages/modules/ApprovedBoqModule.tsx` (read-only BOQ items table) and any analogous tables in `src/pages/purchase/PurchaseDetail.tsx` / `src/pages/manufacturing/ManufacturingDetail.tsx`: add hidden "Make" column reading from `BoqLineItem.make` (will be empty until BOQ is regenerated/synced from OA).
 
-Fields:
-- `department` text — `design | purchase | manufacturing`
-- `user_id` uuid (nullable) — links to `profiles`
-- `email` text (nullable, for external recipients)
-- `name` text
-- `channels` text[] default `{email}`
-- `is_active` bool default true
+### 5. Shared column-toggle UX
+- Reuse `src/components/orders/PdfColumnVisibility.tsx` pattern (`Columns3` button + popover with checkboxes). For modules without an existing column-defs file, add a tiny per-module `columns.ts` listing the `Make` toggle only (more columns can be added later).
 
-RLS: admin write, authenticated read.
+## Explicitly out of scope / untouched
 
-OA Creator is resolved at trigger time from `orders.user_id` → `profiles` (no config row needed).
-
-### 3. DB trigger on `orders`
-
-`AFTER INSERT ON public.orders` — when `revision > 0` (i.e. a new revision, not the root row), insert one `order_revision_notifications` row with:
-- recipients pulled from `notification_recipients` (active rows) grouped by department
-- plus the OA creator from `profiles` joined on `orders.user_id`
-- `status = 'pending'`
-- `payload` = summary jsonb (oa_number, revision, previous_revision, client_name, format, revised_from_id)
-
-Security definer function so it bypasses RLS for the insert. Does NOT modify the order row, send anything, or block the insert on error (wrapped so a failed notification never breaks revision creation).
-
-### 4. Frontend hook (no UI delivery, just plumbing)
-
-- `src/lib/notifications/orderRevision.ts` — typed helpers:
-  - `listPendingRevisionNotifications()`
-  - `markNotificationSent(id, channelStatus)`
-  - `getRevisionNotificationsForOrder(orderId)`
-- `src/hooks/useOrderRevisionNotifications.ts` — thin React hook around the above for any future admin/notifications screen.
-
-Nothing is imported by existing screens, so behavior is unchanged. `reviseOrder()` in `src/lib/revisions/index.ts` is **not modified** — the DB trigger handles capture automatically when the new revision row is inserted.
-
-### 5. Admin config screen (optional, minimal)
-
-Add a small `src/pages/admin/AdminNotificationRecipients.tsx` so admins can add/remove department recipients. Linked from existing `AdminTabs.tsx` as a new tab "Notifications". Pure CRUD on `notification_recipients` — no other admin tabs change.
-
----
-
-## What is explicitly NOT changed
-
-- `src/lib/revisions/index.ts`, `reviseOrder`, `syncBoqsAndPisForOrder`, `createPendingBoqRevision` — untouched
-- BOQ verification, design review, requisition, PI flows — untouched
-- OA editor / preview / PDF / pricing / calc — untouched
-- No edge function, no email provider, no Twilio/WhatsApp keys, no realtime broadcast — deferred until channel selection
-- `supabase/config.toml`, existing storage buckets, existing RLS — untouched
-
----
-
-## Technical notes
-
-```text
-orders (INSERT, revision > 0)
-        │
-        ▼
-trg_orders_after_insert_notify  (SECURITY DEFINER)
-        │
-        ├── resolve audience from notification_recipients + profiles
-        └── INSERT order_revision_notifications (status='pending')
-                │
-                ▼
-        (future) delivery worker / edge function
-                ├── email
-                ├── sms
-                ├── whatsapp
-                └── in_app
-```
-
-Channel dispatch is intentionally a no-op now: rows accumulate as `pending`, ready for whichever channel(s) you wire up later. To enable a channel later, add an edge function that selects `status='pending'`, sends, then calls `markNotificationSent`.
-
----
-
-## Deliverables
-
-1. Migration creating `order_revision_notifications`, `notification_recipients`, the trigger function, the trigger, and RLS policies.
-2. `src/lib/notifications/orderRevision.ts` + `src/hooks/useOrderRevisionNotifications.ts`.
-3. `src/pages/admin/AdminNotificationRecipients.tsx` + new tab in `AdminTabs.tsx` + route.
-
-Approve and I will implement in this order: migration → lib/hook → admin tab.
+- No DB migrations (all needed columns already exist in `requisition_raw_materials`; `boqs.line_items` is `jsonb`).
+- No edits to OA editor, OA PDF, pricing, calc, approval, revision rules, RLS, edge functions, `supabase/config.toml`, or notification feature.
+- No back-fill of existing BOQ rows. Make value only appears on BOQs generated/synced after this change; older BOQs simply render the column blank when toggled on.
