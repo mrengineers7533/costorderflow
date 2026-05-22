@@ -184,7 +184,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
     return base;
   });
   const emptyRow = headRow.map((_, i) => (i === (showMake ? 3 : 2) ? "(no items)" : ""));
-  const columnStyles: Record<number, { cellWidth?: number | "auto"; halign?: "center" | "left" | "right"; fontStyle?: string }> = showMake
+  const columnStyles: Record<number, Partial<{ cellWidth: number | "auto"; halign: "center" | "left" | "right"; fontStyle: "bold" | "normal" | "italic" | "bolditalic" }>> = showMake
     ? {
         0: { cellWidth: 14, halign: "center" },
         1: { cellWidth: 26 },
