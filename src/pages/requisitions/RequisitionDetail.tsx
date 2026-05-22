@@ -142,6 +142,22 @@ export default function RequisitionDetail() {
     }));
   }, [rms, itemById]);
 
+  // Resolve Make for a requisition item: prefer fg_snapshot.make, then
+  // the BOQ item's stored Make, then the linked OA's Make (by description
+  // /model match or row index).
+  const resolveReqMake = useMemo(() => {
+    const fromOa = buildMakeResolver(order?.line_items);
+    const boqItems = Array.isArray(boq?.line_items) ? boq!.line_items : [];
+    const boqById = new Map(boqItems.map((b, i) => [b.id, { item: b, index: i }] as const));
+    return (it: RequisitionItemRecord): string => {
+      const snap = (it.fg_snapshot as { make?: string } | null)?.make;
+      if (snap && snap.trim()) return snap.trim();
+      const hit = boqById.get(it.boq_item_id);
+      if (hit) return fromOa(hit.item, hit.index);
+      return "";
+    };
+  }, [order, boq]);
+
   async function regenerate() {
     if (!boq) return;
     // close current
