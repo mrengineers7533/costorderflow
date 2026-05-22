@@ -32,10 +32,12 @@ import AdminDomains from "./pages/admin/AdminDomains";
 import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
 import AdminNotificationRecipients from "./pages/admin/AdminNotificationRecipients";
+import AdminAccess from "./pages/admin/AdminAccess";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
 import FamilyBoq from "./pages/boqs/FamilyBoq";
+import { RequireModule } from "./components/RequireModule";
 
 const queryClient = new QueryClient();
 
@@ -60,24 +62,24 @@ const App = () => (
                   <AppLayout user={user}>
                     <Routes>
                       <Route path="/" element={<Index />} />
-                      <Route path="/orders" element={<OrdersList />} />
-                      <Route path="/orders/new" element={<NewOrderChooser />} />
-                      <Route path="/orders/new/edit" element={<OrderEditor />} />
-                      <Route path="/orders/:id" element={<OrderEditor />} />
-                      <Route path="/boqs" element={<BoqList />} />
-                      <Route path="/boqs/new" element={<BoqEditor />} />
-                      <Route path="/boqs/:id" element={<BoqEditor />} />
-                      <Route path="/pi" element={<PiList />} />
-                      <Route path="/pi/:id" element={<PiEditor />} />
-                      <Route path="/reports" element={<FlowReport />} />
-                      <Route path="/workflow" element={<WorkflowPage />} />
-                      <Route path="/purchase" element={<PurchaseList />} />
-                      <Route path="/purchase/:boqId" element={<PurchaseDetail />} />
-                      <Route path="/manufacturing" element={<ManufacturingList />} />
-                      <Route path="/manufacturing/:boqId" element={<ManufacturingDetail />} />
-                      <Route path="/requisitions" element={<RequisitionsList />} />
-                      <Route path="/requisitions/:id" element={<RequisitionDetail />} />
-                      <Route path="/raw-materials" element={<RawMaterialMaster />} />
+                      <Route path="/orders" element={<RequireModule user={user} module="orders"><OrdersList /></RequireModule>} />
+                      <Route path="/orders/new" element={<RequireModule user={user} module="orders"><NewOrderChooser /></RequireModule>} />
+                      <Route path="/orders/new/edit" element={<RequireModule user={user} module="orders"><OrderEditor /></RequireModule>} />
+                      <Route path="/orders/:id" element={<RequireModule user={user} module="orders"><OrderEditor /></RequireModule>} />
+                      <Route path="/boqs" element={<RequireModule user={user} module="boqs"><BoqList /></RequireModule>} />
+                      <Route path="/boqs/new" element={<RequireModule user={user} module="boqs"><BoqEditor /></RequireModule>} />
+                      <Route path="/boqs/:id" element={<RequireModule user={user} module="boqs"><BoqEditor /></RequireModule>} />
+                      <Route path="/pi" element={<RequireModule user={user} module="pi"><PiList /></RequireModule>} />
+                      <Route path="/pi/:id" element={<RequireModule user={user} module="pi"><PiEditor /></RequireModule>} />
+                      <Route path="/reports" element={<RequireModule user={user} module="reports"><FlowReport /></RequireModule>} />
+                      <Route path="/workflow" element={<RequireModule user={user} module="workflow"><WorkflowPage /></RequireModule>} />
+                      <Route path="/purchase" element={<RequireModule user={user} module="purchase"><PurchaseList /></RequireModule>} />
+                      <Route path="/purchase/:boqId" element={<RequireModule user={user} module="purchase"><PurchaseDetail /></RequireModule>} />
+                      <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
+                      <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
+                      <Route path="/requisitions" element={<RequireModule user={user} module="requisitions"><RequisitionsList /></RequireModule>} />
+                      <Route path="/requisitions/:id" element={<RequireModule user={user} module="requisitions"><RequisitionDetail /></RequireModule>} />
+                      <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
@@ -101,6 +103,10 @@ const App = () => (
                       <Route
                         path="/admin/notifications"
                         element={<RequireAdmin user={user}><AdminNotificationRecipients /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/access"
+                        element={<RequireAdmin user={user}><AdminAccess /></RequireAdmin>}
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
