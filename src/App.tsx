@@ -31,6 +31,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminDomains from "./pages/admin/AdminDomains";
 import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
+import AdminNotificationRecipients from "./pages/admin/AdminNotificationRecipients";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
@@ -96,6 +97,10 @@ const App = () => (
                       <Route
                         path="/admin/raw-materials"
                         element={<RequireAdmin user={user}><AdminRawMaterials /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/notifications"
+                        element={<RequireAdmin user={user}><AdminNotificationRecipients /></RequireAdmin>}
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>

@@ -7,6 +7,7 @@ const tabs = [
   { to: "/admin/domains", label: "Domains" },
   { to: "/admin/boq-verification", label: "BOQ Verification" },
   { to: "/admin/raw-materials", label: "Raw Materials" },
+  { to: "/admin/notifications", label: "Notifications" },
 ];
 
 export function AdminTabs({ title, description }: { title: string; description?: string }) {
