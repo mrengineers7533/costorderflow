@@ -27,9 +27,11 @@ import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestSubmittedRound } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { Columns3 } from "lucide-react";
 
 function newBoqItem(seq: number): BoqLineItem {
-  return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
+  return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "", make: "" };
 }
 
 export default function BoqEditor() {
@@ -68,6 +70,7 @@ export default function BoqEditor() {
   const [isCurrentBoq, setIsCurrentBoq] = useState<boolean>(true);
   const [boqRevision, setBoqRevision] = useState<number>(0);
   const [distributeOpen, setDistributeOpen] = useState(false);
+  const [showMake, setShowMake] = useColumnToggle("boq.columns.make", false);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
@@ -368,7 +371,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { showMake });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -398,7 +401,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { showMake });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
@@ -541,10 +544,34 @@ export default function BoqEditor() {
                   Saved snapshot for this revision. Items are frozen at the moment this BOQ was saved.
                   Only Remarks editable (OA/BOQ creator only). Senior approval is item-wise.
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={showMake ? "secondary" : "outline"}
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowMake(!showMake)}
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    {showMake ? "Hide Make column" : "Show Make column"}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
+                <div
+                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                >
+                  <div>Item</div>
+                  <div>Model</div>
+                  {showMake && <div>Make</div>}
+                  <div>Description</div>
+                  <div>Qty</div>
+                  <div>Unit</div>
+                  <div>Remarks</div>
+                  <div>Approval</div>
                 </div>
                 <BoqItemsList
                   key={`items-${refreshKey}`}
@@ -554,6 +581,7 @@ export default function BoqEditor() {
                   boqId={boqId}
                   orderId={orderId || null}
                   onUpdate={updateItem}
+                  showMake={showMake}
                 />
               </CardContent>
             </Card>
@@ -617,7 +645,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} />
           </div>
           </TabsContent>
 
@@ -648,7 +676,7 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate,
+  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
@@ -656,6 +684,7 @@ function BoqItemsList({
   boqId: string | null;
   orderId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
+  showMake?: boolean;
 }) {
   // Latest submitted design-review round for this BOQ. Used to surface
   // per-row comments and approval decisions inline beneath each item.
@@ -664,12 +693,19 @@ function BoqItemsList({
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 items-start">
+            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
               {canEditFull ? (
                 <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
               ) : (
                 <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+              )}
+              {showMake && (
+                canEditFull ? (
+                  <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
+                )
               )}
               {canEditFull ? (
                 <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
@@ -816,7 +852,7 @@ function BoqDesignSuggestionRow({
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
    table column widths, header colors, terms box, and notes line. */
-function BoqDocPreview({ rec }: { rec: BoqRecord }) {
+function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: boolean }) {
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
@@ -889,6 +925,7 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
           <colgroup>
             <col style={{ width: "16mm" }} />
             <col style={{ width: "32mm" }} />
+            {showMake && <col style={{ width: "22mm" }} />}
             <col />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
@@ -897,18 +934,27 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
           </colgroup>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
-              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"].map((h, i) => (
-                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 || i === 6 ? "center" : "left" }}>{h}</th>
-              ))}
+              {(showMake
+                ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+                : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+              ).map((h, i) => {
+                const center = showMake
+                  ? (i === 0 || i === 4 || i === 5 || i === 7)
+                  : (i === 0 || i === 3 || i === 4 || i === 6);
+                return (
+                  <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={showMake ? 8 : 7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
+                {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>

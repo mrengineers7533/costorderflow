@@ -9,10 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Download, Link2 } from "lucide-react";
+import { Columns3, Copy, Download, Link2 } from "lucide-react";
 import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function RequisitionDetail() {
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [latestRev, setLatestRev] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showMake, setShowMake] = useColumnToggle("requisition.columns.make", false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
@@ -81,6 +83,7 @@ export default function RequisitionDetail() {
       clientName: boq.client_name || "",
       shareLink,
       familyLink,
+      showMake,
     });
     const safe = req.requisition_number.replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
@@ -193,7 +196,20 @@ export default function RequisitionDetail() {
 
         <TabsContent value="raw">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Raw material indent</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-sm">Raw material indent</CardTitle>
+              <Button
+                type="button"
+                variant={showMake ? "secondary" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowMake(!showMake)}
+                title="Hidden by default. Also controls the PDF export."
+              >
+                <Columns3 className="h-4 w-4" />
+                {showMake ? "Hide Make column" : "Show Make column"}
+              </Button>
+            </CardHeader>
             <CardContent className="overflow-x-auto space-y-3">
               {hasUnmapped && (
                 <div className="text-xs rounded border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2">
@@ -206,6 +222,7 @@ export default function RequisitionDetail() {
                   <tr>
                     <th className="text-left py-2 px-3 border-r">Finished Good</th>
                     <th className="text-left py-2 px-3 border-r">Raw Material</th>
+                    {showMake && <th className="text-left py-2 px-3 border-r">Make</th>}
                     <th className="text-left py-2 px-3 border-r">Size / Spec</th>
                     <th className="text-right py-2 px-3 border-r">Reqd Qty</th>
                     <th className="text-left py-2 px-3 border-r">Unit</th>
@@ -214,7 +231,7 @@ export default function RequisitionDetail() {
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                   ) : rmGroups.flatMap((g) => g.rms.map((r, idx) => {
                     const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
                     return (
@@ -226,6 +243,7 @@ export default function RequisitionDetail() {
                           </td>
                         )}
                         <td className="py-2 px-3 border-r">{r.material}</td>
+                        {showMake && <td className="py-2 px-3 border-r">{r.make || "—"}</td>}
                         <td className="py-2 px-3 border-r">{r.size_model || "—"}</td>
                         <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
                         <td className="py-2 px-3 border-r">{r.unit || "—"}</td>

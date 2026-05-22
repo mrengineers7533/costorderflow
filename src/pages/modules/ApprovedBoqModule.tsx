@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, FilePlus2 } from "lucide-react";
+import { Search, FilePlus2, Columns3 } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
 import type { RequisitionRecord } from "@/lib/requisition/types";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -142,6 +143,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
+  const [showMake, setShowMake] = useColumnToggle(`module.${config.kind}.boq.columns.make`, false);
 
   useEffect(() => {
     if (!boqId) return;
@@ -208,8 +210,18 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-sm">Approved BOQ items (read-only)</CardTitle>
+          <Button
+            type="button"
+            variant={showMake ? "secondary" : "outline"}
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowMake(!showMake)}
+          >
+            <Columns3 className="h-4 w-4" />
+            {showMake ? "Hide Make" : "Show Make"}
+          </Button>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -218,6 +230,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                 <th className="text-left py-2 pr-3">#</th>
                 <th className="text-left py-2 pr-3">Description</th>
                 <th className="text-left py-2 pr-3">Model</th>
+                {showMake && <th className="text-left py-2 pr-3">Make</th>}
                 <th className="text-right py-2 pr-3">Qty</th>
                 <th className="text-left py-2 pr-3">Unit</th>
                 <th className="text-left py-2 pr-3">Remarks</th>
@@ -225,12 +238,13 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
+                <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={it.id || idx} className="border-b last:border-0">
                   <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
                   <td className="py-2 pr-3">{it.description}</td>
                   <td className="py-2 pr-3">{it.model_number}</td>
+                  {showMake && <td className="py-2 pr-3">{(it as { make?: string }).make || "—"}</td>}
                   <td className="py-2 pr-3 text-right">{it.quantity}</td>
                   <td className="py-2 pr-3">{it.unit}</td>
                   <td className="py-2 pr-3 text-muted-foreground">{it.remarks}</td>

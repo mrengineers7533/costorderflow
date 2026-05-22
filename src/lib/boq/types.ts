@@ -8,6 +8,10 @@ export interface BoqLineItem {
   quantity: number;
   unit: string;
   remarks: string;
+  /** Verbatim Make label propagated from the linked OA line item
+   *  (`LineItem.make_label`). Optional — hidden from every BOQ surface by
+   *  default and only rendered when the user toggles the Make column on. */
+  make?: string;
   /** Senior approval state per line item. */
   approval_status?: "pending" | "approved" | "rejected";
   approval_comment?: string;
