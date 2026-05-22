@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Columns3, Download } from "lucide-react";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import type { RequisitionItemRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 interface ReqView {
   requisition_id: string;
@@ -28,6 +29,7 @@ export default function PublicRequisition() {
   const [items, setItems] = useState<RequisitionItemRecord[]>([]);
   const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showMake, setShowMake] = useColumnToggle("requisition.public.columns.make", false);
 
   useEffect(() => {
     (async () => {
@@ -75,6 +77,7 @@ export default function PublicRequisition() {
       oaNumber: view.reference_oa_number || "",
       clientName: view.client_name || "",
       shareLink: `${window.location.origin}/requisition/${token}`,
+      showMake,
     });
     doc.save(`${view.requisition_number.replace(/[/\\]/g, "_")}.pdf`);
   }
@@ -140,9 +143,21 @@ export default function PublicRequisition() {
 
       {rms.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Raw material indent</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-sm">Raw material indent</CardTitle>
+            <Button
+              type="button"
+              variant={showMake ? "secondary" : "outline"}
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowMake(!showMake)}
+            >
+              <Columns3 className="h-4 w-4" />
+              {showMake ? "Hide Make" : "Show Make"}
+            </Button>
+          </CardHeader>
           <CardContent className="overflow-x-auto">
-            <RawMaterialGroupedTable items={items} rms={rms} />
+            <RawMaterialGroupedTable items={items} rms={rms} showMake={showMake} />
           </CardContent>
         </Card>
       )}
@@ -150,7 +165,7 @@ export default function PublicRequisition() {
   );
 }
 
-function RawMaterialGroupedTable({ items, rms }: { items: RequisitionItemRecord[]; rms: RequisitionRawMaterialRecord[] }) {
+function RawMaterialGroupedTable({ items, rms, showMake = false }: { items: RequisitionItemRecord[]; rms: RequisitionRawMaterialRecord[]; showMake?: boolean }) {
   const groups = useMemo(() => {
     const itemById = new Map(items.map((it) => [it.id, it] as const));
     const order: string[] = [];
@@ -179,6 +194,7 @@ function RawMaterialGroupedTable({ items, rms }: { items: RequisitionItemRecord[
         <tr>
           <th className="text-left py-2 px-3 border-r">Finished Good</th>
           <th className="text-left py-2 px-3 border-r">Raw Material</th>
+          {showMake && <th className="text-left py-2 px-3 border-r">Make</th>}
           <th className="text-left py-2 px-3 border-r">Size / Spec</th>
           <th className="text-right py-2 px-3 border-r">Reqd Qty</th>
           <th className="text-left py-2 px-3">Unit</th>
@@ -196,6 +212,7 @@ function RawMaterialGroupedTable({ items, rms }: { items: RequisitionItemRecord[
                 </td>
               )}
               <td className="py-2 px-3 border-r">{r.material}</td>
+              {showMake && <td className="py-2 px-3 border-r">{r.make || "—"}</td>}
               <td className="py-2 px-3 border-r">{r.size_model || "—"}</td>
               <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
               <td className="py-2 px-3">{r.unit ?? "—"}</td>
