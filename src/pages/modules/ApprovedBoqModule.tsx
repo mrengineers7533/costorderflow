@@ -11,6 +11,7 @@ import type { OrderRecord } from "@/lib/orders/types";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
 import type { RequisitionRecord } from "@/lib/requisition/types";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { buildMakeResolver } from "@/lib/boq/makeResolver";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -140,6 +141,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
 export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const { boqId } = useParams<{ boqId: string }>();
   const [boq, setBoq] = useState<BoqRecord | null>(null);
+  const [order, setOrder] = useState<OrderRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
@@ -149,7 +151,13 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
     if (!boqId) return;
     (async () => {
       const { data } = await supabase.from("boqs").select("*").eq("id", boqId).maybeSingle();
-      setBoq((data as unknown as BoqRecord) || null);
+      const b = (data as unknown as BoqRecord) || null;
+      setBoq(b);
+      const oaId = b?.source_order_id || b?.order_id;
+      if (oaId) {
+        const { data: o } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
+        setOrder((o as unknown as OrderRecord) || null);
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const { data: r } = await sb.from("requisitions").select("*").eq("boq_id", boqId).order("created_at", { ascending: false });
@@ -163,6 +171,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
 
   const items = Array.isArray(boq.line_items) ? boq.line_items : [];
   const approved = (boq.verification_status ?? "approved") === "approved";
+  const resolveMake = buildMakeResolver(order?.line_items);
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
@@ -244,7 +253,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                   <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
                   <td className="py-2 pr-3">{it.description}</td>
                   <td className="py-2 pr-3">{it.model_number}</td>
-                  {showMake && <td className="py-2 pr-3">{(it as { make?: string }).make || "—"}</td>}
+                  {showMake && <td className="py-2 pr-3">{resolveMake(it, idx) || "—"}</td>}
                   <td className="py-2 pr-3 text-right">{it.quantity}</td>
                   <td className="py-2 pr-3">{it.unit}</td>
                   <td className="py-2 pr-3 text-muted-foreground">{it.remarks}</td>
