@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Receipt, Loader2, CheckCircle2 } from "lucide-react";
+import { Receipt, Loader2, CheckCircle2, Columns3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -20,6 +20,7 @@ import {
   fetchOaItemPiStatus,
   type OaItemPiStatus,
 } from "@/lib/pi/convert";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   const [amtMap, setAmtMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showMake, setShowMake] = useColumnToggle("pi.select.columns.make", false);
 
   useEffect(() => {
     if (!open || !oa) return;
@@ -215,6 +217,20 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             )}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant={showMake ? "secondary" : "outline"}
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowMake(!showMake)}
+            title="Hidden by default. Inherited from OA."
+          >
+            <Columns3 className="h-4 w-4" />
+            {showMake ? "Hide Make column" : "Show Make column"}
+          </Button>
+        </div>
 
         <div className="max-h-[55vh] overflow-auto rounded-md border">
           <Table>
