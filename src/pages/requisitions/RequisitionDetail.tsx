@@ -341,7 +341,7 @@ export default function RequisitionDetail() {
                       <td className="py-2 pr-3">{it.model_number}</td>
                       <td className="py-2 pr-3">{it.description}</td>
                       {showMake && (
-                        <td className="py-2 pr-3">{(it.fg_snapshot as { make?: string } | null)?.make || "—"}</td>
+                        <td className="py-2 pr-3">{resolveReqMake(it) || "—"}</td>
                       )}
                       <td className="py-2 pr-3 text-right">{it.quantity}</td>
                       <td className="py-2 pr-3">{it.unit}</td>
@@ -411,7 +411,7 @@ export default function RequisitionDetail() {
                         <td className="py-2 pr-3">{it.model_number}</td>
                         <td className="py-2 pr-3">{it.description}</td>
                         {showMake && (
-                          <td className="py-2 pr-3">{(it.fg_snapshot as { make?: string } | null)?.make || "—"}</td>
+                        <td className="py-2 pr-3">{resolveReqMake(it) || "—"}</td>
                         )}
                         <td className="py-2 pr-3 text-right">{it.quantity}</td>
                         <td className="py-2 pr-3">{it.unit}</td>
