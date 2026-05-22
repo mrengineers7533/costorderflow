@@ -544,10 +544,34 @@ export default function BoqEditor() {
                   Saved snapshot for this revision. Items are frozen at the moment this BOQ was saved.
                   Only Remarks editable (OA/BOQ creator only). Senior approval is item-wise.
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={showMake ? "secondary" : "outline"}
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowMake(!showMake)}
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    {showMake ? "Hide Make column" : "Show Make column"}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px] gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                  <div>Item</div><div>Model</div><div>Description</div><div>Qty</div><div>Unit</div><div>Remarks</div><div>Approval</div>
+                <div
+                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(80px,0.9fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                >
+                  <div>Item</div>
+                  <div>Model</div>
+                  {showMake && <div>Make</div>}
+                  <div>Description</div>
+                  <div>Qty</div>
+                  <div>Unit</div>
+                  <div>Remarks</div>
+                  <div>Approval</div>
                 </div>
                 <BoqItemsList
                   key={`items-${refreshKey}`}
@@ -557,6 +581,7 @@ export default function BoqEditor() {
                   boqId={boqId}
                   orderId={orderId || null}
                   onUpdate={updateItem}
+                  showMake={showMake}
                 />
               </CardContent>
             </Card>
