@@ -1,63 +1,111 @@
 ## Goal
 
-Change the requisition Raw Material view to an **item-wise grouped format** matching the user's reference: one row per raw material, grouped under each Finish Good, with columns **Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit**.
+Add a notification trigger that fires whenever an OA is revised, capturing recipients across Design, Purchase, Manufacturing, and the OA Creator. No delivery channel is wired up yet — only the storage + dispatch hook so email / SMS / WhatsApp / in‑app can be plugged in later.
 
-Apply this format consistently to:
-1. `RequisitionDetail.tsx` — "Raw Materials" tab (private view)
-2. `PublicRequisition.tsx` — public share page (same layout)
-3. `lib/requisition/pdf.ts` — PDF "Raw Material Indent" section
+Nothing in existing OA, BOQ, PI, Requisition, approval, revision, pricing, calculation, or workflow code changes behavior.
 
-No backend / data model changes. Data is already grouped by `requisition_item_id` and `model_number` in `requisition_raw_materials`.
+---
 
-## Target layout (matches uploaded image)
+## What gets added
+
+### 1. New table: `order_revision_notifications`
+
+Stores one row per revision event. Acts as an outbox so a future delivery worker can pick pending rows and send via any channel.
+
+Fields (domain):
+- `order_id` (the new revision row)
+- `order_root_id`
+- `oa_number`, `revision`, `previous_revision`
+- `revised_from_id`
+- `client_name`, `format`
+- `recipients` jsonb — array of `{ role, user_id, email, name, channels: ["email","sms","whatsapp","in_app"] }`
+- `audience` jsonb — `{ design: [...], purchase: [...], manufacturing: [...], creator: {...} }`
+- `status` text — `pending | queued | sent | failed | skipped` (default `pending`)
+- `channel_status` jsonb — per-channel delivery state (default `{}`)
+- `payload` jsonb — snapshot of summary fields for the future sender
+- `error` text, `triggered_by` uuid, `sent_at`, `created_at`, `updated_at`
+
+RLS: owner of the underlying order OR admin can read; insert via the trigger (security definer) and via owner/admin. No client UPDATE/DELETE needed yet (admin only).
+
+### 2. New table: `notification_recipients` (config-only, no delivery)
+
+So admins can later assign which users belong to Design / Purchase / Manufacturing groups without touching code.
+
+Fields:
+- `department` text — `design | purchase | manufacturing`
+- `user_id` uuid (nullable) — links to `profiles`
+- `email` text (nullable, for external recipients)
+- `name` text
+- `channels` text[] default `{email}`
+- `is_active` bool default true
+
+RLS: admin write, authenticated read.
+
+OA Creator is resolved at trigger time from `orders.user_id` → `profiles` (no config row needed).
+
+### 3. DB trigger on `orders`
+
+`AFTER INSERT ON public.orders` — when `revision > 0` (i.e. a new revision, not the root row), insert one `order_revision_notifications` row with:
+- recipients pulled from `notification_recipients` (active rows) grouped by department
+- plus the OA creator from `profiles` joined on `orders.user_id`
+- `status = 'pending'`
+- `payload` = summary jsonb (oa_number, revision, previous_revision, client_name, format, revised_from_id)
+
+Security definer function so it bypasses RLS for the insert. Does NOT modify the order row, send anything, or block the insert on error (wrapped so a failed notification never breaks revision creation).
+
+### 4. Frontend hook (no UI delivery, just plumbing)
+
+- `src/lib/notifications/orderRevision.ts` — typed helpers:
+  - `listPendingRevisionNotifications()`
+  - `markNotificationSent(id, channelStatus)`
+  - `getRevisionNotificationsForOrder(orderId)`
+- `src/hooks/useOrderRevisionNotifications.ts` — thin React hook around the above for any future admin/notifications screen.
+
+Nothing is imported by existing screens, so behavior is unchanged. `reviseOrder()` in `src/lib/revisions/index.ts` is **not modified** — the DB trigger handles capture automatically when the new revision row is inserted.
+
+### 5. Admin config screen (optional, minimal)
+
+Add a small `src/pages/admin/AdminNotificationRecipients.tsx` so admins can add/remove department recipients. Linked from existing `AdminTabs.tsx` as a new tab "Notifications". Pure CRUD on `notification_recipients` — no other admin tabs change.
+
+---
+
+## What is explicitly NOT changed
+
+- `src/lib/revisions/index.ts`, `reviseOrder`, `syncBoqsAndPisForOrder`, `createPendingBoqRevision` — untouched
+- BOQ verification, design review, requisition, PI flows — untouched
+- OA editor / preview / PDF / pricing / calc — untouched
+- No edge function, no email provider, no Twilio/WhatsApp keys, no realtime broadcast — deferred until channel selection
+- `supabase/config.toml`, existing storage buckets, existing RLS — untouched
+
+---
+
+## Technical notes
 
 ```text
-| Finished Good                              | Raw Material   | Size / Spec       | Reqd Qty | Unit |
-| SCREW CONVEYOR SIZE-250MM TOTAL LENGTH-9.2M| MS SHEET       | 1250X2500X3MM     |     4.70 | NOS  |
-|                                            | MS SHEET       | 1250X2500X1.6MM   |     1.30 | NOS  |
-|                                            | MS FLAT        | 25X3MM            |    25.76 | MTR  |
-|                                            | KNOB           | 3" W/O BOLT       |     9.00 | NOS  |
-| (next FG)                                  | …              | …                 |        … | …    |
+orders (INSERT, revision > 0)
+        │
+        ▼
+trg_orders_after_insert_notify  (SECURITY DEFINER)
+        │
+        ├── resolve audience from notification_recipients + profiles
+        └── INSERT order_revision_notifications (status='pending')
+                │
+                ▼
+        (future) delivery worker / edge function
+                ├── email
+                ├── sms
+                ├── whatsapp
+                └── in_app
 ```
 
-- **Finished Good** cell: shown once per group via `rowSpan`, displaying `model_number` + short description (or `description` if model is empty). Empty for following RM rows in the same group.
-- Rows ordered: by FG `item_no`, then by original RM insertion order within the group.
-- Source/status badges kept compact: an "Mapping Not Found" badge on the FG cell when the group is unmapped (placeholder row). Purchase status `Select` (Pending/Ordered/Received) remains on the right in the detail view only — NOT shown in PDF or public view.
-- Direct Purchase Finish Goods are excluded (they already have no RM rows).
+Channel dispatch is intentionally a no-op now: rows accumulate as `pending`, ready for whichever channel(s) you wire up later. To enable a channel later, add an edge function that selects `status='pending'`, sends, then calls `markNotificationSent`.
 
-## Files to change
+---
 
-### 1. `src/components/manufacturing/CreateRequisitionDialog.tsx`
-No change — the wizard already shows the item-wise layout.
+## Deliverables
 
-### 2. `src/pages/requisitions/RequisitionDetail.tsx`
-- Replace the flat `<tr>` map in the "Raw Materials" tab with a grouping pass:
-  - Build `groups: Array<{ item: RequisitionItemRecord; rms: RequisitionRawMaterialRecord[] }>` from `items` + `rms`, keyed by `requisition_item_id`. Items with no RMs (direct purchase) are skipped.
-  - For each group render one row per RM; first row uses `rowSpan={group.rms.length}` on the Finished Good cell.
-- Columns: Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit · Status (status kept for purchase workflow).
-- Keep the unmapped warning banner.
+1. Migration creating `order_revision_notifications`, `notification_recipients`, the trigger function, the trigger, and RLS policies.
+2. `src/lib/notifications/orderRevision.ts` + `src/hooks/useOrderRevisionNotifications.ts`.
+3. `src/pages/admin/AdminNotificationRecipients.tsx` + new tab in `AdminTabs.tsx` + route.
 
-### 3. `src/pages/requisitions/PublicRequisition.tsx`
-- Mirror the same grouped layout. Columns: Finished Good · Raw Material · Size / Spec · Reqd Qty · Unit. No status column.
-
-### 4. `src/lib/requisition/pdf.ts`
-- Replace the current flat "Raw Material Indent" autoTable with a grouped table:
-  - Build the same group structure.
-  - Use autoTable `body` with `rowSpan` via cell objects: `{ content: fgLabel, rowSpan: group.rms.length, styles: { valign: "middle" } }` on the first row of each group; subsequent rows omit the FG cell.
-  - Columns: `["Finished Good", "Raw Material", "Size / Spec", "Reqd Qty", "Unit"]`.
-- Keep the upper Finish Good items table and footer notes unchanged.
-
-## What stays the same (untouched)
-
-- OA, BOQ, approval, revision, pricing, calculation, workflow.
-- Edge function `create-requisition`, RM Master matching, snapshots.
-- Database schema, RLS, share/family tokens, regenerate-for-latest-revision.
-- Items, Steel List, Outside Purchase tabs.
-- Purchase status updates (still editable in the detail view).
-- Wizard (Create Requisition dialog) — already item-wise.
-
-## Notes
-
-- "Size / Spec" maps to existing column `size_model`.
-- "Reqd Qty" maps to existing `required_qty` (computed = `qty_per_unit × fg_quantity`).
-- Finished Good label = `model_number` (fall back to truncated `description`) — taken from the joined `requisition_items` row so it always matches the BOQ snapshot.
+Approve and I will implement in this order: migration → lib/hook → admin tab.

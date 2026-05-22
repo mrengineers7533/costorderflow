@@ -734,6 +734,50 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_recipients: {
+        Row: {
+          channels: string[]
+          created_at: string
+          department: string
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          channels?: string[]
+          created_at?: string
+          department: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          channels?: string[]
+          created_at?: string
+          department?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oa_counters: {
         Row: {
           financial_year: string
@@ -754,6 +798,72 @@ export type Database = {
           format?: Database["public"]["Enums"]["order_format"]
           id?: string
           last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      order_revision_notifications: {
+        Row: {
+          audience: Json
+          channel_status: Json
+          client_name: string | null
+          created_at: string
+          error: string | null
+          format: Database["public"]["Enums"]["order_format"] | null
+          id: string
+          oa_number: string
+          order_id: string
+          order_root_id: string
+          payload: Json
+          previous_revision: number | null
+          recipients: Json
+          revised_from_id: string | null
+          revision: number
+          sent_at: string | null
+          status: string
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience?: Json
+          channel_status?: Json
+          client_name?: string | null
+          created_at?: string
+          error?: string | null
+          format?: Database["public"]["Enums"]["order_format"] | null
+          id?: string
+          oa_number: string
+          order_id: string
+          order_root_id: string
+          payload?: Json
+          previous_revision?: number | null
+          recipients?: Json
+          revised_from_id?: string | null
+          revision: number
+          sent_at?: string | null
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: Json
+          channel_status?: Json
+          client_name?: string | null
+          created_at?: string
+          error?: string | null
+          format?: Database["public"]["Enums"]["order_format"] | null
+          id?: string
+          oa_number?: string
+          order_id?: string
+          order_root_id?: string
+          payload?: Json
+          previous_revision?: number | null
+          recipients?: Json
+          revised_from_id?: string | null
+          revision?: number
+          sent_at?: string | null
+          status?: string
+          triggered_by?: string | null
           updated_at?: string
         }
         Relationships: []
