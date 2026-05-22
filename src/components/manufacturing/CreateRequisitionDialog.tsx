@@ -21,6 +21,7 @@ import { firstLine } from "@/lib/requisition/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { logEvent } from "@/lib/activity/log";
 
 interface Props {
   open: boolean;
@@ -265,6 +266,15 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       if (error) throw error;
       const reqId = (data as { requisition?: { id: string } })?.requisition?.id;
       toast({ title: "Requisition created" });
+      logEvent({
+        module: "requisition",
+        event_type: "requisition.created",
+        status: "info",
+        title: `Requisition created`,
+        message: `From BOQ ${boq.boq_number} (R${boq.revision ?? 0})`,
+        boq_id: boq.id,
+        requisition_id: reqId ?? null,
+      });
       onOpenChange(false);
       if (reqId) navigate(`/requisitions/${reqId}`);
     } catch (e) {
