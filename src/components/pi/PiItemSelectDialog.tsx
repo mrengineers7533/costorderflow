@@ -341,6 +341,11 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                           {it.description}
                         </div>
                       </TableCell>
+                      {showMake && (
+                        <TableCell className="text-xs">
+                          {(it as { make_label?: string }).make_label || "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums">
                         {isMR ? (
                           <div className="flex items-center justify-end gap-1.5 w-32 ml-auto">
