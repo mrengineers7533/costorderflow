@@ -6,11 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import { MODULES, type ModuleKey } from "@/lib/access/modules";
+import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 
-type Profile = { id: string; full_name: string | null; email: string | null };
+type Profile = { id: string; full_name: string | null; email: string | null; is_active: boolean };
 
 export default function AdminAccess() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -19,11 +22,17 @@ export default function AdminAccess() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   async function refresh() {
     setLoading(true);
     const [{ data: profs }, { data: roles }, { data: rows }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("profiles").select("id, full_name, email, is_active"),
       supabase.from("user_roles").select("user_id, role"),
       supabase.from("user_module_access").select("user_id, module"),
     ]);
@@ -87,25 +96,53 @@ export default function AdminAccess() {
     }
   }
 
+  async function toggleActive(userId: string, isActive: boolean) {
+    if (userId === currentUserId && !isActive) {
+      toast.error("You cannot disable your own account");
+      return;
+    }
+    const key = `active:${userId}`;
+    setBusy(key);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-set-user-active", {
+        body: { user_id: userId, is_active: isActive },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      setProfiles((prev) => prev.map((p) => p.id === userId ? { ...p, is_active: isActive } : p));
+      toast.success(isActive ? "User enabled" : "User disabled");
+    } catch (e) {
+      toast.error((e as Error).message || "Failed to update status");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
       <AdminTabs title="User Access Control" description="Assign per-module access to each user. Admins have full access automatically." />
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by email or name…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+          <div className="flex items-center justify-between gap-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by email or name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button onClick={() => setShowCreate(true)}>
+              <UserPlus className="h-4 w-4 mr-2" /> Add User
+            </Button>
           </div>
           <div className="overflow-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10 min-w-[240px]">User</TableHead>
+                  <TableHead className="text-center whitespace-nowrap">Active</TableHead>
                   {MODULES.map((m) => (
                     <TableHead key={m.key} className="text-center whitespace-nowrap">{m.label}</TableHead>
                   ))}
@@ -113,20 +150,29 @@ export default function AdminAccess() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={MODULES.length + 1} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={MODULES.length + 2} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={MODULES.length + 1} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={MODULES.length + 2} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
                 ) : filtered.map((p) => {
                   const isAdmin = adminIds.has(p.id);
                   const userMods = access.get(p.id) ?? new Set();
+                  const activeKey = `active:${p.id}`;
                   return (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} className={!p.is_active ? "opacity-60" : undefined}>
                       <TableCell className="sticky left-0 bg-background z-10">
                         <div className="flex flex-col">
                           <span className="text-sm font-medium">{p.full_name || "—"}</span>
                           <span className="text-xs text-muted-foreground">{p.email}</span>
                           {isAdmin && <Badge variant="secondary" className="mt-1 w-fit">Full access (Admin)</Badge>}
+                          {!p.is_active && <Badge variant="outline" className="mt-1 w-fit">Disabled</Badge>}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={p.is_active}
+                          disabled={busy === activeKey || p.id === currentUserId}
+                          onCheckedChange={(v) => toggleActive(p.id, v === true)}
+                        />
                       </TableCell>
                       {MODULES.map((m) => {
                         const checked = isAdmin || userMods.has(m.key);
@@ -135,7 +181,7 @@ export default function AdminAccess() {
                           <TableCell key={m.key} className="text-center">
                             <Checkbox
                               checked={checked}
-                              disabled={isAdmin || busy === key}
+                              disabled={isAdmin || busy === key || !p.is_active}
                               onCheckedChange={(v) => toggle(p.id, m.key, v === true)}
                             />
                           </TableCell>
@@ -149,6 +195,12 @@ export default function AdminAccess() {
           </div>
         </CardContent>
       </Card>
+
+      <CreateUserDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        onCreated={refresh}
+      />
     </div>
   );
 }
