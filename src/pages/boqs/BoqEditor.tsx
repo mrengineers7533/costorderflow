@@ -645,7 +645,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} />
           </div>
           </TabsContent>
 
@@ -852,7 +852,7 @@ function BoqDesignSuggestionRow({
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
    table column widths, header colors, terms box, and notes line. */
-function BoqDocPreview({ rec }: { rec: BoqRecord }) {
+function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: boolean }) {
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
@@ -925,6 +925,7 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
           <colgroup>
             <col style={{ width: "16mm" }} />
             <col style={{ width: "32mm" }} />
+            {showMake && <col style={{ width: "22mm" }} />}
             <col />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
@@ -933,18 +934,27 @@ function BoqDocPreview({ rec }: { rec: BoqRecord }) {
           </colgroup>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
-              {["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"].map((h, i) => (
-                <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: i === 0 || i === 3 || i === 4 || i === 6 ? "center" : "left" }}>{h}</th>
-              ))}
+              {(showMake
+                ? ["ITEM No.", "MODEL NUMBER", "MAKE", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+                : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
+              ).map((h, i) => {
+                const center = showMake
+                  ? (i === 0 || i === 4 || i === 5 || i === 7)
+                  : (i === 0 || i === 3 || i === 4 || i === 6);
+                return (
+                  <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={showMake ? 8 : 7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
+                {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
