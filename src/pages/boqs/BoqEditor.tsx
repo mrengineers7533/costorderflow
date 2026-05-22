@@ -27,9 +27,11 @@ import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestSubmittedRound } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { Columns3 } from "lucide-react";
 
 function newBoqItem(seq: number): BoqLineItem {
-  return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "" };
+  return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "", make: "" };
 }
 
 export default function BoqEditor() {
@@ -368,7 +370,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { showMake });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -398,7 +400,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord());
+    const doc = await generateBoqPDF(buildRecord(), { showMake });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
