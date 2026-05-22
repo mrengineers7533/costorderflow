@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Receipt, Loader2, CheckCircle2 } from "lucide-react";
+import { Receipt, Loader2, CheckCircle2, Columns3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -20,6 +20,7 @@ import {
   fetchOaItemPiStatus,
   type OaItemPiStatus,
 } from "@/lib/pi/convert";
+import { useColumnToggle } from "@/hooks/useColumnToggle";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,7 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
   const [amtMap, setAmtMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showMake, setShowMake] = useColumnToggle("pi.select.columns.make", false);
 
   useEffect(() => {
     if (!open || !oa) return;
@@ -216,6 +218,20 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant={showMake ? "secondary" : "outline"}
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowMake(!showMake)}
+            title="Hidden by default. Inherited from OA."
+          >
+            <Columns3 className="h-4 w-4" />
+            {showMake ? "Hide Make column" : "Show Make column"}
+          </Button>
+        </div>
+
         <div className="max-h-[55vh] overflow-auto rounded-md border">
           <Table>
             <TableHeader className="bg-muted/40 sticky top-0">
@@ -234,6 +250,11 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                 <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   Description
                 </TableHead>
+                {showMake && (
+                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Make
+                  </TableHead>
+                )}
                 <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">
                   Qty
                 </TableHead>
@@ -268,14 +289,14 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={(isMR ? 12 : 11) + (showMake ? 1 : 0)} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="inline h-4 w-4 mr-2 animate-spin" />
                     Checking PI status for items…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isMR ? 12 : 11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={(isMR ? 12 : 11) + (showMake ? 1 : 0)} className="text-center py-10 text-muted-foreground">
                     This OA has no line items.
                   </TableCell>
                 </TableRow>
@@ -320,6 +341,11 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
                           {it.description}
                         </div>
                       </TableCell>
+                      {showMake && (
+                        <TableCell className="text-xs">
+                          {(it as { make_label?: string }).make_label || "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums">
                         {isMR ? (
                           <div className="flex items-center justify-end gap-1.5 w-32 ml-auto">

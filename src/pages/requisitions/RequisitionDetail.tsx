@@ -271,7 +271,20 @@ export default function RequisitionDetail() {
 
         <TabsContent value="items">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Finish Good items</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-sm">Finish Good items</CardTitle>
+              <Button
+                type="button"
+                variant={showMake ? "secondary" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowMake(!showMake)}
+                title="Hidden by default. Inherited from OA via BOQ."
+              >
+                <Columns3 className="h-4 w-4" />
+                {showMake ? "Hide Make column" : "Show Make column"}
+              </Button>
+            </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs text-muted-foreground border-b">
@@ -280,6 +293,7 @@ export default function RequisitionDetail() {
                     <th className="text-left py-2 pr-3">#</th>
                     <th className="text-left py-2 pr-3">Model</th>
                     <th className="text-left py-2 pr-3">Description</th>
+                    {showMake && <th className="text-left py-2 pr-3">Make</th>}
                     <th className="text-right py-2 pr-3">Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
                     <th className="text-left py-2 pr-3">Lot</th>
@@ -288,7 +302,7 @@ export default function RequisitionDetail() {
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
-                    <tr><td colSpan={8} className="py-4 text-center text-muted-foreground">No items.</td></tr>
+                    <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No items.</td></tr>
                   ) : items.map((it) => (
                     <tr key={it.id} className="border-b last:border-0">
                       <td className="py-2 pr-3">
@@ -300,6 +314,9 @@ export default function RequisitionDetail() {
                       <td className="py-2 pr-3">{it.item_no}</td>
                       <td className="py-2 pr-3">{it.model_number}</td>
                       <td className="py-2 pr-3">{it.description}</td>
+                      {showMake && (
+                        <td className="py-2 pr-3">{(it.fg_snapshot as { make?: string } | null)?.make || "—"}</td>
+                      )}
                       <td className="py-2 pr-3 text-right">{it.quantity}</td>
                       <td className="py-2 pr-3">{it.unit}</td>
                       <td className="py-2 pr-3">
@@ -332,7 +349,20 @@ export default function RequisitionDetail() {
         {(["steel", "outside"] as const).map((cat) => (
           <TabsContent key={cat} value={cat}>
             <Card>
-              <CardHeader><CardTitle className="text-sm capitalize">{cat} purchase list</CardTitle></CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-sm capitalize">{cat} purchase list</CardTitle>
+                <Button
+                  type="button"
+                  variant={showMake ? "secondary" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setShowMake(!showMake)}
+                  title="Hidden by default. Inherited from OA via BOQ."
+                >
+                  <Columns3 className="h-4 w-4" />
+                  {showMake ? "Hide Make column" : "Show Make column"}
+                </Button>
+              </CardHeader>
               <CardContent className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-muted-foreground border-b">
@@ -340,6 +370,7 @@ export default function RequisitionDetail() {
                       <th className="text-left py-2 pr-3">#</th>
                       <th className="text-left py-2 pr-3">Model</th>
                       <th className="text-left py-2 pr-3">Description</th>
+                      {showMake && <th className="text-left py-2 pr-3">Make</th>}
                       <th className="text-right py-2 pr-3">Qty</th>
                       <th className="text-left py-2 pr-3">Unit</th>
                       <th className="text-left py-2 pr-3">Lot</th>
@@ -347,12 +378,15 @@ export default function RequisitionDetail() {
                   </thead>
                   <tbody>
                     {items.filter((i) => i.purchase_category === cat).length === 0 ? (
-                      <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
+                      <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
                     ) : items.filter((i) => i.purchase_category === cat).map((it) => (
                       <tr key={it.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">{it.item_no}</td>
                         <td className="py-2 pr-3">{it.model_number}</td>
                         <td className="py-2 pr-3">{it.description}</td>
+                        {showMake && (
+                          <td className="py-2 pr-3">{(it.fg_snapshot as { make?: string } | null)?.make || "—"}</td>
+                        )}
                         <td className="py-2 pr-3 text-right">{it.quantity}</td>
                         <td className="py-2 pr-3">{it.unit}</td>
                         <td className="py-2 pr-3">{it.lot_no || "—"}</td>
