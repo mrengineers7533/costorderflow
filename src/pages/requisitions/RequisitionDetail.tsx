@@ -269,13 +269,93 @@ export default function RequisitionDetail() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="items">
+      <Tabs defaultValue="generated">
         <TabsList>
+          <TabsTrigger value="generated">Generated</TabsTrigger>
           <TabsTrigger value="raw">Raw Materials</TabsTrigger>
           <TabsTrigger value="items">Items</TabsTrigger>
           <TabsTrigger value="steel">Steel List</TabsTrigger>
           <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="generated">
+          <Card>
+            <CardHeader className="space-y-0 py-3">
+              <CardTitle className="text-sm">Generated requisition</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm border">
+                <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+                  <tr>
+                    <th className="text-left py-2 px-2 border-r">Finished Good</th>
+                    <th className="text-left py-2 px-2 border-r">Make</th>
+                    <th className="text-right py-2 px-2 border-r">Qty</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material</th>
+                    <th className="text-left py-2 px-2 border-r">Size</th>
+                    <th className="text-right py-2 px-2 border-r">RM Qty</th>
+                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">UOM</th>
+                    <th className="text-left py-2 px-2 border-r">Lot</th>
+                    <th className="text-left py-2 px-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rmGroups.length === 0 ? (
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                  ) : rmGroups.flatMap((g) => {
+                    const it = g.item;
+                    const fgLabel = it?.model_number || it?.description || g.fgLabel;
+                    const fgMake = it ? resolveReqMake(it) : "";
+                    const fgQty = it?.quantity != null ? String(it.quantity) : "—";
+                    return g.rms.map((r, idx) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        {idx === 0 && (
+                          <>
+                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
+                            <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
+                            <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
+                          </>
+                        )}
+                        <td className="py-2 px-2 border-r">{r.material}</td>
+                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
+                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
+                        {idx === 0 ? (
+                          <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
+                            <Input
+                              className="h-7 w-24"
+                              defaultValue={it?.lot_no || ""}
+                              onBlur={(e) => {
+                                if (!it) return;
+                                const v = e.target.value;
+                                if ((it.lot_no || "") === v) return;
+                                updateItem(it.id, { lot_no: v || null, purchase_status: v ? "lotted" : it.purchase_status });
+                              }}
+                            />
+                          </td>
+                        ) : null}
+                        <td className="py-2 px-2">
+                          <Select
+                            value={ENUM_TO_STATUS[r.purchase_status] || "Pending"}
+                            onValueChange={(v) => updateRm(r.id, { purchase_status: STATUS_TO_ENUM[v] })}
+                          >
+                            <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Pending">Pending</SelectItem>
+                              <SelectItem value="Inhouse">Inhouse</SelectItem>
+                              <SelectItem value="Outside Purchase">Outside Purchase</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    ));
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="raw">
           <Card>
