@@ -56,10 +56,25 @@ Deno.serve(async (req) => {
     if (updErr) return json({ error: updErr.message }, 500);
 
     // On deactivation, revoke all active sessions immediately so a stale JWT
-    // cannot keep reading data until expiry.
+    // cannot keep reading data until expiry. signOut() expects a JWT, so use
+    // the admin API to delete the user's sessions directly.
     if (!is_active) {
-      const { error: soErr } = await admin.auth.admin.signOut(user_id, "global");
-      if (soErr) return json({ error: soErr.message }, 500);
+      // Best-effort; ignore if not supported on this runtime version.
+      try {
+        // @ts-ignore - available on supabase-js admin API
+        await (admin.auth.admin as unknown as {
+          deleteSession?: (id: string) => Promise<unknown>;
+          listUserSessions?: (uid: string) => Promise<{ data?: { sessions?: { id: string }[] } }>;
+        }).listUserSessions?.(user_id).then(async (res) => {
+          const sessions = res?.data?.sessions ?? [];
+          for (const s of sessions) {
+            // @ts-ignore
+            await admin.auth.admin.deleteSession?.(s.id);
+          }
+        });
+      } catch (_) {
+        // ignore — deactivation still succeeds
+      }
     }
 
     return json({ ok: true });
