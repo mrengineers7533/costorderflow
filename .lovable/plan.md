@@ -1,49 +1,44 @@
-# Plan — Add hidden "Make" column across OA-linked modules
+# Plan — Place Make column right after Description (BOQ + PI)
 
-Mirror the existing OA **Make** column (the verbatim `make_label` per item) into BOQ, PI, Requisition, Purchase and Manufacturing views. Column stays **hidden by default** everywhere and can be toggled on-screen and in print/export.
+## 1. BOQ — move the Make column to immediately after Description
 
-## Scope summary
+Today the hidden Make column renders between **Model Number** and **Description**. Reorder it so the columns become:
 
-| Module | Source of "Make" | Work needed |
-|---|---|---|
-| OA (orders) | `LineItem.make_label` | Already exists — no change |
-| PI | Reuses `LineItem` → already carries `make_label` from OA | Add column (hidden by default) to PI editor table + PDF/Excel toggle |
-| BOQ | New optional `make` field on `BoqLineItem` | Propagate from OA on generation/sync; add hidden column to BOQ editor, PDF, Excel, design review, distribution PDFs |
-| Requisition | `requisition_raw_materials.make` already exists | Add hidden column in `RequisitionDetail`, `PublicRequisition`, and `requisition/pdf.ts` |
-| Purchase / Manufacturing | Reads BOQ + Requisition | Inherits via the BOQ + Requisition changes; add hidden column in `ApprovedBoqDetailPage` items table and any purchase/manufacturing tables |
+`Item No. | Model Number | Description | Make | Qty | Unit | Remarks | Approved by Design`
 
-## Behavior contract (applies everywhere)
+Make stays **hidden by default** — only the position changes when it is toggled on.
 
-- Column is **off by default** for both on-screen tables and PDF/Excel exports.
-- Each table gets a small "Columns" toggle (reuse `PdfColumnVisibility` pattern) where the user can flip "Make" on per-session. Preference is stored in `localStorage` per surface (e.g. `boq.columns.make`, `req.columns.make`) so the choice survives reloads but does not affect other users or saved records.
-- PDF / Excel export honors the same toggle: if user enables Make before exporting, the column is included; otherwise the output is **byte-identical to today**.
-- No changes to totals, calculations, layouts of other columns, RLS, workflows, or stored snapshots. The column simply renders if a value is present and the toggle is on.
+Files touched:
 
-## Technical details
+- `src/pages/boqs/BoqEditor.tsx`
+  - `BoqItemsList` grid: move the `showMake` cell to sit between Description and Quantity. Update the `grid-cols-[...]` template so the Make column slot moves accordingly.
+  - Live HTML preview block (`<td>` around line 957): move the Make `<td>` to right after the Description `<td>`.
+- `src/lib/boq/pdf.ts`: change `base.splice(2, …)` → `base.splice(3, …)` and update `headRow`, `approvalIdx`, `columnStyles`, and the `emptyRow` "(no items)" index so Make sits after Description.
+- `src/lib/boq/pdfDistribution.ts`: same column reorder for the distribution PDF.
+- `src/lib/boq/excel.ts`: same column reorder for the Excel export.
 
-### 1. BOQ
-- `src/lib/boq/types.ts`: add optional `make?: string` to `BoqLineItem`. Backward compatible (existing rows have it `undefined`).
-- BOQ generator (`src/lib/revisions/index.ts` `syncBoqsAndPisForOrder` / `createPendingBoqRevision` and any `deriveBoqLineItems` helper): copy `make_label` from OA `LineItem` → `make` on the new `BoqLineItem`. Existing BOQs untouched until next sync/revision.
-- `src/pages/boqs/BoqEditor.tsx`: add a "Make" column gated by a column-visibility state (default hidden) with a toggle button.
-- `src/lib/boq/pdf.ts` + `src/lib/boq/excel.ts` + `src/lib/boq/pdfDistribution.ts`: accept a `showMake` flag (default `false`); when `true`, insert a "Make" column. Existing callers that don't pass it behave exactly as today.
-- `src/components/boqs/DesignReviewPanel.tsx` and `DistributeBoqDialog.tsx`: surface the same toggle when triggering exports.
+No column widths, totals, or default-hidden behaviour change. When `showMake` is false the output is byte-identical to today.
 
-### 2. PI
-- `src/pages/pi/PiEditor.tsx`: add a hidden "Make" column (reads `line_items[].make_label`) with a column-visibility toggle.
-- `src/lib/pi/pdf.ts` + `src/lib/pi/excel.ts`: accept and respect a `showMake` flag.
+## 2. PI — inherit Make from OA, hidden by default in print
 
-### 3. Requisition
-- `src/pages/requisitions/RequisitionDetail.tsx` and `src/pages/requisitions/PublicRequisition.tsx`: add hidden "Make" column inside the grouped RM table (renders `rrm.make`).
-- `src/lib/requisition/pdf.ts`: optional `showMake` flag adding a Make column to the grouped autoTable.
+PI line items already use the OA `LineItem` type, which carries `make_label`. `convertOaToPi` / `syncPiFromOa` in `src/lib/pi/convert.ts` pass `line_items` through unchanged, so OA's Make value is already preserved on the PI record.
 
-### 4. Purchase / Manufacturing
-- `src/pages/modules/ApprovedBoqModule.tsx` (read-only BOQ items table) and any analogous tables in `src/pages/purchase/PurchaseDetail.tsx` / `src/pages/manufacturing/ManufacturingDetail.tsx`: add hidden "Make" column reading from `BoqLineItem.make` (will be empty until BOQ is regenerated/synced from OA).
+The PI PDF also already supports a Make column through the shared `pdfColumns` (`src/lib/orders/pdf.ts` → `case "make": displayMake(it)`), and `PiEditor.tsx` defaults `hiddenPdfColumns` to include `"make"` so it stays hidden on the printable until the user explicitly enables it.
 
-### 5. Shared column-toggle UX
-- Reuse `src/components/orders/PdfColumnVisibility.tsx` pattern (`Columns3` button + popover with checkboxes). For modules without an existing column-defs file, add a tiny per-module `columns.ts` listing the `Make` toggle only (more columns can be added later).
+Verification-only step (no code change expected):
 
-## Explicitly out of scope / untouched
+- Confirm `convertOaToPi` does not strip `make_label` — re-read `src/lib/pi/convert.ts` and the `buildClientCopyItems` helper used at lines 114–115 to make sure `make_label` survives the mapping. If either drops it, add a one-line passthrough (`make_label: item.make_label`) so the OA Make value reaches the PI line item.
+- Confirm the PI PDF columns place Make immediately after Description in the on-screen `PdfColumnVisibility` toggle order; if the shared `pdfColumns` order in `src/lib/orders/pdfColumns.ts` puts Make elsewhere for the PI surface, reorder only the PI usage (not OA) so the printable shows Make right after Description.
 
-- No DB migrations (all needed columns already exist in `requisition_raw_materials`; `boqs.line_items` is `jsonb`).
-- No edits to OA editor, OA PDF, pricing, calc, approval, revision rules, RLS, edge functions, `supabase/config.toml`, or notification feature.
-- No back-fill of existing BOQ rows. Make value only appears on BOQs generated/synced after this change; older BOQs simply render the column blank when toggled on.
+## 3. Consistency guarantee
+
+- BOQ Make continues to come from OA via existing propagation in `src/lib/revisions/index.ts` (`make: it.make_label || prev?.make || ""`).
+- PI Make comes directly from OA `LineItem.make_label` on every convert/sync.
+- Single source of truth = OA item. No new storage, no new write paths.
+
+## Out of scope / untouched
+
+- No DB migrations, no RLS changes, no edge-function changes.
+- No changes to OA editor / OA PDF, calculations, approval rules, revisions, or notifications.
+- No repositioning of the Make column in Requisition / Purchase / Manufacturing surfaces (not requested in this round).
+- Default visibility stays **hidden** on every surface; existing PDFs/Excel without the toggle remain byte-identical.
