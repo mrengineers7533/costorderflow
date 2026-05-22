@@ -438,6 +438,7 @@ export default function BoqEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
+        {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
             Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.
