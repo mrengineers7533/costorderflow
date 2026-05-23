@@ -566,12 +566,15 @@ export default function PiEditor() {
                     );
                   }
                   const showDisc = !!pi.apply_discount && totals.one_time_discount_amount > 0;
-                  const discLbl = (pi.discount_label || "").trim() || "One Time Very Special Discount";
+                  const discLbl = pi.format === "MR"
+                    ? "Discount on Basic Total"
+                    : ((pi.discount_label || "").trim() || "One Time Very Special Discount");
+                  const afterDiscLbl = pi.format === "MR" ? "After Discount Amount" : "After Discount";
                   return (
                     <>
                       <Row label={showDisc ? "Sub Total" : "Basic Total"} value={totals.basic_total} />
                       {showDisc && <Row label={discLbl} value={totals.one_time_discount_amount} />}
-                      {showDisc && <Row label="After Discount" value={totals.basic_after_discount} />}
+                      {showDisc && <Row label={afterDiscLbl} value={totals.basic_after_discount} />}
                       {totals.pf_amount > 0 && <Row label="P&F" value={totals.pf_amount} />}
                       {totals.insurance_amount > 0 && <Row label="Insurance" value={totals.insurance_amount} />}
                       {totals.freight_amount > 0 && <Row label="Freight" value={totals.freight_amount} />}
