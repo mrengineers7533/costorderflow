@@ -1226,7 +1226,17 @@ export default function PiEditor() {
               orderDate={pi.pi_date}
               preparedBy={pi.prepared_by || ""}
               items={buildClientCopyItems(pi.line_items)}
-              charges={{ ...pi.charges, discount_percent: 0 }}
+              charges={
+                pi.format === "MR"
+                  ? {
+                      ...pi.charges,
+                      discount_percent: pi.one_time_discount_percent || 0,
+                      apply_discount:
+                        !!pi.apply_discount && totals.one_time_discount_amount > 0,
+                      discount_label: "Discount on Basic Total",
+                    }
+                  : { ...pi.charges, discount_percent: 0 }
+              }
               totals={{
                 basic_total: totals.basic_total,
                 subtotal: totals.subtotal,
@@ -1248,8 +1258,10 @@ export default function PiEditor() {
                 refLabel: "Ref. OA No.",
                 refValue: pi.reference_oa_number || "-",
                 hideFirstPageFooter: pi.format === "GMS",
+                hideDefaultGrandTotal:
+                  pi.format === "MR" && totals.advance_adjustment_amount > 0,
                 extraTotalsRows: gmsBreakdown ? [] : [
-                  ...(pi.apply_discount && totals.one_time_discount_amount > 0
+                  ...(pi.format !== "MR" && pi.apply_discount && totals.one_time_discount_amount > 0
                     ? [
                         {
                           label: (pi.discount_label || "").trim() || "One Time Very Special Discount",
