@@ -1,49 +1,56 @@
-# MR PI — Discount on Basic Total
 
-Scope: **MR-format PI only**. GMS PI (Turkey / Murthal / CIF Port), OA, BOQ, and all other modules stay exactly as today.
+# MR PI — Fix Review & Export row order only
 
-## Why
+## Problem
 
-`calcPiTotals` already discounts on Basic Total and computes P&F / Insurance / GST on the after-discount value (via `one_time_discount_percent`). The MR PI page is currently exposing a *second*, gross-level discount (`discount_mode`/`discount_value`) labeled "Discount (deducted at the end) % of Gross" — that is the field producing the wrong `Discount @ 50000%` row. We simply need to point the MR PI's right-side discount input at the basic-level discount and tidy up the labels.
+In the MR PI editor's Review & Export panel, `OrderPreview` is given `charges: { ...pi.charges, discount_percent: 0 }`. With `discount_percent = 0`, `showDiscount` is false, so the native totals section renders `Basic Total → P&F → Insurance → Subtotal → GST` and then appends the `extraTotalsRows` (which carry Discount + After Discount + Grand Total + Advance + Net Payable). Result: discount rows appear *after* GST and a duplicate Grand Total shows up.
 
-## Changes
+Download PDF and the editor's top breakdown are already correct and must stay untouched.
 
-### 1. `src/pages/pi/PiEditor.tsx` — MR PI only
+## Scope
 
-- Replace the right-hand **Discount** card field (currently bound to `discount_mode` / `discount_value`) **when `pi.format === "MR"`** with:
-  - Label: **"Discount on Basic Total"** (no "deducted at the end" hint).
-  - Mode toggle kept: `%` (of Basic Total) and `₹ Amount`.
-  - Writes to `one_time_discount_percent` and `apply_discount`:
-    - `%` mode → `one_time_discount_percent = value`, `apply_discount = value > 0`.
-    - `₹` mode → `one_time_discount_percent = basic > 0 ? (amount / basic) * 100 : 0`, `apply_discount = amount > 0`.
-  - Force `discount_value = 0`, `discount_mode = "percent"` on MR so the gross-level PI discount stays out of the calc.
-- GMS PI keeps the existing gross-level discount UI unchanged.
-- Breakdown rows for MR (the non-GMS branch already covers this) just need the label tweak:
-  - `Basic Total` → discount row (using `discount_label` or default "Discount on Basic Total") → **`After Discount Amount`** (rename from "After Discount") → `P&F` → `Insurance` → `GST @ x%` → `Grand Total` → (`Advance Adjustment` if any) → `Net Payable`.
-- Since MR no longer uses `piDiscountAmt`, the trailing "Discount @ x%" row below Grand Total will naturally not render for MR (value is 0).
+- **Only** `src/pages/pi/PiEditor.tsx` (the `<OrderPreview …>` props for MR PI).
+- No changes to `OrderPreview` component, `pdf.ts`, `excel.ts`, `calcPiTotals`, GMS PI, OA, BOQ, or any other module.
 
-### 2. `src/lib/pi/pdf.ts` — MR only
+## Change
 
-- For `pi.format === "MR"`, when `showDiscount` is true, use labels:
-  - Discount row: `"Discount on Basic Total"` (overrides `discount_label` default for MR).
-  - After-discount row: `"After Discount Amount"`.
-- Existing row order already matches the required print order (Basic → Discount → After Discount → P&F → Insurance → GST → Grand Total → Advance → Net Payable) via `generateOrderPDF` + `extraTotalsRows`.
-- GMS/CIF branches untouched.
+In `PiEditor.tsx`, the `<OrderPreview>` props (around lines 1217–1278), branch on `pi.format === "MR"`:
 
-### 3. `src/lib/pi/excel.ts` — MR only
+1. **Charges prop (MR only):** pass discount through so the native totals path renders it in correct order:
+   - `apply_discount: !!pi.apply_discount && totals.one_time_discount_amount > 0`
+   - `discount_percent: pi.one_time_discount_percent`
+   - `discount_label: "Discount on Basic Total"`
+   - Leave every other `pi.charges` field untouched.
 
-- In the MR/generic chain (the `else` branch), when discount applies and `pi.format === "MR"`, push:
-  - `["Discount on Basic Total", fmt(tt.one_time_discount_amount)]`
-  - `["After Discount Amount", fmt(tt.basic_after_discount)]`
-- All other formats and rows unchanged.
+   GMS PI keeps the existing `{ ...pi.charges, discount_percent: 0 }` behavior.
 
-## Out of scope
+2. **extraTotalsRows (MR only):** drop the discount / after-discount entries (now rendered natively). Keep the existing block for advance:
+   - When `totals.advance_adjustment_amount > 0`, push `Grand Total` → `Advance Adjustment …` → `Net Payable` (unchanged).
+   - Keep `Other Charges` entry as today.
 
-- `calcPiTotals` math, GMS modes, OA, BOQ, advance-adjustment behavior, currency conversion, `OrderPreview`, DB schema/migrations, save payload shape (uses existing fields), other PDF/Excel paths.
+3. **hideDefaultGrandTotal (MR only):** add `hideDefaultGrandTotal: true` to `docMeta` when the MR `extraTotalsRows` already include a Grand Total row (i.e. when advance > 0), to avoid a duplicate trailing Grand Total. When there is no advance, leave it false so the native Grand Total renders after GST.
+
+Net result for MR PI Review & Export, matching Download / top display:
+
+```
+Sub Total
+Discount on Basic Total
+After Discount Amount
+P&F
+Insurance
+GST
+Grand Total
+Advance Adjustment
+Net Payable
+```
+
+The "After Discount" label rendered by `OrderPreview` currently reads `After Discount` (not `After Discount Amount`). The user explicitly only requires the *order* to match — Download PDF already renders `After Discount Amount` — but the Review panel will say `After Discount`. If they want the label tweak too, that's a one-line follow-up; not changing `OrderPreview` keeps this fix scoped to the editor file only.
 
 ## Verification
 
-On an MR PI:
-1. Enter `10%` (or `₹1,500`) in the new "Discount on Basic Total" field. Editor breakdown shows: Basic Total ₹15,000 → Discount on Basic Total ₹1,500 → After Discount Amount ₹13,500 → P&F (on 13,500) → Insurance (on 13,500) → GST 18% (on after-discount + P&F + Insurance) → Grand Total → Advance Adjustment → Net Payable.
-2. Download PDF and Excel — same rows in same order with the renamed labels.
-3. Open a GMS PI — discount UI, math, PDF, Excel all unchanged.
+MR PI with `1 × ₹15,000`, Discount 10%, P&F 1.5%, Insurance 0.071%, GST 18%, Advance 10%:
+- Review & Export shows: Sub Total ₹15,000 → Discount on Basic Total ₹1,500 → After Discount ₹13,500 → P&F (on 13,500) → Insurance (on 13,500) → GST 18% → Grand Total → Advance Adjustment @10% → Net Payable. No duplicate Grand Total.
+- Top calculation display: unchanged.
+- Download PDF: unchanged.
+- GMS PI Review & Export: unchanged.
+- OA / BOQ: unchanged.
