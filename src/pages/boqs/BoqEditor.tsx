@@ -26,7 +26,7 @@ import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designRevie
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
-import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestSubmittedRound } from "@/lib/boq/designReview";
+import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestApprovalRound } from "@/lib/boq/designReview";
 import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
@@ -99,9 +99,8 @@ export default function BoqEditor() {
     let cancelled = false;
     (async () => {
       try {
-        const latest = await fetchLatestSubmittedRound(boqId);
+        const latest = await fetchLatestApprovalRound(boqId);
         if (!latest || cancelled) return;
-        if (latest.round.kind !== "approval") return;
         const byId = new Map(latest.items.map((r) => [r.boq_item_id, r]));
         const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
         const byDesc = new Map<string, typeof latest.items[number]>();
