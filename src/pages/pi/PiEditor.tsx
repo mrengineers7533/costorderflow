@@ -180,6 +180,11 @@ export default function PiEditor() {
   })();
   const piDiscountAmt = (() => {
     if (!pi) return 0;
+    // MR PI uses one_time_discount_percent (Basic-Total discount) instead of
+    // the gross-level PI discount. discount_value here is only the displayed
+    // input value for the "Discount on Basic Total" field — never re-applied
+    // on the gross.
+    if (pi.format === "MR") return 0;
     const mode = pi.discount_mode || "percent";
     const v = pi.discount_value || 0;
     if (mode === "amount") return Math.max(0, v);
