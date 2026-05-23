@@ -91,15 +91,18 @@ export async function generatePiPDF(
   const showDiscount =
     (pi.apply_discount ?? (pi.one_time_discount_percent > 0)) &&
     t.one_time_discount_amount > 0;
-  const discountLabel = (pi.discount_label || "One Time Very Special Discount").trim()
-    || "One Time Very Special Discount";
+  const discountLabel = pi.format === "MR"
+    ? "Discount on Basic Total"
+    : ((pi.discount_label || "One Time Very Special Discount").trim()
+        || "One Time Very Special Discount");
+  const afterDiscountLabel = pi.format === "MR" ? "After Discount Amount" : "After Discount";
   if (showDiscount) {
     extraTotalsRows.push({
       label: discountLabel,
       value: t.one_time_discount_amount,
     });
     extraTotalsRows.push({
-      label: "After Discount",
+      label: afterDiscountLabel,
       value: t.basic_after_discount,
     });
   }
