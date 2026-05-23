@@ -28,7 +28,25 @@
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-initial-loader" style="position:fixed;inset:0;display:grid;place-items:center;background:#fff;z-index:9999;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:20px;">
+          <div style="position:relative;height:80px;width:80px;border-radius:16px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 10px 25px -10px rgba(234,88,12,.35);display:grid;place-items:center;overflow:hidden;">
+            <div style="position:absolute;inset:0;border-radius:16px;background:radial-gradient(circle at center, rgba(234,88,12,.18), transparent 70%);animation:appPulse 1.6s ease-in-out infinite;"></div>
+            <div style="position:relative;width:36px;height:36px;border-radius:50%;border:3px solid rgba(234,88,12,.18);border-top-color:#ea580c;animation:appSpin .9s linear infinite;"></div>
+          </div>
+          <div style="height:4px;width:160px;background:#f1f5f9;border-radius:9999px;overflow:hidden;position:relative;">
+            <div style="position:absolute;inset:0;width:40%;background:#ea580c;border-radius:9999px;animation:appBar 1.4s ease-in-out infinite;"></div>
+          </div>
+          <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;font-weight:600;">Loading</div>
+        </div>
+      </div>
+      <style>
+        @keyframes appSpin { to { transform: rotate(360deg); } }
+        @keyframes appPulse { 0%,100% { opacity:.4; } 50% { opacity:1; } }
+        @keyframes appBar { 0% { transform:translateX(-100%); } 50% { transform:translateX(150%); } 100% { transform:translateX(400%); } }
+      </style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
