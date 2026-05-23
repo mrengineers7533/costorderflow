@@ -62,9 +62,13 @@ export async function generatePiPDF(
     : Math.max(0, (grandForPi * (pi.advance_adjustment_percent || 0)) / 100);
   const piDiscMode = pi.discount_mode || "percent";
   const piDiscValue = pi.discount_value || 0;
-  const piDiscAmt = piDiscMode === "amount"
-    ? Math.max(0, piDiscValue)
-    : Math.max(0, (grandForPi * piDiscValue) / 100);
+  // MR PI's discount_value drives Basic-Total discount (one_time_discount_percent),
+  // not a gross-level discount — never apply it on top of grand total.
+  const piDiscAmt = pi.format === "MR"
+    ? 0
+    : (piDiscMode === "amount"
+        ? Math.max(0, piDiscValue)
+        : Math.max(0, (grandForPi * piDiscValue) / 100));
   const piNet = Math.max(0, grandForPi - piAdvOnGrand - piDiscAmt);
 
   const extraTotalsRows: ExtraTotalsRow[] = [];
