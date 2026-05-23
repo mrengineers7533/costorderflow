@@ -133,9 +133,11 @@ export function buildPiXlsx(pi: PiRecord): Blob {
     );
     chain.push(["Basic Total", fmt(tt.basic_total)]);
     if ((pi.apply_discount ?? (pi.one_time_discount_percent > 0)) && tt.one_time_discount_amount > 0) {
-      const lbl = (pi.discount_label || "One Time Very Special Discount").trim() || "Discount";
+      const lbl = pi.format === "MR"
+        ? "Discount on Basic Total"
+        : ((pi.discount_label || "One Time Very Special Discount").trim() || "Discount");
       chain.push([lbl, fmt(tt.one_time_discount_amount)]);
-      chain.push(["After Discount", fmt(tt.basic_after_discount)]);
+      chain.push([pi.format === "MR" ? "After Discount Amount" : "After Discount", fmt(tt.basic_after_discount)]);
     }
     if (tt.pf_amount > 0) chain.push(["P&F", fmt(tt.pf_amount)]);
     if (tt.insurance_amount > 0) chain.push(["Insurance", fmt(tt.insurance_amount)]);
