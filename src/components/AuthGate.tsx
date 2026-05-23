@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, User as UserIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import gmsLogo from "@/assets/gms-logo.png";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 const FALLBACK_DOMAINS = ["fmec.in", "gmsdelhi.com", "mrengineers.com"];
 
@@ -61,7 +62,7 @@ export function AuthGate({ children }: { children: (user: User) => React.ReactNo
   }, []);
 
   if (loading) {
-    return <div className="min-h-screen grid place-items-center text-muted-foreground">Checking secure session…</div>;
+    return <LoadingScreen label="Checking secure session" />;
   }
   if (!session?.user) return <AuthForm />;
   return <>{children(session.user)}</>;
