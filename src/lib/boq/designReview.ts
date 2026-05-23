@@ -226,6 +226,23 @@ export async function fetchLatestSubmittedRound(boqId: string): Promise<{ round:
   return { round, items, docs };
 }
 
+/** Fetch latest approval round (any status) + its items for a BOQ.
+ *  Used so per-item decisions made by the designer reflect in the editor
+ *  Approval column even before the round is formally submitted. */
+export async function fetchLatestApprovalRound(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
+  const { data } = await supabase
+    .from("boq_design_reviews")
+    .select("*")
+    .eq("boq_id", boqId)
+    .eq("kind", "approval")
+    .order("round_no", { ascending: false })
+    .limit(1);
+  const round = data?.[0] as unknown as DesignReviewRow | undefined;
+  if (!round) return null;
+  const [items, docs] = await Promise.all([fetchReviewItems(round.id), fetchReviewDocs(round.id)]);
+  return { round, items, docs };
+}
+
 /** Fetch the baseline BOQ snapshot from the latest **comment** review round.
  *  Items are the BOQ state at the moment that comment link was generated —
  *  i.e. "Previous Data" before the creator applied any updates. */
