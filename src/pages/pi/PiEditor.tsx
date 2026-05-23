@@ -180,6 +180,11 @@ export default function PiEditor() {
   })();
   const piDiscountAmt = (() => {
     if (!pi) return 0;
+    // MR PI uses one_time_discount_percent (Basic-Total discount) instead of
+    // the gross-level PI discount. discount_value here is only the displayed
+    // input value for the "Discount on Basic Total" field — never re-applied
+    // on the gross.
+    if (pi.format === "MR") return 0;
     const mode = pi.discount_mode || "percent";
     const v = pi.discount_value || 0;
     if (mode === "amount") return Math.max(0, v);
@@ -442,9 +447,61 @@ export default function PiEditor() {
                 </div>
                 <div>
                   <Label>
-                    Discount{" "}
-                    <span className="text-muted-foreground text-xs">(deducted at the end)</span>
+                    {pi.format === "MR" ? (
+                      "Discount on Basic Total"
+                    ) : (
+                      <>
+                        Discount{" "}
+                        <span className="text-muted-foreground text-xs">(deducted at the end)</span>
+                      </>
+                    )}
                   </Label>
+                  {pi.format === "MR" ? (
+                    <div className="flex gap-2">
+                      <select
+                        className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                        value={pi.discount_mode || "percent"}
+                        onChange={(e) => {
+                          const newMode = e.target.value as "amount" | "percent";
+                          const basic = totals.basic_total || 0;
+                          const curVal = pi.discount_value || 0;
+                          // Recompute one_time_discount_percent for the new mode
+                          // using the same displayed value.
+                          const pct = newMode === "percent"
+                            ? curVal
+                            : basic > 0 ? (curVal / basic) * 100 : 0;
+                          setPi((cur) => cur ? {
+                            ...cur,
+                            discount_mode: newMode,
+                            one_time_discount_percent: pct,
+                            apply_discount: curVal > 0,
+                          } : cur);
+                        }}
+                      >
+                        <option value="percent">% of Basic</option>
+                        <option value="amount">₹ Amount</option>
+                      </select>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        max={(pi.discount_mode || "percent") === "percent" ? 100 : undefined}
+                        value={pi.discount_value || 0}
+                        onChange={(e) => {
+                          const v = Number(e.target.value) || 0;
+                          const mode = pi.discount_mode || "percent";
+                          const basic = totals.basic_total || 0;
+                          const pct = mode === "percent"
+                            ? v
+                            : basic > 0 ? (v / basic) * 100 : 0;
+                          setPi((cur) => cur ? {
+                            ...cur,
+                            discount_value: v,
+                            one_time_discount_percent: pct,
+                            apply_discount: v > 0,
+                          } : cur);
+                        }}
+                      />
+                    </div>
+                  ) : (
                   <div className="flex gap-2">
                     <select
                       className="h-10 rounded-md border border-input bg-background px-2 text-sm"
@@ -461,6 +518,7 @@ export default function PiEditor() {
                       onChange={(e) => update("discount_value", Number(e.target.value))}
                     />
                   </div>
+                  )}
                 </div>
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
@@ -508,12 +566,15 @@ export default function PiEditor() {
                     );
                   }
                   const showDisc = !!pi.apply_discount && totals.one_time_discount_amount > 0;
-                  const discLbl = (pi.discount_label || "").trim() || "One Time Very Special Discount";
+                  const discLbl = pi.format === "MR"
+                    ? "Discount on Basic Total"
+                    : ((pi.discount_label || "").trim() || "One Time Very Special Discount");
+                  const afterDiscLbl = pi.format === "MR" ? "After Discount Amount" : "After Discount";
                   return (
                     <>
                       <Row label={showDisc ? "Sub Total" : "Basic Total"} value={totals.basic_total} />
                       {showDisc && <Row label={discLbl} value={totals.one_time_discount_amount} />}
-                      {showDisc && <Row label="After Discount" value={totals.basic_after_discount} />}
+                      {showDisc && <Row label={afterDiscLbl} value={totals.basic_after_discount} />}
                       {totals.pf_amount > 0 && <Row label="P&F" value={totals.pf_amount} />}
                       {totals.insurance_amount > 0 && <Row label="Insurance" value={totals.insurance_amount} />}
                       {totals.freight_amount > 0 && <Row label="Freight" value={totals.freight_amount} />}
