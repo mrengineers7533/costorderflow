@@ -1,41 +1,21 @@
-## Add "Create User" to Access Control (admin-only)
+## Goal
+Make the "Generate Approval Link" button always enabled so users can regenerate the approval link anytime — even after a comment submission, without waiting for a BOQ save.
 
-Extend the existing **Admin → Access Control** page (`/admin/access`) with a new **+ Add User** button, plus inline controls to disable/block users and quick-edit access. Existing per-module checkbox grid, `AdminUsers` page, edit dialog, reset-password dialog, and delete flow remain untouched.
+## Change (single, surgical)
+File: `src/components/boqs/DesignReviewPanel.tsx`
 
-### What admin can do from Access Control
-1. **+ Add User** (top-right button) opens a dialog:
-   - Email (required, validated, must be from an allowed domain)
-   - Full name (optional)
-   - Auth method (radio):
-     - **Set password now** — type a password (min 8 chars)
-     - **Send invite / reset email** — uses Supabase invite/reset link
-   - Module access checkboxes (same `MODULES` list used in the grid). Optional preset shortcuts: *Purchase only*, *Manufacturing only*, *Requisition only*, *Costing only*, *Full access (admin)*.
-   - Make admin? (switch) — grants `admin` role instead of per-module rows.
-2. **Disable / Enable** toggle per row (uses existing `admin-set-user-active` edge function — also revokes sessions).
-3. **Edit access** is already the checkbox grid; no change needed.
-4. Quick links per row to existing **Edit / Reset / Delete** actions (reuse dialogs from `AdminUsers.tsx`).
+Remove the `approvalGated` lock on the Approval Link button. The button stays hidden when the BOQ is locked (`design_approved` / `final_sent`), which preserves the existing post-approval flow.
 
-### Access enforcement
-- Page already sits behind `RequireAdmin`. All new mutations additionally check `useUserRole().isAdmin` client-side; server-side enforcement is handled by edge functions (service-role) and existing RLS on `user_module_access` / `user_roles` (admin-only writes).
+- Drop the `approvalGated` variable (lines ~164–168).
+- In the Approval button (lines ~199–209):
+  - `disabled={!!creating || !boq.id}` (remove `|| approvalGated`)
+  - Remove the gated `title` tooltip.
 
-### Backend
-- **New edge function `admin-create-user`** (verify_jwt = false; validates caller is admin via JWT + service-role client):
-  - Input: `{ email, full_name?, password?, send_invite?: boolean, is_admin?: boolean, modules?: string[] }`
-  - Validates email domain against `allowed_domains`.
-  - If `password` provided → `auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } })`.
-  - Else → `auth.admin.inviteUserByEmail(email, { data: { full_name } })`.
-  - On success, inserts role row (`admin` or `user`) and any `user_module_access` rows.
-  - Returns created `user_id` or structured error (e.g. `email_in_use`, `domain_not_allowed`).
-- No DB migration required — uses existing `user_module_access`, `user_roles`, `profiles`, `allowed_domains` tables. `handle_new_user` trigger will auto-create the profile row.
+## Out of scope (unchanged)
+- Comment link flow, OA auto-save, BOQ auto-update, revision snapshots, status transitions, RLS, edge functions, calculations.
+- `isLocked` behavior after design approval / final sent stays as-is.
+- No DB / migration / backend changes.
 
-### Frontend changes
-- **`src/pages/admin/AdminAccess.tsx`**: add toolbar with **+ Add User** button and per-row Active toggle + action menu (Edit / Reset / Delete). Refresh list after mutations.
-- **New `src/components/admin/CreateUserDialog.tsx`**: form described above; calls `admin-create-user` edge function; on success calls `onCreated()` to refresh.
-- Reuse existing `EditUserDialog`, `ResetPasswordDialog`, delete `AlertDialog` from `AdminUsers.tsx` by extracting them into `src/components/admin/UserRowActions.tsx` (pure refactor — `AdminUsers` keeps working identically).
-
-### Out of scope (unchanged)
-- Existing `/admin/users` page, role logic, RLS policies, module gating, sidebar filtering, notifications, business workflows.
-
-### Files
-- New: `supabase/functions/admin-create-user/index.ts`, `src/components/admin/CreateUserDialog.tsx`, `src/components/admin/UserRowActions.tsx`
-- Edited (additive): `src/pages/admin/AdminAccess.tsx`, `src/pages/admin/AdminUsers.tsx` (import shared row actions)
+## Verification
+- Submit a comment round → "Generate Approval Link" remains enabled and creates a new round.
+- Generate multiple approval links in succession → each creates a new round (R+1) with no side effects on OA or BOQ data.

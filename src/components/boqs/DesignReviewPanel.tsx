@@ -162,10 +162,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const needsChanges = latestApprovalSubmitted?.overall_outcome === "changes_required" || designReviewStatus === "changes_required";
   const isLocked = designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
   const hasSubmittedComment = rounds.some((r) => r.kind === "comment" && r.status === "submitted");
-  const approvalGated = hasSubmittedComment
-    && designReviewStatus !== "boq_updated"
-    && designReviewStatus !== "design_approved"
-    && designReviewStatus !== "final_sent";
+  // Approval link is always available (unless the BOQ is locked via isLocked below).
+  void hasSubmittedComment;
   const docsByItem = openDocs.reduce<Record<string, DesignReviewDocRow[]>>((m, d) => {
     const k = d.boq_item_id || "_general";
     (m[k] ||= []).push(d); return m;
@@ -200,8 +198,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
             <Button
               size="sm"
               onClick={() => handleCreate("approval")}
-              disabled={!!creating || !boq.id || approvalGated}
-              title={approvalGated ? "Save the updated BOQ first (after Design comments) before generating an Approval link." : undefined}
+              disabled={!!creating || !boq.id}
             >
               {creating === "approval" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
               Generate Approval Link
