@@ -399,7 +399,7 @@ export function OrderPreview(p: Props) {
                       {p.format === "MR" && p.charges.mr_advance_enabled && (() => {
                         const mode = p.charges.mr_advance_mode || "percent";
                         const adv = mode === "percent"
-                          ? (p.totals.basic_total * (p.charges.mr_advance_percent || 0)) / 100
+                          ? ((p.totals.basic_total - discountAmount) * (p.charges.mr_advance_percent || 0)) / 100
                           : (p.charges.mr_advance_amount || 0);
                         if (adv <= 0) return null;
                         const lbl = mode === "percent"

@@ -176,9 +176,10 @@ export default function PiEditor() {
     if (!pi) return 0;
     const mode = pi.advance_mode || "percent";
     if (mode === "amount") return Math.max(0, pi.advance_amount || 0);
-    // MR PI: Advance % is computed on Basic Total (not Grand Total).
+    // MR PI: Advance % is computed on Discounted Basic Total
+    // (falls back to Basic Total when no discount).
     const base = pi.format === "MR"
-      ? (totals?.basic_total ?? 0)
+      ? (totals?.basic_after_discount ?? totals?.basic_total ?? 0)
       : effectiveGrand;
     return Math.max(0, (base * (pi.advance_adjustment_percent || 0)) / 100);
   })();
