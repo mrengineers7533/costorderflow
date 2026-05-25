@@ -131,6 +131,14 @@ export function buildPiXlsx(pi: PiRecord): Blob {
       { mode: advMode, value: advValue },
       pi.other_charges || 0,
     );
+    // MR PI: Advance % must compute on Basic Total. calcPiTotals applies it
+    // on the gross — recompute & override here for MR (percent mode only).
+    let mrAdvAmt = tt.advance_adjustment_amount;
+    let mrNet = tt.net_payable_pi;
+    if (pi.format === "MR" && advMode === "percent") {
+      mrAdvAmt = Math.max(0, (tt.basic_total * (pi.advance_adjustment_percent || 0)) / 100);
+      mrNet = Math.max(0, tt.gross_invoice_total - mrAdvAmt);
+    }
     chain.push(["Basic Total", fmt(tt.basic_total)]);
     if ((pi.apply_discount ?? (pi.one_time_discount_percent > 0)) && tt.one_time_discount_amount > 0) {
       const lbl = pi.format === "MR"
@@ -145,8 +153,8 @@ export function buildPiXlsx(pi: PiRecord): Blob {
     if (tt.other_charges_amount > 0) chain.push(["Other Charges", fmt(tt.other_charges_amount)]);
     chain.push([`GST @ ${c.gst_percent || 0}%`, fmt(tt.gst_amount)]);
     chain.push(["Grand Total", fmt(tt.gross_invoice_total)]);
-    if (tt.advance_adjustment_amount > 0) chain.push(["Advance Adjustment", fmt(tt.advance_adjustment_amount)]);
-    chain.push(["Net Payable", fmt(tt.net_payable_pi)]);
+    if (mrAdvAmt > 0) chain.push(["Advance Adjustment", fmt(mrAdvAmt)]);
+    chain.push(["Net Payable", fmt(mrNet)]);
   }
 
   const tail: (string | number)[][] = [

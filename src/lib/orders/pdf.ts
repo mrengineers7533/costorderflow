@@ -300,7 +300,7 @@ export async function generateOrderPDF(
     if (order.format === "MR" && c.mr_advance_enabled) {
       const mode = c.mr_advance_mode || "percent";
       const adv = mode === "percent"
-        ? (grand * (c.mr_advance_percent || 0)) / 100
+        ? (t.basic_total * (c.mr_advance_percent || 0)) / 100
         : (c.mr_advance_amount || 0);
       if (adv > 0) {
         const lbl = mode === "percent"

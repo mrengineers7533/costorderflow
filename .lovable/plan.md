@@ -1,56 +1,47 @@
-
-# MR PI — Fix Review & Export row order only
-
-## Problem
-
-In the MR PI editor's Review & Export panel, `OrderPreview` is given `charges: { ...pi.charges, discount_percent: 0 }`. With `discount_percent = 0`, `showDiscount` is false, so the native totals section renders `Basic Total → P&F → Insurance → Subtotal → GST` and then appends the `extraTotalsRows` (which carry Discount + After Discount + Grand Total + Advance + Net Payable). Result: discount rows appear *after* GST and a duplicate Grand Total shows up.
-
-Download PDF and the editor's top breakdown are already correct and must stay untouched.
+# Advance Adjustment on Basic Total + OA→PI charge editability
 
 ## Scope
 
-- **Only** `src/pages/pi/PiEditor.tsx` (the `<OrderPreview …>` props for MR PI).
-- No changes to `OrderPreview` component, `pdf.ts`, `excel.ts`, `calcPiTotals`, GMS PI, OA, BOQ, or any other module.
+Two changes — **MR only** (OA + PI). GMS Turkey/Murthal, BOQ, exports for non-MR flows: untouched.
 
-## Change
+---
 
-In `PiEditor.tsx`, the `<OrderPreview>` props (around lines 1217–1278), branch on `pi.format === "MR"`:
+## 1. Advance Adjustment base → Basic Total (MR OA + MR PI)
 
-1. **Charges prop (MR only):** pass discount through so the native totals path renders it in correct order:
-   - `apply_discount: !!pi.apply_discount && totals.one_time_discount_amount > 0`
-   - `discount_percent: pi.one_time_discount_percent`
-   - `discount_label: "Discount on Basic Total"`
-   - Leave every other `pi.charges` field untouched.
+Today: `Advance Amount = Grand Total × adv%`. New: `Advance Amount = Basic Total × adv%`. Flat-₹ mode unchanged. `Net Payable = Grand Total − Advance` (same as today).
 
-   GMS PI keeps the existing `{ ...pi.charges, discount_percent: 0 }` behavior.
+Files to update (percent branch only — replace the multiplier base with `basic_total`):
 
-2. **extraTotalsRows (MR only):** drop the discount / after-discount entries (now rendered natively). Keep the existing block for advance:
-   - When `totals.advance_adjustment_amount > 0`, push `Grand Total` → `Advance Adjustment …` → `Net Payable` (unchanged).
-   - Keep `Other Charges` entry as today.
+- `src/pages/orders/OrderEditor.tsx` (~line 1846) — MR live breakdown.
+- `src/components/orders/OrderPreview.tsx` (~line 402) — Review/Export preview for MR OA.
+- `src/lib/orders/pdf.ts` (~line 303) — MR OA PDF.
+- `src/pages/pi/PiEditor.tsx` (~line 179, `piAdvanceAmt`) — MR PI live breakdown.
+- `src/lib/pi/pdf.ts` (~line 61) — MR PI PDF.
+- `src/lib/pi/excel.ts` (~line 123–126) — MR PI Excel (recompute amount from basic when percent mode).
 
-3. **hideDefaultGrandTotal (MR only):** add `hideDefaultGrandTotal: true` to `docMeta` when the MR `extraTotalsRows` already include a Grand Total row (i.e. when advance > 0), to avoid a duplicate trailing Grand Total. When there is no advance, leave it false so the native Grand Total renders after GST.
+In each spot, gate the new base on `format === "MR"` (PI: `pi.format === "MR"`). GMS Turkey/Murthal advance logic in `src/lib/orders/calc.ts` (`calcExTurkey`, `calcExMurthal`) and corresponding preview/PDF branches stay on Grand-Total base.
 
-Net result for MR PI Review & Export, matching Download / top display:
+Label stays `Advance Adjustment @ N%` (matches user's example).
 
-```
-Sub Total
-Discount on Basic Total
-After Discount Amount
-P&F
-Insurance
-GST
-Grand Total
-Advance Adjustment
-Net Payable
-```
+## 2. OA → PI charges carry over + manual edit on MR PI
 
-The "After Discount" label rendered by `OrderPreview` currently reads `After Discount` (not `After Discount Amount`). The user explicitly only requires the *order* to match — Download PDF already renders `After Discount Amount` — but the Review panel will say `After Discount`. If they want the label tweak too, that's a one-line follow-up; not changing `OrderPreview` keeps this fix scoped to the editor file only.
+`src/lib/pi/convert.ts` already copies `oa.charges` into the new PI (line 217) so carry-over works. Gap is editability: MR PI editor currently only exposes Advance + Discount and says "Charges, discount, taxes mirror the OA."
 
-## Verification
+Update `src/pages/pi/PiEditor.tsx` MR branch (the "PI adjustments" card, ~line 411–600):
 
-MR PI with `1 × ₹15,000`, Discount 10%, P&F 1.5%, Insurance 0.071%, GST 18%, Advance 10%:
-- Review & Export shows: Sub Total ₹15,000 → Discount on Basic Total ₹1,500 → After Discount ₹13,500 → P&F (on 13,500) → Insurance (on 13,500) → GST 18% → Grand Total → Advance Adjustment @10% → Net Payable. No duplicate Grand Total.
-- Top calculation display: unchanged.
-- Download PDF: unchanged.
-- GMS PI Review & Export: unchanged.
-- OA / BOQ: unchanged.
+- Add editable inputs for `pi.charges.pf_percent` / `pf_amount`, `insurance_percent` / `insurance`, `freight_enabled` + `freight`, `gst_percent`. Pre-filled from OA (already in `pi.charges`); user can edit or add missing ones.
+- Each writes via `update("charges", { ...pi.charges, <field>: v })`, which already flows through `calcPiTotals` and persists on save.
+- Drop the "mirror the OA" helper text; replace with "Charges carry over from the OA — edit if needed."
+
+GMS PI charges UI: unchanged.
+
+## 3. Verification
+
+User's example (MR): Basic 23,000; P&F 1.5% = 345; Subtotal 23,345; GST 18% = 4,202.10; Grand 27,547.10. Advance 10% on Basic = 2,300. Net Payable = 25,247.10. Verify in: MR OA live breakdown, OA Review/Export preview, OA PDF, MR PI live breakdown, PI PDF, PI Excel.
+
+Also verify: editing P&F / Insurance / Freight / GST on a freshly-created MR PI updates the totals and saves; GMS PI (Turkey / Murthal / CIF) Review/Export/PDF unchanged; GMS Turkey/Murthal advance still uses Grand-Total base.
+
+## Out of scope
+
+- `calcPiTotals` signature and OA `calc.ts` Turkey/Murthal logic — not touched.
+- BOQ, OA→PI conversion logic (only the editor UI gains inputs), discount label/order, GMS PI editor.

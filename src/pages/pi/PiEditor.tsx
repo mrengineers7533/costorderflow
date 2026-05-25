@@ -176,7 +176,11 @@ export default function PiEditor() {
     if (!pi) return 0;
     const mode = pi.advance_mode || "percent";
     if (mode === "amount") return Math.max(0, pi.advance_amount || 0);
-    return Math.max(0, (effectiveGrand * (pi.advance_adjustment_percent || 0)) / 100);
+    // MR PI: Advance % is computed on Basic Total (not Grand Total).
+    const base = pi.format === "MR"
+      ? (totals?.basic_total ?? 0)
+      : effectiveGrand;
+    return Math.max(0, (base * (pi.advance_adjustment_percent || 0)) / 100);
   })();
   const piDiscountAmt = (() => {
     if (!pi) return 0;
@@ -412,7 +416,7 @@ export default function PiEditor() {
               <CardHeader>
                 <CardTitle className="text-base">PI adjustments</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Charges, discount, taxes mirror the OA. Only Advance Adjustment is editable.
+                  Charges carry over from the OA — edit if needed.
                 </p>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -520,6 +524,50 @@ export default function PiEditor() {
                   </div>
                   )}
                 </div>
+                {pi.format === "MR" && (
+                  <>
+                    <div>
+                      <Label>P&F %</Label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        value={pi.charges.pf_percent || 0}
+                        onChange={(e) => update("charges", { ...pi.charges, pf_percent: Number(e.target.value), pf_amount: 0 })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Insurance %</Label>
+                      <Input
+                        type="number" step="0.001" min={0}
+                        value={pi.charges.insurance_percent || 0}
+                        onChange={(e) => update("charges", { ...pi.charges, insurance_percent: Number(e.target.value), insurance: 0 })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!!pi.charges.freight_enabled}
+                          onChange={(e) => update("charges", { ...pi.charges, freight_enabled: e.target.checked })}
+                        />
+                        Freight (₹)
+                      </Label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        disabled={!pi.charges.freight_enabled}
+                        value={pi.charges.freight || 0}
+                        onChange={(e) => update("charges", { ...pi.charges, freight: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label>GST %</Label>
+                      <Input
+                        type="number" step="0.01" min={0}
+                        value={pi.charges.gst_percent || 0}
+                        onChange={(e) => update("charges", { ...pi.charges, gst_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
               <CardContent className="border-t pt-3 text-sm space-y-1">
                 {(() => {
