@@ -1,47 +1,34 @@
-# Advance Adjustment on Basic Total + OA→PI charge editability
+## Goal
+MR Advance Adjustment % base:
+- Discount applied → calculate on **Discounted Basic Total** (Basic − Discount)
+- No discount → calculate on **Basic Total**
 
-## Scope
+Applies only to MR (OA + PI). Flat-₹ advance mode and all other modules unchanged.
 
-Two changes — **MR only** (OA + PI). GMS Turkey/Murthal, BOQ, exports for non-MR flows: untouched.
+Since `basic_after_discount` already equals `basic_total` when no discount, switching the base to the discounted value naturally handles both cases.
 
----
+## Files to change
 
-## 1. Advance Adjustment base → Basic Total (MR OA + MR PI)
+1. **`src/pages/orders/OrderEditor.tsx`** (MR OA live breakdown, ~line 1846)
+   - Advance base → `totals.basic_total - (showDisc ? rawDisc : 0)` (both already computed at ~1804).
 
-Today: `Advance Amount = Grand Total × adv%`. New: `Advance Amount = Basic Total × adv%`. Flat-₹ mode unchanged. `Net Payable = Grand Total − Advance` (same as today).
+2. **`src/components/orders/OrderPreview.tsx`** (MR OA Review/Export, ~line 402)
+   - Advance base → `p.totals.basic_total - discountAmount` (already computed at line 139).
 
-Files to update (percent branch only — replace the multiplier base with `basic_total`):
+3. **`src/lib/orders/pdf.ts`** (MR OA PDF, ~line 303)
+   - Advance base → `t.basic_total - (showDiscount ? rawDiscount : 0)` (already in scope at line 253).
 
-- `src/pages/orders/OrderEditor.tsx` (~line 1846) — MR live breakdown.
-- `src/components/orders/OrderPreview.tsx` (~line 402) — Review/Export preview for MR OA.
-- `src/lib/orders/pdf.ts` (~line 303) — MR OA PDF.
-- `src/pages/pi/PiEditor.tsx` (~line 179, `piAdvanceAmt`) — MR PI live breakdown.
-- `src/lib/pi/pdf.ts` (~line 61) — MR PI PDF.
-- `src/lib/pi/excel.ts` (~line 123–126) — MR PI Excel (recompute amount from basic when percent mode).
+4. **`src/pages/pi/PiEditor.tsx`** (MR PI `piAdvanceAmt`)
+   - Advance base → `totals.basic_after_discount` instead of `totals.basic_total`.
 
-In each spot, gate the new base on `format === "MR"` (PI: `pi.format === "MR"`). GMS Turkey/Murthal advance logic in `src/lib/orders/calc.ts` (`calcExTurkey`, `calcExMurthal`) and corresponding preview/PDF branches stay on Grand-Total base.
+5. **`src/lib/pi/pdf.ts`** (MR PI PDF, `piAdvOnGrand`)
+   - Advance base → `t.basic_after_discount`.
 
-Label stays `Advance Adjustment @ N%` (matches user's example).
+6. **`src/lib/pi/excel.ts`** (MR PI Excel, ~line 139)
+   - Advance base → `tt.basic_after_discount`.
 
-## 2. OA → PI charges carry over + manual edit on MR PI
-
-`src/lib/pi/convert.ts` already copies `oa.charges` into the new PI (line 217) so carry-over works. Gap is editability: MR PI editor currently only exposes Advance + Discount and says "Charges, discount, taxes mirror the OA."
-
-Update `src/pages/pi/PiEditor.tsx` MR branch (the "PI adjustments" card, ~line 411–600):
-
-- Add editable inputs for `pi.charges.pf_percent` / `pf_amount`, `insurance_percent` / `insurance`, `freight_enabled` + `freight`, `gst_percent`. Pre-filled from OA (already in `pi.charges`); user can edit or add missing ones.
-- Each writes via `update("charges", { ...pi.charges, <field>: v })`, which already flows through `calcPiTotals` and persists on save.
-- Drop the "mirror the OA" helper text; replace with "Charges carry over from the OA — edit if needed."
-
-GMS PI charges UI: unchanged.
-
-## 3. Verification
-
-User's example (MR): Basic 23,000; P&F 1.5% = 345; Subtotal 23,345; GST 18% = 4,202.10; Grand 27,547.10. Advance 10% on Basic = 2,300. Net Payable = 25,247.10. Verify in: MR OA live breakdown, OA Review/Export preview, OA PDF, MR PI live breakdown, PI PDF, PI Excel.
-
-Also verify: editing P&F / Insurance / Freight / GST on a freshly-created MR PI updates the totals and saves; GMS PI (Turkey / Murthal / CIF) Review/Export/PDF unchanged; GMS Turkey/Murthal advance still uses Grand-Total base.
-
-## Out of scope
-
-- `calcPiTotals` signature and OA `calc.ts` Turkey/Murthal logic — not touched.
-- BOQ, OA→PI conversion logic (only the editor UI gains inputs), discount label/order, GMS PI editor.
+## Verification
+- With discount (user example): Basic 23,000; Discount 10% = 2,300; Discounted Basic 20,700; Advance 10% = **2,070**; Net Payable = Grand − 2,070.
+- Without discount: Basic 23,000; Advance 10% = **2,300** (unchanged from current behavior).
+- Check MR OA live, OA Review/Export, OA PDF, MR PI live, PI PDF, PI Excel.
+- GMS Turkey/Murthal/CIF, BOQ, discount UI, OA→PI charges carryover: unchanged.
