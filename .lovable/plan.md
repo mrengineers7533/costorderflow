@@ -1,34 +1,37 @@
 ## Goal
-MR Advance Adjustment % base:
-- Discount applied → calculate on **Discounted Basic Total** (Basic − Discount)
-- No discount → calculate on **Basic Total**
+GMS **EXW Murthal** Advance Adjustment % base:
+- Change from `Grand Total − one-time-discount` → **Landed Price in INR** (= `net_landed` after Landed Discount, converted via `murthal_landed_inr_rate` when USD-to-Landed mode is active).
+- "If discount applied → discounted Landed; else original Landed" is satisfied automatically because `net_landed = landed − landed_discount` (equals landed when no discount).
 
-Applies only to MR (OA + PI). Flat-₹ advance mode and all other modules unchanged.
+EXW Turkey advance, flat-₹ Murthal advance mode, Net Payable formula (`grand − one_time_discount − advance`), and all other modules unchanged.
 
-Since `basic_after_discount` already equals `basic_total` when no discount, switching the base to the discounted value naturally handles both cases.
+## File to change
 
-## Files to change
+**`src/lib/orders/calc.ts`** — `calcExMurthal`, inside the Advance Adjustment block (~line 186):
 
-1. **`src/pages/orders/OrderEditor.tsx`** (MR OA live breakdown, ~line 1846)
-   - Advance base → `totals.basic_total - (showDisc ? rawDisc : 0)` (both already computed at ~1804).
+```ts
+if (c.murthal_advance_enabled) {
+  if ((c.murthal_advance_mode || "percent") === "percent") {
+    // OLD: advance = ((grand - discount) * (c.murthal_advance_percent || 0)) / 100;
+    // NEW: base on Landed Price (INR) — already discount-aware via net_landed
+    advance = (downstreamBase * (c.murthal_advance_percent || 0)) / 100;
+  } else {
+    advance = c.murthal_advance_amount || 0;
+  }
+}
+```
 
-2. **`src/components/orders/OrderPreview.tsx`** (MR OA Review/Export, ~line 402)
-   - Advance base → `p.totals.basic_total - discountAmount` (already computed at line 139).
+`downstreamBase` is already defined just above as `inrMode ? usdLanded * landedInrRate : netLanded` — i.e. the INR Landed Price (post Landed Discount). Same value shown in the "Net Landed Price" / "Amount in INR @ rate" row.
 
-3. **`src/lib/orders/pdf.ts`** (MR OA PDF, ~line 303)
-   - Advance base → `t.basic_total - (showDiscount ? rawDiscount : 0)` (already in scope at line 253).
+## Why only one file
 
-4. **`src/pages/pi/PiEditor.tsx`** (MR PI `piAdvanceAmt`)
-   - Advance base → `totals.basic_after_discount` instead of `totals.basic_total`.
+All GMS Murthal surfaces (`OrderEditor`, `OrderPreview`, `orders/pdf.ts`, `PiEditor`, `pi/pdf.ts`, `pi/excel.ts`, `pi/convert.ts`, `revisions/index.ts`) call `calcExMurthal()` and read `m.advance_amount`. Updating the function propagates to every surface.
 
-5. **`src/lib/pi/pdf.ts`** (MR PI PDF, `piAdvOnGrand`)
-   - Advance base → `t.basic_after_discount`.
-
-6. **`src/lib/pi/excel.ts`** (MR PI Excel, ~line 139)
-   - Advance base → `tt.basic_after_discount`.
+EXW Turkey path (`calcExTurkey`) is untouched → existing Basic/Discounted-Basic rule preserved.
 
 ## Verification
-- With discount (user example): Basic 23,000; Discount 10% = 2,300; Discounted Basic 20,700; Advance 10% = **2,070**; Net Payable = Grand − 2,070.
-- Without discount: Basic 23,000; Advance 10% = **2,300** (unchanged from current behavior).
-- Check MR OA live, OA Review/Export, OA PDF, MR PI live, PI PDF, PI Excel.
-- GMS Turkey/Murthal/CIF, BOQ, discount UI, OA→PI charges carryover: unchanged.
+- EXW Murthal, no landed discount, rate set: Advance % × `amount_in_inr` (Landed × rate). Net Payable = Grand − one_time_disc − Advance.
+- EXW Murthal, landed discount applied: Advance % × `net_landed` (or its INR equivalent).
+- EXW Murthal, flat ₹ advance mode: unchanged.
+- EXW Turkey OA + PI: unchanged.
+- Non-Murthal MR flows: unaffected.

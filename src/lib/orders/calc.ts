@@ -185,7 +185,9 @@ export function calcExMurthal(
   let advance = 0;
   if (c.murthal_advance_enabled) {
     if ((c.murthal_advance_mode || "percent") === "percent") {
-      advance = ((grand - discount) * (c.murthal_advance_percent || 0)) / 100;
+      // Advance % is computed on the Landed Price in INR
+      // (= net_landed after Landed Discount; INR-converted when inrMode).
+      advance = (downstreamBase * (c.murthal_advance_percent || 0)) / 100;
     } else {
       advance = c.murthal_advance_amount || 0;
     }
