@@ -1,37 +1,43 @@
 ## Goal
-GMS **EXW Murthal** Advance Adjustment % base:
-- Change from `Grand Total − one-time-discount` → **Landed Price in INR** (= `net_landed` after Landed Discount, converted via `murthal_landed_inr_rate` when USD-to-Landed mode is active).
-- "If discount applied → discounted Landed; else original Landed" is satisfied automatically because `net_landed = landed − landed_discount` (equals landed when no discount).
 
-EXW Turkey advance, flat-₹ Murthal advance mode, Net Payable formula (`grand − one_time_discount − advance`), and all other modules unchanged.
+Make Advance Adjustment % calculate on the **discounted applicable amount** (Net Landed Price) — falls back to original Landed Price when no Landed Discount is applied — across all three GMS pricing modes (OA + PI):
+
+- **EXW Murthal** — ✅ already done in the previous turn (`downstreamBase` = INR Net Landed).
+- **EXW CIF Port** — ✅ covered by the same `calcExMurthal` function (CIF flows through Murthal with `cif_pu_dollar_rate`). No additional change needed.
+- **EXW Turkey** — ❌ still computes `advance = (grand - discount) × %`. **This is the only remaining change.**
+
+Net Payable formula stays `Grand Total − one_time_discount − Advance` (unchanged). All MR flows, BOQ, and other modules untouched.
 
 ## File to change
 
-**`src/lib/orders/calc.ts`** — `calcExMurthal`, inside the Advance Adjustment block (~line 186):
+**`src/lib/orders/calc.ts`** — `calcExTurkey`, the Advance Adjustment block (~line 304):
 
 ```ts
-if (c.murthal_advance_enabled) {
-  if ((c.murthal_advance_mode || "percent") === "percent") {
-    // OLD: advance = ((grand - discount) * (c.murthal_advance_percent || 0)) / 100;
-    // NEW: base on Landed Price (INR) — already discount-aware via net_landed
-    advance = (downstreamBase * (c.murthal_advance_percent || 0)) / 100;
+// 9. Advance Adjustment — base on Net Landed Price (discount-aware via netLanded).
+let advance = 0;
+if (c.turkey_advance_enabled) {
+  if ((c.turkey_advance_mode || "percent") === "percent") {
+    // OLD: advance = ((grand - discount) * (c.turkey_advance_percent || 0)) / 100;
+    // NEW: base on Net Landed Price (= landed when no landed_discount).
+    advance = (netLanded * (c.turkey_advance_percent || 0)) / 100;
   } else {
-    advance = c.murthal_advance_amount || 0;
+    advance = c.turkey_advance_amount || 0;
   }
 }
 ```
 
-`downstreamBase` is already defined just above as `inrMode ? usdLanded * landedInrRate : netLanded` — i.e. the INR Landed Price (post Landed Discount). Same value shown in the "Net Landed Price" / "Amount in INR @ rate" row.
+`netLanded` is already defined in the function as `landed − turkey_landed_discount_amount` (equals `landed` when the landed discount toggle is off), so the "if discount applied → discounted; else original" rule is satisfied automatically.
 
 ## Why only one file
 
-All GMS Murthal surfaces (`OrderEditor`, `OrderPreview`, `orders/pdf.ts`, `PiEditor`, `pi/pdf.ts`, `pi/excel.ts`, `pi/convert.ts`, `revisions/index.ts`) call `calcExMurthal()` and read `m.advance_amount`. Updating the function propagates to every surface.
+All GMS Turkey surfaces (`OrderEditor`, `OrderPreview`, `orders/pdf.ts`, `PiEditor`, `pi/pdf.ts`, `pi/excel.ts`, `pi/convert.ts`, `revisions/index.ts`) call `calcExTurkey()` and read `t.advance_amount`. Updating the function propagates to OA live, OA Review, OA PDF, PI live, PI PDF, PI Excel.
 
-EXW Turkey path (`calcExTurkey`) is untouched → existing Basic/Discounted-Basic rule preserved.
+CIF Port shares `calcExMurthal()` (which already uses `downstreamBase`), so no separate edit needed.
 
 ## Verification
-- EXW Murthal, no landed discount, rate set: Advance % × `amount_in_inr` (Landed × rate). Net Payable = Grand − one_time_disc − Advance.
-- EXW Murthal, landed discount applied: Advance % × `net_landed` (or its INR equivalent).
-- EXW Murthal, flat ₹ advance mode: unchanged.
-- EXW Turkey OA + PI: unchanged.
-- Non-Murthal MR flows: unaffected.
+
+- EXW Turkey, no landed discount: Advance % × Landed Price. Net Payable = Grand − one-time-discount − Advance.
+- EXW Turkey, landed discount applied: Advance % × Net Landed (post landed discount).
+- EXW Turkey, flat ₹ advance mode: unchanged.
+- EXW Murthal & CIF Port: already correct from previous change.
+- MR OA/PI: unaffected.
