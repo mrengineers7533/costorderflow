@@ -57,9 +57,11 @@ export async function generatePiPDF(
   );
   // PI-level overrides applied on TOP of the OA grand total (mirrors editor).
   const grandForPi = t.gross_invoice_total;
+  // MR PI: Advance % is computed on Basic Total (not Grand Total).
+  const advPctBase = pi.format === "MR" ? t.basic_total : grandForPi;
   const piAdvOnGrand = advMode === "amount"
     ? Math.max(0, pi.advance_amount || 0)
-    : Math.max(0, (grandForPi * (pi.advance_adjustment_percent || 0)) / 100);
+    : Math.max(0, (advPctBase * (pi.advance_adjustment_percent || 0)) / 100);
   const piDiscMode = pi.discount_mode || "percent";
   const piDiscValue = pi.discount_value || 0;
   // MR PI's discount_value drives Basic-Total discount (one_time_discount_percent),
