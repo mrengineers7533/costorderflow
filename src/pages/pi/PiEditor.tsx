@@ -416,7 +416,7 @@ export default function PiEditor() {
               <CardHeader>
                 <CardTitle className="text-base">PI adjustments</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Charges, discount, taxes mirror the OA. Only Advance Adjustment is editable.
+                  Charges carry over from the OA — edit if needed.
                 </p>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
