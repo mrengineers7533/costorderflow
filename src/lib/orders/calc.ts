@@ -326,7 +326,9 @@ export function calcExTurkey(
   let advance = 0;
   if (c.turkey_advance_enabled) {
     if ((c.turkey_advance_mode || "percent") === "percent") {
-      advance = ((grand - discount) * (c.turkey_advance_percent || 0)) / 100;
+      // Base on Net Landed Price (discount-aware via netLanded). Equals
+      // Landed when no landed_discount is applied.
+      advance = (netLanded * (c.turkey_advance_percent || 0)) / 100;
     } else {
       advance = c.turkey_advance_amount || 0;
     }
