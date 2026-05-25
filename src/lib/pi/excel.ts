@@ -131,12 +131,13 @@ export function buildPiXlsx(pi: PiRecord): Blob {
       { mode: advMode, value: advValue },
       pi.other_charges || 0,
     );
-    // MR PI: Advance % must compute on Basic Total. calcPiTotals applies it
-    // on the gross — recompute & override here for MR (percent mode only).
+    // MR PI: Advance % must compute on Discounted Basic Total (falls back to
+    // Basic Total when no discount). calcPiTotals applies it on the gross —
+    // recompute & override here for MR (percent mode only).
     let mrAdvAmt = tt.advance_adjustment_amount;
     let mrNet = tt.net_payable_pi;
     if (pi.format === "MR" && advMode === "percent") {
-      mrAdvAmt = Math.max(0, (tt.basic_total * (pi.advance_adjustment_percent || 0)) / 100);
+      mrAdvAmt = Math.max(0, (tt.basic_after_discount * (pi.advance_adjustment_percent || 0)) / 100);
       mrNet = Math.max(0, tt.gross_invoice_total - mrAdvAmt);
     }
     chain.push(["Basic Total", fmt(tt.basic_total)]);

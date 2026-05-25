@@ -1843,7 +1843,7 @@ export default function OrderEditor() {
                       if (format !== "MR" || !charges.mr_advance_enabled) return null;
                       const mode = charges.mr_advance_mode || "percent";
                       const adv = mode === "percent"
-                        ? (totals.basic_total * (charges.mr_advance_percent || 0)) / 100
+                        ? (baseAfter * (charges.mr_advance_percent || 0)) / 100
                         : (charges.mr_advance_amount || 0);
                       if (adv <= 0) return null;
                       const lbl = mode === "percent"
