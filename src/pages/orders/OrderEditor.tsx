@@ -557,7 +557,7 @@ export default function OrderEditor() {
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
+      const doc = await generateOrderPDF(record, { terms, bank: fmt === "GMS" ? gmsBank : bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       doc.save(filename);
       return { used: "default" as const };
     };
@@ -594,7 +594,7 @@ export default function OrderEditor() {
         tc_note: tcNote,
         created_at: "", updated_at: "",
       };
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
+      const doc = await generateOrderPDF(record, { terms, bank: fmt === "GMS" ? gmsBank : bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       const fileName = `${baseName}-CLIENT-COPY${suffix}.pdf`;
       doc.save(fileName);
       // Persist a copy so it shows up in the OA Version History.
@@ -616,7 +616,7 @@ export default function OrderEditor() {
               cost_sheet_number: costSheetNumber, order_date: orderDate,
               prepared_by: preparedBy, amount_in_words: subWords,
               notes, tc_note: tcNote, terms,
-              bank, gmsTerms,
+              bank: fmt === "GMS" ? gmsBank : bank, gmsTerms,
             },
           });
           setRevisionsKey((k) => k + 1);
