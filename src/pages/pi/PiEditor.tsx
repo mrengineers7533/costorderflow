@@ -1300,7 +1300,7 @@ export default function PiEditor() {
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
               terms={terms}
-              bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
+              bank={pi.format === "GMS" ? gmsBank : bank}
               gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
               currencyMode={currencyMode}
               hiddenColumns={hiddenPdfColumns}
