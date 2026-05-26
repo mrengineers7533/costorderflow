@@ -560,10 +560,10 @@ export function OrderPreview(p: Props) {
         {p.format === "MR" && <MRPostItems terms={p.terms} bank={p.bank} preparedBy={p.preparedBy} />}
 
         {p.format === "GMS" && !p.docMeta?.hideFirstPageFooter && isFX && (
-          <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} />
+          <GMSFooter fxRate={fxRate} currency={p.charges.currency || "USD"} bank={p.bank} />
         )}
         {p.format === "GMS" && !p.docMeta?.hideFirstPageFooter && !isFX && (
-          <GMSHeadOfficeBank />
+          <GMSHeadOfficeBank bank={p.bank} />
         )}
 
         {p.format === "GMS" && p.gmsTerms && (
@@ -573,6 +573,7 @@ export function OrderPreview(p: Props) {
             fxRate={fxRate}
             currency={p.charges.currency || "INR"}
             isFX={isFX}
+            bank={p.bank}
           />
         )}
 
@@ -768,8 +769,8 @@ function ExTurkeyBlock({
   );
 }
 
-function GMSHeadOfficeBank() {
-  const bank = DEFAULT_GMS_BANK;
+function GMSHeadOfficeBank({ bank: bankProp }: { bank?: BankDetails } = {}) {
+  const bank = bankProp ?? DEFAULT_GMS_BANK;
   return (
     <div className="grid grid-cols-2 gap-4 pt-2 text-[11px]">
       <div>
@@ -790,7 +791,7 @@ function GMSHeadOfficeBank() {
   );
 }
 
-function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
+function GMSFooter({ fxRate, currency, bank }: { fxRate: number; currency: string; bank?: BankDetails }) {
   return (
     <div className="border-t-2 border-foreground mt-3 pt-2 text-[11px] space-y-2">
       <div className="space-y-0.5 font-semibold">
@@ -801,19 +802,20 @@ function GMSFooter({ fxRate, currency }: { fxRate: number; currency: string }) {
           {currency} conversion rate - @Rs{fxRate}. Any variation in exchange rate will be borne by client.
         </div>
       </div>
-      <GMSHeadOfficeBank />
+      <GMSHeadOfficeBank bank={bank} />
     </div>
   );
 }
 
 function GMSTermsBlock({
-  t, includeExclusions, fxRate, currency, isFX,
+  t, includeExclusions, fxRate, currency, isFX, bank,
 }: {
   t: GMSTerms;
   includeExclusions?: boolean;
   fxRate?: number;
   currency?: string;
   isFX?: boolean;
+  bank?: BankDetails;
 }) {
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="space-y-0.5">
@@ -843,7 +845,7 @@ function GMSTermsBlock({
           ) : null}
         </div>
       )}
-      <GMSHeadOfficeBank />
+      <GMSHeadOfficeBank bank={bank} />
     </div>
   );
 }
