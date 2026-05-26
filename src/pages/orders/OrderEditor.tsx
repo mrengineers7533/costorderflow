@@ -1907,6 +1907,7 @@ export default function OrderEditor() {
         )}
 
         {format === "GMS" && (
+          <>
           <Card>
             <CardHeader><CardTitle>GMS Terms &amp; Conditions</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -1933,6 +1934,20 @@ export default function OrderEditor() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-3">
+              <div><Label>Bank Name</Label><Input value={gmsBank.bank_name} onChange={(e) => setGmsBank({ ...gmsBank, bank_name: e.target.value })} /></div>
+              <div><Label>Branch</Label><Input value={gmsBank.branch} onChange={(e) => setGmsBank({ ...gmsBank, branch: e.target.value })} /></div>
+              <div><Label>Account Number</Label><Input value={gmsBank.account_no} onChange={(e) => setGmsBank({ ...gmsBank, account_no: e.target.value })} /></div>
+              <div><Label>IFSC Code</Label><Input value={gmsBank.ifsc} onChange={(e) => setGmsBank({ ...gmsBank, ifsc: e.target.value })} /></div>
+              <div className="md:col-span-2 flex justify-end">
+                <Button size="sm" variant="ghost" onClick={() => setGmsBank(DEFAULT_GMS_BANK)}>Reset to default</Button>
+              </div>
+            </CardContent>
+          </Card>
+          </>
         )}
           </div>
 
@@ -1964,7 +1979,7 @@ export default function OrderEditor() {
               onFormatChange={(f) => switchFormat(f)}
               onDownloadPDF={downloadPDF}
               terms={terms}
-              bank={bank}
+              bank={format === "GMS" ? gmsBank : bank}
               gmsTerms={gmsTerms}
               currencyMode={currencyMode}
               hiddenColumns={hiddenPdfColumns}
