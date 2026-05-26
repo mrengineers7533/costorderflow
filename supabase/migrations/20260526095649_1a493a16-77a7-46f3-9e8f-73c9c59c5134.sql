@@ -1,0 +1,1 @@
+ALTER TABLE public.notification_recipients DROP CONSTRAINT notification_recipients_department_check;
