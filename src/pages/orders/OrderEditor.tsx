@@ -22,7 +22,7 @@ import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { saveClientCopy } from "@/lib/orders/clientCopies";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
-import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
+import { DEFAULT_MR_BANK, DEFAULT_GMS_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
@@ -90,6 +90,7 @@ export default function OrderEditor() {
   const [parsing, setParsing] = useState(false);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
+  const [gmsBank, setGmsBank] = useState<BankDetails>(DEFAULT_GMS_BANK);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
   // Optional free-form note that prints under the Terms & Conditions block.
   const [tcNote, setTcNote] = useState<string>("");
