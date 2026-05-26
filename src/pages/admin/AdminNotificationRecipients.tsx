@@ -21,12 +21,23 @@ import {
   type NotificationRecipientConfig,
 } from "@/lib/notifications/orderRevision";
 
-const DEPTS: NotificationDepartment[] = ["design", "purchase", "manufacturing"];
+const PRESET_DEPTS: NotificationDepartment[] = [
+  "design",
+  "purchase",
+  "manufacturing",
+  "DME Team",
+  "CRM Team",
+  "Reception",
+  "HR",
+  "Production",
+];
+const CUSTOM_SENTINEL = "__custom__";
 
 export default function AdminNotificationRecipients() {
   const [rows, setRows] = useState<NotificationRecipientConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [dept, setDept] = useState<NotificationDepartment>("design");
+  const [customDept, setCustomDept] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,10 +56,16 @@ export default function AdminNotificationRecipients() {
       toast.error("Enter a valid email address");
       return;
     }
+    let finalDept = dept;
+    if (dept === CUSTOM_SENTINEL) {
+      finalDept = customDept.trim().replace(/\s+/g, " ");
+      if (!finalDept) { toast.error("Enter a department name"); return; }
+      if (finalDept.length > 60) { toast.error("Department name too long (max 60)"); return; }
+    }
     setBusy(true);
     try {
-      await addNotificationRecipient({ department: dept, email: em, name: name.trim() || null });
-      setEmail(""); setName("");
+      await addNotificationRecipient({ department: finalDept, email: em, name: name.trim() || null });
+      setEmail(""); setName(""); setCustomDept("");
       toast.success("Recipient added");
       refresh();
     } catch (e) { toast.error((e as Error).message); }
@@ -80,12 +97,26 @@ export default function AdminNotificationRecipients() {
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Department</div>
             <Select value={dept} onValueChange={(v) => setDept(v as NotificationDepartment)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DEPTS.map((d) => <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>)}
+                {PRESET_DEPTS.map((d) => (
+                  <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_SENTINEL}>Custom…</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {dept === CUSTOM_SENTINEL && (
+            <div className="space-y-1 min-w-[180px]">
+              <div className="text-xs text-muted-foreground">Custom department</div>
+              <Input
+                placeholder="e.g. DME Team"
+                value={customDept}
+                onChange={(e) => setCustomDept(e.target.value)}
+                maxLength={60}
+              />
+            </div>
+          )}
           <div className="space-y-1 flex-1 min-w-[200px]">
             <div className="text-xs text-muted-foreground">Email</div>
             <Input placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />

@@ -1,41 +1,34 @@
 ## Goal
-Make the GMS bank account details editable in the OA and PI editors, and have those edits flow through the GMS Print Preview, GMS PDF, and Client Copy PDF. No other behavior, layout, calculation, or PDF format changes.
 
-## Current state
-- A `Bank Details` editable card already exists in `OrderEditor.tsx`, but it is rendered **inside the `format === "MR"` block only**. GMS has no editable bank UI.
-- `OrderPreview` has a `GMSHeadOfficeBank` component that uses `DEFAULT_GMS_BANK` directly (ignores any prop).
-- `renderGmsFooter` in `src/lib/orders/pdf.ts` already supports `opts.bank` and falls back to `DEFAULT_GMS_BANK`, but callers never pass a GMS bank.
-- `PiEditor.tsx` passes `bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}` — no GMS bank state.
-- Client Copy PDF in both OA and PI is produced through the same `generateOrderPDF` / `generatePiPDF` path, so feeding the bank into those calls covers Client Copy automatically.
+In Admin → Revision Notifications, allow adding recipients under any department name (e.g. DME Team, CRM Team, Reception, HR, Production) in addition to the existing Design, Purchase, Manufacturing — without affecting any other behavior.
+
+## Why no DB change is needed
+
+`notification_recipients.department` is already a free-form `text` column. The restriction is purely in the frontend (a hardcoded preset list and a TypeScript union). So this is a UI-only change.
 
 ## Changes
 
-### 1. `src/pages/orders/OrderEditor.tsx`
-- Add a second piece of state `gmsBank` (default `DEFAULT_GMS_BANK`); keep the existing `bank` (MR) state untouched.
-- Render the existing **Bank Details** card for GMS too, bound to `gmsBank` / `setGmsBank`, with "Reset to default" → `DEFAULT_GMS_BANK`. Field labels and layout identical to the MR card.
-- When calling `generateOrderPDF` (regular PDF + Client Copy PDF saves) and when passing `bank` to `<OrderPreview>`, choose `format === "GMS" ? gmsBank : bank`.
+### 1. `src/lib/notifications/orderRevision.ts`
+- Widen `NotificationDepartment` from a fixed union to `string` (keep the three existing values documented as known presets via a separate `KNOWN_DEPARTMENTS` const). Existing rows and code paths keep working unchanged.
 
-### 2. `src/pages/pi/PiEditor.tsx`
-- Add `gmsBank` state initialised from `DEFAULT_GMS_BANK` (load from existing PI record if a stored override exists; otherwise default).
-- Add the same editable Bank Details card to the PI editor for GMS (mirroring the MR layout already used in OA editor).
-- Pass `bank={pi.format === "MR" ? DEFAULT_MR_BANK : gmsBank}` into the preview and into `generatePiPDF` for both the regular PI PDF and the Client Copy PDF.
+### 2. `src/pages/admin/AdminNotificationRecipients.tsx`
+Replace the fixed `Select` with a combined preset + custom input:
+- Keep the three preset options (Design, Purchase, Manufacturing) plus newly added presets: DME Team, CRM Team, Reception, HR, Production.
+- Add a "Custom…" option at the bottom of the dropdown. When chosen, reveal a text input where the admin types any department name.
+- Normalize on add: trim whitespace, collapse internal spaces, store as-is (preserve case the user entered, e.g. "DME Team"). Validate non-empty and max length 60 chars.
+- Department column in the existing recipients table already renders whatever string is stored, so custom names will display correctly. Remove the `capitalize` class on the cell so names like "DME Team" aren't lowercased visually — or keep it (CSS `capitalize` only capitalizes first letter of each word, it won't break uppercase acronyms). Verify and keep behavior consistent.
 
-### 3. `src/components/orders/OrderPreview.tsx`
-- `GMSHeadOfficeBank` accepts an optional `bank?: BankDetails` prop and uses it when provided, else falls back to `DEFAULT_GMS_BANK`.
-- Plumb the `bank` prop into the three call sites of `GMSHeadOfficeBank` so the on-screen Print Preview reflects user edits.
-
-### 4. `src/lib/orders/pdf.ts`
-- No code change required (already honors `opts.bank` in `renderGmsFooter`); just ensure callers now pass it.
-
-### 5. `src/lib/pi/pdf.ts`
-- No structural change; the existing `opts?.bank` is already forwarded into `generateOrderPDF`, so the new GMS bank from `PiEditor` will flow through.
-
-## Out of scope
-- No DB schema changes; bank overrides remain editor-session state (matching how MR currently works). If persistence is desired later it can be added separately.
-- No changes to MR flow, calculations, charges, totals, PDF layout, column visibility, or any other module.
+### 3. No other module touched
+- Revision notification trigger, OA/PI/MR flows, PDFs, calculations, preview — unchanged.
+- Existing recipients (design/purchase/manufacturing) continue to work exactly as today.
+- `NotificationRecipient.role` type in `orderRevision.ts` similarly widened to `string | "creator"` so future audience payloads can reference custom departments. No runtime code paths currently constrain it.
 
 ## Verification
-- OA editor (GMS): edit bank fields → Print Preview footer and downloaded GMS PDF show the edited values; Client Copy PDF shows them too. MR flow unchanged.
-- PI editor (GMS): same checks for PI PDF + Client Copy PDF.
-- Reset button restores `DEFAULT_GMS_BANK`.
-- MR OA/PI bank behavior identical to today.
+
+1. Open Admin → Revision Notifications.
+2. Add a recipient under preset "Design" → still works as before.
+3. Choose "Custom…", type "DME Team", add email → row appears with department "DME Team".
+4. Repeat for "CRM Team", "Reception", "HR", "Production".
+5. Toggle / delete works for both preset and custom department rows.
+6. Refresh page → all rows persist.
+7. Existing OA-revision notification creation flow is unchanged (recipients list query is the same).
