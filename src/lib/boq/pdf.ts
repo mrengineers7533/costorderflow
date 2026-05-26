@@ -42,10 +42,14 @@ export interface BoqPdfOptions {
   /** When true, inserts a "Make" column between Model Number and Description.
    *  Defaults to false so existing exports stay byte-identical. */
   showMake?: boolean;
+  /** When true, includes the "Approved by Design" column. Defaults to false
+   *  so the column is hidden in PDF/print unless the user opts in. */
+  showApproval?: boolean;
 }
 
 export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): Promise<jsPDF> {
   const showMake = !!opts.showMake;
+  const showApproval = !!opts.showApproval;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
@@ -159,11 +163,12 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   });
   y += leftRows.length * 5 + 4;
 
-  // Items table — Make column inserted only when explicitly requested.
-  const headRow = showMake
-    ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks", "Approved by Design"]
-    : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"];
-  const approvalIdx = showMake ? 7 : 6;
+  // Items table — Make / Approved-by-Design columns inserted only when requested.
+  const headRow: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
+  if (showMake) headRow.push("MAKE");
+  headRow.push("QTY", "UNIT", "Remarks");
+  if (showApproval) headRow.push("Approved by Design");
+  const approvalIdx = showApproval ? headRow.length - 1 : -1;
   const rows = sortByItemNo(boq.line_items).map((it, i) => {
     const approval = (() => {
       const s = (it.approval_status || "pending").toLowerCase();
@@ -171,39 +176,38 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       if (s === "rejected") return "Rejected";
       return "Pending";
     })();
-    const base = [
+    const base: string[] = [
       it.item_no || String(i + 1),
       it.model_number || "",
       it.description || "",
       it.quantity ? String(it.quantity) : "",
       it.unit || "",
       it.remarks || "",
-      approval,
     ];
     if (showMake) base.splice(3, 0, (it.make || "").trim());
+    if (showApproval) base.push(approval);
     return base;
   });
   const emptyRow = headRow.map((_, i) => (i === 2 ? "(no items)" : ""));
-  const columnStyles: Record<number, Partial<{ cellWidth: number | "auto"; halign: "center" | "left" | "right"; fontStyle: "bold" | "normal" | "italic" | "bolditalic" }>> = showMake
-    ? {
-        0: { cellWidth: 14, halign: "center" },
-        1: { cellWidth: 26 },
-        2: { cellWidth: "auto" },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 12, halign: "center" },
-        5: { cellWidth: 12, halign: "center" },
-        6: { cellWidth: 32 },
-        7: { cellWidth: 22, halign: "center", fontStyle: "bold" },
-      }
-    : {
-        0: { cellWidth: 16, halign: "center" },
-        1: { cellWidth: 28 },
-        2: { cellWidth: "auto" },
-        3: { cellWidth: 12, halign: "center" },
-        4: { cellWidth: 12, halign: "center" },
-        5: { cellWidth: 38 },
-        6: { cellWidth: 24, halign: "center", fontStyle: "bold" },
-      };
+  type ColStyle = Partial<{ cellWidth: number | "auto"; halign: "center" | "left" | "right"; fontStyle: "bold" | "normal" | "italic" | "bolditalic" }>;
+  const columnStyles: Record<number, ColStyle> = {};
+  let ci = 0;
+  // ITEM No.
+  columnStyles[ci++] = { cellWidth: showMake ? 14 : 16, halign: "center" };
+  // MODEL NUMBER
+  columnStyles[ci++] = { cellWidth: showMake ? 26 : 28 };
+  // DESCRIPTION
+  columnStyles[ci++] = { cellWidth: "auto" };
+  // MAKE (optional)
+  if (showMake) columnStyles[ci++] = { cellWidth: 20 };
+  // QTY
+  columnStyles[ci++] = { cellWidth: 12, halign: "center" };
+  // UNIT
+  columnStyles[ci++] = { cellWidth: 12, halign: "center" };
+  // Remarks — wider when approval column is hidden so layout matches existing look.
+  columnStyles[ci++] = { cellWidth: showApproval ? (showMake ? 32 : 38) : (showMake ? 54 : 62) };
+  // Approved by Design (optional)
+  if (showApproval) columnStyles[ci++] = { cellWidth: showMake ? 22 : 24, halign: "center", fontStyle: "bold" };
 
   autoTable(doc, {
     startY: y,
@@ -214,7 +218,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles,
     didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === approvalIdx) {
+      if (approvalIdx >= 0 && data.section === "body" && data.column.index === approvalIdx) {
         const v = String(data.cell.raw || "").toLowerCase();
         if (v === "approved") data.cell.styles.textColor = [22, 128, 51];
         else if (v === "rejected") data.cell.styles.textColor = [200, 30, 30];
