@@ -97,12 +97,26 @@ export default function AdminNotificationRecipients() {
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Department</div>
             <Select value={dept} onValueChange={(v) => setDept(v as NotificationDepartment)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DEPTS.map((d) => <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>)}
+                {PRESET_DEPTS.map((d) => (
+                  <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_SENTINEL}>Custom…</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {dept === CUSTOM_SENTINEL && (
+            <div className="space-y-1 min-w-[180px]">
+              <div className="text-xs text-muted-foreground">Custom department</div>
+              <Input
+                placeholder="e.g. DME Team"
+                value={customDept}
+                onChange={(e) => setCustomDept(e.target.value)}
+                maxLength={60}
+              />
+            </div>
+          )}
           <div className="space-y-1 flex-1 min-w-[200px]">
             <div className="text-xs text-muted-foreground">Email</div>
             <Input placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
