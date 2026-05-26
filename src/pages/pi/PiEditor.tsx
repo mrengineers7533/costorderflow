@@ -29,6 +29,8 @@ import {
   DEFAULT_MR_TERMS,
   DEFAULT_GMS_TERMS,
   DEFAULT_MR_BANK,
+  DEFAULT_GMS_BANK,
+  type BankDetails,
   type GMSTerms,
 } from "@/lib/orders/defaults";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
@@ -48,6 +50,8 @@ export default function PiEditor() {
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
+  const [gmsBank, setGmsBank] = useState<BankDetails>(DEFAULT_GMS_BANK);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
   // PI hides the Make column by default. User can flip it on per-session via
@@ -217,7 +221,7 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
-      }, { terms, gmsTerms, currencyMode, hiddenColumns: hiddenPdfColumns });
+      }, { terms, gmsTerms, bank: pi.format === "GMS" ? gmsBank : bank, currencyMode, hiddenColumns: hiddenPdfColumns });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
