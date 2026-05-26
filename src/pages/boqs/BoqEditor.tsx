@@ -886,7 +886,7 @@ function BoqDesignSuggestionRow({
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
    table column widths, header colors, terms box, and notes line. */
-function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: boolean }) {
+function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: BoqRecord; showMake?: boolean; showApproval?: boolean }) {
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
@@ -964,17 +964,21 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "38mm" }} />
-            <col style={{ width: "24mm" }} />
+            {showApproval && <col style={{ width: "24mm" }} />}
           </colgroup>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
-              {(showMake
-                ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks", "Approved by Design"]
-                : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks", "Approved by Design"]
-              ).map((h, i) => {
-                const center = showMake
-                  ? (i === 0 || i === 4 || i === 5 || i === 7)
-                  : (i === 0 || i === 3 || i === 4 || i === 6);
+              {(() => {
+                const heads: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
+                if (showMake) heads.push("MAKE");
+                heads.push("QTY", "UNIT", "Remarks");
+                if (showApproval) heads.push("Approved by Design");
+                return heads;
+              })().map((h, i) => {
+                const lastIdx = 2 + (showMake ? 1 : 0) + 3 + (showApproval ? 1 : 0) - 1;
+                const qtyIdx = 2 + (showMake ? 1 : 0) + 1;
+                const unitIdx = qtyIdx + 1;
+                const center = i === 0 || i === qtyIdx || i === unitIdx || (showApproval && i === lastIdx);
                 return (
                   <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
                 );
@@ -983,7 +987,7 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={showMake ? 8 : 7} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={6 + (showMake ? 1 : 0) + (showApproval ? 1 : 0)} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
@@ -993,7 +997,7 @@ function BoqDocPreview({ rec, showMake = false }: { rec: BoqRecord; showMake?: b
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
-                {(() => {
+                {showApproval && (() => {
                   const s = ((it as { approval_status?: string }).approval_status || "pending").toLowerCase();
                   const txt = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
                   const color = s === "approved" ? "rgb(22,128,51)" : s === "rejected" ? "rgb(200,30,30)" : "rgb(180,120,0)";
