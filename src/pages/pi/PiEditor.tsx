@@ -1232,6 +1232,7 @@ export default function PiEditor() {
 
             {/* Terms & Conditions */}
             {pi.format === "MR" ? (
+              <>
               <Card>
                 <CardHeader><CardTitle className="text-base">Terms &amp; Conditions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
@@ -1241,7 +1242,21 @@ export default function PiEditor() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Bank Details</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                  <div><Label>Bank Name</Label><Input value={bank.bank_name} onChange={(e) => setBank({ ...bank, bank_name: e.target.value })} /></div>
+                  <div><Label>Branch</Label><Input value={bank.branch} onChange={(e) => setBank({ ...bank, branch: e.target.value })} /></div>
+                  <div><Label>Account Number</Label><Input value={bank.account_no} onChange={(e) => setBank({ ...bank, account_no: e.target.value })} /></div>
+                  <div><Label>IFSC Code</Label><Input value={bank.ifsc} onChange={(e) => setBank({ ...bank, ifsc: e.target.value })} /></div>
+                  <div className="col-span-2 flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setBank(DEFAULT_MR_BANK)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+              </>
             ) : (
+              <>
               <Card>
                 <CardHeader><CardTitle className="text-base">GMS Terms &amp; Conditions</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -1256,6 +1271,19 @@ export default function PiEditor() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Bank Details</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                  <div><Label>Bank Name</Label><Input value={gmsBank.bank_name} onChange={(e) => setGmsBank({ ...gmsBank, bank_name: e.target.value })} /></div>
+                  <div><Label>Branch</Label><Input value={gmsBank.branch} onChange={(e) => setGmsBank({ ...gmsBank, branch: e.target.value })} /></div>
+                  <div><Label>Account Number</Label><Input value={gmsBank.account_no} onChange={(e) => setGmsBank({ ...gmsBank, account_no: e.target.value })} /></div>
+                  <div><Label>IFSC Code</Label><Input value={gmsBank.ifsc} onChange={(e) => setGmsBank({ ...gmsBank, ifsc: e.target.value })} /></div>
+                  <div className="col-span-2 flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setGmsBank(DEFAULT_GMS_BANK)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+              </>
             )}
         </div>
 
