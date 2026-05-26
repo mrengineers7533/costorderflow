@@ -2,7 +2,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type NotificationChannel = "email" | "sms" | "whatsapp" | "in_app";
 export type NotificationStatus = "pending" | "queued" | "sent" | "failed" | "skipped";
-export type NotificationDepartment = "design" | "purchase" | "manufacturing";
+// Department is free-form text in the database; common presets are listed below
+// but admins may add any custom department name (e.g. "DME Team", "HR").
+export type NotificationDepartment = string;
+export const KNOWN_DEPARTMENTS = [
+  "design",
+  "purchase",
+  "manufacturing",
+] as const;
 
 export interface NotificationRecipient {
   role: NotificationDepartment | "creator";
