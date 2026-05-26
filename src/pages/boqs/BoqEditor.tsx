@@ -578,6 +578,17 @@ export default function BoqEditor() {
                     <Columns3 className="h-4 w-4" />
                     {showMake ? "Hide Make column" : "Show Make column"}
                   </Button>
+                  <Button
+                    type="button"
+                    variant={showApproval ? "secondary" : "outline"}
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowApproval(!showApproval)}
+                    title="Affects PDF / print only. The on-screen items table is unchanged."
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    {showApproval ? "Hide 'Approved by Design' in PDF" : "Show 'Approved by Design' in PDF"}
+                  </Button>
                   <span className="text-[11px] text-muted-foreground">
                     Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
                   </span>
