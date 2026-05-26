@@ -22,7 +22,7 @@ import { buildClientCopyItems } from "@/lib/orders/clientCopy";
 import { saveClientCopy } from "@/lib/orders/clientCopies";
 import { CostSheetPicker, type ExtractedCostSheet } from "@/components/orders/CostSheetPicker";
 import { OrderPreview } from "@/components/orders/OrderPreview";
-import { DEFAULT_MR_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
+import { DEFAULT_MR_BANK, DEFAULT_GMS_BANK, DEFAULT_MR_TERMS, DEFAULT_GMS_TERMS, type BankDetails, type GMSTerms } from "@/lib/orders/defaults";
 import { RevisionsPanel } from "@/components/orders/RevisionsPanel";
 import { OaRevisionHistory } from "@/components/orders/OaRevisionHistory";
 import { ItemChangeHistoryButton } from "@/components/orders/ItemChangeHistoryButton";
@@ -90,6 +90,7 @@ export default function OrderEditor() {
   const [parsing, setParsing] = useState(false);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
+  const [gmsBank, setGmsBank] = useState<BankDetails>(DEFAULT_GMS_BANK);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
   // Optional free-form note that prints under the Terms & Conditions block.
   const [tcNote, setTcNote] = useState<string>("");
@@ -556,7 +557,7 @@ export default function OrderEditor() {
         created_at: "", updated_at: "",
       };
       const filename = `${baseName}${suffix}.pdf`;
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
+      const doc = await generateOrderPDF(record, { terms, bank: fmt === "GMS" ? gmsBank : bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       doc.save(filename);
       return { used: "default" as const };
     };
@@ -593,7 +594,7 @@ export default function OrderEditor() {
         tc_note: tcNote,
         created_at: "", updated_at: "",
       };
-      const doc = await generateOrderPDF(record, { terms, bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
+      const doc = await generateOrderPDF(record, { terms, bank: fmt === "GMS" ? gmsBank : bank, gmsTerms, tcNote, currencyMode, hiddenColumns: hiddenPdfColumns });
       const fileName = `${baseName}-CLIENT-COPY${suffix}.pdf`;
       doc.save(fileName);
       // Persist a copy so it shows up in the OA Version History.
@@ -615,7 +616,7 @@ export default function OrderEditor() {
               cost_sheet_number: costSheetNumber, order_date: orderDate,
               prepared_by: preparedBy, amount_in_words: subWords,
               notes, tc_note: tcNote, terms,
-              bank, gmsTerms,
+              bank: fmt === "GMS" ? gmsBank : bank, gmsTerms,
             },
           });
           setRevisionsKey((k) => k + 1);
@@ -1906,6 +1907,7 @@ export default function OrderEditor() {
         )}
 
         {format === "GMS" && (
+          <>
           <Card>
             <CardHeader><CardTitle>GMS Terms &amp; Conditions</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -1932,6 +1934,20 @@ export default function OrderEditor() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-3">
+              <div><Label>Bank Name</Label><Input value={gmsBank.bank_name} onChange={(e) => setGmsBank({ ...gmsBank, bank_name: e.target.value })} /></div>
+              <div><Label>Branch</Label><Input value={gmsBank.branch} onChange={(e) => setGmsBank({ ...gmsBank, branch: e.target.value })} /></div>
+              <div><Label>Account Number</Label><Input value={gmsBank.account_no} onChange={(e) => setGmsBank({ ...gmsBank, account_no: e.target.value })} /></div>
+              <div><Label>IFSC Code</Label><Input value={gmsBank.ifsc} onChange={(e) => setGmsBank({ ...gmsBank, ifsc: e.target.value })} /></div>
+              <div className="md:col-span-2 flex justify-end">
+                <Button size="sm" variant="ghost" onClick={() => setGmsBank(DEFAULT_GMS_BANK)}>Reset to default</Button>
+              </div>
+            </CardContent>
+          </Card>
+          </>
         )}
           </div>
 
@@ -1963,7 +1979,7 @@ export default function OrderEditor() {
               onFormatChange={(f) => switchFormat(f)}
               onDownloadPDF={downloadPDF}
               terms={terms}
-              bank={bank}
+              bank={format === "GMS" ? gmsBank : bank}
               gmsTerms={gmsTerms}
               currencyMode={currencyMode}
               hiddenColumns={hiddenPdfColumns}

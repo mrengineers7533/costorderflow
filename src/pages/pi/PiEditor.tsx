@@ -29,6 +29,8 @@ import {
   DEFAULT_MR_TERMS,
   DEFAULT_GMS_TERMS,
   DEFAULT_MR_BANK,
+  DEFAULT_GMS_BANK,
+  type BankDetails,
   type GMSTerms,
 } from "@/lib/orders/defaults";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
@@ -48,6 +50,8 @@ export default function PiEditor() {
   const [family, setFamily] = useState<PiRecord[]>([]);
   const [terms, setTerms] = useState<string>(DEFAULT_MR_TERMS);
   const [gmsTerms, setGmsTerms] = useState<GMSTerms>(DEFAULT_GMS_TERMS);
+  const [bank, setBank] = useState<BankDetails>(DEFAULT_MR_BANK);
+  const [gmsBank, setGmsBank] = useState<BankDetails>(DEFAULT_GMS_BANK);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>("INR");
   const [exchangeRate, setExchangeRate] = useState<number>(83);
   // PI hides the Make column by default. User can flip it on per-session via
@@ -217,7 +221,7 @@ export default function PiEditor() {
           net_payable: effectiveNet,
         },
         amount_in_words: amountInWords(effectiveNet),
-      }, { terms, gmsTerms, currencyMode, hiddenColumns: hiddenPdfColumns });
+      }, { terms, gmsTerms, bank: pi.format === "GMS" ? gmsBank : bank, currencyMode, hiddenColumns: hiddenPdfColumns });
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
@@ -1228,6 +1232,7 @@ export default function PiEditor() {
 
             {/* Terms & Conditions */}
             {pi.format === "MR" ? (
+              <>
               <Card>
                 <CardHeader><CardTitle className="text-base">Terms &amp; Conditions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
@@ -1237,7 +1242,21 @@ export default function PiEditor() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Bank Details</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                  <div><Label>Bank Name</Label><Input value={bank.bank_name} onChange={(e) => setBank({ ...bank, bank_name: e.target.value })} /></div>
+                  <div><Label>Branch</Label><Input value={bank.branch} onChange={(e) => setBank({ ...bank, branch: e.target.value })} /></div>
+                  <div><Label>Account Number</Label><Input value={bank.account_no} onChange={(e) => setBank({ ...bank, account_no: e.target.value })} /></div>
+                  <div><Label>IFSC Code</Label><Input value={bank.ifsc} onChange={(e) => setBank({ ...bank, ifsc: e.target.value })} /></div>
+                  <div className="col-span-2 flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setBank(DEFAULT_MR_BANK)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+              </>
             ) : (
+              <>
               <Card>
                 <CardHeader><CardTitle className="text-base">GMS Terms &amp; Conditions</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -1252,6 +1271,19 @@ export default function PiEditor() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Bank Details</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                  <div><Label>Bank Name</Label><Input value={gmsBank.bank_name} onChange={(e) => setGmsBank({ ...gmsBank, bank_name: e.target.value })} /></div>
+                  <div><Label>Branch</Label><Input value={gmsBank.branch} onChange={(e) => setGmsBank({ ...gmsBank, branch: e.target.value })} /></div>
+                  <div><Label>Account Number</Label><Input value={gmsBank.account_no} onChange={(e) => setGmsBank({ ...gmsBank, account_no: e.target.value })} /></div>
+                  <div><Label>IFSC Code</Label><Input value={gmsBank.ifsc} onChange={(e) => setGmsBank({ ...gmsBank, ifsc: e.target.value })} /></div>
+                  <div className="col-span-2 flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setGmsBank(DEFAULT_GMS_BANK)}>Reset to default</Button>
+                  </div>
+                </CardContent>
+              </Card>
+              </>
             )}
         </div>
 
@@ -1296,7 +1328,7 @@ export default function PiEditor() {
               notes={pi.notes || ""}
               onDownloadPDF={downloadPdf}
               terms={terms}
-              bank={pi.format === "MR" ? DEFAULT_MR_BANK : undefined}
+              bank={pi.format === "GMS" ? gmsBank : bank}
               gmsTerms={pi.format === "GMS" ? gmsTerms : undefined}
               currencyMode={currencyMode}
               hiddenColumns={hiddenPdfColumns}
