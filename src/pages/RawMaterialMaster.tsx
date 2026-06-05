@@ -46,12 +46,14 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
   const cMake = headers.findIndex((h) => h === "make" || h.startsWith("make"));
   const cMat = findCol("raw", "material");
   const cSize = headers.findIndex((h) => h.includes("size") || h.includes("model"));
-  const cQty = headers.findIndex((h) => h.includes("reqd") || h.includes("qty"));
+  const cQtyPerUnit = headers.findIndex((h) => h.includes("qty"));
+  const cReqd = headers.findIndex((h) => h.includes("reqd") || h.includes("required"));
   const cUnit = headers.findIndex((h) => h === "unit" || h.startsWith("unit"));
   if (cMat < 0) return [];
 
   const out: ParsedFg[] = [];
   let current: ParsedFg | null = null;
+  let lastSize: string | undefined;
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i] || [];
     const fgRaw = String(row[cFg] ?? "");
@@ -64,15 +66,28 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
         raw_materials: [],
       };
       out.push(current);
+      lastSize = undefined;
     }
     if (!current) continue;
     const mat = String(row[cMat] ?? "").trim();
     if (!mat) continue;
+    const sizeRaw = cSize >= 0 ? String(row[cSize] ?? "").trim() : "";
+    if (sizeRaw) lastSize = sizeRaw;
+    const sizeVal = sizeRaw || lastSize || undefined;
+    const qtyPerUnitRaw = cQtyPerUnit >= 0 ? row[cQtyPerUnit] : null;
+    const reqdRaw = cReqd >= 0 ? row[cReqd] : null;
+    const qtyPerUnitNum = Number(qtyPerUnitRaw);
+    const reqdNum = Number(reqdRaw);
+    let qtyVal = 0;
+    if (Number.isFinite(qtyPerUnitNum) && qtyPerUnitNum !== 0) qtyVal = qtyPerUnitNum;
+    else if (Number.isFinite(reqdNum) && reqdNum !== 0) qtyVal = reqdNum;
+    else if (Number.isFinite(qtyPerUnitNum)) qtyVal = qtyPerUnitNum;
+    else if (Number.isFinite(reqdNum)) qtyVal = reqdNum;
     current.raw_materials.push({
       make: cMake >= 0 ? String(row[cMake] ?? "").trim() || undefined : undefined,
       material: mat,
-      size_model: cSize >= 0 ? String(row[cSize] ?? "").trim() || undefined : undefined,
-      qty_per_unit: cQty >= 0 ? Number(row[cQty]) || 0 : 0,
+      size_model: sizeVal,
+      qty_per_unit: qtyVal,
       unit: cUnit >= 0 ? String(row[cUnit] ?? "").trim() || undefined : undefined,
     });
   }
