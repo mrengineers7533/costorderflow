@@ -1,42 +1,70 @@
-# Fix: RM Master → Requisition auto-populates Size/Model and Qty/unit
+# Fix: RM Master Excel parser is picking the wrong columns for Size and Qty
 
-## Root cause
+## What the data shows
 
-The Requisition dialog (`CreateRequisitionDialog.tsx`) already reads `size_model` and `qty_per_unit` straight from the `fg_raw_material_map` row — that code is correct.
+Querying `fg_raw_material_map` for the FGs visible in the screenshot (e.g. `CYCLONE DIA 1500MM COMPLETE`, `ASPIRATION CHANNEL`) shows the same broken pattern every time:
 
-The data in `fg_raw_material_map.raw_materials` is itself wrong: a database sample shows almost every row stored as `qty_per_unit: 0` and `size_model` missing. So nothing in the requisition flow needs to change — the bug is in the RM Master Excel parser (`src/pages/RawMaterialMaster.tsx → parseSheet`).
+- Row 1 has `size_model: "1"` and `qty_per_unit: 1`.
+- Rows 2..N have no `size_model` and `qty_per_unit: 0`.
+- `material` and `unit` are correct on every row.
 
-Two parser problems explain the symptoms:
+Compared to the BOM screenshot (`MS SHEET | 1250X2500X2MM | 7.00 | NOS`, …), the parser is clearly:
 
-1. **Qty column picked is wrong.** Header detection is `headers.findIndex(h => h.includes("reqd") || h.includes("qty"))`. The user's sheet has both `Qty / unit` and `Reqd`, and `Qty / unit` appears first, so the parser locks onto `Qty / unit`. In the source workbook that column is blank for most rows while the real quantity lives in `Reqd` (or vice-versa), so every row gets `0`.
-2. **Size / Model lost when cell is blank in a merged block.** When the Excel uses merged cells for Size that span sibling rows of the same FG, only the first row carries a value; the rest become `undefined`. That matches the DB pattern (one row has `size_model: "1"`, the rest are missing).
+1. Reading the **wrong column** for `Size / Model` — it's picking up a `Sr No` / item-number-like column whose first cell is `"1"`, not the column with `1250X2500X2MM`.
+2. Reading the **wrong column** for `Qty / unit` — it's picking up the same kind of column (value `1`), not the column with `7`.
+3. The last RM Master upload (`BOM 04 Jun. RECEIVE DATA FROM AMIT SIR FACTORY.xlsx`, 25 FGs, 565 rows) is the only one on file. Re-uploading after the previous parser patch will not help until the parser is corrected for this workbook's header layout.
 
-## What to change (scope: parser only)
+The Excel file itself is not retained in storage, so we cannot inspect its exact header row from the sandbox — we need it once to lock the fix in.
 
-Single file: `src/pages/RawMaterialMaster.tsx`, inside `parseSheet`. No requisition, no UI, no schema changes.
+## Why the current detection fails
 
-1. Detect two distinct columns instead of one:
-   - `cQtyPerUnit` = header containing `qty` (e.g. `qty / unit`, `qty/unit`, `qty per unit`).
-   - `cReqd` = header containing `reqd` (e.g. `reqd`, `reqd qty`, `required`).
-   - Keep current behaviour when only one of them exists.
-2. When building each RM row, set `qty_per_unit` to the first non-empty, non-zero value among `[row[cQtyPerUnit], row[cReqd]]`. If both are empty, fall back to `0` (today's behaviour).
-3. For `size_model`, when the current row's Size cell is empty, carry forward the last non-empty Size value seen within the same FG block (Column A unchanged). Reset the carry-forward when a new FG starts. This mirrors how Excel merged cells read out as blanks on subsequent rows.
-4. No change to Make, Material, Unit, Notes parsing, FG grouping, or dedupe logic.
+Inside `src/pages/RawMaterialMaster.tsx → parseSheet`:
 
-## Re-populating existing data
+```ts
+const cSize = headers.findIndex(h => h.includes("size") || h.includes("model"));
+const cQtyPerUnit = headers.findIndex(h => h.includes("qty"));
+const cReqd = headers.findIndex(h => h.includes("reqd") || h.includes("required"));
+```
 
-The DB rows are already wrong, so a code fix alone won't update them. After deploying the parser change, the admin must re-upload the same RM Master Excel from the `Raw Material Master` page — the existing `upsert(..., onConflict: "model_number")` path will overwrite each FG's `raw_materials` with the corrected values. No migration needed.
+- `h.includes("model")` matches any column whose header has `Model` in it (e.g. `Model No`, `Sr/Model`, etc.), which can sit to the **left** of the real `Size / Model` column. `findIndex` returns the first match, so the Size column is mis-picked.
+- `h.includes("qty")` matches the **first** header containing `qty` (e.g. `Sr / Qty`, `Qty Note`), again not necessarily the real `Qty / unit` column.
+- The previous "merged-cell carry-forward" then propagates the wrong value, which is why row 1 has a stray `1` and the others are blank.
 
-## Verification
+## Plan
 
-1. Upload the existing RM Master Excel from `Raw Material Master`.
-2. Open any FG in the master detail dialog — Size / Model and Qty / unit columns are now populated.
-3. In Manufacturing → BOQ → Create Requisition → Manual select, click `Search RM Master` and pick the FG. The RM rows show Material, Size / Model, Qty / unit, Unit all auto-filled; `Reqd` column recomputes correctly.
-4. Direct Purchase FGs still mark as Direct Purchase (no rows). Existing RM rows for FGs not re-uploaded remain unchanged.
-5. No change to BOQ, OA, PI, PDFs, calculations, notifications, or any other module.
+### Step 1 — Get the actual workbook once
 
-## Out of scope (explicitly unchanged)
+Ask the user to re-upload `BOM 04 Jun. …xlsx` to the chat (one-time, just so the headers can be inspected). Without seeing the real header row we cannot be sure which column variants exist and we risk re-introducing the same bug.
 
-- `CreateRequisitionDialog.tsx`, requisition save/edge function, PDF, public requisition view.
-- DB schema, RLS, edge functions.
-- Direct Purchase flow, Make column toggle, Load-from-RM-Master button behaviour beyond reading the now-correct data.
+While waiting, the parser fix below is written defensively against the patterns we already see.
+
+### Step 2 — Tighten header detection (file: `src/pages/RawMaterialMaster.tsx`, function `parseSheet`)
+
+1. Treat the FG block columns as **positional from the `Raw Material` column**, not by fuzzy header search:
+   - `cMat` stays as the column whose header matches `raw material`.
+   - `cSize = cMat + 1` only if that header contains `size` (case-insensitive). If not, fall back to a strict header match for `size / model`, `size/model`, `size`, or a header that contains both `size` AND `model`. Never match on `model` alone.
+   - `cQty` = the first column **after `cMat`** whose header contains `qty` (e.g. `qty / unit`, `qty/unit`, `qty per unit`, `qty`). Ignore any `qty` headers that sit **before** `cMat`.
+   - `cReqd` = the first column **after `cMat`** whose header contains `reqd` or `required`.
+   - `cUnit` = column whose header is exactly `unit` (or starts with `unit`) and sits **after `cMat`**.
+   - `cMake` = column whose header is `make` and sits **before `cMat`** (Make conventionally precedes Material).
+2. Compute `qty_per_unit` as the first finite non-zero value in `[row[cQty], row[cReqd]]`; if both are 0/empty, store `0` (today's behaviour).
+3. **Remove the Size carry-forward** introduced previously. The current data proves it spreads the wrong value when the column itself is mis-detected; we'd rather have a blank than a wrong `"1"`. If the user's Excel genuinely uses merged Size cells we can reintroduce a narrower carry-forward (only when `sizeRaw` is non-empty for the first row of the FG block and the spreadsheet has no other text in the Size column for sibling rows), but only after seeing the file.
+4. Add a one-time `console.info` of the detected column indices and the header row when parsing each sheet, so the next upload makes any further mis-detection obvious in DevTools. No UI change.
+
+### Step 3 — Re-upload and verify
+
+After the patch lands the admin must re-upload the same BOM Excel from `Raw Material Master`. Then:
+
+1. Open `Raw Material Master → CYCLONE DIA 950MM COMPLETE` (or whichever FG corresponds to "Aspiration Cyclone - MRAC-15"). Size/Model and Qty match the BOM screenshot.
+2. Manufacturing → Requisition → Manual select → `Search RM Master` → pick the same FG. Rows auto-fill Material, Size/Model, Qty/unit, Unit exactly as in the BOM. `Reqd` recomputes from `Qty/unit × FG quantity`.
+3. Spot-check 2–3 other FGs (`ASPIRATION CHANNEL`, `BUCKET ELEVATOR MRE-200MM`) to confirm no regression.
+
+## Out of scope (unchanged)
+
+- `CreateRequisitionDialog.tsx`, `create-requisition` edge function, requisition PDF, public requisition view.
+- DB schema, RLS, edge functions, Direct Purchase flow, Make column toggle.
+- The on-screen BOQ grid, OA, PI, PDFs, calculations.
+
+## What I need from you
+
+Please attach the exact `BOM 04 Jun. …xlsx` you uploaded so I can confirm the header row text before I commit to Step 2's column rules — that's the only way to guarantee the fix matches your sheet on the first try.

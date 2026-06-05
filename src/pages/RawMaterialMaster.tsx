@@ -43,17 +43,33 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
   const findCol = (...keys: string[]) =>
     headers.findIndex((h) => keys.every((k) => h.includes(k)));
   const cFg = 0;
-  const cMake = headers.findIndex((h) => h === "make" || h.startsWith("make"));
   const cMat = findCol("raw", "material");
-  const cSize = headers.findIndex((h) => h.includes("size") || h.includes("model"));
-  const cQtyPerUnit = headers.findIndex((h) => h.includes("qty"));
-  const cReqd = headers.findIndex((h) => h.includes("reqd") || h.includes("required"));
-  const cUnit = headers.findIndex((h) => h === "unit" || h.startsWith("unit"));
   if (cMat < 0) return [];
+  // Resolve columns strictly relative to the Raw Material column to avoid
+  // picking up Sr/Model/Qty-like columns that may sit to its left.
+  const afterIdx = (predicate: (h: string) => boolean) => {
+    for (let i = cMat + 1; i < headers.length; i++) if (predicate(headers[i])) return i;
+    return -1;
+  };
+  const beforeIdx = (predicate: (h: string) => boolean) => {
+    for (let i = cMat - 1; i >= 0; i--) if (predicate(headers[i])) return i;
+    return -1;
+  };
+  // Size: prefer header containing "size" (after Material). Never match on
+  // "model" alone — there is often a Sr/Model column to the left of Material.
+  let cSize = afterIdx((h) => h.includes("size"));
+  if (cSize < 0) cSize = afterIdx((h) => h.includes("size") && h.includes("model"));
+  const cQtyPerUnit = afterIdx((h) => h.includes("qty"));
+  const cReqd = afterIdx((h) => h.includes("reqd") || h.includes("required"));
+  const cUnit = afterIdx((h) => h === "unit" || h.startsWith("unit"));
+  // Make conventionally precedes Material
+  const cMake = beforeIdx((h) => h === "make" || h.startsWith("make"));
+  // Diagnostic — visible in DevTools, no UI impact
+  // eslint-disable-next-line no-console
+  console.info("[RM parser] headers:", headers, { cFg, cMake, cMat, cSize, cQtyPerUnit, cReqd, cUnit });
 
   const out: ParsedFg[] = [];
   let current: ParsedFg | null = null;
-  let lastSize: string | undefined;
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i] || [];
     const fgRaw = String(row[cFg] ?? "");
@@ -66,14 +82,12 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
         raw_materials: [],
       };
       out.push(current);
-      lastSize = undefined;
     }
     if (!current) continue;
     const mat = String(row[cMat] ?? "").trim();
     if (!mat) continue;
     const sizeRaw = cSize >= 0 ? String(row[cSize] ?? "").trim() : "";
-    if (sizeRaw) lastSize = sizeRaw;
-    const sizeVal = sizeRaw || lastSize || undefined;
+    const sizeVal = sizeRaw || undefined;
     const qtyPerUnitRaw = cQtyPerUnit >= 0 ? row[cQtyPerUnit] : null;
     const reqdRaw = cReqd >= 0 ? row[cReqd] : null;
     const qtyPerUnitNum = Number(qtyPerUnitRaw);
