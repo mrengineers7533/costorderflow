@@ -1,55 +1,59 @@
-# Fix stale "Approved by Design" status in BOQ PDF
-
 ## Problem
 
-`generateBoqPDF` renders each item's `it.approval_status` directly from `boq.line_items`. That field is only refreshed when a user opens **BoqEditor** (it pulls the latest approval round and writes it back to `boqs.line_items`). If the PDF is exported from anywhere else — `BoqList`, `FinalBoq`, `OrderEditor`, `RevisionsPanel`, `DistributeBoqDialog`, `FamilyBoq`, revision snapshots — the values can be stale, so items that Design has already approved still print as **Pending**.
+For BOQ `26-27/GMSBOQ/0007`, the Design Review screen shows item 1 (Destoner SGA-13) as **Approved** in Round 1 (`boq_design_review_items.decision = 'approved'`), but the downloaded PDF still prints **Pending** under "Approved by Design".
 
-The show/hide toggle for the column already exists (per the earlier change) and stays as-is.
+DB check confirms:
+- `boqs.line_items[0].approval_status = 'pending'` (stale snapshot)
+- `boq_design_review_items` row for the same `boq_item_id` has `decision = 'approved'`
+
+The previous fix added `resolveLatestApprovalStatuses` inside `generateBoqPDF`, but only on the in-memory `boq` object passed to the PDF. It does not write the resolved value back to `boqs.line_items`, and other surfaces (Excel export, distribution email PDF, on-screen BOQ preview, revision-row PDFs whose snapshot is identical) keep showing the stale value. If the in-memory BOQ used by the PDF caller is itself stale (e.g. `BoqList.handleDownload(b)` where `b` was loaded once on page mount and never refreshed), the user can still see Pending if any caller bypasses the resolver.
 
 ## Fix
 
-Resolve the latest per-item decision inside the PDF layer, just before rendering, so every entry point gets the same correct values without each caller having to pre-sync.
+Only touch the approval-status resolution path. No UI, workflow, layout, or other column changes.
 
-### 1. New helper `src/lib/boq/approvalSync.ts`
+### 1. Make the resolver write-through (one place)
 
-- `resolveLatestApprovalStatuses(boqId, items)` → returns a new `BoqLineItem[]` where `approval_status` is overridden from the latest **submitted** approval round.
-- Implementation mirrors the existing sync in `BoqEditor.tsx` (lines 96–168):
-  - Call `fetchLatestApprovalRound(boqId)` (already exported from `@/lib/boq/designReview`).
-  - Map decisions: `approved → approved`, `change_required → rejected`, anything else → `pending`.
-  - Match review rows to items by `boq_item_id` first, then by normalized `description` as fallback.
-  - If no round or no match, leave the item untouched (preserves current behavior for BOQs without a review).
-- Pure read-only — no writes back to the DB from the PDF path (DB sync stays the responsibility of `BoqEditor`).
-
-### 2. Wire into `src/lib/boq/pdf.ts`
-
-In `generateBoqPDF`, before building the table rows:
+In `src/lib/boq/approvalSync.ts`, after building the new items array, if any item's `approval_status` actually changed, persist the corrected `line_items` back to `boqs` for that `boqId`:
 
 ```ts
-if (boq.id) {
-  try {
-    const synced = await resolveLatestApprovalStatuses(boq.id, boq.line_items);
-    boq = { ...boq, line_items: synced };
-  } catch (e) { console.warn("approval status resolve failed", e); }
+if (changed) {
+  await supabase
+    .from("boqs")
+    .update({ line_items: nextItems } as never)
+    .eq("id", boqId);
 }
 ```
 
-That's the only change to the PDF renderer. The existing `showApproval` opt-in, column layout, color coding, and "Pending/Approved/Rejected" mapping all stay identical.
+- Read-with-write-through, not a new write path. Mirrors what `BoqEditor` already does on load.
+- Wrapped in try/catch so a write failure (e.g. RLS for a viewer who only has SELECT) never breaks PDF rendering — it still returns the corrected in-memory items.
+- No change to the mapping rules (`approved → approved`, `change_required → rejected`, else `pending`) and no change to the matching keys (`boq_item_id` first, normalized `description` fallback).
 
-### 3. No other call sites change
+Result: the very first time **any** PDF is generated after the designer approves an item, the BOQ row is healed. Every subsequent surface (on-screen table, Excel, distribution PDF, revision list, etc.) reads the corrected snapshot.
 
-`BoqList`, `FinalBoq`, `BoqEditor`, `OrderEditor`, `RevisionsPanel`, `DistributeBoqDialog`, `FamilyBoq`, and `revisions/index.ts` keep calling `generateBoqPDF` exactly as today; they automatically get the corrected status.
+### 2. Ensure every PDF caller benefits
 
-For revision-snapshot PDFs (`revisions/index.ts`) the same lookup applies — snapshots use the parent `boq.id`, so they'll also reflect the latest approval round, which matches the requirement that the PDF "should display the latest/current item status."
+`generateBoqPDF` already calls `resolveLatestApprovalStatuses` when `showApproval` is true. Confirm and keep that single integration point — no caller-side changes needed in `BoqList`, `BoqEditor`, `FinalBoq`, `FamilyBoq`, `OrderEditor`, `RevisionsPanel`, `DistributeBoqDialog`, or `revisions/index.ts`.
 
-## Out of scope
+For the distribution path (`src/lib/boq/pdfDistribution.ts`), it already forwards `showApproval` to `generateBoqPDF`, so no edit is required there either.
 
-- BOQ on-screen table, totals, GST, calculations.
-- Approval workflow itself (`BoqVerify`, `DesignReview`, `fetchLatestApprovalRound`).
-- OA/PI/Requisition PDFs and their approval mirrors.
-- Show/hide toggle UI and `boq.pdf.approval` localStorage (already implemented).
-- Persisting the resolved status back to `boqs.line_items` from the PDF path.
+### 3. Out of scope
 
-## Files touched
+- Excel export (`buildBoqXlsx`) — separate column visibility; not in this request.
+- `exportDesignReviewRoundPDF` in `DesignReviewPanel` — that PDF reads round items directly and is already correct.
+- BOQ on-screen verification badge, totals, GST, or any approval workflow logic.
+- Schema, RLS, or migrations.
 
-- **Add** `src/lib/boq/approvalSync.ts`
-- **Edit** `src/lib/boq/pdf.ts` (one await + import at the top of `generateBoqPDF`)
+### Files touched
+
+- `src/lib/boq/approvalSync.ts` — add the conditional `boqs.update({ line_items })` write inside the existing function.
+
+No other files change.
+
+### Verification
+
+1. Open BOQ `26-27/GMSBOQ/0007` in BoqEditor or BoqList.
+2. Click **Download PDF** with the "Approved by Design" column toggle on.
+3. Expected: item 1 (Destoner SGA-13) prints **Approved**; remaining items print **Pending**.
+4. Re-open the BOQ — the on-screen Approval column also reflects **Approved** for item 1 (because `boqs.line_items` was healed).
+5. Subsequent Excel export and distribution PDF read the same corrected snapshot.
