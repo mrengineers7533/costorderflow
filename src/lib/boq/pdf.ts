@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { sortByItemNo, type BoqRecord } from "./types";
+import { resolveLatestApprovalStatuses } from "./approvalSync";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
@@ -50,6 +51,18 @@ export interface BoqPdfOptions {
 export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): Promise<jsPDF> {
   const showMake = !!opts.showMake;
   const showApproval = !!opts.showApproval;
+  // Refresh per-item approval status from the latest design-review round so
+  // the PDF always reflects current decisions, regardless of which screen
+  // initiated the export. Failures fall back silently to whatever is on
+  // `boq.line_items`.
+  if (showApproval && boq?.id) {
+    try {
+      const synced = await resolveLatestApprovalStatuses(boq.id, boq.line_items || []);
+      boq = { ...boq, line_items: synced };
+    } catch (e) {
+      console.warn("[boq pdf] approval status resolve failed", e);
+    }
+  }
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
