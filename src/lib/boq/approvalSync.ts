@@ -1,5 +1,6 @@
 import { fetchLatestApprovalRound } from "@/lib/boq/designReview";
 import type { BoqLineItem } from "@/lib/boq/types";
+import { supabase } from "@/integrations/supabase/client";
 
 const norm = (s: string | null | undefined) =>
   (s || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -24,11 +25,24 @@ export async function resolveLatestApprovalStatuses(
     const k = norm(r.description);
     if (k && !byDesc.has(k)) byDesc.set(k, r);
   });
-  return items.map((it) => {
+  let changed = false;
+  const next = items.map((it) => {
     const r = byId.get(it.id) || byDesc.get(norm(it.description));
     if (!r) return it;
     const ns = mapDecision(r.decision);
     if ((it as BoqLineItem & { approval_status?: string }).approval_status === ns) return it;
+    changed = true;
     return { ...it, approval_status: ns } as BoqLineItem;
   });
+  // Heal the stored snapshot so on-screen tables, Excel, distribution PDF,
+  // and revision rows reflect the same decision. Best-effort: a write
+  // failure (e.g. RLS for a viewer with only SELECT) must not break PDF.
+  if (changed) {
+    try {
+      await supabase.from("boqs").update({ line_items: next } as never).eq("id", boqId);
+    } catch (e) {
+      console.warn("[approvalSync] write-through failed", e);
+    }
+  }
+  return next;
 }
