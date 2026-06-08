@@ -188,6 +188,29 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
     (m[k] ||= []).push(d); return m;
   }, {});
 
+  const isCreator = !!currentUserId && currentUserId === boq.user_id;
+  const prepareDirty = JSON.stringify(prepareItems.map((i) => ({ id: i.id, r: i.remarks || "" })))
+    !== JSON.stringify(prepareOriginal.map((i) => ({ id: i.id, r: i.remarks || "" })));
+
+  async function handleSavePrepareRemarks() {
+    if (!boq.id) {
+      toast({ title: "Save the BOQ first", variant: "destructive" });
+      return;
+    }
+    setSavingRemarks(true);
+    try {
+      await saveBoqRemarks(boq.id, prepareItems, prepareOriginal);
+      setPrepareOriginal(JSON.parse(JSON.stringify(prepareItems)));
+      toast({ title: "Remarks saved" });
+      onChange?.();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setSavingRemarks(false);
+    }
+  }
+
   return (
     <Card id="design-review-panel">
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
