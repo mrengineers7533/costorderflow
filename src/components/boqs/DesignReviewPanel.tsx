@@ -252,6 +252,83 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isCreator && !isLocked && boq.id && (
+          <div className="rounded-lg border bg-card">
+            <button
+              type="button"
+              onClick={() => setPrepareOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium hover:bg-accent/40"
+            >
+              <span className="flex items-center gap-2">
+                {prepareOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                Prepare items for Design
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Edit Remarks and attach files per item before generating the link
+              </span>
+            </button>
+            {prepareOpen && (
+              <div className="border-t p-3 space-y-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted-foreground">
+                        <th className="py-1 pr-2 w-10">#</th>
+                        <th className="py-1 pr-2">Model</th>
+                        <th className="py-1 pr-2">Description</th>
+                        <th className="py-1 pr-2 w-16">Qty</th>
+                        <th className="py-1 pr-2 w-16">Unit</th>
+                        <th className="py-1 pr-2 min-w-[220px]">Remarks</th>
+                        <th className="py-1 pr-2 w-16 text-right">Files</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortByItemNo(prepareItems).map((it) => (
+                        <tr key={it.id} className="border-t align-top">
+                          <td className="py-1 pr-2">{it.item_no}</td>
+                          <td className="py-1 pr-2 whitespace-pre-wrap">{it.model_number}</td>
+                          <td className="py-1 pr-2 whitespace-pre-wrap">{it.description}</td>
+                          <td className="py-1 pr-2">{it.quantity}</td>
+                          <td className="py-1 pr-2">{it.unit}</td>
+                          <td className="py-1 pr-2">
+                            <Textarea
+                              value={it.remarks || ""}
+                              onChange={(e) =>
+                                setPrepareItems((prev) =>
+                                  prev.map((p) => (p.id === it.id ? { ...p, remarks: e.target.value } : p)),
+                                )
+                              }
+                              className="min-h-9 text-xs"
+                              rows={1}
+                            />
+                          </td>
+                          <td className="py-1 pr-2 text-right">
+                            <BoqItemAttachments boqId={boq.id} itemId={it.id} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSavePrepareRemarks}
+                    disabled={savingRemarks || !prepareDirty}
+                  >
+                    {savingRemarks ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1 h-4 w-4" />
+                    )}
+                    Save Remarks
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {needsChanges && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
             <div className="font-medium text-destructive">Design requires changes</div>
