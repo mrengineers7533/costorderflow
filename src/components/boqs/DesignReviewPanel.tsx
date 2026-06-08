@@ -60,6 +60,20 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const [openId, setOpenId] = useState<string | null>(null);
   const [openItems, setOpenItems] = useState<DesignReviewItemRow[]>([]);
   const [openDocs, setOpenDocs] = useState<DesignReviewDocRow[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [prepareOpen, setPrepareOpen] = useState(false);
+  const [prepareItems, setPrepareItems] = useState<BoqLineItem[]>(items);
+  const [prepareOriginal, setPrepareOriginal] = useState<BoqLineItem[]>(items);
+  const [savingRemarks, setSavingRemarks] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
+  }, []);
+
+  useEffect(() => {
+    setPrepareItems(items);
+    setPrepareOriginal(JSON.parse(JSON.stringify(items)));
+  }, [items]);
 
   async function load() {
     if (!boq.id) return;
