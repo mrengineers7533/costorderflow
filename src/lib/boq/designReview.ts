@@ -211,6 +211,42 @@ export async function signedDocUrl(filePath: string, ttlSeconds = 3600): Promise
   return data.signedUrl;
 }
 
+/** Creator-uploaded BOQ item instruction attachments fetched via the review
+ *  token. Returns a map keyed by boq_item_id. */
+export interface BoqItemAttachmentRow {
+  id: string;
+  boq_id: string;
+  boq_item_id: string;
+  file_name: string;
+  file_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+export async function fetchCreatorAttachmentsByToken(
+  token: string,
+): Promise<Record<string, BoqItemAttachmentRow[]>> {
+  const { data, error } = await supabase.rpc("get_boq_item_attachments_by_token", { _token: token });
+  if (error) return {};
+  const out: Record<string, BoqItemAttachmentRow[]> = {};
+  for (const r of (data || []) as unknown as BoqItemAttachmentRow[]) {
+    (out[r.boq_item_id] ||= []).push(r);
+  }
+  return out;
+}
+
+/** Short-lived signed URL for a creator-uploaded BOQ item attachment.
+ *  Anonymous reviewers are allowed via an RLS policy on storage.objects
+ *  scoped to the parent BOQ having an open design review. */
+export async function signedCreatorDocUrl(filePath: string, ttlSeconds = 600): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("boq-item-docs")
+    .createSignedUrl(filePath, ttlSeconds);
+  if (error || !data?.signedUrl) return "";
+  return data.signedUrl;
+}
+
 /** Fetch latest submitted review round + its items for a BOQ. */
 export async function fetchLatestSubmittedRound(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
   const { data } = await supabase
