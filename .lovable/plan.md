@@ -1,40 +1,45 @@
-# Per-item Remarks + Attachments for the OA/BOQ creator
+# Fix: Design team can't open/download item attachments
 
-Goal: the OA/BOQ creator can add/edit Remarks and attach files per line item BOTH on the BOQ editor and inside the "Generate Design Link" panel — without touching any other existing behavior.
+## Root cause
 
-## Scope (only what changes)
+On the `/design-review/:token` page the file list (`Instructions:`) is fetched correctly via the `get_boq_item_attachments_by_token` SECURITY DEFINER RPC, so names appear. But clicking a link calls `supabase.storage.from('boq-item-docs').createSignedUrl(...)` as an **anonymous** user, which returns `404 Object not found`.
 
-### 1. BOQ editor — `src/pages/boqs/BoqEditor.tsx`
-- Remarks editing for the creator is currently gated by `canEditRemarks && !locked`. Keep `locked` as is (approved / final_sent stays read-only) but make sure the **Remarks textarea and "Save Remarks" button are enabled in every other state**, including `design_sent` (link generated, awaiting review) — which is the state where the user reports being unable to edit.
-- Per-item attachment popover (`BoqItemAttachments`) already renders on each row — leave it untouched.
-- No other column behavior, save flow, or design-review logic changes.
+The current storage RLS policy is:
 
-### 2. Link-generation panel — `src/components/boqs/DesignReviewPanel.tsx`
-- Above the existing "Generate Comment Link / Generate Approval Link" buttons, add a collapsible **"Prepare items for Design"** section, visible only to the creator, that lists every BOQ line item in a compact table:
+```text
+Anon read boq-item-docs via open review (SELECT, roles=anon)
+  USING bucket_id='boq-item-docs'
+        AND EXISTS (SELECT 1 FROM boq_design_reviews r
+                    WHERE r.status='sent' AND r.expires_at > now()
+                      AND r.boq_id::text = split_part(objects.name,'/',1))
+```
 
-  ```text
-  # | Model | Description | Qty | Unit | Remarks (editable) | Files
-  ```
+The `EXISTS` subquery runs as the `anon` role, which has **no SELECT grant on `public.boq_design_reviews`**, so the subquery returns false and the storage object is hidden — hence the 404 and the broken link/download.
 
-  - **Remarks** cell: `<Textarea>` bound to the item's `remarks`. On blur (or via a single "Save Remarks" button at the bottom of the section), persist via the same `UPDATE boqs SET line_items=...` path the editor uses — extract that into a small helper (`saveBoqRemarks(boqId, items)` in `src/lib/boq/designReview.ts` or inline) so both surfaces share one writer. Also append the same `boq_remarks_audit_log` entries the editor writes today.
-  - **Files** cell: reuse the existing `<BoqItemAttachments boqId itemId />` popover unchanged.
-  - Disable both controls when `locked` (approved / final_sent), matching editor rules.
-- The "Generate …" buttons remain exactly as today; no change to round creation, tokens, or RPCs.
+Verified by curl against `/storage/v1/object/sign/...` with the anon key → 404, while the row + attachments + open review all exist in the DB.
 
-### 3. Out of scope (do NOT change)
-- Design Review page, RPCs, RLS, storage buckets, attachment schema.
-- Any other column (Model, Description, Qty, Unit, Make, Approval).
-- PDF/Excel exports, distribution emails, verification flow.
+The fallback RPC `public.sign_boq_item_doc_by_token` is also non-functional (returns NULL because `storage.create_signed_url` does not exist in this project), so the storage policy must be fixed.
 
-## Technical notes
+## Fix (one migration, no app code changes)
 
-- Single source of truth for line_items stays the `boqs.line_items` JSON column. The new panel mutates a local copy and writes back via the shared helper; on success it calls `onChange()` so the editor refreshes.
-- Re-use the existing `boq_remarks_audit_log` insert payload (`old_remarks` / `new_remarks` / `item_id`) from `BoqEditor.saveRemarks` — move it into the helper to avoid drift.
-- No DB migration, no new tables, no new policies, no edge-function changes.
+1. Create `public.has_open_review_for_boq(_boq_id uuid) RETURNS boolean` — `SECURITY DEFINER`, `STABLE`, `SET search_path = public`. Returns true when there is a `boq_design_reviews` row with `boq_id = _boq_id`, `status = 'sent'`, `expires_at > now()`. `GRANT EXECUTE ... TO anon, authenticated`.
+2. Drop and recreate the `Anon read boq-item-docs via open review` policy on `storage.objects` so its `USING` clause calls the new helper:
+
+   ```text
+   bucket_id = 'boq-item-docs'
+     AND public.has_open_review_for_boq(
+           (split_part(name, '/', 1))::uuid)
+   ```
+
+3. Leave every other storage policy, RPC, table, frontend file, and bucket unchanged.
 
 ## Acceptance
 
-1. Creator opens a BOQ whose status is `design_sent`: Remarks textareas in the main table are editable; "Save Remarks" button works.
-2. In the Design Review panel, the creator sees the per-item list with editable Remarks and the same paperclip popover. Saving Remarks updates the BOQ and the editor table without a page reload. Uploading a file shows up in the popover badge.
-3. Non-creators see the section read-only (or hidden) — never lose existing permission boundaries.
-4. Every other BOQ feature (approval flow, link generation, PDF, verification, design review submission) behaves identically to before.
+- Opening the link in the report (the user's `…/design-review/3d735e49-…` URL) shows the same items but the file names under "Instructions:" become live links that open/download in a new tab.
+- Authenticated creators continue to upload, download, and delete via the existing `Auth …` policies.
+- Submitting the review still works; no schema, RPC, or UI behavior changes.
+
+## Out of scope
+
+- The `sign_boq_item_doc_by_token` RPC stays as-is (unused).
+- No changes to BOQ editor, link-generation panel, or the `boq_remarks_audit_log` flow already shipped this session.

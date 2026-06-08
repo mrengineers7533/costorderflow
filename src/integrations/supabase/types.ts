@@ -2014,6 +2014,7 @@ export type Database = {
         Args: { _module: string; _user: string }
         Returns: boolean
       }
+      has_open_review_for_boq: { Args: { _boq_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
