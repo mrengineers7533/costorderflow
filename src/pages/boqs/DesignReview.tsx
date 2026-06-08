@@ -24,6 +24,21 @@ import {
 import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo } from "@/lib/boq/types";
 
+function CreatorDocLink({ filePath, fileName }: { filePath: string; fileName: string }) {
+  const [url, setUrl] = useState<string>("");
+  useEffect(() => {
+    let cancelled = false;
+    signedCreatorDocUrl(filePath).then((u) => { if (!cancelled) setUrl(u); });
+    return () => { cancelled = true; };
+  }, [filePath]);
+  if (!url) return <span className="text-muted-foreground truncate max-w-[200px]">{fileName}</span>;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px] text-primary">
+      {fileName}
+    </a>
+  );
+}
+
 interface ReviewMeta {
   id: string;
   boq_id: string;
