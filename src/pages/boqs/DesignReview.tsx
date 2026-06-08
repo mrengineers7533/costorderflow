@@ -322,6 +322,7 @@ export default function DesignReview() {
                         const d = decisions[it.boq_item_id];
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+                        const instructions = creatorAttachments[it.boq_item_id] || [];
                         const base = baselineById[it.boq_item_id];
                         const wasChanged = (field: DiffField): string | null => {
                           if (isComment || !base) return null;
@@ -414,6 +415,18 @@ export default function DesignReview() {
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
                                       <DocLink key={i} filePath={dc.file_path} fileName={dc.file_name} className="underline truncate max-w-[200px]" />
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                            {instructions.length > 0 && (
+                              <TableRow>
+                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Instructions:</span>
+                                    {instructions.map((a) => (
+                                      <CreatorDocLink key={a.id} filePath={a.file_path} fileName={a.file_name} />
                                     ))}
                                   </div>
                                 </TableCell>
