@@ -17,6 +17,9 @@ import {
   type DiffField,
   type DesignReviewItemRow,
   type Decision,
+  fetchCreatorAttachmentsByToken,
+  signedCreatorDocUrl,
+  type BoqItemAttachmentRow,
 } from "@/lib/boq/designReview";
 import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo } from "@/lib/boq/types";
@@ -55,6 +58,7 @@ export default function DesignReview() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [baselineById, setBaselineById] = useState<Record<string, DesignReviewItemRow>>({});
   const [baselineRoundNo, setBaselineRoundNo] = useState<number | null>(null);
+  const [creatorAttachments, setCreatorAttachments] = useState<Record<string, BoqItemAttachmentRow[]>>({});
 
   const [reviewerName, setReviewerName] = useState("");
   const [designTeam, setDesignTeam] = useState("");
@@ -83,6 +87,7 @@ export default function DesignReview() {
       setMeta(row as unknown as ReviewMeta);
       const its = await (await import("@/lib/boq/designReview")).fetchReviewItemsByToken(token);
       setItems(its);
+      fetchCreatorAttachmentsByToken(token).then(setCreatorAttachments).catch(() => undefined);
       const d: typeof decisions = {};
       its.forEach((it) => { d[it.boq_item_id] = { decision: "pending", comment: "", design_change_note: "" }; });
       setDecisions(d);
