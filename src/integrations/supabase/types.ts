@@ -433,6 +433,57 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_item_attachments: {
+        Row: {
+          boq_id: string
+          boq_item_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          boq_id: string
+          boq_item_id: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          boq_id?: string
+          boq_item_id?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_item_attachments_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_item_attachments_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
+        ]
+      }
       boq_remarks_audit_log: {
         Row: {
           boq_id: string
@@ -1711,6 +1762,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_boq_item_attachments_by_token: {
+        Args: { _token: string }
+        Returns: {
+          boq_id: string
+          boq_item_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          uploaded_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "boq_item_attachments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_design_review_by_token: {
         Args: { _token: string }
         Returns: {
@@ -1969,6 +2040,10 @@ export type Database = {
       }
       next_requisition_number: {
         Args: { _oa_number: string; _revision: number; _root: string }
+        Returns: string
+      }
+      sign_boq_item_doc_by_token: {
+        Args: { _path: string; _token: string }
         Returns: string
       }
       submit_design_review_with_token: {
