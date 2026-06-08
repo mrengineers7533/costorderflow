@@ -1,73 +1,31 @@
-# Per-Item BOQ Attachments (Instructions for Design Team)
+# Per-item Instructions + Design Approval — already live
 
-## Goal
-Every BOQ line item gets its own file upload slot. The BOQ creator attaches instruction files (Excel / PDF / Word / images / common docs) per row. The Design team opens the BOQ review link and can view/download those files inline against each item. Existing per-item comments (already supported by the Design Review screen) remain unchanged.
+After re-reading `src/pages/boqs/DesignReview.tsx` and `src/lib/boq/designReview.ts`, all three pieces of your requirement are already wired up. No new code is required.
 
-No change to BOQ auto-create, calculations, approval workflow, verification, or any other existing feature.
+## What's already in place
 
-## What the user will see
+1. **Creator attachments visible to Design**
+   - `DesignReview.tsx` (line 105) calls `fetchCreatorAttachmentsByToken(token)` on load and stores results in `creatorAttachments`, keyed by `boq_item_id`.
+   - For each item row, an extra row renders (lines 438–449) labelled **"Instructions:"** with each file as a clickable link (`CreatorDocLink`) that resolves via a short-lived signed URL on the private `boq-item-docs` bucket.
+   - Backed by the SECURITY DEFINER RPC `get_boq_item_attachments_by_token` (joins via `boq_design_reviews` so anonymous reviewers can only see files for BOQs with an open review link).
 
-**BoqEditor (creator side):**
-- Each item row in the items table gets a small "Attach" button (paperclip icon) plus a count badge of attached files.
-- Clicking opens a popover listing existing files (with download link + remove button) and an "Upload file" input.
-- Accepts: `.pdf .doc .docx .xls .xlsx .ppt .pptx .csv .txt .png .jpg .jpeg`.
-- Uploads happen immediately on file pick; files persist even before the BOQ is re-saved.
+2. **Item-wise comments**
+   - Each item gets a sub-row of 5 textareas — Model, Description, Qty, Unit, Remarks (lines 404–413) — saved into `column_comments` per item on submit.
+   - Reviewer can also attach their own files per item via the paperclip in the Comment cell (lines 398–402, uploaded to `design-review-docs`).
 
-**Design Review page (`/boqs/review/:token`):**
-- The existing item row gets a new "Instructions" cell (or thin section under the row) listing the creator's attachments as clickable links that open via short-lived signed URLs (same pattern as the existing `DocLink` component used for reviewer uploads).
-- No upload control on this side — view/download only. The existing per-column comment textareas and per-item Approved/Change buttons stay exactly as they are.
+3. **Item-wise Approve / Change Required**
+   - When the link is an **Approval** link (`meta.kind === "approval"`), each item row shows **Approved** and **Change** buttons (lines 376–390), plus a "Change note" textarea when Change is selected.
+   - Bulk **Approve all items** / **Reset all** buttons in the card header (lines 282–314).
+   - Submission goes through `submit_design_review_with_token` which persists per-item `decision`, `comment`, `column_comments`, and `design_change_note`, and rolls up the BOQ-level `design_review_status`.
 
-## Technical details
+## If something is not working as expected
 
-### Storage
-- New private bucket **`boq-item-docs`** (created via storage tool).
-- Path convention: `{boq_id}/{boq_item_id}/{uuid}.{ext}`.
-- RLS on `storage.objects`:
-  - `authenticated` can `INSERT`/`SELECT`/`DELETE` for this bucket (BOQ creators).
-  - `anon` + `authenticated` get `SELECT` only when the parent BOQ has an open design-review token (enforced via the RPC returning signed URLs, not via direct anon storage access — anon never touches storage directly, links are signed server-side).
+If you are not seeing the Instructions row on the Design Review page for a specific BOQ, the most likely causes are:
 
-### Database (single migration)
-New table `public.boq_item_attachments`:
-- `id uuid pk`, `boq_id uuid → boqs(id) on delete cascade`, `boq_item_id text not null`, `file_name text`, `file_path text`, `mime_type text`, `size_bytes int`, `uploaded_by uuid → auth.users`, `created_at timestamptz`.
-- Index on `(boq_id, boq_item_id)`.
-- GRANTs: `SELECT, INSERT, DELETE` to `authenticated`; `ALL` to `service_role`.
-- RLS:
-  - authenticated users: full CRUD on rows where they can see the parent BOQ (mirror existing BOQ select policy — owner or admin).
-  - no anon policy (anon access goes through SECURITY DEFINER RPC).
+- The files were uploaded **before** the Design link was sent — they should still appear; if not, the review token may have expired (the RPC only returns rows for `status='sent' AND expires_at > now()`).
+- You're opening a Comment-only link generated before the attachment feature shipped — generate a fresh link from the BOQ editor.
+- The link is for a different BOQ revision than the one the files were attached to (attachments are scoped to `boq_id`).
 
-New RPC `public.get_boq_item_attachments_by_token(_token uuid)`:
-- SECURITY DEFINER, returns rows joined via `boq_design_reviews.boq_id` where the review is still open (`status='sent' and expires_at > now()`).
-- Mirrors existing `get_design_review_*_by_token` pattern.
+## Recommended next step
 
-New RPC `public.sign_boq_item_doc_by_token(_token uuid, _path text) returns text`:
-- SECURITY DEFINER, validates that `_path` belongs to a row reachable from `_token`, then calls `storage.create_signed_url('boq-item-docs', _path, 600)` and returns the URL. (Alternative: have the client call `supabase.storage.from(...).createSignedUrl` directly — but reviewers are anonymous and won't have storage permission, so the RPC route is required.)
-
-### Frontend
-
-`src/components/boqs/BoqItemAttachments.tsx` (new):
-- Popover with file list + upload input. Used in `BoqEditor` item rows.
-- Uses `supabase.storage.from('boq-item-docs').upload(...)` then inserts a row into `boq_item_attachments`.
-- Loads existing attachments per item on open.
-
-`src/pages/boqs/BoqEditor.tsx`:
-- Add a new compact column (or trailing cell) per item that renders `<BoqItemAttachments boqId={boqId} itemId={it.id} />`. No other column / layout / save logic touched.
-
-`src/pages/boqs/DesignReview.tsx`:
-- After `fetchReviewItemsByToken`, also call new helper `fetchCreatorAttachmentsByToken(token)` → `Record<boq_item_id, Attachment[]>`.
-- Render a small "Instructions from Sales" line above the existing Comment row when attachments exist, using anchors that resolve via `sign_boq_item_doc_by_token`.
-
-`src/lib/boq/designReview.ts`:
-- Add `fetchCreatorAttachmentsByToken` and `signCreatorDocByToken` helpers wrapping the two new RPCs.
-
-### Out of scope (explicit)
-- BOQ PDF / Excel exports — unchanged.
-- Distribution PDF — unchanged.
-- Approval workflow, verification, revisions, design_review_status transitions — unchanged.
-- Comments storage — already handled by existing per-column comment system; no change.
-- Editing/removing attachments from the reviewer side — view-only by design.
-
-## Verification
-1. Create / open a BOQ → each item row shows the new Attach button.
-2. Upload a PDF + an XLSX against item 1 → both appear in the popover with download + remove.
-3. Send a Design Comment/Approval link → open the public review page → item 1 shows both files as clickable links that download via signed URL; other items show no attachments section.
-4. Existing flows (save BOQ, send for verification, finalize, generate PDF, design approval) all behave exactly as before.
+Tell me which specific BOQ / link is missing the Instructions row, or share a screenshot of the Design Review page where you expect to see them. I'll trace that exact case in the database (`boq_item_attachments` rows + the matching `boq_design_reviews` row) and fix whatever's blocking it. No speculative code changes until then.
