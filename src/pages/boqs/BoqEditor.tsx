@@ -28,7 +28,7 @@ import { RevisionsTable } from "@/components/boqs/RevisionsTable";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 import { PendingChangesPanel } from "@/components/boqs/PendingChangesPanel";
 import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog, fetchLatestApprovalRound } from "@/lib/boq/designReview";
-import { fetchRemarksAuditLog, insertRemarksAuditLogs } from "@/lib/boq/auditLog";
+import { fetchRemarksAuditLog, saveBoqRemarks } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { Columns3 } from "lucide-react";
@@ -350,47 +350,16 @@ export default function BoqEditor() {
       return;
     }
     setSaving(true);
-
-    // Build audit entries for any changed remarks
-    const originalMap = new Map(originalItems.map((it) => [it.id, it]));
-    const changed = items
-      .map((it) => {
-        const orig = originalMap.get(it.id);
-        if (!orig) return null;
-        if ((orig.remarks || "").trim() === (it.remarks || "").trim()) return null;
-        return { item: it, oldRemarks: orig.remarks || "" };
-      })
-      .filter(Boolean) as { item: BoqLineItem; oldRemarks: string }[];
-
-    if (changed.length) {
-      const { data: authData } = await supabase.auth.getUser();
-      const user = authData.user;
-      const userName = (user?.user_metadata as { full_name?: string } | undefined)?.full_name?.trim() || "";
-      const auditEntries = changed.map((c) => ({
-        boq_id: boqId,
-        item_id: c.item.id,
-        item_no: c.item.item_no,
-        model_number: c.item.model_number,
-        old_remarks: c.oldRemarks,
-        new_remarks: c.item.remarks || "",
-        changed_by: user?.id || null,
-        changed_by_email: user?.email || null,
-        changed_by_name: userName || null,
-      }));
-      try {
-        await insertRemarksAuditLogs(auditEntries);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setSaving(false);
-        return toast({ title: "Audit log failed", description: msg, variant: "destructive" });
-      }
+    try {
+      await saveBoqRemarks(boqId, items, originalItems);
+      setOriginalItems(JSON.parse(JSON.stringify(items)));
+      toast({ title: "Remarks saved" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-
-    const { error } = await supabase.from("boqs").update({ line_items: items } as never).eq("id", boqId);
-    setSaving(false);
-    if (error) return toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    setOriginalItems(JSON.parse(JSON.stringify(items)));
-    toast({ title: "Remarks saved" });
   }
 
   async function downloadPDF() {

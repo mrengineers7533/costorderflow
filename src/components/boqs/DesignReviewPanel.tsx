@@ -2,6 +2,11 @@ import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { saveBoqRemarks } from "@/lib/boq/auditLog";
+import { BoqItemAttachments } from "@/components/boqs/BoqItemAttachments";
+import { ChevronDown, ChevronRight, Save } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { Copy, Download, FileSpreadsheet, Link2, Loader2, RefreshCw } from "lucide-react";
@@ -55,6 +60,20 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const [openId, setOpenId] = useState<string | null>(null);
   const [openItems, setOpenItems] = useState<DesignReviewItemRow[]>([]);
   const [openDocs, setOpenDocs] = useState<DesignReviewDocRow[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [prepareOpen, setPrepareOpen] = useState(false);
+  const [prepareItems, setPrepareItems] = useState<BoqLineItem[]>(items);
+  const [prepareOriginal, setPrepareOriginal] = useState<BoqLineItem[]>(items);
+  const [savingRemarks, setSavingRemarks] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
+  }, []);
+
+  useEffect(() => {
+    setPrepareItems(items);
+    setPrepareOriginal(JSON.parse(JSON.stringify(items)));
+  }, [items]);
 
   async function load() {
     if (!boq.id) return;
@@ -169,6 +188,29 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
     (m[k] ||= []).push(d); return m;
   }, {});
 
+  const isCreator = !!currentUserId && currentUserId === boq.user_id;
+  const prepareDirty = JSON.stringify(prepareItems.map((i) => ({ id: i.id, r: i.remarks || "" })))
+    !== JSON.stringify(prepareOriginal.map((i) => ({ id: i.id, r: i.remarks || "" })));
+
+  async function handleSavePrepareRemarks() {
+    if (!boq.id) {
+      toast({ title: "Save the BOQ first", variant: "destructive" });
+      return;
+    }
+    setSavingRemarks(true);
+    try {
+      await saveBoqRemarks(boq.id, prepareItems, prepareOriginal);
+      setPrepareOriginal(JSON.parse(JSON.stringify(prepareItems)));
+      toast({ title: "Remarks saved" });
+      onChange?.();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setSavingRemarks(false);
+    }
+  }
+
   return (
     <Card id="design-review-panel">
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
@@ -210,6 +252,83 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isCreator && !isLocked && boq.id && (
+          <div className="rounded-lg border bg-card">
+            <button
+              type="button"
+              onClick={() => setPrepareOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium hover:bg-accent/40"
+            >
+              <span className="flex items-center gap-2">
+                {prepareOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                Prepare items for Design
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Edit Remarks and attach files per item before generating the link
+              </span>
+            </button>
+            {prepareOpen && (
+              <div className="border-t p-3 space-y-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted-foreground">
+                        <th className="py-1 pr-2 w-10">#</th>
+                        <th className="py-1 pr-2">Model</th>
+                        <th className="py-1 pr-2">Description</th>
+                        <th className="py-1 pr-2 w-16">Qty</th>
+                        <th className="py-1 pr-2 w-16">Unit</th>
+                        <th className="py-1 pr-2 min-w-[220px]">Remarks</th>
+                        <th className="py-1 pr-2 w-16 text-right">Files</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortByItemNo(prepareItems).map((it) => (
+                        <tr key={it.id} className="border-t align-top">
+                          <td className="py-1 pr-2">{it.item_no}</td>
+                          <td className="py-1 pr-2 whitespace-pre-wrap">{it.model_number}</td>
+                          <td className="py-1 pr-2 whitespace-pre-wrap">{it.description}</td>
+                          <td className="py-1 pr-2">{it.quantity}</td>
+                          <td className="py-1 pr-2">{it.unit}</td>
+                          <td className="py-1 pr-2">
+                            <Textarea
+                              value={it.remarks || ""}
+                              onChange={(e) =>
+                                setPrepareItems((prev) =>
+                                  prev.map((p) => (p.id === it.id ? { ...p, remarks: e.target.value } : p)),
+                                )
+                              }
+                              className="min-h-9 text-xs"
+                              rows={1}
+                            />
+                          </td>
+                          <td className="py-1 pr-2 text-right">
+                            <BoqItemAttachments boqId={boq.id} itemId={it.id} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSavePrepareRemarks}
+                    disabled={savingRemarks || !prepareDirty}
+                  >
+                    {savingRemarks ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1 h-4 w-4" />
+                    )}
+                    Save Remarks
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {needsChanges && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
             <div className="font-medium text-destructive">Design requires changes</div>
