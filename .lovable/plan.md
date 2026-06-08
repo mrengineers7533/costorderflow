@@ -1,59 +1,73 @@
-## Problem
+# Per-Item BOQ Attachments (Instructions for Design Team)
 
-For BOQ `26-27/GMSBOQ/0007`, the Design Review screen shows item 1 (Destoner SGA-13) as **Approved** in Round 1 (`boq_design_review_items.decision = 'approved'`), but the downloaded PDF still prints **Pending** under "Approved by Design".
+## Goal
+Every BOQ line item gets its own file upload slot. The BOQ creator attaches instruction files (Excel / PDF / Word / images / common docs) per row. The Design team opens the BOQ review link and can view/download those files inline against each item. Existing per-item comments (already supported by the Design Review screen) remain unchanged.
 
-DB check confirms:
-- `boqs.line_items[0].approval_status = 'pending'` (stale snapshot)
-- `boq_design_review_items` row for the same `boq_item_id` has `decision = 'approved'`
+No change to BOQ auto-create, calculations, approval workflow, verification, or any other existing feature.
 
-The previous fix added `resolveLatestApprovalStatuses` inside `generateBoqPDF`, but only on the in-memory `boq` object passed to the PDF. It does not write the resolved value back to `boqs.line_items`, and other surfaces (Excel export, distribution email PDF, on-screen BOQ preview, revision-row PDFs whose snapshot is identical) keep showing the stale value. If the in-memory BOQ used by the PDF caller is itself stale (e.g. `BoqList.handleDownload(b)` where `b` was loaded once on page mount and never refreshed), the user can still see Pending if any caller bypasses the resolver.
+## What the user will see
 
-## Fix
+**BoqEditor (creator side):**
+- Each item row in the items table gets a small "Attach" button (paperclip icon) plus a count badge of attached files.
+- Clicking opens a popover listing existing files (with download link + remove button) and an "Upload file" input.
+- Accepts: `.pdf .doc .docx .xls .xlsx .ppt .pptx .csv .txt .png .jpg .jpeg`.
+- Uploads happen immediately on file pick; files persist even before the BOQ is re-saved.
 
-Only touch the approval-status resolution path. No UI, workflow, layout, or other column changes.
+**Design Review page (`/boqs/review/:token`):**
+- The existing item row gets a new "Instructions" cell (or thin section under the row) listing the creator's attachments as clickable links that open via short-lived signed URLs (same pattern as the existing `DocLink` component used for reviewer uploads).
+- No upload control on this side — view/download only. The existing per-column comment textareas and per-item Approved/Change buttons stay exactly as they are.
 
-### 1. Make the resolver write-through (one place)
+## Technical details
 
-In `src/lib/boq/approvalSync.ts`, after building the new items array, if any item's `approval_status` actually changed, persist the corrected `line_items` back to `boqs` for that `boqId`:
+### Storage
+- New private bucket **`boq-item-docs`** (created via storage tool).
+- Path convention: `{boq_id}/{boq_item_id}/{uuid}.{ext}`.
+- RLS on `storage.objects`:
+  - `authenticated` can `INSERT`/`SELECT`/`DELETE` for this bucket (BOQ creators).
+  - `anon` + `authenticated` get `SELECT` only when the parent BOQ has an open design-review token (enforced via the RPC returning signed URLs, not via direct anon storage access — anon never touches storage directly, links are signed server-side).
 
-```ts
-if (changed) {
-  await supabase
-    .from("boqs")
-    .update({ line_items: nextItems } as never)
-    .eq("id", boqId);
-}
-```
+### Database (single migration)
+New table `public.boq_item_attachments`:
+- `id uuid pk`, `boq_id uuid → boqs(id) on delete cascade`, `boq_item_id text not null`, `file_name text`, `file_path text`, `mime_type text`, `size_bytes int`, `uploaded_by uuid → auth.users`, `created_at timestamptz`.
+- Index on `(boq_id, boq_item_id)`.
+- GRANTs: `SELECT, INSERT, DELETE` to `authenticated`; `ALL` to `service_role`.
+- RLS:
+  - authenticated users: full CRUD on rows where they can see the parent BOQ (mirror existing BOQ select policy — owner or admin).
+  - no anon policy (anon access goes through SECURITY DEFINER RPC).
 
-- Read-with-write-through, not a new write path. Mirrors what `BoqEditor` already does on load.
-- Wrapped in try/catch so a write failure (e.g. RLS for a viewer who only has SELECT) never breaks PDF rendering — it still returns the corrected in-memory items.
-- No change to the mapping rules (`approved → approved`, `change_required → rejected`, else `pending`) and no change to the matching keys (`boq_item_id` first, normalized `description` fallback).
+New RPC `public.get_boq_item_attachments_by_token(_token uuid)`:
+- SECURITY DEFINER, returns rows joined via `boq_design_reviews.boq_id` where the review is still open (`status='sent' and expires_at > now()`).
+- Mirrors existing `get_design_review_*_by_token` pattern.
 
-Result: the very first time **any** PDF is generated after the designer approves an item, the BOQ row is healed. Every subsequent surface (on-screen table, Excel, distribution PDF, revision list, etc.) reads the corrected snapshot.
+New RPC `public.sign_boq_item_doc_by_token(_token uuid, _path text) returns text`:
+- SECURITY DEFINER, validates that `_path` belongs to a row reachable from `_token`, then calls `storage.create_signed_url('boq-item-docs', _path, 600)` and returns the URL. (Alternative: have the client call `supabase.storage.from(...).createSignedUrl` directly — but reviewers are anonymous and won't have storage permission, so the RPC route is required.)
 
-### 2. Ensure every PDF caller benefits
+### Frontend
 
-`generateBoqPDF` already calls `resolveLatestApprovalStatuses` when `showApproval` is true. Confirm and keep that single integration point — no caller-side changes needed in `BoqList`, `BoqEditor`, `FinalBoq`, `FamilyBoq`, `OrderEditor`, `RevisionsPanel`, `DistributeBoqDialog`, or `revisions/index.ts`.
+`src/components/boqs/BoqItemAttachments.tsx` (new):
+- Popover with file list + upload input. Used in `BoqEditor` item rows.
+- Uses `supabase.storage.from('boq-item-docs').upload(...)` then inserts a row into `boq_item_attachments`.
+- Loads existing attachments per item on open.
 
-For the distribution path (`src/lib/boq/pdfDistribution.ts`), it already forwards `showApproval` to `generateBoqPDF`, so no edit is required there either.
+`src/pages/boqs/BoqEditor.tsx`:
+- Add a new compact column (or trailing cell) per item that renders `<BoqItemAttachments boqId={boqId} itemId={it.id} />`. No other column / layout / save logic touched.
 
-### 3. Out of scope
+`src/pages/boqs/DesignReview.tsx`:
+- After `fetchReviewItemsByToken`, also call new helper `fetchCreatorAttachmentsByToken(token)` → `Record<boq_item_id, Attachment[]>`.
+- Render a small "Instructions from Sales" line above the existing Comment row when attachments exist, using anchors that resolve via `sign_boq_item_doc_by_token`.
 
-- Excel export (`buildBoqXlsx`) — separate column visibility; not in this request.
-- `exportDesignReviewRoundPDF` in `DesignReviewPanel` — that PDF reads round items directly and is already correct.
-- BOQ on-screen verification badge, totals, GST, or any approval workflow logic.
-- Schema, RLS, or migrations.
+`src/lib/boq/designReview.ts`:
+- Add `fetchCreatorAttachmentsByToken` and `signCreatorDocByToken` helpers wrapping the two new RPCs.
 
-### Files touched
+### Out of scope (explicit)
+- BOQ PDF / Excel exports — unchanged.
+- Distribution PDF — unchanged.
+- Approval workflow, verification, revisions, design_review_status transitions — unchanged.
+- Comments storage — already handled by existing per-column comment system; no change.
+- Editing/removing attachments from the reviewer side — view-only by design.
 
-- `src/lib/boq/approvalSync.ts` — add the conditional `boqs.update({ line_items })` write inside the existing function.
-
-No other files change.
-
-### Verification
-
-1. Open BOQ `26-27/GMSBOQ/0007` in BoqEditor or BoqList.
-2. Click **Download PDF** with the "Approved by Design" column toggle on.
-3. Expected: item 1 (Destoner SGA-13) prints **Approved**; remaining items print **Pending**.
-4. Re-open the BOQ — the on-screen Approval column also reflects **Approved** for item 1 (because `boqs.line_items` was healed).
-5. Subsequent Excel export and distribution PDF read the same corrected snapshot.
+## Verification
+1. Create / open a BOQ → each item row shows the new Attach button.
+2. Upload a PDF + an XLSX against item 1 → both appear in the popover with download + remove.
+3. Send a Design Comment/Approval link → open the public review page → item 1 shows both files as clickable links that download via signed URL; other items show no attachments section.
+4. Existing flows (save BOQ, send for verification, finalize, generate PDF, design approval) all behave exactly as before.
