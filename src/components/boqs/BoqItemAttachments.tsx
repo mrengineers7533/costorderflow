@@ -178,24 +178,20 @@ export function BoqItemAttachments({
             ))}
           </ul>
         )}
-        <label className="inline-flex w-full">
-          <span className="sr-only">Upload file</span>
-          <Button type="button" variant="secondary" size="sm" className="w-full gap-2" asChild disabled={uploading || !boqId}>
-            <span>
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
-              {uploading ? "Uploading…" : "Upload file"}
-              <input
-                type="file"
-                accept={ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onUpload(f);
-                  e.target.value = "";
-                }}
-              />
-            </span>
-          </Button>
+        <label className={`inline-flex w-full items-center justify-center gap-2 h-9 rounded-md border border-input bg-secondary text-secondary-foreground text-sm font-medium px-3 ${uploading || !boqId ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-secondary/80"}`}>
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
+          {uploading ? "Uploading…" : "Upload file"}
+          <input
+            type="file"
+            accept={ACCEPT}
+            className="hidden"
+            disabled={uploading || !boqId}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpload(f);
+              e.target.value = "";
+            }}
+          />
         </label>
         <p className="text-[10px] text-muted-foreground">PDF, Word, Excel, PowerPoint, CSV, TXT, PNG, JPG.</p>
       </PopoverContent>
