@@ -17,9 +17,27 @@ import {
   type DiffField,
   type DesignReviewItemRow,
   type Decision,
+  fetchCreatorAttachmentsByToken,
+  signedCreatorDocUrl,
+  type BoqItemAttachmentRow,
 } from "@/lib/boq/designReview";
 import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo } from "@/lib/boq/types";
+
+function CreatorDocLink({ filePath, fileName }: { filePath: string; fileName: string }) {
+  const [url, setUrl] = useState<string>("");
+  useEffect(() => {
+    let cancelled = false;
+    signedCreatorDocUrl(filePath).then((u) => { if (!cancelled) setUrl(u); });
+    return () => { cancelled = true; };
+  }, [filePath]);
+  if (!url) return <span className="text-muted-foreground truncate max-w-[200px]">{fileName}</span>;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px] text-primary">
+      {fileName}
+    </a>
+  );
+}
 
 interface ReviewMeta {
   id: string;
@@ -55,6 +73,7 @@ export default function DesignReview() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [baselineById, setBaselineById] = useState<Record<string, DesignReviewItemRow>>({});
   const [baselineRoundNo, setBaselineRoundNo] = useState<number | null>(null);
+  const [creatorAttachments, setCreatorAttachments] = useState<Record<string, BoqItemAttachmentRow[]>>({});
 
   const [reviewerName, setReviewerName] = useState("");
   const [designTeam, setDesignTeam] = useState("");
@@ -83,6 +102,7 @@ export default function DesignReview() {
       setMeta(row as unknown as ReviewMeta);
       const its = await (await import("@/lib/boq/designReview")).fetchReviewItemsByToken(token);
       setItems(its);
+      fetchCreatorAttachmentsByToken(token).then(setCreatorAttachments).catch(() => undefined);
       const d: typeof decisions = {};
       its.forEach((it) => { d[it.boq_item_id] = { decision: "pending", comment: "", design_change_note: "" }; });
       setDecisions(d);
@@ -317,6 +337,7 @@ export default function DesignReview() {
                         const d = decisions[it.boq_item_id];
                         const cols = colComments[it.boq_item_id] || {};
                         const itemDocs = docs.filter((x) => x.boq_item_id === it.boq_item_id);
+                        const instructions = creatorAttachments[it.boq_item_id] || [];
                         const base = baselineById[it.boq_item_id];
                         const wasChanged = (field: DiffField): string | null => {
                           if (isComment || !base) return null;
@@ -409,6 +430,18 @@ export default function DesignReview() {
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
                                       <DocLink key={i} filePath={dc.file_path} fileName={dc.file_name} className="underline truncate max-w-[200px]" />
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                            {instructions.length > 0 && (
+                              <TableRow>
+                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Instructions:</span>
+                                    {instructions.map((a) => (
+                                      <CreatorDocLink key={a.id} filePath={a.file_path} fileName={a.file_name} />
                                     ))}
                                   </div>
                                 </TableCell>

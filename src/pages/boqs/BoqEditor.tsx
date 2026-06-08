@@ -21,6 +21,7 @@ import ugurLogoUrl from "@/assets/ugur-logo.png";
 import { DesignReviewPanel } from "@/components/boqs/DesignReviewPanel";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { BoqItemChangeHistoryButton } from "@/components/boqs/BoqItemChangeHistoryButton";
+import { BoqItemAttachments } from "@/components/boqs/BoqItemAttachments";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import { RevisionsTable } from "@/components/boqs/RevisionsTable";
@@ -772,6 +773,9 @@ function BoqItemsList({
                   <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5">Pending</span>
                 )}
               </div>
+            </div>
+            <div className="flex justify-end -mt-1">
+              <BoqItemAttachments boqId={boqId} itemId={it.id} />
             </div>
             {designReview && (
               <BoqDesignSuggestionRow
