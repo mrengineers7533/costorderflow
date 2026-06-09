@@ -56,7 +56,21 @@ function parseSheet(rows: unknown[][]): ParsedFg[] {
   }
   if (headerIdx < 0 || cMat < 0) return [];
   const headers = (rows[headerIdx] || []).map((h) => String(h ?? "").trim().toLowerCase());
-  const cFg = 0;
+  // Detect Finished Good column from header. Must lie to the left of Material
+  // so we don't accidentally pick "Size/Model". Falls back to column A
+  // (legacy behaviour) when no FG-like header is found.
+  const FG_SYNONYMS = [
+    "finished good", "finished goods", "finish good",
+    "fg", "fg name", "fg description",
+    "model", "model number", "model no", "model no.",
+    "product", "product name",
+  ];
+  let cFg = -1;
+  for (let i = 0; i < cMat; i++) {
+    const h = headers[i];
+    if (h && FG_SYNONYMS.some((s) => h === s || h.includes(s))) { cFg = i; break; }
+  }
+  if (cFg < 0) cFg = 0;
   // Resolve columns strictly relative to the Raw Material column to avoid
   // picking up Sr/Model/Qty-like columns that may sit to its left.
   const afterIdx = (predicate: (h: string) => boolean) => {
