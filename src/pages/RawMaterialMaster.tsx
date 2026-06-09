@@ -30,21 +30,33 @@ type ParsedFg = {
 };
 
 function parseSheet(rows: unknown[][]): ParsedFg[] {
-  // locate header row (first 6 rows) by finding "raw material" header
+  // Material column synonyms (case-insensitive, exact-after-trim match against cell text).
+  const MATERIAL_SYNONYMS = [
+    "raw material", "raw materials",
+    "material", "material name", "material description", "description of material",
+    "item", "item name", "item description",
+    "particulars", "description",
+  ];
+  const isMaterialHeader = (h: string) => MATERIAL_SYNONYMS.includes(h);
+  const SUPPORT_KEYS = ["qty", "reqd", "required", "unit", "size", "model", "make"];
+
+  // Scan first 25 rows for a header row containing a material-column synonym
+  // AND at least one supporting column (qty/unit/size/etc) to avoid false positives.
   let headerIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 6); i++) {
-    const r = rows[i] || [];
-    if (r.some((c) => typeof c === "string" && /raw\s*material/i.test(c))) {
-      headerIdx = i; break;
-    }
+  let cMat = -1;
+  for (let i = 0; i < Math.min(rows.length, 25); i++) {
+    const r = (rows[i] || []).map((c) => String(c ?? "").trim().toLowerCase());
+    const matIdx = r.findIndex(isMaterialHeader);
+    if (matIdx < 0) continue;
+    const hasSupport = r.some((h) => h && SUPPORT_KEYS.some((k) => h.includes(k)));
+    if (!hasSupport) continue;
+    headerIdx = i;
+    cMat = matIdx;
+    break;
   }
-  if (headerIdx < 0) return [];
+  if (headerIdx < 0 || cMat < 0) return [];
   const headers = (rows[headerIdx] || []).map((h) => String(h ?? "").trim().toLowerCase());
-  const findCol = (...keys: string[]) =>
-    headers.findIndex((h) => keys.every((k) => h.includes(k)));
   const cFg = 0;
-  const cMat = findCol("raw", "material");
-  if (cMat < 0) return [];
   // Resolve columns strictly relative to the Raw Material column to avoid
   // picking up Sr/Model/Qty-like columns that may sit to its left.
   const afterIdx = (predicate: (h: string) => boolean) => {
@@ -157,13 +169,20 @@ export default function RawMaterialMaster() {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const allFgs: ParsedFg[] = [];
+      const failedSheets: string[] = [];
       for (const name of wb.SheetNames) {
         const ws = wb.Sheets[name];
         const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: null }) as unknown[][];
-        allFgs.push(...parseSheet(aoa));
+        const parsed = parseSheet(aoa);
+        if (parsed.length === 0) failedSheets.push(name);
+        allFgs.push(...parsed);
       }
       if (!allFgs.length) {
-        toast({ title: "No rows parsed", description: "Could not detect FG / Raw Material columns.", variant: "destructive" });
+        toast({
+          title: "No rows parsed",
+          description: `Could not detect header row in: ${failedSheets.join(", ") || "(none)"}. Expected a row with 'Raw Material' (or Material/Item/Particulars) plus Qty/Unit.`,
+          variant: "destructive",
+        });
         setBusy(false); return;
       }
       // De-dupe by model_number (case-insensitive); keep first

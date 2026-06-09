@@ -1,32 +1,50 @@
-## Goal
-Raw Material Master "CSV import" button par user ek se zyada Excel (.xlsx/.xls) files select kar sake. Existing single-file flow, validation, grouping, aur upsert logic same rahega — sirf file picker `multiple` ho jayega aur har file ko loop me same importer se process kiya jayega.
+## Problem
 
-## Scope (only this)
-- File: `src/pages/admin/AdminRawMaterials.tsx`
-- Add `xlsx` (SheetJS) dependency for parsing `.xlsx` / `.xls` to rows.
-- Button label aur `accept` update: `.csv,.xlsx,.xls` + `multiple`.
-- New helper `parseFileToCsvText(file)`:
-  - `.csv` → existing `file.text()` path (unchanged behavior).
-  - `.xlsx` / `.xls` → first sheet → `XLSX.utils.sheet_to_csv(...)` → same CSV text string.
-- Existing `importCsv(file)` body becomes `importOne(csvText)` (zero changes to parsing/validation/grouping/upsert/toast logic). `importCsv` wrapper still works for single CSV path so nothing else breaks.
-- New `importFiles(files: File[])`:
-  - For each file (in order): parse → call `importOne(csvText)`.
-  - Per-file error toast uses existing error message; success toast existing format.
-  - At end: one summary toast `Imported N file(s)`.
-  - Single `load()` at the end.
+On `/raw-materials`, uploading an Excel file shows the red toast:
+**"No rows parsed — Could not detect FG / Raw Material columns."**
 
-## What stays unchanged
-- `model_number` requirement, header detection, `is_direct_purchase` parsing, raw_materials grouping, `upsert(..., { onConflict: "model_number" })`, all existing toasts on validation failure, table/edit sheet UI, save/delete, RLS, schema.
+Root cause is in `src/pages/RawMaterialMaster.tsx` → `parseSheet()`:
+
+1. Header row is searched only in the **first 6 rows**. Many BOM sheets have a title block / logo / merged cells pushing the real header down to row 7–15.
+2. Header detection requires a cell that matches `/raw\s*material/i`. Sheets that label the column simply **"Material"**, **"Description of Material"**, **"Item"**, or **"Particulars"** are rejected.
+3. When detection fails the toast gives no hint of *why* (which sheet, what headers were seen), so the user can't self-diagnose.
+
+The upload history in the screenshot proves the same logic *does* work for some files (24 FG, 565 RM rows imported) — so we only need to widen detection, not rewrite it.
+
+## Scope (only this file)
+
+`src/pages/RawMaterialMaster.tsx` — `parseSheet()` only. No DB / schema / UI / other-flow changes.
+
+### Changes
+
+1. **Wider header scan window**
+   - Search first **25 rows** (was 6) for the header row.
+
+2. **More header synonyms for the Raw Material column**
+   Accept any of (case-insensitive, trimmed):
+   - `raw material`, `raw materials`
+   - `material`, `material name`, `material description`, `description of material`
+   - `item`, `item name`, `item description`
+   - `particulars`, `description`
+   Pick the **leftmost** matching cell so a stray "material code" column doesn't win over the real one.
+
+3. **Stricter header-row confirmation**
+   To avoid matching a stray cell, the candidate row must also contain at least one of: `qty`, `reqd`, `required`, `unit`, `size`, `model`, or `make`. Otherwise keep scanning.
+
+4. **Better failure toast**
+   When no sheet yields rows, replace the generic message with:
+   `"Could not detect header row in: <sheet names>. Expected a row with 'Raw Material' (or Material/Item/Particulars) plus Qty/Unit."`
+   Also keep the existing `console.info("[RM parser] headers:", …)` so devs can inspect what was actually seen.
+
+### Unchanged
+
+- Column-A FG grouping, `firstLine()` model key, `qty_per_unit` / `reqd` fallback, `make`/`size`/`unit` resolution relative to Material column.
+- Upsert into `fg_raw_material_map`, upload-history insert, admin gate, all UI, all toasts on success, edit / view / delete flows.
+- The earlier multi-file work in `AdminRawMaterials.tsx` is untouched.
 
 ## Acceptance
-- Single `.csv` upload → identical behavior.
-- Single `.xlsx` upload → parsed and imported via same logic.
-- Multiple files selected at once → each processed; summary toast shows count; list reloads once.
-- Any file failing validation shows its existing toast, but remaining files still process.
 
-## Technical
-- `bun add xlsx`
-- Import: `import * as XLSX from "xlsx";`
-- xlsx parse: `const wb = XLSX.read(await file.arrayBuffer(), { type: "array" }); const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);`
-
-No DB migrations, no other files touched.
+- File `BOM 04 Jun. RECEIVE DATA FROM AMIT SIR FACTORY.xlsx` continues to import (24 FG / 565 rows).
+- A BOM file whose header is on row 8–20 imports successfully.
+- A BOM file whose column is labelled "Material" / "Description of Material" / "Particulars" imports successfully.
+- A truly malformed file shows the new descriptive toast naming the sheets that failed.
