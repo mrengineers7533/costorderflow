@@ -1,45 +1,32 @@
-# Fix: Design team can't open/download item attachments
+## Goal
+Raw Material Master "CSV import" button par user ek se zyada Excel (.xlsx/.xls) files select kar sake. Existing single-file flow, validation, grouping, aur upsert logic same rahega — sirf file picker `multiple` ho jayega aur har file ko loop me same importer se process kiya jayega.
 
-## Root cause
+## Scope (only this)
+- File: `src/pages/admin/AdminRawMaterials.tsx`
+- Add `xlsx` (SheetJS) dependency for parsing `.xlsx` / `.xls` to rows.
+- Button label aur `accept` update: `.csv,.xlsx,.xls` + `multiple`.
+- New helper `parseFileToCsvText(file)`:
+  - `.csv` → existing `file.text()` path (unchanged behavior).
+  - `.xlsx` / `.xls` → first sheet → `XLSX.utils.sheet_to_csv(...)` → same CSV text string.
+- Existing `importCsv(file)` body becomes `importOne(csvText)` (zero changes to parsing/validation/grouping/upsert/toast logic). `importCsv` wrapper still works for single CSV path so nothing else breaks.
+- New `importFiles(files: File[])`:
+  - For each file (in order): parse → call `importOne(csvText)`.
+  - Per-file error toast uses existing error message; success toast existing format.
+  - At end: one summary toast `Imported N file(s)`.
+  - Single `load()` at the end.
 
-On the `/design-review/:token` page the file list (`Instructions:`) is fetched correctly via the `get_boq_item_attachments_by_token` SECURITY DEFINER RPC, so names appear. But clicking a link calls `supabase.storage.from('boq-item-docs').createSignedUrl(...)` as an **anonymous** user, which returns `404 Object not found`.
-
-The current storage RLS policy is:
-
-```text
-Anon read boq-item-docs via open review (SELECT, roles=anon)
-  USING bucket_id='boq-item-docs'
-        AND EXISTS (SELECT 1 FROM boq_design_reviews r
-                    WHERE r.status='sent' AND r.expires_at > now()
-                      AND r.boq_id::text = split_part(objects.name,'/',1))
-```
-
-The `EXISTS` subquery runs as the `anon` role, which has **no SELECT grant on `public.boq_design_reviews`**, so the subquery returns false and the storage object is hidden — hence the 404 and the broken link/download.
-
-Verified by curl against `/storage/v1/object/sign/...` with the anon key → 404, while the row + attachments + open review all exist in the DB.
-
-The fallback RPC `public.sign_boq_item_doc_by_token` is also non-functional (returns NULL because `storage.create_signed_url` does not exist in this project), so the storage policy must be fixed.
-
-## Fix (one migration, no app code changes)
-
-1. Create `public.has_open_review_for_boq(_boq_id uuid) RETURNS boolean` — `SECURITY DEFINER`, `STABLE`, `SET search_path = public`. Returns true when there is a `boq_design_reviews` row with `boq_id = _boq_id`, `status = 'sent'`, `expires_at > now()`. `GRANT EXECUTE ... TO anon, authenticated`.
-2. Drop and recreate the `Anon read boq-item-docs via open review` policy on `storage.objects` so its `USING` clause calls the new helper:
-
-   ```text
-   bucket_id = 'boq-item-docs'
-     AND public.has_open_review_for_boq(
-           (split_part(name, '/', 1))::uuid)
-   ```
-
-3. Leave every other storage policy, RPC, table, frontend file, and bucket unchanged.
+## What stays unchanged
+- `model_number` requirement, header detection, `is_direct_purchase` parsing, raw_materials grouping, `upsert(..., { onConflict: "model_number" })`, all existing toasts on validation failure, table/edit sheet UI, save/delete, RLS, schema.
 
 ## Acceptance
+- Single `.csv` upload → identical behavior.
+- Single `.xlsx` upload → parsed and imported via same logic.
+- Multiple files selected at once → each processed; summary toast shows count; list reloads once.
+- Any file failing validation shows its existing toast, but remaining files still process.
 
-- Opening the link in the report (the user's `…/design-review/3d735e49-…` URL) shows the same items but the file names under "Instructions:" become live links that open/download in a new tab.
-- Authenticated creators continue to upload, download, and delete via the existing `Auth …` policies.
-- Submitting the review still works; no schema, RPC, or UI behavior changes.
+## Technical
+- `bun add xlsx`
+- Import: `import * as XLSX from "xlsx";`
+- xlsx parse: `const wb = XLSX.read(await file.arrayBuffer(), { type: "array" }); const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);`
 
-## Out of scope
-
-- The `sign_boq_item_doc_by_token` RPC stays as-is (unused).
-- No changes to BOQ editor, link-generation panel, or the `boq_remarks_audit_log` flow already shipped this session.
+No DB migrations, no other files touched.
