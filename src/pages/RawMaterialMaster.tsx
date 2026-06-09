@@ -169,13 +169,20 @@ export default function RawMaterialMaster() {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const allFgs: ParsedFg[] = [];
+      const failedSheets: string[] = [];
       for (const name of wb.SheetNames) {
         const ws = wb.Sheets[name];
         const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: null }) as unknown[][];
-        allFgs.push(...parseSheet(aoa));
+        const parsed = parseSheet(aoa);
+        if (parsed.length === 0) failedSheets.push(name);
+        allFgs.push(...parsed);
       }
       if (!allFgs.length) {
-        toast({ title: "No rows parsed", description: "Could not detect FG / Raw Material columns.", variant: "destructive" });
+        toast({
+          title: "No rows parsed",
+          description: `Could not detect header row in: ${failedSheets.join(", ") || "(none)"}. Expected a row with 'Raw Material' (or Material/Item/Particulars) plus Qty/Unit.`,
+          variant: "destructive",
+        });
         setBusy(false); return;
       }
       // De-dupe by model_number (case-insensitive); keep first
