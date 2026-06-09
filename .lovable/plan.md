@@ -1,50 +1,33 @@
-## Problem
+## Diagnosis
 
-On `/raw-materials`, uploading an Excel file shows the red toast:
-**"No rows parsed — Could not detect FG / Raw Material columns."**
+Inspected the uploaded `Final Upload BOM Requisition 09 Jun.xlsx`:
 
-Root cause is in `src/pages/RawMaterialMaster.tsx` → `parseSheet()`:
+```
+Row 0 headers: Sr. No. | S.N | Finished Good | Qty./ Size | UOM | Raw Material | Size/Model | Reqd Qty | Unit | PARTY NAME | REMARKS
+Row 1:        (blank) | 1   | SCREW CONVEYOR SIZE-250MM | 1mtr. | Length | MS SHEET | 1250X2500X3MM | 0.5108 | NOS | ...
+```
 
-1. Header row is searched only in the **first 6 rows**. Many BOM sheets have a title block / logo / merged cells pushing the real header down to row 7–15.
-2. Header detection requires a cell that matches `/raw\s*material/i`. Sheets that label the column simply **"Material"**, **"Description of Material"**, **"Item"**, or **"Particulars"** are rejected.
-3. When detection fails the toast gives no hint of *why* (which sheet, what headers were seen), so the user can't self-diagnose.
+The header row IS being detected correctly. The real bug:
 
-The upload history in the screenshot proves the same logic *does* work for some files (24 FG, 565 RM rows imported) — so we only need to widen detection, not rewrite it.
+`parseSheet()` in `src/pages/RawMaterialMaster.tsx` hardcodes `const cFg = 0;` — i.e. it assumes the Finished Good name is always in Column A. In this file Column A is "Sr. No." (mostly empty) and the Finished Good column is **Column C**. Result: no non-empty FG cell is ever found → no groups created → "No rows parsed".
 
-## Scope (only this file)
+## Fix (single file)
 
-`src/pages/RawMaterialMaster.tsx` — `parseSheet()` only. No DB / schema / UI / other-flow changes.
+`src/pages/RawMaterialMaster.tsx` → `parseSheet()` only.
 
-### Changes
-
-1. **Wider header scan window**
-   - Search first **25 rows** (was 6) for the header row.
-
-2. **More header synonyms for the Raw Material column**
-   Accept any of (case-insensitive, trimmed):
-   - `raw material`, `raw materials`
-   - `material`, `material name`, `material description`, `description of material`
-   - `item`, `item name`, `item description`
-   - `particulars`, `description`
-   Pick the **leftmost** matching cell so a stray "material code" column doesn't win over the real one.
-
-3. **Stricter header-row confirmation**
-   To avoid matching a stray cell, the candidate row must also contain at least one of: `qty`, `reqd`, `required`, `unit`, `size`, `model`, or `make`. Otherwise keep scanning.
-
-4. **Better failure toast**
-   When no sheet yields rows, replace the generic message with:
-   `"Could not detect header row in: <sheet names>. Expected a row with 'Raw Material' (or Material/Item/Particulars) plus Qty/Unit."`
-   Also keep the existing `console.info("[RM parser] headers:", …)` so devs can inspect what was actually seen.
-
-### Unchanged
-
-- Column-A FG grouping, `firstLine()` model key, `qty_per_unit` / `reqd` fallback, `make`/`size`/`unit` resolution relative to Material column.
-- Upsert into `fg_raw_material_map`, upload-history insert, admin gate, all UI, all toasts on success, edit / view / delete flows.
-- The earlier multi-file work in `AdminRawMaterials.tsx` is untouched.
+1. **Detect FG column from header** instead of hardcoding 0. Search the detected header row for the first cell matching any of:
+   - `finished good`, `finish good`, `finished goods`
+   - `fg`, `fg name`, `fg description`
+   - `model`, `model number`, `model no`, `product`
+   Pick the **leftmost** match. Must lie to the **left of** the Material column (`< cMat`) so it can't accidentally pick "Size/Model".
+2. **Fallback** (preserves old behaviour for legacy files where Column A is the FG): if no FG header is found, use `cFg = 0`.
+3. Keep all other behaviour identical — Column-A-or-cFg drives grouping via the same loop; `firstLine()` model-key, qty fallback, make/size/unit resolution, upsert, upload history, toasts all unchanged.
+4. Update the diagnostic `console.info("[RM parser] headers:", …)` to also log the resolved `cFg`.
 
 ## Acceptance
 
-- File `BOM 04 Jun. RECEIVE DATA FROM AMIT SIR FACTORY.xlsx` continues to import (24 FG / 565 rows).
-- A BOM file whose header is on row 8–20 imports successfully.
-- A BOM file whose column is labelled "Material" / "Description of Material" / "Particulars" imports successfully.
-- A truly malformed file shows the new descriptive toast naming the sheets that failed.
+- `Final Upload BOM Requisition 09 Jun.xlsx` imports successfully — many FGs (one per distinct value in the "Finished Good" column), each with its raw-material rows grouped underneath.
+- Previously-working file `BOM 04 Jun. RECEIVE DATA FROM AMIT SIR FACTORY.xlsx` still imports the same 24 FG / 565 RM rows (its FG column IS Column A → fallback kicks in OR header text matches, both paths work).
+- All other flows on `/raw-materials` (view, edit, delete, upload history, admin gate) untouched.
+
+No DB / schema / other-file changes.
