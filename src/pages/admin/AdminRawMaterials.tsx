@@ -99,7 +99,7 @@ export default function AdminRawMaterials() {
 
   async function importOne(text: string): Promise<boolean> {
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (!lines.length) return;
+    if (!lines.length) return false;
     const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
     const idx = (k: string) => header.indexOf(k);
     const iModel = idx("model_number");
@@ -110,7 +110,7 @@ export default function AdminRawMaterials() {
     const iNotes = idx("notes");
     if (iModel < 0) {
       toast({ title: "CSV missing model_number column", variant: "destructive" });
-      return;
+      return false;
     }
     const grouped = new Map<string, { model_number: string; is_direct_purchase: boolean; raw_materials: Array<{ material: string; qty_per_unit: number; unit?: string; notes?: string }> }>();
     for (let i = 1; i < lines.length; i++) {
