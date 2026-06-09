@@ -17,6 +17,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, Upload } from "lucide-react";
 import type { FgRawMaterialMapRow } from "@/lib/requisition/types";
+import * as XLSX from "xlsx";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -85,10 +86,20 @@ export default function AdminRawMaterials() {
     load();
   }
 
-  async function importCsv(file: File) {
-    const text = await file.text();
+  async function parseFileToCsvText(file: File): Promise<string> {
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_csv(ws);
+    }
+    return await file.text();
+  }
+
+  async function importOne(text: string): Promise<boolean> {
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (!lines.length) return;
+    if (!lines.length) return false;
     const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
     const idx = (k: string) => header.indexOf(k);
     const iModel = idx("model_number");
@@ -99,7 +110,7 @@ export default function AdminRawMaterials() {
     const iNotes = idx("notes");
     if (iModel < 0) {
       toast({ title: "CSV missing model_number column", variant: "destructive" });
-      return;
+      return false;
     }
     const grouped = new Map<string, { model_number: string; is_direct_purchase: boolean; raw_materials: Array<{ material: string; qty_per_unit: number; unit?: string; notes?: string }> }>();
     for (let i = 1; i < lines.length; i++) {
@@ -126,8 +137,23 @@ export default function AdminRawMaterials() {
     }
     const payload = Array.from(grouped.values());
     const { error } = await sb.from("fg_raw_material_map").upsert(payload, { onConflict: "model_number" });
-    if (error) { toast({ title: "Import failed", description: error.message, variant: "destructive" }); return; }
+    if (error) { toast({ title: "Import failed", description: error.message, variant: "destructive" }); return false; }
     toast({ title: `Imported ${payload.length} mappings` });
+    return true;
+  }
+
+  async function importFiles(files: File[]) {
+    let ok = 0;
+    for (const f of files) {
+      try {
+        const csv = await parseFileToCsvText(f);
+        const res = await importOne(csv);
+        if (res) ok++;
+      } catch (e) {
+        toast({ title: `Failed to read ${f.name}`, description: String((e as Error).message || e), variant: "destructive" });
+      }
+    }
+    if (files.length > 1) toast({ title: `Imported ${ok} file(s)` });
     load();
   }
 
@@ -141,8 +167,8 @@ export default function AdminRawMaterials() {
           <div className="flex-1" />
           <label className="inline-flex items-center gap-2 text-sm border rounded px-3 py-1.5 cursor-pointer hover:bg-accent">
             <Upload className="h-4 w-4" />
-            CSV import
-            <input type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.currentTarget.value = ""; }} />
+            Import (CSV / Excel)
+            <input type="file" accept=".csv,.xlsx,.xls" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files || []); if (fs.length) importFiles(fs); e.currentTarget.value = ""; }} />
           </label>
           <Button onClick={() => setEditing(emptyRow())}><Plus className="h-4 w-4 mr-1" />Add mapping</Button>
         </CardContent>
