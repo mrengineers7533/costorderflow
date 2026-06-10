@@ -397,6 +397,12 @@ export default function RequisitionPlan() {
         </div>
       </div>
 
+      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+        {saveStatus === "saving" && (<><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>)}
+        {saveStatus === "saved" && (<><Check className="h-3 w-3 text-green-600" /> All edits saved</>)}
+        {saveStatus === "error" && <span className="text-destructive">Autosave failed — retry by editing again.</span>}
+      </div>
+
       <Card>
         <CardContent className="py-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
           <div><span className="font-semibold text-foreground">{items.length}</span> Finished Goods</div>
@@ -567,7 +573,10 @@ export default function RequisitionPlan() {
         <TabsContent value="raw">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 py-3">
-              <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
+              <div>
+                <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
+                <p className="text-[11px] text-muted-foreground mt-1">Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab.</p>
+              </div>
               <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
