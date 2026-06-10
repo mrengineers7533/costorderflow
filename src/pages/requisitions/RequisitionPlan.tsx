@@ -50,6 +50,17 @@ export default function RequisitionPlan() {
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
+  // Pre-select lots / tab passed via query string (e.g. recreate from Annexure Folder)
+  useEffect(() => {
+    const relot = sp.get("relotSelect");
+    if (relot) {
+      const wanted = relot.split(",").map((s) => s.trim()).filter(Boolean);
+      if (wanted.length) setSelectedLots(new Set(wanted));
+    }
+    const t = sp.get("tab");
+    if (t === "raw" || t === "generated" || t === "reports") setTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [reportMode, setReportMode] = useState<"live" | "saved">("live");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // Lot-wise selection state for annexure creation (Raw Materials tab)
