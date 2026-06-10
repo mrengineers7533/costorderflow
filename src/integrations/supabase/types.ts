@@ -1181,6 +1181,24 @@ export type Database = {
         }
         Relationships: []
       }
+      po_counters: {
+        Row: {
+          financial_year: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          financial_year: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          financial_year?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1361,6 +1379,113 @@ export type Database = {
           totals?: Json
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      purchase_order_rows: {
+        Row: {
+          created_at: string
+          id: string
+          lot_no: string | null
+          make: string | null
+          material: string
+          po_id: string
+          qty: number | null
+          raw_material_id: string | null
+          size_model: string | null
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lot_no?: string | null
+          make?: string | null
+          material: string
+          po_id: string
+          qty?: number | null
+          raw_material_id?: string | null
+          size_model?: string | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lot_no?: string | null
+          make?: string | null
+          material?: string
+          po_id?: string
+          qty?: number | null
+          raw_material_id?: string | null
+          size_model?: string | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_rows_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          annexure_ids: string[]
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lot_numbers: string[]
+          notes: string | null
+          po_number: string
+          requisition_ids: string[]
+          status: string
+          updated_at: string
+          vendor_contact: string | null
+          vendor_name: string
+        }
+        Insert: {
+          annexure_ids?: string[]
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_numbers?: string[]
+          notes?: string | null
+          po_number: string
+          requisition_ids?: string[]
+          status?: string
+          updated_at?: string
+          vendor_contact?: string | null
+          vendor_name: string
+        }
+        Update: {
+          annexure_ids?: string[]
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_numbers?: string[]
+          notes?: string | null
+          po_number?: string
+          requisition_ids?: string[]
+          status?: string
+          updated_at?: string
+          vendor_contact?: string | null
+          vendor_name?: string
         }
         Relationships: []
       }
@@ -1629,6 +1754,8 @@ export type Database = {
           model_number: string | null
           notes: string | null
           plan_status: string | null
+          po_id: string | null
+          po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
           required_qty: number | null
@@ -1651,6 +1778,8 @@ export type Database = {
           model_number?: string | null
           notes?: string | null
           plan_status?: string | null
+          po_id?: string | null
+          po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
           required_qty?: number | null
@@ -1673,6 +1802,8 @@ export type Database = {
           model_number?: string | null
           notes?: string | null
           plan_status?: string | null
+          po_id?: string | null
+          po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
           required_qty?: number | null
@@ -1689,6 +1820,13 @@ export type Database = {
             columns: ["annexure_id"]
             isOneToOne: false
             referencedRelation: "requisition_annexures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requisition_raw_materials_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -2112,6 +2250,8 @@ export type Database = {
           model_number: string | null
           notes: string | null
           plan_status: string | null
+          po_id: string | null
+          po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
           required_qty: number | null
@@ -2158,6 +2298,7 @@ export type Database = {
         }
         Returns: string
       }
+      next_po_number: { Args: { _fy: string }; Returns: string }
       next_requisition_number: {
         Args: { _oa_number: string; _revision: number; _root: string }
         Returns: string

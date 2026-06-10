@@ -1,116 +1,111 @@
 ## Goal
 
-Add an **Annexure Folder** with search, plus **Cancel** and **Recreate** actions for any annexure. All status changes stay linked to Generated Requisition, Raw Materials, and Annexure Reports. No existing module is altered beyond what's listed below.
+On the Purchase page, add two new sections without changing existing behavior:
 
-## Scope
+1. **BOQ Folder** → **MR BOQ** and **GMS BOQ** sub-folders that filter the existing approved-BOQ list by order format.
+2. **Purchase Material** folder → lot-wise list of annexure-created raw materials, with vendor selection (Steel / Machine / 3P) and multi-vendor PO creation (PDF download).
 
-- New page: `src/pages/requisitions/AnnexureFolder.tsx` at route `/requisitions/annexures`.
-- New sidebar entry "Annexure Folder" under Requisitions.
-- Small additions to existing `src/pages/requisitions/RequisitionPlan.tsx` (link to folder, recreate flow, badge says "Cancelled" when applicable).
-- One migration to add cancellation fields on `requisition_annexures`.
-- No changes to single-requisition Detail, Manufacturing → Requisition, RM Master, BOQ/OA/PI, Purchase, Admin, permissions, or ES Page flow.
+Existing Purchase list/detail and all other pages stay untouched.
 
-## 1. Annexure Folder page
+---
 
-Route: `/requisitions/annexures`. New top-level page accessible from the sidebar.
+## 1. Purchase landing redesign (`src/pages/purchase/PurchaseList.tsx` + module)
 
-Layout:
+Replace the single approved-BOQ list with a folder grid (3 cards):
 
 ```text
-+--------------------------------------------------------------+
-| Annexure Folder                                              |
-| [Search: Lot No / Type / Raw Material / Status / Date / By]  |
-| [Status filter: All | Active | Cancelled]                    |
-+--------------------------------------------------------------+
-| Lot 01  ┌─ Machine List  · 10-Jun-26 · pc.2@... · Active     |
-|         │     12 rows · Grand Total 480 kg   [View][Cancel][PDF]
-|         ├─ Steel List    · 10-Jun-26 · pc.2@... · Cancelled  |
-|         │     5 rows ...                       [View][Recreate]
-|         └─ Outside Purch · ...                                |
-| Lot 02  ...                                                  |
-+--------------------------------------------------------------+
+┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐
+│  BOQ Folder  │  │ Approved BOQs│  │  Purchase Material  │
+│ MR · GMS     │  │ (existing)   │  │ Lot-wise · PO       │
+└──────────────┘  └──────────────┘  └─────────────────────┘
 ```
 
-Behavior:
-- Lists every annexure ever created, grouped by **Lot No** (one annexure can span multiple lots; in that case it appears under each of its lots).
-- Splits each annexure into three logical "annexure types" derived from the `plan_status` of its rows: **Machine List**, **Steel List**, **Outside Purchase**. Each type sub-card shows its own row count + grand total.
-- Columns per annexure entry: Lot No, Type, Created Date, Created By (email from `profiles`), Status (Active / Cancelled), row count, grand total.
-- **View** opens an inline modal with the full snapshot rows (lot, material, size, make, unit, qty) and a grand total — read-only.
-- **Download PDF** uses the same renderer already in `RequisitionPlan.tsx` (extracted into a tiny shared helper `src/lib/requisition/annexurePdf.ts`).
-- **Cancel** (only on Active): confirm dialog → sets annexure to Cancelled and clears `annexure_status` on every contributing `requisition_raw_materials` row (so they become available for a new annexure again).
-- **Recreate** (only on Cancelled, and only from the folder): opens the Plan page for the original requisition set with the matching Lots pre-selected, so the user can click Create Annexure again. The new annexure is independent (new id, new created_at). The cancelled one stays for history.
+- The existing "Approved BOQs" list stays exactly as today (kept as a card link / second tab).
+- New routes:
+  - `/purchase/boq-folder` → tabs `MR BOQ` | `GMS BOQ`, each rendering the existing approved-BOQ list filtered by `orders.format = 'MR'` / `'GMS'`. Reuses `pickLatestApprovedPerFamily` and the same row card → "Open" links into the existing `/purchase/:boqId` detail.
+  - `/purchase/materials` → Purchase Material page (below).
 
-Search panel:
-- Single text input plus filter chips. Searches across:
-  - Lot No (substring on `requisition_annexures.lot_numbers`)
-  - Type (Machine / Steel / Outside) — chip filter
-  - Raw Material name (substring on `requisition_annexure_rows.material`)
-  - Status (Active / Cancelled) — chip filter
-  - Created Date range (from/to date pickers)
-  - Created By (substring on profile email/full_name)
-- All filters compose with AND. The page fetches `requisition_annexures` + their `requisition_annexure_rows` once and filters in memory (the data set is small per project).
+No schema change for the BOQ folder — purely a filtered view.
 
-## 2. Cancel + Recreate flow
+## 2. Purchase Material page (`src/pages/purchase/PurchaseMaterial.tsx`, new)
 
-- Cancel:
-  1. `update requisition_annexures set cancelled_at=now(), cancelled_by=<uid>, status='cancelled' where id=<id>`.
-  2. `update requisition_raw_materials set annexure_status=null, annexure_id=null where annexure_id=<id>` so downstream tabs immediately drop the "Annexure Created" badge for those rows.
-  3. Local state refresh on the folder page and on the Plan page (already keyed off `annexure_status`).
-- Recreate:
-  - Just opens `/requisitions/plan?ids=<original ids>` with a query param `?relotSelect=Lot01,Lot02` that pre-checks the matching lots in the Lot selector. Existing Create Annexure flow does the rest.
-  - The cancelled annexure remains visible in the folder with its Cancelled badge.
+Source data: only raw materials where `requisition_raw_materials.annexure_status = 'created'` AND their `annexure_id` points to a `requisition_annexures` row with `status = 'active'` (cancelled annexures auto-disappear, matching the existing folder behaviour).
 
-## 3. Linking & badge updates in existing tabs
+UI:
 
-- The `annexure_status` flag on `requisition_raw_materials` is already the single source of truth used by Generated Requisition, Raw Materials, and Annexure Reports tabs. Because Cancel clears that flag on every contributing row, those tabs automatically stop showing "Annexure Created" — no further changes to the Plan page rendering logic.
-- Small tweak on the Plan page: when displaying **Saved annexures** mode in the Reports tab, show a `Cancelled` badge next to cancelled batches and grey them out (read-only). Active batches keep today's behavior.
+- **Lot selector** (multi-select chips) listing every distinct `lot_no` that has annexure-created materials. Selecting one or more lots filters the table.
+- **Category filter** (All / Steel / Machine / 3P) using existing `plan_status` (`steel`, `machine`, `3p`).
+- **Material table** columns: checkbox · Lot · Category · Material · Size/Model · Make · Qty · Unit · PO status badge (Pending / PO Created · PO No.).
+- **Vendor & PO panel** (right side or sticky footer):
+  - Three free-text vendor inputs: `Steel Vendor`, `Machine Vendor`, `3P Vendor` (only the categories present in the selection are required).
+  - Optional contact line per vendor (single text field — phone/email free text).
+  - **Create PO** button: groups selected rows by category, generates one PO per category that has a vendor + selected rows (so 1–3 POs per click). Each PO gets a unique PO number, persists rows, and triggers a PDF download.
 
-## 4. Database migration
+PO numbering: `PO/{FY}/{seq}` via a new `po_counters` table (one row per FY, atomic increment in a `next_po_number` function, mirroring `next_requisition_number`).
 
-Additive only — no breaking changes:
+PDF: new helper `src/lib/purchase/poPdf.ts` (pdf-lib, same style as `src/lib/requisition/pdf.ts`) showing PO No · Date · Vendor block · Category · Lot(s) · line items · totals.
 
-```sql
-ALTER TABLE public.requisition_annexures
-  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active',
-  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
-  ADD COLUMN IF NOT EXISTS cancelled_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS cancel_reason text;
+## 3. Database (single migration)
 
-ALTER TABLE public.requisition_annexures
-  DROP CONSTRAINT IF EXISTS requisition_annexures_status_check;
-ALTER TABLE public.requisition_annexures
-  ADD CONSTRAINT requisition_annexures_status_check
-  CHECK (status IN ('active','cancelled'));
+New tables (all in `public`, with GRANTs + RLS + `set_updated_at` triggers):
 
-CREATE INDEX IF NOT EXISTS idx_requisition_annexures_status
-  ON public.requisition_annexures(status);
-```
+- `purchase_orders`
+  - `po_number text unique`, `category text check in ('steel','machine','3p')`,
+  - `vendor_name text`, `vendor_contact text`,
+  - `lot_numbers text[]`,
+  - `requisition_ids uuid[]`, `annexure_ids uuid[]`,
+  - `status text default 'active' check in ('active','cancelled')`,
+  - `notes text`, `created_by uuid references auth.users`, `created_at`, `updated_at`.
 
-Existing RLS / GRANTs unchanged.
+- `purchase_order_rows`
+  - `po_id uuid references purchase_orders on delete cascade`,
+  - `raw_material_id uuid` (snapshot reference to `requisition_raw_materials.id`),
+  - `lot_no`, `material`, `size_model`, `make`, `unit`, `qty numeric`,
+  - `created_at`, `updated_at`.
 
-## 5. Files touched
+- `po_counters` (`financial_year text primary key`, `last_number int`, `updated_at`).
 
-- New: `src/pages/requisitions/AnnexureFolder.tsx`
-- New: `src/lib/requisition/annexurePdf.ts` (extracted helper, identical output)
-- Edited: `src/App.tsx` (add route)
-- Edited: `src/components/AppSidebar.tsx` (add "Annexure Folder" link under Requisitions)
-- Edited: `src/pages/requisitions/RequisitionPlan.tsx`
-  - Add toolbar link "Annexure Folder".
-  - On load, read `relotSelect` query param to pre-check matching lots.
-  - In Reports tab "Saved annexures" mode, show `Cancelled` badge + disable PDF when cancelled. (Active behavior unchanged.)
-  - Use the extracted PDF helper (no behavior change).
-- Edited: `src/lib/requisition/types.ts` — add optional `status: 'active'|'cancelled'`, `cancelled_at`, `cancelled_by`, `cancel_reason` to `AnnexureRecord`.
-- New migration file under `supabase/migrations/`.
+- `requisition_raw_materials` add columns `po_status text check in (null,'created')` and `po_id uuid references purchase_orders(id) on delete set null` (kept null until a PO is created for that row; cancelled annexure flow already nulls `annexure_status`, this is an independent flag).
 
-## Out of scope (explicitly unchanged)
+- Function `public.next_po_number(_fy text)` (security definer, mirrors `next_requisition_number`).
 
-- Single-requisition Detail page, Manufacturing flow, RM Master, BOQ/OA/PI, Admin pages, ES Page, permissions model, PDF templates.
-- Annexure row schema (`requisition_annexure_rows`) — unchanged; snapshots stay immutable.
-- No deletion of any annexure — only soft "Cancelled" status.
+RLS: authenticated users can read/insert/update their own POs (`auth.uid() = created_by` for write; admins via `has_role`); rows inherit via `po_id` join policy. `service_role` full access.
+
+## 4. Sync rules
+
+- After PO insert: update each contributing `requisition_raw_materials` row → `po_status = 'created'`, `po_id = <new>`. Surface a "PO Created" badge in the Raw Materials / Annexure Folder views by reading these fields (no UI change required this round beyond the badge in Purchase Material — existing tabs unchanged).
+- Cancelling a PO (future, simple `Cancel` action in Purchase Material list of POs) sets `purchase_orders.status='cancelled'` and clears `po_status`/`po_id` on its rows, mirroring annexure cancel.
+
+## 5. Routing & sidebar
+
+- `src/App.tsx`: register `/purchase/boq-folder` and `/purchase/materials` under the same `RequireModule module="purchase"` guard.
+- `src/components/AppSidebar.tsx`: keep "Purchase" as the parent link; no sub-nav added (entry points live as cards on the Purchase landing). Folder pages have a "Back to Purchase" button.
+
+## 6. Out of scope (explicit)
+
+- No changes to: Annexure Folder, Requisition Plan, Raw Materials tab logic, Generated Requisition behaviour, manufacturing flow, ES Page, BOQ list/editor, admin pages.
+- No vendor master table (per user's choice — vendor is free text on each PO).
+- No PO email sending in this round.
+- No edits to existing approved-BOQ detail page; it remains reachable from both the legacy list card and from MR/GMS folders.
+
+## Technical notes
+
+Files added:
+- `src/pages/purchase/PurchaseLanding.tsx` (folder grid; new default for `/purchase`)
+- `src/pages/purchase/BoqFolder.tsx` (MR/GMS tabs reusing `pickLatestApprovedPerFamily`)
+- `src/pages/purchase/PurchaseMaterial.tsx`
+- `src/lib/purchase/poPdf.ts`
+- `supabase/migrations/<ts>_purchase_orders.sql`
+
+Files edited:
+- `src/pages/purchase/PurchaseList.tsx` → render `PurchaseLanding` instead of `ApprovedBoqListPage` directly (existing list still mounted inside one of the cards as "All Approved BOQs").
+- `src/App.tsx` → add 2 routes.
+- `src/lib/requisition/types.ts` → add `po_status?: 'created' | null`, `po_id?: string | null` to `RequisitionRawMaterial`.
 
 ## Acceptance
 
-- A new **Annexure Folder** page lists every annexure, grouped by Lot, with Type, Created Date, Created By, Status, row count, grand total, and a working search across all listed fields.
-- Cancelling an annexure flips its status to **Cancelled**, removes the "Annexure Created" badge from its rows in Generated Requisition / Raw Materials / Annexure Reports tabs instantly, and keeps the cancelled annexure visible in the folder.
-- Recreating from a cancelled annexure opens the Plan page with the matching Lots pre-selected; the new annexure is a fresh active entry with its own created_at; the cancelled one stays for history.
-- All existing flows, calculations, ES Page behavior, autosave, single-requisition view, and permissions continue to work exactly as today.
+- `/purchase` shows three cards: BOQ Folder, All Approved BOQs (existing flow), Purchase Material.
+- BOQ Folder → MR BOQ tab lists only `format='MR'` approved BOQs; GMS BOQ tab lists only `format='GMS'`. "Open" jumps to the unchanged detail page.
+- Purchase Material lists only raw materials with `annexure_status='created'` and active annexure, filterable by lot/category.
+- Selecting rows + entering vendors + clicking Create PO produces 1–N POs (one per category), each downloads a PDF and shows up as "PO Created" badge on those rows.
+- All existing Purchase flows, lists, and routes continue to work unchanged.
