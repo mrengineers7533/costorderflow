@@ -325,8 +325,31 @@ export default function RequisitionPlan() {
   const activeAnnexure = annexures.find((a) => a.id === activeAnnexureId) || null;
   const reportRows = annexureRows.filter((r) => r.annexure_id === activeAnnexureId);
 
+  // Live report rows derived from current consolidated state
+  const liveReportRows: AnnexureRowRecord[] = useMemo(() => consolidated
+    .filter((c) => c.plan_status)
+    .map((c, i) => ({
+      id: `live-${i}`,
+      annexure_id: "live",
+      lot_no: c.lot_no || "",
+      plan_status: c.plan_status as PlanStatus,
+      material: c.material,
+      size_model: c.size_model,
+      make: c.make,
+      unit: c.unit,
+      total_qty: c.total,
+      source_rm_ids: c.sourceRmIds,
+      created_at: "",
+      updated_at: "",
+    })), [consolidated]);
+
+  const displayReportRows = reportMode === "live" || !activeAnnexure ? liveReportRows : reportRows;
+  const displayLotNumbers = reportMode === "live" || !activeAnnexure
+    ? Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]))
+    : (activeAnnexure?.lot_numbers || []);
+
   function downloadReportPdf(kind: PlanStatus) {
-    const rows = reportRows.filter((r) => r.plan_status === kind);
+    const rows = displayReportRows.filter((r) => r.plan_status === kind);
     const doc = new jsPDF({ orientation: "landscape" });
     const title = `${STATUS_LABEL[kind]} — Annexure`;
     doc.setFontSize(14); doc.text(title, 14, 14);
@@ -334,9 +357,10 @@ export default function RequisitionPlan() {
     const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
     doc.text(`Lot Number(s): ${lots || "—"}`, 14, 22);
     doc.text(`Requisitions: ${reqs.map((r) => r.requisition_number).join(", ")}`, 14, 28);
+    if (reportMode === "live") doc.text(`Live preview generated ${new Date().toLocaleString("en-IN")}`, 14, 32);
     const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
     autoTable(doc, {
-      startY: 34,
+      startY: reportMode === "live" ? 38 : 34,
       head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
       body: rows.map((r) => [
         r.lot_no,
