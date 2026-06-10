@@ -33,9 +33,19 @@ export interface PoPdfRow {
   lineAmount?: number;
 }
 
+export type PoPdfCategory =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel";
+
 export interface PoPdfContext {
   poNumber: string;
-  category: "steel" | "machine" | "3p";
+  category: PoPdfCategory;
   vendor: PoPdfPartyBlock;
   buyer: PoPdfBuyerBlock;
   preparedBy?: string;
@@ -52,10 +62,15 @@ export interface PoPdfContext {
   grandTotal?: number;
 }
 
-const catLabel: Record<PoPdfContext["category"], string> = {
-  steel: "Steel",
+const catLabel: Record<PoPdfCategory, string> = {
   machine: "Machine",
   "3p": "3P / Outside Purchase",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
 };
 
 function fmtINR(n: number | undefined | null): string {
