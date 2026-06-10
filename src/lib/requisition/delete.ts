@@ -52,14 +52,27 @@ export async function deleteRequisitionCascade(
       .from("purchase_order_rows").delete().in("raw_material_id", rmIds);
     if (porErr) throw new Error(`purchase_order_rows: ${porErr.message}`);
   }
-  const steps = [
-    "requisition_distribution_log",
-    "requisition_raw_materials",
-    "requisition_annexures",
-  ];
-  for (const table of steps) {
+  for (const table of ["requisition_distribution_log", "requisition_raw_materials"]) {
     const { error } = await sb.from(table).delete().eq("requisition_id", r.id);
     if (error) throw new Error(`${table}: ${error.message}`);
+  }
+  // Annexures reference requisitions through a uuid[]. Fetch overlapping rows; delete if
+  // only this requisition is linked, otherwise drop the id from the array.
+  const { data: anns, error: annErr } = await sb
+    .from("requisition_annexures")
+    .select("id, requisition_ids")
+    .contains("requisition_ids", [r.id]);
+  if (annErr) throw new Error(`requisition_annexures: ${annErr.message}`);
+  for (const a of (anns as Array<{ id: string; requisition_ids: string[] }>) || []) {
+    const remaining = (a.requisition_ids || []).filter((x) => x !== r.id);
+    if (remaining.length === 0) {
+      const { error } = await sb.from("requisition_annexures").delete().eq("id", a.id);
+      if (error) throw new Error(`requisition_annexures: ${error.message}`);
+    } else {
+      const { error } = await sb
+        .from("requisition_annexures").update({ requisition_ids: remaining }).eq("id", a.id);
+      if (error) throw new Error(`requisition_annexures: ${error.message}`);
+    }
   }
 
   // 3. Best-effort storage cleanup.
