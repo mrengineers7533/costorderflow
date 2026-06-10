@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
+import { Download, FileText } from "lucide-react";
 
 type Category = "steel" | "machine" | "3p";
 
@@ -474,22 +475,17 @@ export default function PurchaseMaterial() {
                         <Label className="text-xs font-semibold">{catLabel[c]} vendor</Label>
                         {needed && <Badge variant="secondary" className="text-[10px]">required</Badge>}
                       </div>
-                      <Input
-                        placeholder="Vendor name"
-                        className="h-8"
-                        value={vendors[c].name}
-                        onChange={(e) =>
-                          setVendors((v) => ({ ...v, [c]: { ...v[c], name: e.target.value } }))
-                        }
+                      <VendorCombobox
+                        category={c}
+                        value={vendors[c]}
+                        onChange={(v) => setVendors((vs) => ({ ...vs, [c]: v }))}
                       />
-                      <Input
-                        placeholder="Contact (phone/email)"
-                        className="h-8"
-                        value={vendors[c].contact}
-                        onChange={(e) =>
-                          setVendors((v) => ({ ...v, [c]: { ...v[c], contact: e.target.value } }))
-                        }
-                      />
+                      {vendors[c] && (
+                        <div className="text-[10px] text-muted-foreground space-y-0.5">
+                          {vendors[c]!.email && <div>{vendors[c]!.email}</div>}
+                          {vendors[c]!.phone && <div>{vendors[c]!.phone}</div>}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
