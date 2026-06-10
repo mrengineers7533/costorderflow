@@ -249,7 +249,7 @@ export default function RequisitionDetail() {
             {stale && <Badge variant="destructive">BOQ revised to R{latestRev}</Badge>}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
+            {req.client_name_override || boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
           </p>
         </div>
         <div className="flex gap-2">
