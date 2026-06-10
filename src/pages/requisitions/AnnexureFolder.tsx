@@ -233,9 +233,12 @@ export default function AnnexureFolder() {
             <SelectTrigger className="h-8"><SelectValue placeholder="Type" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="machine">Machine List</SelectItem>
-              <SelectItem value="steel">Steel List</SelectItem>
-              <SelectItem value="3p">Outside Purchase</SelectItem>
+              {ACTIVE_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>{TYPE_LABEL[t]}</SelectItem>
+              ))}
+              {entries.some((e) => e.type === "steel") && (
+                <SelectItem value="steel">Steel List (legacy)</SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
