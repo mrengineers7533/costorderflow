@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Check, Download, FileText, Loader2, Send } from "lucide-react";
 import jsPDF from "jspdf";
@@ -51,6 +52,9 @@ export default function RequisitionPlan() {
   const [tab, setTab] = useState("generated");
   const [reportMode, setReportMode] = useState<"live" | "saved">("live");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Lot-wise selection state for annexure creation (Raw Materials tab)
+  const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set());
+  const [excludedRowKeys, setExcludedRowKeys] = useState<Set<string>>(new Set());
 
   // ---- Debounced autosave plumbing ----
   // pendingPatches keyed by `${table}:${id}` -> merged patch
@@ -237,6 +241,8 @@ export default function RequisitionPlan() {
     total: number;
     sourceRmIds: string[];
     sourceReqNos: string[];
+    annexureCount: number; // number of source rms already in an annexure
+    annexureIds: string[];
   };
   const consolidated: ConsRow[] = useMemo(() => {
     const map = new Map<ConsKey, ConsRow>();
@@ -262,11 +268,17 @@ export default function RequisitionPlan() {
           total: 0,
           sourceRmIds: [],
           sourceReqNos: [],
+          annexureCount: 0,
+          annexureIds: [],
         };
         map.set(key, row);
       }
       row.total += Number(rm.required_qty || 0);
       row.sourceRmIds.push(rm.id);
+      if (rm.annexure_status === "created") {
+        row.annexureCount += 1;
+        if (rm.annexure_id && !row.annexureIds.includes(rm.annexure_id)) row.annexureIds.push(rm.annexure_id);
+      }
       const reqNo = reqById.get(rm.requisition_id)?.requisition_number;
       if (reqNo && !row.sourceReqNos.includes(reqNo)) row.sourceReqNos.push(reqNo);
     });
@@ -277,8 +289,22 @@ export default function RequisitionPlan() {
     rmIds.forEach((id) => patchRm(id, patch));
   }
 
+  // Rows eligible for annexure creation: lot is selected, row not excluded, not already created.
+  function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
+    if (!c.lot_no) return false;
+    if (!selectedLots.has(c.lot_no)) return false;
+    if (excludedRowKeys.has(c.key)) return false;
+    if (c.annexureCount >= c.sourceRmIds.length) return false; // fully created already
+    return true;
+  }
+
   async function createAnnexure() {
-    const missing = consolidated.filter((c) => !c.lot_no || !c.plan_status);
+    const eligible = consolidated.filter(isRowSelected);
+    if (eligible.length === 0) {
+      toast({ title: "No rows selected", description: "Pick at least one Lot with rows to include.", variant: "destructive" });
+      return;
+    }
+    const missing = eligible.filter((c) => !c.lot_no || !c.plan_status);
     if (missing.length > 0) {
       toast({
         title: "Lot and Status required",
@@ -287,7 +313,7 @@ export default function RequisitionPlan() {
       });
       return;
     }
-    const lots = Array.from(new Set(consolidated.map((c) => c.lot_no!).filter(Boolean)));
+    const lots = Array.from(new Set(eligible.map((c) => c.lot_no!).filter(Boolean)));
     const { data: { user } } = await supabase.auth.getUser();
     const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
       requisition_ids: ids,
@@ -295,7 +321,7 @@ export default function RequisitionPlan() {
       created_by: user?.id ?? null,
     }).select("*").maybeSingle();
     if (e1 || !ax) { toast({ title: "Create failed", description: e1?.message, variant: "destructive" }); return; }
-    const rows = consolidated.map((c) => ({
+    const rows = eligible.map((c) => ({
       annexure_id: (ax as AnnexureRecord).id,
       lot_no: c.lot_no!,
       plan_status: c.plan_status!,
@@ -308,11 +334,32 @@ export default function RequisitionPlan() {
     }));
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
+    // Mark contributing raw materials as annexure_status='created'
+    const contributingRmIds = Array.from(new Set(eligible.flatMap((c) => c.sourceRmIds)));
+    const newAxId = (ax as AnnexureRecord).id;
+    const { error: e3 } = await sb.from("requisition_raw_materials")
+      .update({ annexure_status: "created", annexure_id: newAxId })
+      .in("id", contributingRmIds);
+    if (e3) { toast({ title: "Status sync failed", description: e3.message, variant: "destructive" }); }
+    setRms((prev) => prev.map((x) => contributingRmIds.includes(x.id)
+      ? { ...x, annexure_status: "created" as const, annexure_id: newAxId }
+      : x));
     setAnnexures((p) => [ax as AnnexureRecord, ...p]);
     setAnnexureRows((axRows as AnnexureRowRecord[]) || []);
     setActiveAnnexureId((ax as AnnexureRecord).id);
+    setSelectedLots(new Set());
+    setExcludedRowKeys(new Set());
     toast({ title: "Annexure created", description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).` });
     setTab("reports");
+  }
+
+  async function reincludeRow(c: ConsRow) {
+    if (!window.confirm("Clear the 'Annexure Created' status on this row so it can be included in a new annexure? (The existing saved annexure won't be deleted.)")) return;
+    const { error } = await sb.from("requisition_raw_materials")
+      .update({ annexure_status: null, annexure_id: null })
+      .in("id", c.sourceRmIds);
+    if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+    setRms((prev) => prev.map((x) => c.sourceRmIds.includes(x.id) ? { ...x, annexure_status: null, annexure_id: null } : x));
   }
 
   async function forwardToPurchase() {
@@ -326,22 +373,29 @@ export default function RequisitionPlan() {
   const reportRows = annexureRows.filter((r) => r.annexure_id === activeAnnexureId);
 
   // Live report rows derived from current consolidated state
-  const liveReportRows: AnnexureRowRecord[] = useMemo(() => consolidated
+  type LiveAnnexureRow = AnnexureRowRecord & { _createdState?: "created" | "partial" | "none" };
+  const liveReportRows: LiveAnnexureRow[] = useMemo(() => consolidated
     .filter((c) => c.plan_status)
-    .map((c, i) => ({
-      id: `live-${i}`,
-      annexure_id: "live",
-      lot_no: c.lot_no || "",
-      plan_status: c.plan_status as PlanStatus,
-      material: c.material,
-      size_model: c.size_model,
-      make: c.make,
-      unit: c.unit,
-      total_qty: c.total,
-      source_rm_ids: c.sourceRmIds,
-      created_at: "",
-      updated_at: "",
-    })), [consolidated]);
+    .map((c, i) => {
+      const state: "created" | "partial" | "none" =
+        c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0 ? "created"
+        : c.annexureCount > 0 ? "partial" : "none";
+      return {
+        id: `live-${i}`,
+        annexure_id: "live",
+        lot_no: c.lot_no || "",
+        plan_status: c.plan_status as PlanStatus,
+        material: c.material,
+        size_model: c.size_model,
+        make: c.make,
+        unit: c.unit,
+        total_qty: c.total,
+        source_rm_ids: c.sourceRmIds,
+        created_at: "",
+        updated_at: "",
+        _createdState: state,
+      };
+    }), [consolidated]);
 
   const displayReportRows = reportMode === "live" || !activeAnnexure ? liveReportRows : reportRows;
   const displayLotNumbers = reportMode === "live" || !activeAnnexure
@@ -435,12 +489,13 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2">Status</th>
+                    <th className="text-left py-2 px-2 border-r">Status</th>
+                    <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.length === 0 ? (
-                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : groups.flatMap((g) => {
                     const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
                     const fgMake = g.item ? resolveMake(g.item) : "";
@@ -548,7 +603,7 @@ export default function RequisitionPlan() {
                             }}
                           />
                         </td>
-                        <td className="py-2 px-1">
+                        <td className="py-2 px-1 border-r">
                           <Select
                             value={r.plan_status || ""}
                             onValueChange={(v) => patchRm(r.id, { plan_status: v as PlanStatus })}
@@ -560,6 +615,11 @@ export default function RequisitionPlan() {
                               <SelectItem value="steel">Steel</SelectItem>
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="py-2 px-1">
+                          {r.annexure_status === "created"
+                            ? <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                            : <span className="text-[11px] text-muted-foreground">—</span>}
                         </td>
                       </tr>
                     ));
@@ -577,12 +637,50 @@ export default function RequisitionPlan() {
                 <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
                 <p className="text-[11px] text-muted-foreground mt-1">Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab.</p>
               </div>
-              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure</Button>
+              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure for Selected Lots</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
+              {(() => {
+                const lotsAvailable = Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]));
+                const hasNoLotRows = consolidated.some((c) => !c.lot_no);
+                const eligibleCount = consolidated.filter(isRowSelected).length;
+                return (
+                  <div className="mb-3 rounded border bg-muted/30 p-2.5 text-xs">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="font-medium text-foreground">Select Lot(s) for annexure:</span>
+                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setSelectedLots(new Set(lotsAvailable))}>Select all</Button>
+                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
+                      <span className="ml-auto text-muted-foreground">{eligibleCount} row(s) eligible</span>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {lotsAvailable.length === 0 ? (
+                        <span className="text-muted-foreground">No lots set yet. Add Lot numbers in the Generated Requisition tab.</span>
+                      ) : lotsAvailable.map((lot) => (
+                        <label key={lot} className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox
+                            checked={selectedLots.has(lot)}
+                            onCheckedChange={(v) => {
+                              setSelectedLots((prev) => {
+                                const next = new Set(prev);
+                                if (v) next.add(lot); else next.delete(lot);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>{lot}</span>
+                        </label>
+                      ))}
+                      {hasNoLotRows && (
+                        <span className="text-muted-foreground italic">(some rows have no Lot — set Lot first)</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               <table className="w-full text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
+                    <th className="w-8 py-2 px-2 border-r"></th>
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
@@ -590,14 +688,33 @@ export default function RequisitionPlan() {
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2">Source Req(s)</th>
+                    <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
+                    <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.length === 0 ? (
-                    <tr><td colSpan={8} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
-                  ) : consolidated.map((c) => (
-                    <tr key={c.key} className="border-b last:border-0">
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                  ) : consolidated.map((c) => {
+                    const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
+                    const partial = c.annexureCount > 0 && !created;
+                    const lotSelected = c.lot_no ? selectedLots.has(c.lot_no) : false;
+                    const rowChecked = lotSelected && !excludedRowKeys.has(c.key) && !created;
+                    return (
+                    <tr key={c.key} className={`border-b last:border-0 ${created ? "opacity-60" : ""}`}>
+                      <td className="py-2 px-2 border-r">
+                        <Checkbox
+                          checked={rowChecked}
+                          disabled={created || !c.lot_no || !lotSelected}
+                          onCheckedChange={(v) => {
+                            setExcludedRowKeys((prev) => {
+                              const next = new Set(prev);
+                              if (v) next.delete(c.key); else next.add(c.key);
+                              return next;
+                            });
+                          }}
+                        />
+                      </td>
                       <td className="py-2 px-2 border-r font-medium">{c.material}</td>
                       <td className="py-2 px-2 border-r">{c.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{c.make || "—"}</td>
@@ -627,9 +744,22 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="py-2 px-2 text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
+                      <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
+                      <td className="py-2 px-2">
+                        {created ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                            <button className="text-[10px] underline text-muted-foreground" onClick={() => reincludeRow(c)}>Re-include</button>
+                          </div>
+                        ) : partial ? (
+                          <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
@@ -709,12 +839,13 @@ export default function RequisitionPlan() {
                             <th className="text-left py-2 px-2 border-r">Size</th>
                             <th className="text-left py-2 px-2 border-r">RM Make</th>
                             <th className="text-left py-2 px-2 border-r">UOM</th>
-                            <th className="text-right py-2 px-2">Total Qty</th>
+                            <th className="text-right py-2 px-2 border-r">Total Qty</th>
+                            <th className="text-left py-2 px-2">Annexure</th>
                           </tr>
                         </thead>
                         <tbody>
                           {rows.length === 0 ? (
-                            <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No rows in this category.</td></tr>
+                            <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">No rows in this category.</td></tr>
                           ) : rows.map((r) => (
                             <tr key={r.id} className="border-b last:border-0">
                               <td className="py-2 px-2 border-r">{r.lot_no}</td>
@@ -722,7 +853,18 @@ export default function RequisitionPlan() {
                               <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                              <td className="py-2 px-2 text-right">{r.total_qty ?? "—"}</td>
+                              <td className="py-2 px-2 border-r text-right">{r.total_qty ?? "—"}</td>
+                              <td className="py-2 px-2">
+                                {reportMode === "saved" ? (
+                                  <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                                ) : (r as LiveAnnexureRow)._createdState === "created" ? (
+                                  <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                                ) : (r as LiveAnnexureRow)._createdState === "partial" ? (
+                                  <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">—</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -730,7 +872,8 @@ export default function RequisitionPlan() {
                           <tfoot>
                             <tr className="bg-muted/30 font-medium">
                               <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
-                              <td className="py-2 px-2 text-right">{total}</td>
+                              <td className="py-2 px-2 text-right border-r">{total}</td>
+                              <td className="py-2 px-2"></td>
                             </tr>
                           </tfoot>
                         )}
