@@ -20,6 +20,7 @@ import PurchaseDetail from "./pages/purchase/PurchaseDetail";
 import PurchaseLanding from "./pages/purchase/PurchaseLanding";
 import BoqFolder from "./pages/purchase/BoqFolder";
 import PurchaseMaterial from "./pages/purchase/PurchaseMaterial";
+import PoFolder from "./pages/purchase/PoFolder";
 import ManufacturingList from "./pages/manufacturing/ManufacturingList";
 import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
@@ -38,6 +39,7 @@ import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
 import AdminNotificationRecipients from "./pages/admin/AdminNotificationRecipients";
 import AdminAccess from "./pages/admin/AdminAccess";
+import AdminVendors from "./pages/admin/AdminVendors";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
@@ -82,6 +84,7 @@ const App = () => (
                       <Route path="/purchase/approved" element={<RequireModule user={user} module="purchase"><PurchaseList /></RequireModule>} />
                       <Route path="/purchase/boq-folder" element={<RequireModule user={user} module="purchase"><BoqFolder /></RequireModule>} />
                       <Route path="/purchase/materials" element={<RequireModule user={user} module="purchase"><PurchaseMaterial /></RequireModule>} />
+                      <Route path="/purchase/po-folder" element={<RequireModule user={user} module="purchase"><PoFolder /></RequireModule>} />
                       <Route path="/purchase/:boqId" element={<RequireModule user={user} module="purchase"><PurchaseDetail /></RequireModule>} />
                       <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
@@ -117,6 +120,10 @@ const App = () => (
                       <Route
                         path="/admin/access"
                         element={<RequireAdmin user={user}><AdminAccess /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/vendors"
+                        element={<RequireAdmin user={user}><AdminVendors /></RequireAdmin>}
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
