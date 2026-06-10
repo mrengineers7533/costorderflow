@@ -241,6 +241,8 @@ export default function RequisitionPlan() {
     total: number;
     sourceRmIds: string[];
     sourceReqNos: string[];
+    annexureCount: number; // number of source rms already in an annexure
+    annexureIds: string[];
   };
   const consolidated: ConsRow[] = useMemo(() => {
     const map = new Map<ConsKey, ConsRow>();
@@ -266,11 +268,17 @@ export default function RequisitionPlan() {
           total: 0,
           sourceRmIds: [],
           sourceReqNos: [],
+          annexureCount: 0,
+          annexureIds: [],
         };
         map.set(key, row);
       }
       row.total += Number(rm.required_qty || 0);
       row.sourceRmIds.push(rm.id);
+      if (rm.annexure_status === "created") {
+        row.annexureCount += 1;
+        if (rm.annexure_id && !row.annexureIds.includes(rm.annexure_id)) row.annexureIds.push(rm.annexure_id);
+      }
       const reqNo = reqById.get(rm.requisition_id)?.requisition_number;
       if (reqNo && !row.sourceReqNos.includes(reqNo)) row.sourceReqNos.push(reqNo);
     });
