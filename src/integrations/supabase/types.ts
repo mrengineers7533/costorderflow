@@ -1382,15 +1382,56 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_order_audit: {
+        Row: {
+          action: string
+          actor: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          po_id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          po_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          po_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_audit_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_rows: {
         Row: {
           created_at: string
+          discount_pct: number | null
+          due_on: string | null
+          gst_amount: number | null
+          gst_pct: number | null
           id: string
+          line_amount: number | null
           lot_no: string | null
           make: string | null
           material: string
           po_id: string
           qty: number | null
+          rate: number | null
           raw_material_id: string | null
           size_model: string | null
           unit: string | null
@@ -1398,12 +1439,18 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          discount_pct?: number | null
+          due_on?: string | null
+          gst_amount?: number | null
+          gst_pct?: number | null
           id?: string
+          line_amount?: number | null
           lot_no?: string | null
           make?: string | null
           material: string
           po_id: string
           qty?: number | null
+          rate?: number | null
           raw_material_id?: string | null
           size_model?: string | null
           unit?: string | null
@@ -1411,12 +1458,18 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          discount_pct?: number | null
+          due_on?: string | null
+          gst_amount?: number | null
+          gst_pct?: number | null
           id?: string
+          line_amount?: number | null
           lot_no?: string | null
           make?: string | null
           material?: string
           po_id?: string
           qty?: number | null
+          rate?: number | null
           raw_material_id?: string | null
           size_model?: string | null
           unit?: string | null
@@ -1432,60 +1485,178 @@ export type Database = {
           },
         ]
       }
+      purchase_order_sends: {
+        Row: {
+          cc: string | null
+          error: string | null
+          id: string
+          message: string | null
+          po_id: string
+          sent_at: string
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_email: string
+        }
+        Insert: {
+          cc?: string | null
+          error?: string | null
+          id?: string
+          message?: string | null
+          po_id: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_email: string
+        }
+        Update: {
+          cc?: string | null
+          error?: string | null
+          id?: string
+          message?: string | null
+          po_id?: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_sends_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_orders: {
         Row: {
+          amount_in_words: string | null
           annexure_ids: string[]
+          buyer_block: Json | null
           cancel_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           category: string
           created_at: string
           created_by: string | null
+          destination: string | null
+          dispatch_through: string | null
+          grand_total: number | null
           id: string
           lot_numbers: string[]
           notes: string | null
+          payment_mode: string | null
           po_number: string
+          prepared_by_name: string | null
           requisition_ids: string[]
           status: string
+          subtotal: number | null
+          tax_total: number | null
+          terms: string | null
           updated_at: string
           vendor_contact: string | null
+          vendor_id: string | null
           vendor_name: string
         }
         Insert: {
+          amount_in_words?: string | null
           annexure_ids?: string[]
+          buyer_block?: Json | null
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           category: string
           created_at?: string
           created_by?: string | null
+          destination?: string | null
+          dispatch_through?: string | null
+          grand_total?: number | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
+          payment_mode?: string | null
           po_number: string
+          prepared_by_name?: string | null
           requisition_ids?: string[]
           status?: string
+          subtotal?: number | null
+          tax_total?: number | null
+          terms?: string | null
           updated_at?: string
           vendor_contact?: string | null
+          vendor_id?: string | null
           vendor_name: string
         }
         Update: {
+          amount_in_words?: string | null
           annexure_ids?: string[]
+          buyer_block?: Json | null
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           category?: string
           created_at?: string
           created_by?: string | null
+          destination?: string | null
+          dispatch_through?: string | null
+          grand_total?: number | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
+          payment_mode?: string | null
           po_number?: string
+          prepared_by_name?: string | null
           requisition_ids?: string[]
           status?: string
+          subtotal?: number | null
+          tax_total?: number | null
+          terms?: string | null
           updated_at?: string
           vendor_contact?: string | null
+          vendor_id?: string | null
           vendor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_settings: {
+        Row: {
+          buyer_block: Json
+          default_destination: string | null
+          default_dispatch: string | null
+          default_payment_mode: string | null
+          default_terms: string | null
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          buyer_block?: Json
+          default_destination?: string | null
+          default_dispatch?: string | null
+          default_payment_mode?: string | null
+          default_terms?: string | null
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          buyer_block?: Json
+          default_destination?: string | null
+          default_dispatch?: string | null
+          default_payment_mode?: string | null
+          default_terms?: string | null
+          id?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1960,6 +2131,60 @@ export type Database = {
         }
         Relationships: []
       }
+      vendors: {
+        Row: {
+          address: string | null
+          categories: string[]
+          contact_person: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          payment_terms: string | null
+          phone: string | null
+          state_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          categories?: string[]
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          payment_terms?: string | null
+          phone?: string | null
+          state_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          categories?: string[]
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          payment_terms?: string | null
+          phone?: string | null
+          state_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_entity_pending_state: {
@@ -1975,6 +2200,44 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_purchase_order: {
+        Args: { _po_id: string; _reason: string }
+        Returns: {
+          amount_in_words: string | null
+          annexure_ids: string[]
+          buyer_block: Json | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          dispatch_through: string | null
+          grand_total: number | null
+          id: string
+          lot_numbers: string[]
+          notes: string | null
+          payment_mode: string | null
+          po_number: string
+          prepared_by_name: string | null
+          requisition_ids: string[]
+          status: string
+          subtotal: number | null
+          tax_total: number | null
+          terms: string | null
+          updated_at: string
+          vendor_contact: string | null
+          vendor_id: string | null
+          vendor_name: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_boq_by_verification_token: {
         Args: { _token: string }
         Returns: {
