@@ -447,6 +447,7 @@ export default function RequisitionPlan() {
         </div>
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
+          <Link to="/requisitions/annexures"><Button variant="outline" size="sm"><FileText className="mr-1 h-4 w-4" />Annexure Folder</Button></Link>
           <Button size="sm" onClick={forwardToPurchase}><Send className="mr-1 h-4 w-4" />Forward to Purchase</Button>
         </div>
       </div>
