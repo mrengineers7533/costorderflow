@@ -21,6 +21,7 @@ import ManufacturingList from "./pages/manufacturing/ManufacturingList";
 import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
 import RequisitionDetail from "./pages/requisitions/RequisitionDetail";
+import RequisitionPlan from "./pages/requisitions/RequisitionPlan";
 import PublicRequisition from "./pages/requisitions/PublicRequisition";
 import RawMaterialMaster from "./pages/RawMaterialMaster";
 import { AppLayout } from "./components/AppLayout";
@@ -78,6 +79,7 @@ const App = () => (
                       <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
                       <Route path="/requisitions" element={<RequireModule user={user} module="requisitions"><RequisitionsList /></RequireModule>} />
+                      <Route path="/requisitions/plan" element={<RequireModule user={user} module="requisitions"><RequisitionPlan /></RequireModule>} />
                       <Route path="/requisitions/:id" element={<RequireModule user={user} module="requisitions"><RequisitionDetail /></RequireModule>} />
                       <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
                       <Route
