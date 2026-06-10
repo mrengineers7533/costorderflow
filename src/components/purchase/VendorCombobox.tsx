@@ -103,37 +103,44 @@ export function VendorCombobox({ category, value, onChange }: Props) {
   );
 }
 
+const VENDOR_CATEGORIES: { key: string; label: string }[] = [
+  { key: "machine", label: "Machine" },
+  { key: "3p", label: "3P" },
+  { key: "pipe", label: "Pipe" },
+  { key: "sheet_ss", label: "Sheet SS" },
+  { key: "sheet_ms", label: "Sheet MS" },
+  { key: "sheet_gi", label: "Sheet GI" },
+  { key: "structure", label: "Structure" },
+  { key: "steel", label: "Steel (legacy)" },
+];
+
 function AddVendorDialog({
   open, onOpenChange, defaultCategory, onCreated,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
-  defaultCategory: "steel" | "machine" | "3p";
+  defaultCategory: string;
   onCreated: (v: Vendor) => void;
 }) {
   const [form, setForm] = useState({
     name: "", address: "", gstin: "", state_code: "",
     contact_person: "", phone: "", email: "", payment_terms: "NEFT/RTGS",
-    cat_steel: defaultCategory === "steel",
-    cat_machine: defaultCategory === "machine",
-    cat_3p: defaultCategory === "3p",
   });
+  const [cats, setCats] = useState<Set<string>>(new Set([defaultCategory]));
+  useEffect(() => { setCats(new Set([defaultCategory])); }, [defaultCategory, open]);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!form.name.trim()) { toast.error("Name required"); return; }
-    const cats: string[] = [];
-    if (form.cat_steel) cats.push("steel");
-    if (form.cat_machine) cats.push("machine");
-    if (form.cat_3p) cats.push("3p");
-    if (cats.length === 0) { toast.error("Pick at least one category"); return; }
+    const catList = Array.from(cats);
+    if (catList.length === 0) { toast.error("Pick at least one category"); return; }
     setSaving(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const { data: u } = await supabase.auth.getUser();
     const { data, error } = await sb.from("vendors").insert({
       name: form.name.trim(),
-      categories: cats,
+      categories: catList,
       address: form.address.trim() || null,
       gstin: form.gstin.trim() || null,
       state_code: form.state_code.trim() || null,
@@ -159,9 +166,24 @@ function AddVendorDialog({
             <Input className="h-8" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div className="flex gap-3 items-center">
             <Label className="text-xs">Categories:</Label>
-            <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_steel} onChange={(e) => setForm({ ...form, cat_steel: e.target.checked })} /> Steel</label>
-            <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_machine} onChange={(e) => setForm({ ...form, cat_machine: e.target.checked })} /> Machine</label>
-            <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_3p} onChange={(e) => setForm({ ...form, cat_3p: e.target.checked })} /> 3P</label>
+            <div className="flex flex-wrap gap-2">
+              {VENDOR_CATEGORIES.map((c) => (
+                <label key={c.key} className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={cats.has(c.key)}
+                    onChange={(e) => {
+                      setCats((prev) => {
+                        const n = new Set(prev);
+                        if (e.target.checked) n.add(c.key); else n.delete(c.key);
+                        return n;
+                      });
+                    }}
+                  />
+                  {c.label}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div><Label>GSTIN</Label><Input className="h-8" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></div>
