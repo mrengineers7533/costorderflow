@@ -22,29 +22,44 @@ export async function deleteRequisitionCascade(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
-  // 1. Guard: active PO references
-  const { data: poRows, error: poErr } = await sb
-    .from("purchase_order_rows")
-    .select("po_id, purchase_orders!inner(po_number, status)")
-    .eq("requisition_id", r.id);
-  if (poErr) throw new Error(poErr.message);
-  const blocking = ((poRows as Array<{ purchase_orders: { po_number: string; status: string } }>) || [])
-    .filter((x) => x.purchase_orders && x.purchase_orders.status !== "cancelled")
-    .map((x) => x.purchase_orders.po_number);
-  if (blocking.length) {
-    throw new RequisitionDeleteBlockedError(Array.from(new Set(blocking)));
+  // 1. Guard: active PO references via requisition_raw_materials.po_id
+  const { data: rmPo, error: rmErr } = await sb
+    .from("requisition_raw_materials")
+    .select("id, po_id")
+    .eq("requisition_id", r.id)
+    .not("po_id", "is", null);
+  if (rmErr) throw new Error(rmErr.message);
+  const poIds = Array.from(
+    new Set(((rmPo as Array<{ po_id: string | null }>) || []).map((x) => x.po_id).filter(Boolean) as string[]),
+  );
+  const rmIds = ((rmPo as Array<{ id: string }>) || []).map((x) => x.id);
+  if (poIds.length) {
+    const { data: pos, error: poErr } = await sb
+      .from("purchase_orders").select("po_number, status").in("id", poIds);
+    if (poErr) throw new Error(poErr.message);
+    const blocking = ((pos as Array<{ po_number: string; status: string }>) || [])
+      .filter((p) => p.status !== "cancelled")
+      .map((p) => p.po_number);
+    if (blocking.length) {
+      throw new RequisitionDeleteBlockedError(Array.from(new Set(blocking)));
+    }
   }
 
   // 2. Clean dependent rows that don't cascade automatically.
-  const steps: Array<{ table: string }> = [
-    { table: "requisition_distribution_log" },
-    { table: "purchase_order_rows" },
-    { table: "requisition_raw_materials" },
-    { table: "requisition_annexures" },
+  // Remove PO rows tied to this requisition's raw materials (all referenced POs are cancelled at this point).
+  if (rmIds.length) {
+    const { error: porErr } = await sb
+      .from("purchase_order_rows").delete().in("raw_material_id", rmIds);
+    if (porErr) throw new Error(`purchase_order_rows: ${porErr.message}`);
+  }
+  const steps = [
+    "requisition_distribution_log",
+    "requisition_raw_materials",
+    "requisition_annexures",
   ];
-  for (const s of steps) {
-    const { error } = await sb.from(s.table).delete().eq("requisition_id", r.id);
-    if (error) throw new Error(`${s.table}: ${error.message}`);
+  for (const table of steps) {
+    const { error } = await sb.from(table).delete().eq("requisition_id", r.id);
+    if (error) throw new Error(`${table}: ${error.message}`);
   }
 
   // 3. Best-effort storage cleanup.
