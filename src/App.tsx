@@ -17,6 +17,9 @@ import FlowReport from "./pages/reports/FlowReport";
 import WorkflowPage from "./pages/workflow/WorkflowPage";
 import PurchaseList from "./pages/purchase/PurchaseList";
 import PurchaseDetail from "./pages/purchase/PurchaseDetail";
+import PurchaseLanding from "./pages/purchase/PurchaseLanding";
+import BoqFolder from "./pages/purchase/BoqFolder";
+import PurchaseMaterial from "./pages/purchase/PurchaseMaterial";
 import ManufacturingList from "./pages/manufacturing/ManufacturingList";
 import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
@@ -75,7 +78,10 @@ const App = () => (
                       <Route path="/pi/:id" element={<RequireModule user={user} module="pi"><PiEditor /></RequireModule>} />
                       <Route path="/reports" element={<RequireModule user={user} module="reports"><FlowReport /></RequireModule>} />
                       <Route path="/workflow" element={<RequireModule user={user} module="workflow"><WorkflowPage /></RequireModule>} />
-                      <Route path="/purchase" element={<RequireModule user={user} module="purchase"><PurchaseList /></RequireModule>} />
+                      <Route path="/purchase" element={<RequireModule user={user} module="purchase"><PurchaseLanding /></RequireModule>} />
+                      <Route path="/purchase/approved" element={<RequireModule user={user} module="purchase"><PurchaseList /></RequireModule>} />
+                      <Route path="/purchase/boq-folder" element={<RequireModule user={user} module="purchase"><BoqFolder /></RequireModule>} />
+                      <Route path="/purchase/materials" element={<RequireModule user={user} module="purchase"><PurchaseMaterial /></RequireModule>} />
                       <Route path="/purchase/:boqId" element={<RequireModule user={user} module="purchase"><PurchaseDetail /></RequireModule>} />
                       <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
