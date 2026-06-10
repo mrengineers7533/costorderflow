@@ -74,6 +74,10 @@ export interface AnnexureRecord {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  status?: "active" | "cancelled";
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancel_reason?: string | null;
 }
 
 export interface AnnexureRowRecord {

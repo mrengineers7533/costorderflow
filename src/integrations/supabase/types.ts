@@ -1419,30 +1419,42 @@ export type Database = {
       }
       requisition_annexures: {
         Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           created_by: string | null
           id: string
           lot_numbers: string[]
           notes: string | null
           requisition_ids: string[]
+          status: string
           updated_at: string
         }
         Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
           requisition_ids?: string[]
+          status?: string
           updated_at?: string
         }
         Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
           requisition_ids?: string[]
+          status?: string
           updated_at?: string
         }
         Relationships: []

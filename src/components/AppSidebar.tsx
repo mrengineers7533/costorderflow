@@ -27,6 +27,7 @@ const items: { title: string; url: string; icon: typeof LayoutGrid; module: Modu
   { title: "Purchase",  url: "/purchase",   icon: ShoppingCart, module: "purchase" },
   { title: "Manufacturing", url: "/manufacturing", icon: Factory, module: "manufacturing" },
   { title: "Requisitions", url: "/requisitions", icon: ClipboardCheck, module: "requisitions" },
+  { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "requisitions" },
   { title: "Raw Material Master", url: "/raw-materials", icon: Boxes, module: "raw_materials" },
   { title: "Flow Report", url: "/reports", icon: BarChart3, module: "reports" },
 ];
