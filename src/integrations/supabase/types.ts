@@ -1606,6 +1606,8 @@ export type Database = {
       }
       requisition_raw_materials: {
         Row: {
+          annexure_id: string | null
+          annexure_status: string | null
           created_at: string
           fg_quantity: number | null
           id: string
@@ -1626,6 +1628,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          annexure_id?: string | null
+          annexure_status?: string | null
           created_at?: string
           fg_quantity?: number | null
           id?: string
@@ -1646,6 +1650,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          annexure_id?: string | null
+          annexure_status?: string | null
           created_at?: string
           fg_quantity?: number | null
           id?: string
@@ -1665,7 +1671,15 @@ export type Database = {
           unit?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "requisition_raw_materials_annexure_id_fkey"
+            columns: ["annexure_id"]
+            isOneToOne: false
+            referencedRelation: "requisition_annexures"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       requisitions: {
         Row: {
@@ -2075,6 +2089,8 @@ export type Database = {
       get_requisition_raw_materials_by_token: {
         Args: { _token: string }
         Returns: {
+          annexure_id: string | null
+          annexure_status: string | null
           created_at: string
           fg_quantity: number | null
           id: string
