@@ -13,7 +13,15 @@ import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
 import { Download, FileText } from "lucide-react";
 
-type Category = "steel" | "machine" | "3p";
+type Category =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel"; // legacy
 
 interface RawRow {
   id: string;
@@ -24,7 +32,7 @@ interface RawRow {
   make: string | null;
   unit: string | null;
   required_qty: number | null;
-  plan_status: "machine" | "3p" | "steel" | null;
+  plan_status: Category | null;
   annexure_status: "created" | null;
   annexure_id: string | null;
   po_status: "created" | null;
@@ -42,11 +50,24 @@ interface PoRecord {
   created_at: string;
 }
 
-const CATEGORIES: Category[] = ["steel", "machine", "3p"];
+const CATEGORIES: Category[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
 const catLabel: Record<Category, string> = {
-  steel: "Steel",
   machine: "Machine",
   "3p": "3P / Outside",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
 };
 
 export default function PurchaseMaterial() {
@@ -59,9 +80,9 @@ export default function PurchaseMaterial() {
   const [categoryFilter, setCategoryFilter] = useState<"all" | Category>("all");
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
-  const [vendors, setVendors] = useState<Record<Category, Vendor | null>>({
-    steel: null, machine: null, "3p": null,
-  });
+  const [vendors, setVendors] = useState<Record<Category, Vendor | null>>(
+    () => Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>,
+  );
   const [rates, setRates] = useState<Record<string, { rate: string; discount: string; gst: string }>>({});
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -288,7 +309,7 @@ export default function PurchaseMaterial() {
 
       toast.success(`Created ${createdPdfs.length} PO${createdPdfs.length === 1 ? "" : "s"}.`);
       setSelectedRows(new Set());
-      setVendors({ steel: null, machine: null, "3p": null });
+      setVendors(Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>);
       setRates({});
       setNotes("");
       await loadAll();

@@ -18,8 +18,25 @@ import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-type Cat = "steel" | "machine" | "3p";
-const CAT_LABEL: Record<Cat, string> = { steel: "Steel", machine: "Machine", "3p": "Outside Purchase (3P)" };
+type Cat =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel";
+const CAT_LABEL: Record<Cat, string> = {
+  machine: "Machine",
+  "3p": "Outside Purchase (3P)",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
+};
 
 type RowMeta = { selected: boolean; rate: string; discount: string; gst: string; due: string };
 
@@ -36,7 +53,7 @@ export default function PoCreateFromAnnexure() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
   const lot = sp.get("lot") || "";
-  const type = (sp.get("type") as Cat) || "steel";
+  const type = (sp.get("type") as Cat) || "structure";
 
   const [annexure, setAnnexure] = useState<AnnexureRecord | null>(null);
   const [rows, setRows] = useState<AnnexureRowRecord[]>([]);

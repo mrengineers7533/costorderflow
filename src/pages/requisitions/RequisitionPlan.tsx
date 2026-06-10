@@ -23,11 +23,43 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 
-type PlanStatus = "machine" | "3p" | "steel";
+type PlanStatus =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel"; // legacy
 const STATUS_LABEL: Record<PlanStatus, string> = {
   machine: "Machine",
   "3p": "3P / Third Party",
-  steel: "Steel",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
+};
+const ACTIVE_STATUSES: PlanStatus[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
+const REPORT_TITLE: Record<PlanStatus, string> = {
+  machine: "Machine List",
+  "3p": "Outside Purchase",
+  pipe: "Pipe Annexure",
+  sheet_ss: "Sheet SS Annexure",
+  sheet_ms: "Sheet MS Annexure",
+  sheet_gi: "Sheet GI Annexure",
+  structure: "Structure Annexure",
+  steel: "Steel List (legacy)",
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -622,9 +654,12 @@ export default function RequisitionPlan() {
                           >
                             <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="machine">Machine</SelectItem>
-                              <SelectItem value="3p">3P / Third Party</SelectItem>
-                              <SelectItem value="steel">Steel</SelectItem>
+                              {ACTIVE_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                              ))}
+                              {r.plan_status === "steel" && (
+                                <SelectItem value="steel">Steel (legacy)</SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
                         </td>
@@ -750,9 +785,12 @@ export default function RequisitionPlan() {
                         >
                           <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="machine">Machine</SelectItem>
-                            <SelectItem value="3p">3P / Third Party</SelectItem>
-                            <SelectItem value="steel">Steel</SelectItem>
+                            {ACTIVE_STATUSES.map((s) => (
+                              <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                            ))}
+                            {c.plan_status === "steel" && (
+                              <SelectItem value="steel">Steel (legacy)</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </td>
@@ -828,10 +866,16 @@ export default function RequisitionPlan() {
               </CardContent>
             </Card>
 
-            {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
+            {(() => {
+              const hasLegacySteel = displayReportRows.some((r) => r.plan_status === "steel");
+              const kinds: PlanStatus[] = hasLegacySteel
+                ? [...ACTIVE_STATUSES, "steel"]
+                : ACTIVE_STATUSES;
+              return kinds;
+            })().map((kind) => {
                 const rows = displayReportRows.filter((r) => r.plan_status === kind);
                 const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
-                const title = kind === "machine" ? "Machine List" : kind === "steel" ? "Steel List" : "Outside Purchase";
+                const title = REPORT_TITLE[kind];
                 const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
                 return (
                   <Card key={kind}>

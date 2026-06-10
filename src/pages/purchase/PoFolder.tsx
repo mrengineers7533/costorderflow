@@ -16,8 +16,34 @@ import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-type Category = "steel" | "machine" | "3p";
-const catLabel: Record<Category, string> = { steel: "Steel", machine: "Machine", "3p": "3P / Outside" };
+type Category =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel";
+const catLabel: Record<Category, string> = {
+  machine: "Machine",
+  "3p": "3P / Outside",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
+};
+const ACTIVE_CATEGORIES: Category[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
 
 interface Po {
   id: string;
@@ -207,9 +233,12 @@ export default function PoFolder() {
             <SelectTrigger className="h-8"><SelectValue placeholder="Category" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
-              <SelectItem value="steel">Steel</SelectItem>
-              <SelectItem value="machine">Machine</SelectItem>
-              <SelectItem value="3p">3P / Outside</SelectItem>
+              {ACTIVE_CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>{catLabel[c]}</SelectItem>
+              ))}
+              {pos.some((p) => p.category === "steel") && (
+                <SelectItem value="steel">Steel (legacy)</SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Input className="h-8" placeholder="Lot" value={lotQ} onChange={(e) => setLotQ(e.target.value)} />

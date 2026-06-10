@@ -16,12 +16,34 @@ import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-type PlanStatus = "machine" | "3p" | "steel";
+type PlanStatus =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel"; // legacy
 const TYPE_LABEL: Record<PlanStatus, string> = {
   machine: "Machine List",
-  steel: "Steel List",
   "3p": "Outside Purchase",
+  pipe: "Pipe Annexure",
+  sheet_ss: "Sheet SS Annexure",
+  sheet_ms: "Sheet MS Annexure",
+  sheet_gi: "Sheet GI Annexure",
+  structure: "Structure Annexure",
+  steel: "Steel List (legacy)",
 };
+const ACTIVE_TYPES: PlanStatus[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
 
 type Profile = { id: string; full_name: string | null; email: string | null };
 
@@ -211,9 +233,12 @@ export default function AnnexureFolder() {
             <SelectTrigger className="h-8"><SelectValue placeholder="Type" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="machine">Machine List</SelectItem>
-              <SelectItem value="steel">Steel List</SelectItem>
-              <SelectItem value="3p">Outside Purchase</SelectItem>
+              {ACTIVE_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>{TYPE_LABEL[t]}</SelectItem>
+              ))}
+              {entries.some((e) => e.type === "steel") && (
+                <SelectItem value="steel">Steel List (legacy)</SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
