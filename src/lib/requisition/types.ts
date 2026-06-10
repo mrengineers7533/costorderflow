@@ -62,6 +62,8 @@ export interface RequisitionRawMaterialRecord {
   size_model?: string | null;
   lot_no?: string | null;
   plan_status?: "machine" | "3p" | "steel" | null;
+  annexure_status?: "created" | null;
+  annexure_id?: string | null;
 }
 
 export interface AnnexureRecord {
