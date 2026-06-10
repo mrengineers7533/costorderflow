@@ -94,6 +94,7 @@ export default function RequisitionsList() {
       if (!q) return true;
       const b = boqs[r.boq_id];
       return [r.requisition_number, b?.boq_number, b?.reference_oa_number, b?.client_name, cs]
+        .concat(r.client_name_override ? [r.client_name_override] : [])
         .filter(Boolean).join(" ").toLowerCase().includes(q);
     });
   }, [reqs, boqs, search, costSheetByRoot, projectFilter]);
