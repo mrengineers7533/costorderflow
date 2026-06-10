@@ -437,7 +437,15 @@ export default function RequisitionDetail() {
         <TabsContent value="items">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-              <CardTitle className="text-sm">Finish Good items</CardTitle>
+              <div>
+                <CardTitle className="text-sm">Machine List</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Lot Number(s):{" "}
+                  <span className="font-medium text-foreground">
+                    {Array.from(new Set(items.map((i) => i.lot_no).filter(Boolean))).join(", ") || "—"}
+                  </span>
+                </p>
+              </div>
               <Button
                 type="button"
                 variant={showMake ? "secondary" : "outline"}
