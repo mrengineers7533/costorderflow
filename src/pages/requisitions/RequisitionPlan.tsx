@@ -654,9 +654,12 @@ export default function RequisitionPlan() {
                           >
                             <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="machine">Machine</SelectItem>
-                              <SelectItem value="3p">3P / Third Party</SelectItem>
-                              <SelectItem value="steel">Steel</SelectItem>
+                              {ACTIVE_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                              ))}
+                              {r.plan_status === "steel" && (
+                                <SelectItem value="steel">Steel (legacy)</SelectItem>
+                              )}
                             </SelectContent>
                           </Select>
                         </td>
@@ -782,9 +785,12 @@ export default function RequisitionPlan() {
                         >
                           <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="machine">Machine</SelectItem>
-                            <SelectItem value="3p">3P / Third Party</SelectItem>
-                            <SelectItem value="steel">Steel</SelectItem>
+                            {ACTIVE_STATUSES.map((s) => (
+                              <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                            ))}
+                            {c.plan_status === "steel" && (
+                              <SelectItem value="steel">Steel (legacy)</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </td>
