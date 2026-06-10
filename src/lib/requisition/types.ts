@@ -61,7 +61,16 @@ export interface RequisitionRawMaterialRecord {
   make?: string | null;
   size_model?: string | null;
   lot_no?: string | null;
-  plan_status?: "machine" | "3p" | "steel" | null;
+  plan_status?:
+    | "machine"
+    | "3p"
+    | "pipe"
+    | "sheet_ss"
+    | "sheet_ms"
+    | "sheet_gi"
+    | "structure"
+    | "steel"
+    | null;
   annexure_status?: "created" | null;
   annexure_id?: string | null;
 }
@@ -84,7 +93,15 @@ export interface AnnexureRowRecord {
   id: string;
   annexure_id: string;
   lot_no: string;
-  plan_status: "machine" | "3p" | "steel";
+  plan_status:
+    | "machine"
+    | "3p"
+    | "pipe"
+    | "sheet_ss"
+    | "sheet_ms"
+    | "sheet_gi"
+    | "structure"
+    | "steel";
   material: string;
   size_model: string | null;
   make: string | null;
