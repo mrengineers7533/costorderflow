@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X } from "lucide-react";
+import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
@@ -19,6 +19,10 @@ import type {
   RequisitionRawMaterialRecord,
 } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
@@ -90,6 +94,7 @@ export default function RequisitionsList() {
       if (!q) return true;
       const b = boqs[r.boq_id];
       return [r.requisition_number, b?.boq_number, b?.reference_oa_number, b?.client_name, cs]
+        .concat(r.client_name_override ? [r.client_name_override] : [])
         .filter(Boolean).join(" ").toLowerCase().includes(q);
     });
   }, [reqs, boqs, search, costSheetByRoot, projectFilter]);
@@ -172,6 +177,11 @@ export default function RequisitionsList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <UploadRequisitionButton
+            projects={distinctProjects}
+            costSheetByRoot={costSheetByRoot}
+            onCreated={() => window.location.reload()}
+          />
           <AddRequisitionToProjectButton
             projects={distinctProjects}
             onPicked={async (cs) => {
@@ -299,7 +309,7 @@ export default function RequisitionsList() {
                       </td>
                       <td className="py-2 px-3">{b?.boq_number || "—"}</td>
                       <td className="py-2 px-3">R{r.boq_revision}</td>
-                      <td className="py-2 px-3 max-w-[220px] truncate">{b?.client_name || "—"}</td>
+                      <td className="py-2 px-3 max-w-[220px] truncate">{r.client_name_override || b?.client_name || "—"}</td>
                       <td className="py-2 px-3 text-xs text-muted-foreground">{fmtDate(r.created_at)}</td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1 flex-wrap">
@@ -402,6 +412,339 @@ function AddRequisitionToProjectButton({
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+type OrderLite = {
+  id: string;
+  oa_number: string;
+  company_name: string | null;
+  cost_sheet_number: string | null;
+  parent_order_id: string | null;
+};
+type BoqLite = { id: string; boq_number: string; revision: number; client_name: string | null };
+
+function UploadRequisitionButton({
+  projects,
+  costSheetByRoot,
+  onCreated,
+}: {
+  projects: string[];
+  costSheetByRoot: Record<string, string>;
+  onCreated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"project" | "oa">("project");
+  const [csQuery, setCsQuery] = useState("");
+  const [pickedCs, setPickedCs] = useState<string | null>(null);
+  const [oaQuery, setOaQuery] = useState("");
+  const [oaResults, setOaResults] = useState<OrderLite[]>([]);
+  const [pickedOa, setPickedOa] = useState<OrderLite | null>(null);
+  const [boqOptions, setBoqOptions] = useState<BoqLite[]>([]);
+  const [pickedBoqId, setPickedBoqId] = useState<string | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function reset() {
+    setMode("project");
+    setCsQuery(""); setPickedCs(null);
+    setOaQuery(""); setOaResults([]); setPickedOa(null);
+    setBoqOptions([]); setPickedBoqId(null);
+    setClientName(""); setNotes(""); setFile(null);
+  }
+
+  const filteredProjects = useMemo(() => {
+    const s = csQuery.trim().toLowerCase();
+    return s ? projects.filter((p) => p.toLowerCase().includes(s)) : projects;
+  }, [projects, csQuery]);
+
+  // OA search (debounced via simple effect)
+  useEffect(() => {
+    if (mode !== "oa") return;
+    const s = oaQuery.trim();
+    if (s.length < 2) { setOaResults([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, oa_number, company_name, cost_sheet_number, parent_order_id")
+        .or(`oa_number.ilike.%${s}%,company_name.ilike.%${s}%`)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      if (!cancelled) setOaResults((data as unknown as OrderLite[]) || []);
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [mode, oaQuery]);
+
+  // When an OA is picked, load approved BOQ revisions for it
+  useEffect(() => {
+    (async () => {
+      if (!pickedOa) { setBoqOptions([]); setPickedBoqId(null); return; }
+      const { data } = await supabase
+        .from("boqs")
+        .select("id, boq_number, revision, client_name")
+        .eq("order_id", pickedOa.id)
+        .eq("verification_status", "approved")
+        .order("revision", { ascending: false });
+      const list = (data as unknown as BoqLite[]) || [];
+      setBoqOptions(list);
+      setPickedBoqId(list[0]?.id ?? null);
+      if (!clientName && (pickedOa.company_name || list[0]?.client_name)) {
+        setClientName(pickedOa.company_name || list[0]?.client_name || "");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedOa]);
+
+  async function resolveLinkage(): Promise<{ orderRootId: string; boq: BoqLite; oaNumber: string } | null> {
+    if (mode === "project") {
+      if (!pickedCs) return null;
+      const rootIds = Object.entries(costSheetByRoot).filter(([, v]) => v === pickedCs).map(([k]) => k);
+      if (!rootIds.length) return null;
+      const orFilter = rootIds.map((id) => `id.eq.${id},parent_order_id.eq.${id}`).join(",");
+      const { data: orders } = await supabase
+        .from("orders").select("id, oa_number, parent_order_id").or(orFilter);
+      const orderList = (orders as Array<{ id: string; oa_number: string; parent_order_id: string | null }>) || [];
+      if (!orderList.length) return null;
+      const orderIds = orderList.map((o) => o.id);
+      const { data: bqs } = await supabase
+        .from("boqs").select("id, boq_number, revision, client_name, order_id")
+        .in("order_id", orderIds)
+        .eq("verification_status", "approved")
+        .order("revision", { ascending: false })
+        .order("updated_at", { ascending: false });
+      const boq = (bqs as Array<BoqLite & { order_id: string }>)?.[0];
+      if (!boq) return null;
+      const sourceOrder = orderList.find((o) => o.id === boq.order_id);
+      const rootId = sourceOrder?.parent_order_id || sourceOrder?.id || rootIds[0];
+      return { orderRootId: rootId, boq, oaNumber: sourceOrder?.oa_number || "" };
+    }
+    if (!pickedOa || !pickedBoqId) return null;
+    const boq = boqOptions.find((b) => b.id === pickedBoqId);
+    if (!boq) return null;
+    const rootId = pickedOa.parent_order_id || pickedOa.id;
+    return { orderRootId: rootId, boq, oaNumber: pickedOa.oa_number };
+  }
+
+  const canSubmit = !!file && !busy && ((mode === "project" && !!pickedCs) || (mode === "oa" && !!pickedOa && !!pickedBoqId));
+
+  async function submit() {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const linkage = await resolveLinkage();
+      if (!linkage) {
+        toast({ title: "Could not find an approved BOQ for the selection", variant: "destructive" });
+        return;
+      }
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) { toast({ title: "Please sign in", variant: "destructive" }); return; }
+
+      // Reuse / create family share token
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      let familyToken: string | null = null;
+      const { data: existing } = await sb.from("boq_family_share_tokens")
+        .select("token").eq("order_root_id", linkage.orderRootId).maybeSingle();
+      if (existing?.token) {
+        familyToken = existing.token as string;
+      } else {
+        const { data: ins } = await sb.from("boq_family_share_tokens")
+          .insert({ order_root_id: linkage.orderRootId, created_by: userId })
+          .select("token").single();
+        familyToken = ins?.token as string;
+      }
+
+      // Reserve requisition number
+      const { data: reqNum, error: rnErr } = await sb.rpc("next_requisition_number", {
+        _root: linkage.orderRootId, _oa_number: linkage.oaNumber, _revision: linkage.boq.revision ?? 0,
+      });
+      if (rnErr) throw rnErr;
+
+      // Insert requisition row
+      const { data: created, error: cErr } = await sb.from("requisitions").insert({
+        requisition_number: reqNum,
+        order_root_id: linkage.orderRootId,
+        boq_id: linkage.boq.id,
+        boq_revision: linkage.boq.revision ?? 0,
+        family_token: familyToken,
+        notes: notes || null,
+        client_name_override: clientName.trim() || null,
+        user_id: userId,
+        status: "issued",
+        source: "uploaded",
+      }).select("*").single();
+      if (cErr) throw cErr;
+
+      // Upload file
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+      const path = `${userId}/${created.id}/${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from("requisition-uploads")
+        .upload(path, file, { upsert: true, contentType: file.type || undefined });
+      if (upErr) throw upErr;
+
+      // Update row with file info
+      await sb.from("requisitions").update({
+        upload_file_path: path,
+        upload_file_name: file.name,
+        upload_mime_type: file.type || null,
+      }).eq("id", created.id);
+
+      toast({ title: "Requisition uploaded", description: reqNum });
+      setOpen(false); reset();
+      onCreated();
+    } catch (e) {
+      toast({ title: "Upload failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Upload className="mr-1 h-4 w-4" /> Upload Requisition
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Upload Requisition</DialogTitle>
+            <DialogDescription>
+              Upload a PDF or Excel requisition file. Link it to a Project Cost Sheet number or an OA / BOQ revision.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={mode} onValueChange={(v) => setMode(v as "project" | "oa")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="project">By Project CS #</TabsTrigger>
+              <TabsTrigger value="oa">By OA / BOQ</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="project" className="space-y-2 pt-2">
+              {pickedCs ? (
+                <div className="flex items-center justify-between rounded-md border p-2 text-sm">
+                  <span>Project: <b>{pickedCs}</b></span>
+                  <Button size="sm" variant="ghost" onClick={() => setPickedCs(null)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Search project / cost sheet number…"
+                    value={csQuery}
+                    onChange={(e) => setCsQuery(e.target.value)}
+                    className="h-8"
+                  />
+                  <div className="max-h-48 overflow-auto border rounded-md divide-y">
+                    {filteredProjects.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground">No projects found.</div>
+                    ) : filteredProjects.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/40"
+                        onClick={() => setPickedCs(p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="oa" className="space-y-2 pt-2">
+              {pickedOa ? (
+                <div className="flex items-center justify-between rounded-md border p-2 text-sm">
+                  <span>OA: <b>{pickedOa.oa_number}</b>{pickedOa.company_name ? ` · ${pickedOa.company_name}` : ""}</span>
+                  <Button size="sm" variant="ghost" onClick={() => setPickedOa(null)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Search OA number or client…"
+                    value={oaQuery}
+                    onChange={(e) => setOaQuery(e.target.value)}
+                    className="h-8"
+                  />
+                  <div className="max-h-48 overflow-auto border rounded-md divide-y">
+                    {oaResults.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground">Type at least 2 characters.</div>
+                    ) : oaResults.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/40"
+                        onClick={() => setPickedOa(o)}
+                      >
+                        <div className="font-medium">{o.oa_number}</div>
+                        <div className="text-xs text-muted-foreground">{o.company_name || "—"}</div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {pickedOa && (
+                <div>
+                  <Label className="text-xs">BOQ Revision</Label>
+                  {boqOptions.length === 0 ? (
+                    <div className="text-xs text-muted-foreground py-2">No approved BOQ for this OA.</div>
+                  ) : (
+                    <Select value={pickedBoqId || ""} onValueChange={setPickedBoqId}>
+                      <SelectTrigger className="h-8"><SelectValue placeholder="Pick a revision" /></SelectTrigger>
+                      <SelectContent>
+                        {boqOptions.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.boq_number} · R{b.revision}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          <div className="space-y-1">
+            <Label htmlFor="up-client" className="text-xs">Client name</Label>
+            <Input id="up-client" className="h-8" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Optional — overrides BOQ client" />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="up-notes" className="text-xs">Notes</Label>
+            <Textarea id="up-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="up-file" className="text-xs">Requisition file (PDF or Excel)</Label>
+            <Input
+              id="up-file"
+              type="file"
+              accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                if (f && f.size > 20 * 1024 * 1024) {
+                  toast({ title: "File too large", description: "Max 20 MB", variant: "destructive" });
+                  return;
+                }
+                setFile(f);
+              }}
+            />
+            {file && <div className="text-xs text-muted-foreground">{file.name} · {(file.size / 1024).toFixed(0)} KB</div>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+            <Button onClick={submit} disabled={!canSubmit}>
+              <FileUp className="mr-1 h-4 w-4" />
+              {busy ? "Uploading…" : "Upload"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
