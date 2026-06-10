@@ -630,12 +630,50 @@ export default function RequisitionPlan() {
                 <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
                 <p className="text-[11px] text-muted-foreground mt-1">Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab.</p>
               </div>
-              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure</Button>
+              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure for Selected Lots</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
+              {(() => {
+                const lotsAvailable = Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]));
+                const hasNoLotRows = consolidated.some((c) => !c.lot_no);
+                const eligibleCount = consolidated.filter(isRowSelected).length;
+                return (
+                  <div className="mb-3 rounded border bg-muted/30 p-2.5 text-xs">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="font-medium text-foreground">Select Lot(s) for annexure:</span>
+                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setSelectedLots(new Set(lotsAvailable))}>Select all</Button>
+                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
+                      <span className="ml-auto text-muted-foreground">{eligibleCount} row(s) eligible</span>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {lotsAvailable.length === 0 ? (
+                        <span className="text-muted-foreground">No lots set yet. Add Lot numbers in the Generated Requisition tab.</span>
+                      ) : lotsAvailable.map((lot) => (
+                        <label key={lot} className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox
+                            checked={selectedLots.has(lot)}
+                            onCheckedChange={(v) => {
+                              setSelectedLots((prev) => {
+                                const next = new Set(prev);
+                                if (v) next.add(lot); else next.delete(lot);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>{lot}</span>
+                        </label>
+                      ))}
+                      {hasNoLotRows && (
+                        <span className="text-muted-foreground italic">(some rows have no Lot — set Lot first)</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               <table className="w-full text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
+                    <th className="w-8 py-2 px-2 border-r"></th>
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
@@ -643,14 +681,33 @@ export default function RequisitionPlan() {
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2">Source Req(s)</th>
+                    <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
+                    <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.length === 0 ? (
-                    <tr><td colSpan={8} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
-                  ) : consolidated.map((c) => (
-                    <tr key={c.key} className="border-b last:border-0">
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                  ) : consolidated.map((c) => {
+                    const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
+                    const partial = c.annexureCount > 0 && !created;
+                    const lotSelected = c.lot_no ? selectedLots.has(c.lot_no) : false;
+                    const rowChecked = lotSelected && !excludedRowKeys.has(c.key) && !created;
+                    return (
+                    <tr key={c.key} className={`border-b last:border-0 ${created ? "opacity-60" : ""}`}>
+                      <td className="py-2 px-2 border-r">
+                        <Checkbox
+                          checked={rowChecked}
+                          disabled={created || !c.lot_no || !lotSelected}
+                          onCheckedChange={(v) => {
+                            setExcludedRowKeys((prev) => {
+                              const next = new Set(prev);
+                              if (v) next.delete(c.key); else next.add(c.key);
+                              return next;
+                            });
+                          }}
+                        />
+                      </td>
                       <td className="py-2 px-2 border-r font-medium">{c.material}</td>
                       <td className="py-2 px-2 border-r">{c.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{c.make || "—"}</td>
@@ -680,9 +737,22 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="py-2 px-2 text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
+                      <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
+                      <td className="py-2 px-2">
+                        {created ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                            <button className="text-[10px] underline text-muted-foreground" onClick={() => reincludeRow(c)}>Re-include</button>
+                          </div>
+                        ) : partial ? (
+                          <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
