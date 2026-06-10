@@ -2006,6 +2006,7 @@ export type Database = {
         Row: {
           boq_id: string
           boq_revision: number
+          client_name_override: string | null
           created_at: string
           family_token: string | null
           id: string
@@ -2014,14 +2015,19 @@ export type Database = {
           pdf_path: string | null
           requisition_number: string
           share_token: string
+          source: string
           status: string
           superseded_by_id: string | null
           updated_at: string
+          upload_file_name: string | null
+          upload_file_path: string | null
+          upload_mime_type: string | null
           user_id: string | null
         }
         Insert: {
           boq_id: string
           boq_revision?: number
+          client_name_override?: string | null
           created_at?: string
           family_token?: string | null
           id?: string
@@ -2030,14 +2036,19 @@ export type Database = {
           pdf_path?: string | null
           requisition_number: string
           share_token?: string
+          source?: string
           status?: string
           superseded_by_id?: string | null
           updated_at?: string
+          upload_file_name?: string | null
+          upload_file_path?: string | null
+          upload_mime_type?: string | null
           user_id?: string | null
         }
         Update: {
           boq_id?: string
           boq_revision?: number
+          client_name_override?: string | null
           created_at?: string
           family_token?: string | null
           id?: string
@@ -2046,9 +2057,13 @@ export type Database = {
           pdf_path?: string | null
           requisition_number?: string
           share_token?: string
+          source?: string
           status?: string
           superseded_by_id?: string | null
           updated_at?: string
+          upload_file_name?: string | null
+          upload_file_path?: string | null
+          upload_mime_type?: string | null
           user_id?: string | null
         }
         Relationships: []
