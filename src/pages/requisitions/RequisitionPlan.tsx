@@ -866,10 +866,16 @@ export default function RequisitionPlan() {
               </CardContent>
             </Card>
 
-            {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
+            {(() => {
+              const hasLegacySteel = displayReportRows.some((r) => r.plan_status === "steel");
+              const kinds: PlanStatus[] = hasLegacySteel
+                ? [...ACTIVE_STATUSES, "steel"]
+                : ACTIVE_STATUSES;
+              return kinds;
+            })().map((kind) => {
                 const rows = displayReportRows.filter((r) => r.plan_status === kind);
                 const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
-                const title = kind === "machine" ? "Machine List" : kind === "steel" ? "Steel List" : "Outside Purchase";
+                const title = REPORT_TITLE[kind];
                 const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
                 return (
                   <Card key={kind}>
