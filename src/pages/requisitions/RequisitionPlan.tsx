@@ -373,22 +373,29 @@ export default function RequisitionPlan() {
   const reportRows = annexureRows.filter((r) => r.annexure_id === activeAnnexureId);
 
   // Live report rows derived from current consolidated state
-  const liveReportRows: AnnexureRowRecord[] = useMemo(() => consolidated
+  type LiveAnnexureRow = AnnexureRowRecord & { _createdState?: "created" | "partial" | "none" };
+  const liveReportRows: LiveAnnexureRow[] = useMemo(() => consolidated
     .filter((c) => c.plan_status)
-    .map((c, i) => ({
-      id: `live-${i}`,
-      annexure_id: "live",
-      lot_no: c.lot_no || "",
-      plan_status: c.plan_status as PlanStatus,
-      material: c.material,
-      size_model: c.size_model,
-      make: c.make,
-      unit: c.unit,
-      total_qty: c.total,
-      source_rm_ids: c.sourceRmIds,
-      created_at: "",
-      updated_at: "",
-    })), [consolidated]);
+    .map((c, i) => {
+      const state: "created" | "partial" | "none" =
+        c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0 ? "created"
+        : c.annexureCount > 0 ? "partial" : "none";
+      return {
+        id: `live-${i}`,
+        annexure_id: "live",
+        lot_no: c.lot_no || "",
+        plan_status: c.plan_status as PlanStatus,
+        material: c.material,
+        size_model: c.size_model,
+        make: c.make,
+        unit: c.unit,
+        total_qty: c.total,
+        source_rm_ids: c.sourceRmIds,
+        created_at: "",
+        updated_at: "",
+        _createdState: state,
+      };
+    }), [consolidated]);
 
   const displayReportRows = reportMode === "live" || !activeAnnexure ? liveReportRows : reportRows;
   const displayLotNumbers = reportMode === "live" || !activeAnnexure
