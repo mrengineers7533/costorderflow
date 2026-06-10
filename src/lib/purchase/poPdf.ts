@@ -38,7 +38,6 @@ export interface PoPdfContext {
   category: "steel" | "machine" | "3p";
   vendor: PoPdfPartyBlock;
   buyer: PoPdfBuyerBlock;
-  reqLine?: string;
   preparedBy?: string;
   dispatchThrough?: string;
   destination?: string;
