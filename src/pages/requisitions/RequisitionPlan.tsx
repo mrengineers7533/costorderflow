@@ -802,7 +802,9 @@ export default function RequisitionPlan() {
                   <span className="text-muted-foreground">No saved annexures yet. Use <strong>Create Annexure</strong> on the Raw Materials tab.</span>
                 ) : (
                   <>
-                    <Badge variant="secondary">Snapshot</Badge>
+                    {(activeAnnexure.status as string | undefined) === "cancelled"
+                      ? <Badge variant="outline">Cancelled</Badge>
+                      : <Badge variant="secondary">Snapshot</Badge>}
                     <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
                     <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
                     {annexures.length > 1 && (
