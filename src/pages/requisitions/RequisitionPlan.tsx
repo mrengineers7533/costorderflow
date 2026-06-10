@@ -289,8 +289,22 @@ export default function RequisitionPlan() {
     rmIds.forEach((id) => patchRm(id, patch));
   }
 
+  // Rows eligible for annexure creation: lot is selected, row not excluded, not already created.
+  function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
+    if (!c.lot_no) return false;
+    if (!selectedLots.has(c.lot_no)) return false;
+    if (excludedRowKeys.has(c.key)) return false;
+    if (c.annexureCount >= c.sourceRmIds.length) return false; // fully created already
+    return true;
+  }
+
   async function createAnnexure() {
-    const missing = consolidated.filter((c) => !c.lot_no || !c.plan_status);
+    const eligible = consolidated.filter(isRowSelected);
+    if (eligible.length === 0) {
+      toast({ title: "No rows selected", description: "Pick at least one Lot with rows to include.", variant: "destructive" });
+      return;
+    }
+    const missing = eligible.filter((c) => !c.lot_no || !c.plan_status);
     if (missing.length > 0) {
       toast({
         title: "Lot and Status required",
@@ -299,7 +313,7 @@ export default function RequisitionPlan() {
       });
       return;
     }
-    const lots = Array.from(new Set(consolidated.map((c) => c.lot_no!).filter(Boolean)));
+    const lots = Array.from(new Set(eligible.map((c) => c.lot_no!).filter(Boolean)));
     const { data: { user } } = await supabase.auth.getUser();
     const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
       requisition_ids: ids,
@@ -307,7 +321,7 @@ export default function RequisitionPlan() {
       created_by: user?.id ?? null,
     }).select("*").maybeSingle();
     if (e1 || !ax) { toast({ title: "Create failed", description: e1?.message, variant: "destructive" }); return; }
-    const rows = consolidated.map((c) => ({
+    const rows = eligible.map((c) => ({
       annexure_id: (ax as AnnexureRecord).id,
       lot_no: c.lot_no!,
       plan_status: c.plan_status!,
@@ -320,11 +334,32 @@ export default function RequisitionPlan() {
     }));
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
+    // Mark contributing raw materials as annexure_status='created'
+    const contributingRmIds = Array.from(new Set(eligible.flatMap((c) => c.sourceRmIds)));
+    const newAxId = (ax as AnnexureRecord).id;
+    const { error: e3 } = await sb.from("requisition_raw_materials")
+      .update({ annexure_status: "created", annexure_id: newAxId })
+      .in("id", contributingRmIds);
+    if (e3) { toast({ title: "Status sync failed", description: e3.message, variant: "destructive" }); }
+    setRms((prev) => prev.map((x) => contributingRmIds.includes(x.id)
+      ? { ...x, annexure_status: "created" as const, annexure_id: newAxId }
+      : x));
     setAnnexures((p) => [ax as AnnexureRecord, ...p]);
     setAnnexureRows((axRows as AnnexureRowRecord[]) || []);
     setActiveAnnexureId((ax as AnnexureRecord).id);
+    setSelectedLots(new Set());
+    setExcludedRowKeys(new Set());
     toast({ title: "Annexure created", description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).` });
     setTab("reports");
+  }
+
+  async function reincludeRow(c: ConsRow) {
+    if (!window.confirm("Clear the 'Annexure Created' status on this row so it can be included in a new annexure? (The existing saved annexure won't be deleted.)")) return;
+    const { error } = await sb.from("requisition_raw_materials")
+      .update({ annexure_status: null, annexure_id: null })
+      .in("id", c.sourceRmIds);
+    if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+    setRms((prev) => prev.map((x) => c.sourceRmIds.includes(x.id) ? { ...x, annexure_status: null, annexure_id: null } : x));
   }
 
   async function forwardToPurchase() {
