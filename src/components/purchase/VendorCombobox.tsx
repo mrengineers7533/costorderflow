@@ -23,7 +23,7 @@ export interface Vendor {
 }
 
 interface Props {
-  category: "steel" | "machine" | "3p";
+  category: string;
   value: Vendor | null;
   onChange: (v: Vendor | null) => void;
 }
