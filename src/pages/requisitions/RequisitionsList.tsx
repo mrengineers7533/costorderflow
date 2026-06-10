@@ -176,6 +176,11 @@ export default function RequisitionsList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <UploadRequisitionButton
+            projects={distinctProjects}
+            costSheetByRoot={costSheetByRoot}
+            onCreated={() => window.location.reload()}
+          />
           <AddRequisitionToProjectButton
             projects={distinctProjects}
             onPicked={async (cs) => {
