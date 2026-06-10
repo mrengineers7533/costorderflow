@@ -278,7 +278,7 @@ export default function AnnexureFolder() {
                             <Download className="h-3 w-3 mr-1" />PDF
                           </Button>
                           {!cancelled && (
-                            <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => navigate(`/purchase/materials?lots=${encodeURIComponent(e.lot_no)}`)}>
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => navigate(`/annexures/${e.annexure.id}/po/new?lot=${encodeURIComponent(e.lot_no)}&type=${e.type}`)}>
                               <ShoppingCart className="h-3 w-3 mr-1" />Generate PO
                             </Button>
                           )}

@@ -21,6 +21,7 @@ import PurchaseLanding from "./pages/purchase/PurchaseLanding";
 import BoqFolder from "./pages/purchase/BoqFolder";
 import PurchaseMaterial from "./pages/purchase/PurchaseMaterial";
 import PoFolder from "./pages/purchase/PoFolder";
+import PoCreateFromAnnexure from "./pages/purchase/PoCreateFromAnnexure";
 import ManufacturingList from "./pages/manufacturing/ManufacturingList";
 import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
@@ -85,6 +86,7 @@ const App = () => (
                       <Route path="/purchase/boq-folder" element={<RequireModule user={user} module="purchase"><BoqFolder /></RequireModule>} />
                       <Route path="/purchase/materials" element={<RequireModule user={user} module="purchase"><PurchaseMaterial /></RequireModule>} />
                       <Route path="/purchase/po-folder" element={<RequireModule user={user} module="purchase"><PoFolder /></RequireModule>} />
+                      <Route path="/annexures/:annexureId/po/new" element={<RequireModule user={user} module="purchase"><PoCreateFromAnnexure /></RequireModule>} />
                       <Route path="/purchase/:boqId" element={<RequireModule user={user} module="purchase"><PurchaseDetail /></RequireModule>} />
                       <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
