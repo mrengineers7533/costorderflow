@@ -1,102 +1,103 @@
 ## Goal
 
-Extend the existing multi-requisition Plan page (`/requisitions/plan`) so that **Generated Requisition** is the live source of truth. Every cell becomes editable, and **Raw Materials** + **Annexure Reports (Machine List / Steel List / Outside Purchase)** are derived from it in real time — no manual refresh, no duplicate entry.
+Add **lot-wise selection** to the Raw Materials tab so annexures are created only for the chosen Lot number(s), and surface an **"Annexure Created"** status that stays in sync across **Generated Requisition**, **Raw Materials**, and **Annexure Reports**.
 
-This is an additive change on top of the already-approved plan. No existing module (single-requisition Detail, BOQ, OA, PI, Manufacturing, Purchase, RM Master, Admin) is modified.
+Additive change on top of the existing Plan page. No other module touched.
 
-## Scope (what changes)
+## Scope
 
-Only `src/pages/requisitions/RequisitionPlan.tsx` and its small helpers. No new tables, no schema changes beyond the previously approved `lot_no` / `plan_status` / annexure tables.
+- `src/pages/requisitions/RequisitionPlan.tsx` — UI + derivation changes.
+- One small migration to add an `annexure_status` flag on `requisition_raw_materials` so the status survives reload and is visible everywhere.
+- No changes to single-requisition Detail, Manufacturing, RM Master, BOQ/OA/PI, Purchase, Admin, or permissions.
 
-### 1. Generated Requisition tab — fully editable grid
+## 1. Raw Materials tab — Lot selector + Create Annexure
 
-Every cell editable inline. Columns and edit controls:
+- Add a **Lot filter / selector panel** at the top of the consolidated table:
+  - Lists every distinct Lot number present in the current consolidation (derived live from Generated Requisition draft).
+  - Each Lot has a checkbox. "Select all" / "Clear" shortcuts.
+  - Rows with empty Lot are grouped under a disabled "(No lot — set Lot in Generated Requisition first)" entry.
+- Each consolidated row also has a row-level checkbox, auto-toggled by its Lot's checkbox; the user can still uncheck individual rows inside a selected Lot.
+- **Create Annexure** button:
+  - Enabled only when ≥1 row is selected AND every selected row has both Lot and Status.
+  - Snapshots only the selected rows into `requisition_annexures` + `requisition_annexure_rows` (existing tables).
+  - After success: marks every contributing `requisition_raw_materials` row with `annexure_status = 'created'` and stores the new `annexure_id` on each row (see migration below).
+  - Rows from unselected Lots are untouched.
+- Rows already marked "Annexure Created" remain visible but are shown disabled with an "Annexure Created" badge and a link to the saved annexure in Tab 3. They are excluded from new annexure creation unless the user explicitly clicks "Re-include" (which clears the status for those rows — confirm dialog).
 
-| Column          | Editor                                                |
-| --------------- | ----------------------------------------------------- |
-| Finished Good   | text input (per FG group header — edits all RM rows of that FG) |
-| Make (FG)       | text input (per FG group header)                      |
-| Qty (FG)        | number input (per FG group header) — recalculates RM Qty = qty_per_unit × FG Qty for all child RM rows that haven't been manually overridden |
-| Raw Material    | text input (per RM row)                               |
-| Size            | text input (per RM row)                               |
-| RM Qty          | number input (per RM row; manual override flag set on edit) |
-| RM Make         | text input (per RM row)                               |
-| UOM             | text input (per RM row)                               |
-| Lot             | text input (per RM row)                               |
-| Status          | dropdown: Machine / 3P / Steel (per RM row)           |
+## 2. Generated Requisition tab — show status per row
 
-Behaviour:
-- Edits update an in-memory **draft state** keyed by RM row id (plus FG id for FG-level fields).
-- Debounced autosave (~600 ms) writes back to `requisition_items` (FG fields, qty, lot) and `requisition_raw_materials` (rm fields, lot_no, plan_status). One `update` per dirty row; rows are batched per table.
-- Inline "Saving…/Saved" indicator in the toolbar; failed rows are highlighted with a retry.
-- FG-level Qty edit: when the user changes FG Qty, each child RM row's `required_qty` is recomputed as `qty_per_unit × new_fg_qty` unless that RM row has been manually overridden (`rm_qty_overridden` flag in local state). A small "↻" button lets the user clear the override and snap back to the computed value.
-- Validation: numeric fields reject negatives; Status must be one of the three values.
+- Add a read-only **Annexure** column at the end of the editable grid showing one of:
+  - blank (not yet part of an annexure),
+  - "Annexure Created" badge with the annexure number / created-at tooltip.
+- The badge is derived from the RM row's `annexure_status` (live state, updated immediately after Create Annexure completes — no refresh).
+- Editing Lot or Status on a row that is already "Annexure Created" shows a small warning ("This row is part of an existing annexure. Changes won't be reflected in the saved annexure."), but does not block the edit — existing edit behaviour is preserved.
 
-### 2. Raw Materials tab — fully derived (read-only consolidation)
+## 3. Annexure Reports tab — reflect status
 
-Rebuilt from the live Generated Requisition draft on every render via `useMemo`. No separate editing UI — edits happen in Tab 1.
+- **Live preview** mode: each row shows the same "Annexure Created" badge when its underlying RM rows are all already snapshotted; rows that are partially snapshotted show "Partially Created" with a tooltip listing remaining qty.
+- **Saved annexures** mode: unchanged, plus each saved batch header lists the Lot numbers it covers (already in `requisition_annexures.lot_numbers`).
+- Forward to Purchase / Download PDF behaviour unchanged.
 
-Consolidation key stays `(material, size_model, make, unit, lot_no, plan_status)`. `Qty (summed)` and `Source Reqs` recompute as the user edits Tab 1.
-
-A small banner at the top of the tab states: "Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab."
-
-The **Create Annexure** button stays here. It validates the live consolidated rows (every row needs Lot + Status), snapshots them into `requisition_annexures` + `requisition_annexure_rows`, then opens Tab 3.
-
-### 3. Annexure Reports tab — derived from latest data
-
-Two display modes, toggled by a segmented control in the tab header:
-
-- **Live preview (default)** — Machine / Steel / Outside Purchase tables built straight from the current Raw Materials consolidation, filtered by `plan_status`. Always reflects the latest edits in Tab 1.
-- **Saved annexures** — list of previously created annexure batches (from `requisition_annexures`) with their snapshot rows. Each saved batch shows the Lot Numbers and timestamp it was created with, so historical PDFs stay reproducible.
-
-"Download PDF" and "Forward to Purchase" act on whichever mode is active. Live preview's PDF includes a "Generated <timestamp>" line; saved annexure PDFs use the snapshot timestamp.
-
-### 4. Linking summary
+## 4. Linking summary
 
 ```text
-Generated Requisition (editable, persisted)
-        │   (live useMemo derivation)
+Generated Requisition (editable)
+        │  live useMemo
         ▼
-Raw Materials (consolidated, read-only)
-        │   (live useMemo derivation)
-        ▼
-Annexure Reports — Machine / Steel / Outside Purchase  (live preview)
-        │   (snapshot on "Create Annexure")
-        ▼
-Saved annexure batches (immutable history)
+Raw Materials (consolidated)  ──▶  Lot selector ──▶ Create Annexure
+        │                                              │ writes snapshot
+        │                                              │ + sets annexure_status on RM rows
+        ▼                                              ▼
+Annexure Reports (live + saved)         requisition_annexures / _rows
 ```
 
-A single in-memory store inside `RequisitionPlan.tsx` (`draftRows` + `draftItems`) feeds all three tabs, so any edit propagates instantly. Persistence is per dirty row, debounced.
+A single source of truth (`rms` draft) drives all three tabs, and the `annexure_status` flag on each RM row is the single source for the "Annexure Created" badge everywhere.
 
 ## Technical details
 
-- New local hook `useEditablePlan(requisitionIds)` inside `RequisitionPlan.tsx`:
-  - Loads requisitions + items + raw materials once.
-  - Holds draft state with `dirty` markers + `rm_qty_overridden` flags.
-  - Exposes `update(rowId, patch)`, `updateFg(itemId, patch)`, `consolidatedRows`, `saveStatus`.
-  - Debounced flush calls `supabase.from('requisition_items').update(...)` and `supabase.from('requisition_raw_materials').update(...)` per dirty id.
-- Tab 1 grid uses controlled `<Input>` / `<Select>` from `src/components/ui/*` already in the project. No new dependency.
-- Tab 2 becomes a pure derivation of Tab 1 draft (no local edit state).
-- Tab 3 gets a `mode` segmented control (`live` | `saved`) plus the existing Create / PDF / Forward actions.
-- No new tables. Existing `requisition_annexures` / `requisition_annexure_rows` continue to store immutable snapshots.
+### Migration
+
+New columns on `requisition_raw_materials`:
+
+- `annexure_status text` — null or `'created'` (check constraint).
+- `annexure_id uuid references public.requisition_annexures(id) on delete set null`.
+- Index on `annexure_id`.
+
+No new tables, no policy changes (existing RLS on `requisition_raw_materials` already covers authenticated users). Grants unchanged.
+
+### State in `RequisitionPlan.tsx`
+
+- Extend the existing `rms` draft type with `annexure_status` and `annexure_id`.
+- New local state `selectedRowIds: Set<string>` and `selectedLots: Set<string>` (Raw Materials tab only).
+- New action `createAnnexureForSelection()`:
+  1. Validate every selected row has Lot + Status.
+  2. Insert into `requisition_annexures` with `lot_numbers = distinct selected Lots`, `requisition_ids = props.ids`.
+  3. Insert one `requisition_annexure_rows` per consolidated key (existing logic, restricted to selected rows).
+  4. `update` `requisition_raw_materials` for every contributing `source_rm_ids` setting `annexure_status='created'`, `annexure_id=<new id>`.
+  5. Patch local `rms` state so all three tabs show the badge instantly.
+- Re-include action: `update requisition_raw_materials set annexure_status=null, annexure_id=null where id in (...)` after confirm.
+
+### UI
+
+- Lot selector: simple `Checkbox` group + "Select all" toggle, using existing `@/components/ui/checkbox`.
+- Status badge: existing `Badge` component, `variant="secondary"` for created, `variant="outline"` for partial.
 
 ## Files touched
 
-- `src/pages/requisitions/RequisitionPlan.tsx` — make Tab 1 editable, derive Tab 2 from draft, add live/saved toggle to Tab 3, add debounced autosave.
+- `src/pages/requisitions/RequisitionPlan.tsx`
+- New migration: `supabase/migrations/<timestamp>_rm_annexure_status.sql`
+- Types regenerate automatically post-migration; `src/lib/requisition/types.ts` gets two optional fields added to `RequisitionRawMaterialRecord` (`annexure_status`, `annexure_id`).
 
-(No other file changes; types, routes, sidebar, single-requisition Detail page all unchanged.)
+## Out of scope (unchanged)
 
-## Out of scope (explicitly unchanged)
-
-- Single-requisition Detail page (still read-mostly with its existing Lot / category controls).
-- Manufacturing → Requisition creation, RM Master upload, FG↔RM map, BOQ / OA / PI, Admin, permissions.
-- DB schema beyond what the previous plan already covers.
-- PDF templates beyond adding a "Generated <timestamp>" line on live-preview exports.
+- Single-requisition Detail page, Manufacturing → Requisition, RM Master, BOQ/OA/PI, Admin, permissions.
+- PDF templates (annexure PDFs already render from saved snapshots; no change needed).
+- ES Page flow.
 
 ## Acceptance
 
-- Every cell in the Generated Requisition tab can be edited in place; edits persist automatically (visible "Saved" indicator) and survive a page reload.
-- Editing FG Qty rescales all non-overridden child RM Qty values immediately; an overridden RM Qty stays put until the user clears the override.
-- Editing Lot or Status on any RM row instantly updates the Raw Materials consolidation and the Machine / Steel / Outside Purchase live preview without a refresh.
-- "Create Annexure" still snapshots the current consolidated rows into `requisition_annexures`; saved batches remain viewable in Tab 3's "Saved annexures" mode.
-- All existing modules, calculations, status enums, PDFs, upload history, permissions, and the single-requisition view continue to behave exactly as today.
+- Raw Materials tab shows a Lot selector; choosing Lot(s) restricts which rows feed Create Annexure.
+- Create Annexure inserts only the selected rows and marks them "Annexure Created"; unselected Lots are untouched.
+- "Annexure Created" badge appears immediately on the matching rows in Generated Requisition, Raw Materials, and Annexure Reports — no manual refresh, persists across reload.
+- Editing Lot/Status on any row still propagates live to all three tabs; editing an already-snapshotted row shows a non-blocking warning.
+- All existing flows (autosave, FG Qty rescale, live preview vs saved annexures, Forward to Purchase, PDFs, permissions) work exactly as before.
