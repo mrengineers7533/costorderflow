@@ -80,9 +80,9 @@ export default function PurchaseMaterial() {
   const [categoryFilter, setCategoryFilter] = useState<"all" | Category>("all");
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
-  const [vendors, setVendors] = useState<Record<Category, Vendor | null>>({
-    steel: null, machine: null, "3p": null,
-  });
+  const [vendors, setVendors] = useState<Record<Category, Vendor | null>>(
+    () => Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>,
+  );
   const [rates, setRates] = useState<Record<string, { rate: string; discount: string; gst: string }>>({});
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -309,7 +309,7 @@ export default function PurchaseMaterial() {
 
       toast.success(`Created ${createdPdfs.length} PO${createdPdfs.length === 1 ? "" : "s"}.`);
       setSelectedRows(new Set());
-      setVendors({ steel: null, machine: null, "3p": null });
+      setVendors(Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>);
       setRates({});
       setNotes("");
       await loadAll();
