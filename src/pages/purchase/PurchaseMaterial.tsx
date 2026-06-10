@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Download, FileText } from "lucide-react";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
+import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
 
 type Category = "steel" | "machine" | "3p";
 
@@ -58,13 +58,13 @@ export default function PurchaseMaterial() {
   const [categoryFilter, setCategoryFilter] = useState<"all" | Category>("all");
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
-  const [vendors, setVendors] = useState<Record<Category, { name: string; contact: string }>>({
-    steel: { name: "", contact: "" },
-    machine: { name: "", contact: "" },
-    "3p": { name: "", contact: "" },
+  const [vendors, setVendors] = useState<Record<Category, Vendor | null>>({
+    steel: null, machine: null, "3p": null,
   });
+  const [rates, setRates] = useState<Record<string, { rate: string; discount: string; gst: string }>>({});
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [params] = useSearchParams();
 
   const loadAll = async () => {
     setLoading(true);
@@ -88,6 +88,14 @@ export default function PurchaseMaterial() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  // Pre-select lots from query string (used by Annexure Folder "Generate PO")
+  useEffect(() => {
+    const lotsParam = params.get("lots");
+    if (lotsParam) {
+      setSelectedLots(new Set(lotsParam.split(",").map((s) => s.trim()).filter(Boolean)));
+    }
+  }, [params]);
 
   const allLots = useMemo(() => {
     const s = new Set<string>();
@@ -136,7 +144,7 @@ export default function PurchaseMaterial() {
       toast.error("Select at least one raw material row (without an existing PO).");
       return;
     }
-    const missingVendor = Array.from(categoriesInSelection).filter((c) => !vendors[c].name.trim());
+    const missingVendor = Array.from(categoriesInSelection).filter((c) => !vendors[c]);
     if (missingVendor.length > 0) {
       toast.error(`Vendor name required for: ${missingVendor.map((c) => catLabel[c]).join(", ")}`);
       return;
@@ -145,6 +153,9 @@ export default function PurchaseMaterial() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id ?? null;
+      const { data: pSettings } = await (supabase as unknown as { from: (t: string) => { select: (q: string) => { eq: (c: string, v: number) => { maybeSingle: () => Promise<{ data: { buyer_block: Record<string, unknown>; default_terms: string | null; default_dispatch: string | null; default_destination: string | null; default_payment_mode: string | null } | null }> } } } }).from("purchase_settings").select("buyer_block,default_terms,default_dispatch,default_destination,default_payment_mode").eq("id", 1).maybeSingle();
+      const { data: profileData } = await (supabase as unknown as { from: (t: string) => { select: (q: string) => { eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: { full_name: string | null; email: string | null } | null }> } } } }).from("profiles").select("full_name,email").eq("id", userId || "").maybeSingle();
+      const preparedBy = profileData?.full_name || profileData?.email || "—";
       const fy = financialYearOf();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
@@ -167,13 +178,40 @@ export default function PurchaseMaterial() {
           if (r.annexure_id) annexSet.add(r.annexure_id);
         });
 
+        // compute totals
+        const computed = catRows.map((r) => {
+          const meta = rates[r.id] || { rate: "0", discount: "0", gst: "18" };
+          const qty = Number(r.required_qty || 0);
+          const rate = Number(meta.rate || 0);
+          const discountPct = Number(meta.discount || 0);
+          const gstPct = Number(meta.gst || 0);
+          const gross = qty * rate;
+          const afterDisc = gross * (1 - discountPct / 100);
+          const gstAmount = afterDisc * (gstPct / 100);
+          return { r, qty, rate, discountPct, gstPct, gstAmount, lineAmount: afterDisc + gstAmount, basic: afterDisc };
+        });
+        const subtotal = computed.reduce((s, x) => s + x.basic, 0);
+        const taxTotal = computed.reduce((s, x) => s + x.gstAmount, 0);
+        const grand = subtotal + taxTotal;
+        const v = vendors[cat]!;
+
         const { data: poIns, error: poErr } = await sb
           .from("purchase_orders")
           .insert({
             po_number: poNumber,
             category: cat,
-            vendor_name: vendors[cat].name.trim(),
-            vendor_contact: vendors[cat].contact.trim() || null,
+            vendor_id: v.id,
+            vendor_name: v.name,
+            vendor_contact: [v.contact_person, v.phone, v.email].filter(Boolean).join(" · ") || null,
+            buyer_block: pSettings?.buyer_block ?? {},
+            terms: pSettings?.default_terms ?? null,
+            dispatch_through: pSettings?.default_dispatch ?? null,
+            destination: pSettings?.default_destination ?? null,
+            payment_mode: pSettings?.default_payment_mode ?? null,
+            subtotal,
+            tax_total: taxTotal,
+            grand_total: grand,
+            prepared_by_name: preparedBy,
             lot_numbers: Array.from(lotSet),
             requisition_ids: Array.from(reqSet),
             annexure_ids: Array.from(annexSet),
@@ -186,7 +224,7 @@ export default function PurchaseMaterial() {
         const poId = (poIns as { id: string }).id;
 
         const { error: rowErr } = await sb.from("purchase_order_rows").insert(
-          catRows.map((r) => ({
+          computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
             po_id: poId,
             raw_material_id: r.id,
             lot_no: r.lot_no,
@@ -194,7 +232,12 @@ export default function PurchaseMaterial() {
             size_model: r.size_model,
             make: r.make,
             unit: r.unit,
-            qty: r.required_qty,
+            qty,
+            rate,
+            discount_pct: discountPct,
+            gst_pct: gstPct,
+            gst_amount: gstAmount,
+            line_amount: lineAmount,
           })),
         );
         if (rowErr) throw rowErr;
@@ -209,18 +252,34 @@ export default function PurchaseMaterial() {
         const pdf = generatePoPDF({
           poNumber,
           category: cat,
-          vendorName: vendors[cat].name.trim(),
-          vendorContact: vendors[cat].contact.trim() || undefined,
+          vendor: {
+            name: v.name,
+            address: v.address || undefined,
+            gstin: v.gstin || undefined,
+            email: v.email || undefined,
+            state_code: v.state_code || undefined,
+            contact_person: v.contact_person || undefined,
+            phone: v.phone || undefined,
+          },
+          buyer: (pSettings?.buyer_block as Record<string, unknown> as never) || {},
+          reqLine: Array.from(reqSet).slice(0, 2).join(", ") || undefined,
+          preparedBy,
+          dispatchThrough: pSettings?.default_dispatch ?? undefined,
+          destination: pSettings?.default_destination ?? undefined,
+          paymentMode: pSettings?.default_payment_mode ?? undefined,
+          terms: pSettings?.default_terms ?? undefined,
+          subtotal, taxTotal, grandTotal: grand,
           lots: Array.from(lotSet),
           notes: notes.trim() || undefined,
           createdAt: new Date().toISOString(),
-          rows: catRows.map((r) => ({
+          rows: computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
             lot: r.lot_no || "—",
             material: r.material,
             size: r.size_model || "—",
             make: r.make || "—",
-            qty: r.required_qty != null ? String(r.required_qty) : "—",
+            qty,
             unit: r.unit || "—",
+            rate, discountPct, gstPct, gstAmount, lineAmount,
           })),
         });
         pdf.save(`${poNumber.replace(/\//g, "_")}.pdf`);
@@ -229,11 +288,8 @@ export default function PurchaseMaterial() {
 
       toast.success(`Created ${createdPdfs.length} PO${createdPdfs.length === 1 ? "" : "s"}.`);
       setSelectedRows(new Set());
-      setVendors({
-        steel: { name: "", contact: "" },
-        machine: { name: "", contact: "" },
-        "3p": { name: "", contact: "" },
-      });
+      setVendors({ steel: null, machine: null, "3p": null });
+      setRates({});
       setNotes("");
       await loadAll();
     } catch (e) {
