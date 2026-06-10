@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Download, FileText, Send } from "lucide-react";
+import { Check, Download, FileText, Loader2, Send } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type {
@@ -49,6 +49,69 @@ export default function RequisitionPlan() {
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
+  const [reportMode, setReportMode] = useState<"live" | "saved">("live");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // ---- Debounced autosave plumbing ----
+  // pendingPatches keyed by `${table}:${id}` -> merged patch
+  const pendingRef = useRef<Map<string, { table: "requisition_items" | "requisition_raw_materials"; id: string; patch: Record<string, unknown> }>>(new Map());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleFlush() {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    setSaveStatus("saving");
+    flushTimerRef.current = setTimeout(flushPending, 600);
+  }
+
+  async function flushPending() {
+    const entries = Array.from(pendingRef.current.values());
+    pendingRef.current.clear();
+    if (entries.length === 0) { setSaveStatus("saved"); return; }
+    try {
+      await Promise.all(entries.map((e) =>
+        sb.from(e.table).update(e.patch).eq("id", e.id).then((res: { error: unknown }) => {
+          if (res.error) throw res.error;
+        })
+      ));
+      setSaveStatus("saved");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveStatus("error");
+      toast({ title: "Autosave failed", description: msg, variant: "destructive" });
+    }
+  }
+
+  function queuePatch(table: "requisition_items" | "requisition_raw_materials", id: string, patch: Record<string, unknown>) {
+    const key = `${table}:${id}`;
+    const existing = pendingRef.current.get(key);
+    pendingRef.current.set(key, {
+      table,
+      id,
+      patch: { ...(existing?.patch || {}), ...patch },
+    });
+    scheduleFlush();
+  }
+
+  // Optimistic local updaters (also push to autosave queue)
+  function patchItem(id: string, patch: Partial<RequisitionItemRecord>) {
+    setItems((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionItemRecord : x));
+    queuePatch("requisition_items", id, patch as Record<string, unknown>);
+  }
+  function patchItemMake(id: string, make: string) {
+    setItems((prev) => prev.map((x) => {
+      if (x.id !== id) return x;
+      const snap = { ...(x.fg_snapshot as Record<string, unknown> | null || {}), make };
+      return { ...x, fg_snapshot: snap } as RequisitionItemRecord;
+    }));
+    // persist into fg_snapshot
+    const current = items.find((x) => x.id === id);
+    const snap = { ...((current?.fg_snapshot as Record<string, unknown>) || {}), make };
+    queuePatch("requisition_items", id, { fg_snapshot: snap });
+  }
+  function patchRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
+    setRms((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionRawMaterialRecord : x));
+    queuePatch("requisition_raw_materials", id, patch as Record<string, unknown>);
+  }
 
   async function load() {
     if (ids.length === 0) { setLoading(false); return; }
@@ -159,11 +222,7 @@ export default function RequisitionPlan() {
     return order.map((k) => buckets.get(k)!);
   }, [rms, reqById, itemById]);
 
-  async function updateRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
-    const { error } = await sb.from("requisition_raw_materials").update(patch).eq("id", id);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    setRms((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r));
-  }
+  // Legacy direct-save helper kept for spots that don't need debouncing (none after refactor)
 
   // Consolidate raw materials by material+size+make+unit+lot+status
   type ConsKey = string;
@@ -214,10 +273,8 @@ export default function RequisitionPlan() {
     return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
   }, [rms, reqById]);
 
-  async function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
-    const { error } = await sb.from("requisition_raw_materials").update(patch).in("id", rmIds);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    setRms((prev) => prev.map((r) => rmIds.includes(r.id) ? { ...r, ...patch } : r));
+  function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
+    rmIds.forEach((id) => patchRm(id, patch));
   }
 
   async function createAnnexure() {
@@ -268,8 +325,31 @@ export default function RequisitionPlan() {
   const activeAnnexure = annexures.find((a) => a.id === activeAnnexureId) || null;
   const reportRows = annexureRows.filter((r) => r.annexure_id === activeAnnexureId);
 
+  // Live report rows derived from current consolidated state
+  const liveReportRows: AnnexureRowRecord[] = useMemo(() => consolidated
+    .filter((c) => c.plan_status)
+    .map((c, i) => ({
+      id: `live-${i}`,
+      annexure_id: "live",
+      lot_no: c.lot_no || "",
+      plan_status: c.plan_status as PlanStatus,
+      material: c.material,
+      size_model: c.size_model,
+      make: c.make,
+      unit: c.unit,
+      total_qty: c.total,
+      source_rm_ids: c.sourceRmIds,
+      created_at: "",
+      updated_at: "",
+    })), [consolidated]);
+
+  const displayReportRows = reportMode === "live" || !activeAnnexure ? liveReportRows : reportRows;
+  const displayLotNumbers = reportMode === "live" || !activeAnnexure
+    ? Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]))
+    : (activeAnnexure?.lot_numbers || []);
+
   function downloadReportPdf(kind: PlanStatus) {
-    const rows = reportRows.filter((r) => r.plan_status === kind);
+    const rows = displayReportRows.filter((r) => r.plan_status === kind);
     const doc = new jsPDF({ orientation: "landscape" });
     const title = `${STATUS_LABEL[kind]} — Annexure`;
     doc.setFontSize(14); doc.text(title, 14, 14);
@@ -277,9 +357,10 @@ export default function RequisitionPlan() {
     const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
     doc.text(`Lot Number(s): ${lots || "—"}`, 14, 22);
     doc.text(`Requisitions: ${reqs.map((r) => r.requisition_number).join(", ")}`, 14, 28);
+    if (reportMode === "live") doc.text(`Live preview generated ${new Date().toLocaleString("en-IN")}`, 14, 32);
     const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
     autoTable(doc, {
-      startY: 34,
+      startY: reportMode === "live" ? 38 : 34,
       head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
       body: rows.map((r) => [
         r.lot_no,
@@ -314,6 +395,12 @@ export default function RequisitionPlan() {
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
           <Button size="sm" onClick={forwardToPurchase}><Send className="mr-1 h-4 w-4" />Forward to Purchase</Button>
         </div>
+      </div>
+
+      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+        {saveStatus === "saving" && (<><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>)}
+        {saveStatus === "saved" && (<><Check className="h-3 w-3 text-green-600" /> All edits saved</>)}
+        {saveStatus === "error" && <span className="text-destructive">Autosave failed — retry by editing again.</span>}
       </div>
 
       <Card>
@@ -362,33 +449,111 @@ export default function RequisitionPlan() {
                       <tr key={r.id} className="border-b last:border-0">
                         {idx === 0 && (
                           <>
-                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
-                            <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
-                            <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
+                            <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
+                              <div className="text-[10px] text-muted-foreground mb-0.5">[{g.reqNo}]</div>
+                              {g.item ? (
+                                <Input
+                                  className="h-7 w-44 text-sm"
+                                  defaultValue={g.item.model_number || g.item.description || ""}
+                                  onBlur={(e) => {
+                                    const v = e.target.value.trim();
+                                    if (!g.item) return;
+                                    if ((g.item.model_number || "") === v) return;
+                                    patchItem(g.item.id, { model_number: v });
+                                  }}
+                                />
+                              ) : <span className="text-sm">{g.fgLabel}</span>}
+                            </td>
+                            <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
+                              {g.item ? (
+                                <Input
+                                  className="h-7 w-28 text-sm"
+                                  defaultValue={fgMake}
+                                  onBlur={(e) => {
+                                    const v = e.target.value.trim();
+                                    if (!g.item) return;
+                                    if (fgMake === v) return;
+                                    patchItemMake(g.item.id, v);
+                                  }}
+                                />
+                              ) : "—"}
+                            </td>
+                            <td className="py-2 px-1 align-top border-r text-right" rowSpan={g.rms.length}>
+                              {g.item ? (
+                                <Input
+                                  type="number"
+                                  className="h-7 w-20 text-sm text-right"
+                                  defaultValue={g.item.quantity ?? ""}
+                                  onBlur={(e) => {
+                                    const raw = e.target.value.trim();
+                                    const v = raw === "" ? null : Math.max(0, Number(raw));
+                                    if (!g.item) return;
+                                    if ((g.item.quantity ?? null) === v) return;
+                                    patchItem(g.item.id, { quantity: v });
+                                  }}
+                                />
+                              ) : fgQty}
+                            </td>
                           </>
                         )}
-                        <td className="py-2 px-2 border-r">{r.material}</td>
-                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
-                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
-                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
-                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                        <td className="py-2 px-2 border-r">
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-40 text-sm" defaultValue={r.material}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (r.material === v) return;
+                              patchRm(r.id, { material: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-28 text-sm" defaultValue={r.size_model || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.size_model || null) === v) return;
+                              patchRm(r.id, { size_model: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r text-right">
+                          <Input type="number" className="h-7 w-20 text-sm text-right" defaultValue={r.required_qty ?? ""}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              const v = raw === "" ? null : Math.max(0, Number(raw));
+                              if ((r.required_qty ?? null) === v) return;
+                              patchRm(r.id, { required_qty: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-24 text-sm" defaultValue={r.make || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.make || null) === v) return;
+                              patchRm(r.id, { make: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-16 text-sm" defaultValue={r.unit || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.unit || null) === v) return;
+                              patchRm(r.id, { unit: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
                           <Input
-                            className="h-7 w-24"
+                            className="h-7 w-24 text-sm"
                             defaultValue={r.lot_no || ""}
                             onBlur={(e) => {
                               const v = e.target.value.trim() || null;
                               if ((r.lot_no || null) === v) return;
-                              updateRm(r.id, { lot_no: v });
+                              patchRm(r.id, { lot_no: v });
                             }}
                           />
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-1">
                           <Select
                             value={r.plan_status || ""}
-                            onValueChange={(v) => updateRm(r.id, { plan_status: v as PlanStatus })}
+                            onValueChange={(v) => patchRm(r.id, { plan_status: v as PlanStatus })}
                           >
-                            <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="machine">Machine</SelectItem>
                               <SelectItem value="3p">3P / Third Party</SelectItem>
@@ -408,7 +573,10 @@ export default function RequisitionPlan() {
         <TabsContent value="raw">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 py-3">
-              <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
+              <div>
+                <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
+                <p className="text-[11px] text-muted-foreground mt-1">Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab.</p>
+              </div>
               <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -469,36 +637,55 @@ export default function RequisitionPlan() {
         </TabsContent>
 
         <TabsContent value="reports">
-          {!activeAnnexure ? (
-            <Card><CardContent className="py-6 text-sm text-muted-foreground">No annexure yet. Click <strong>Create Annexure</strong> on the Raw Materials tab.</CardContent></Card>
-          ) : (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
-                  <Badge variant="secondary">Annexure</Badge>
-                  <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
-                  <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
-                  {annexures.length > 1 && (
-                    <Select value={activeAnnexureId || ""} onValueChange={async (v) => {
-                      setActiveAnnexureId(v);
-                      const { data } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", v);
-                      setAnnexureRows((data as AnnexureRowRecord[]) || []);
-                    }}>
-                      <SelectTrigger className="h-7 w-64 ml-auto"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {annexures.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {new Date(a.created_at).toLocaleString("en-IN")} — {a.lot_numbers.join(", ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </CardContent>
-              </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
+                <div className="inline-flex rounded-md border bg-muted p-0.5">
+                  <button
+                    onClick={() => setReportMode("live")}
+                    className={`px-3 py-1 rounded text-xs ${reportMode === "live" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >Live preview</button>
+                  <button
+                    onClick={() => setReportMode("saved")}
+                    className={`px-3 py-1 rounded text-xs ${reportMode === "saved" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >Saved annexures ({annexures.length})</button>
+                </div>
+                {reportMode === "live" ? (
+                  <>
+                    <Badge variant="secondary">Live</Badge>
+                    <span><strong>Lots:</strong> {displayLotNumbers.join(", ") || "—"}</span>
+                    <span className="text-muted-foreground">Reflecting current Generated Requisition edits</span>
+                  </>
+                ) : !activeAnnexure ? (
+                  <span className="text-muted-foreground">No saved annexures yet. Use <strong>Create Annexure</strong> on the Raw Materials tab.</span>
+                ) : (
+                  <>
+                    <Badge variant="secondary">Snapshot</Badge>
+                    <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
+                    <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
+                    {annexures.length > 1 && (
+                      <Select value={activeAnnexureId || ""} onValueChange={async (v) => {
+                        setActiveAnnexureId(v);
+                        const { data } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", v);
+                        setAnnexureRows((data as AnnexureRowRecord[]) || []);
+                      }}>
+                        <SelectTrigger className="h-7 w-64 ml-auto"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {annexures.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {new Date(a.created_at).toLocaleString("en-IN")} — {a.lot_numbers.join(", ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
-              {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
-                const rows = reportRows.filter((r) => r.plan_status === kind);
+            {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
+                const rows = displayReportRows.filter((r) => r.plan_status === kind);
                 const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
                 const title = kind === "machine" ? "Machine List" : kind === "steel" ? "Steel List" : "Outside Purchase";
                 const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
@@ -552,8 +739,7 @@ export default function RequisitionPlan() {
                   </Card>
                 );
               })}
-            </div>
-          )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
