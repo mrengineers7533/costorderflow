@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Columns3, Copy, Download, Link2 } from "lucide-react";
+import { Columns3, Copy, Download, Link2, FileDown } from "lucide-react";
 import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
@@ -270,6 +270,33 @@ export default function RequisitionDetail() {
           </span>
         </CardContent>
       </Card>
+
+      {req.upload_file_path && (
+        <Card>
+          <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
+            <FileDown className="h-3.5 w-3.5" />
+            <span className="flex-1 truncate">
+              Uploaded source file: <b>{req.upload_file_name || req.upload_file_path}</b>
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const { data, error } = await supabase.storage
+                  .from("requisition-uploads")
+                  .createSignedUrl(req.upload_file_path!, 60 * 10);
+                if (error || !data?.signedUrl) {
+                  toast({ title: "Download failed", description: error?.message, variant: "destructive" });
+                  return;
+                }
+                window.open(data.signedUrl, "_blank", "noopener");
+              }}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />Download
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="generated">
         <TabsList>
