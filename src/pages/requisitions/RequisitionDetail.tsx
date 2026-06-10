@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Columns3, Copy, Download, Link2, FileDown } from "lucide-react";
+import { Columns3, Copy, Download, Link2, FileDown, Trash2 } from "lucide-react";
 import type { RequisitionItemRecord, RequisitionRecord, RequisitionRawMaterialRecord } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
@@ -17,9 +17,15 @@ import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [req, setReq] = useState<RequisitionRecord | null>(null);
   const [items, setItems] = useState<RequisitionItemRecord[]>([]);
   const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
@@ -28,6 +34,22 @@ export default function RequisitionDetail() {
   const [latestRev, setLatestRev] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMake, setShowMake] = useColumnToggle("requisition.columns.make", false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id ?? null;
+      setCurrentUserId(uid);
+      if (uid) {
+        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+        setIsAdmin(((roles as Array<{ role: string }>) || []).some((r) => r.role === "admin"));
+      }
+    })();
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
@@ -237,6 +259,26 @@ export default function RequisitionDetail() {
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
 
+  const canDelete = isAdmin || (currentUserId != null && req.user_id === currentUserId);
+
+  async function handleDelete() {
+    if (!req) return;
+    setDeleting(true);
+    try {
+      await deleteRequisitionCascade(req);
+      toast({ title: "Requisition deleted", description: req.requisition_number });
+      navigate("/requisitions");
+    } catch (e) {
+      const err = e as Error;
+      toast({
+        title: err instanceof RequisitionDeleteBlockedError ? "Cannot delete" : "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
       <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
@@ -257,8 +299,41 @@ export default function RequisitionDetail() {
           {stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
           <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>
           <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmDel(true)}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />Delete
+            </Button>
+          )}
         </div>
       </div>
+
+      <AlertDialog open={confirmDel} onOpenChange={(o) => { if (!o && !deleting) setConfirmDel(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete requisition {req.requisition_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the requisition along with its items, raw-material rows,
+              annexures, and the uploaded source file (if any). Active purchase orders that
+              reference this requisition will block deletion — cancel those POs first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Card>
         <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
