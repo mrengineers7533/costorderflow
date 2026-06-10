@@ -839,12 +839,13 @@ export default function RequisitionPlan() {
                             <th className="text-left py-2 px-2 border-r">Size</th>
                             <th className="text-left py-2 px-2 border-r">RM Make</th>
                             <th className="text-left py-2 px-2 border-r">UOM</th>
-                            <th className="text-right py-2 px-2">Total Qty</th>
+                            <th className="text-right py-2 px-2 border-r">Total Qty</th>
+                            <th className="text-left py-2 px-2">Annexure</th>
                           </tr>
                         </thead>
                         <tbody>
                           {rows.length === 0 ? (
-                            <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No rows in this category.</td></tr>
+                            <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">No rows in this category.</td></tr>
                           ) : rows.map((r) => (
                             <tr key={r.id} className="border-b last:border-0">
                               <td className="py-2 px-2 border-r">{r.lot_no}</td>
@@ -852,7 +853,18 @@ export default function RequisitionPlan() {
                               <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                              <td className="py-2 px-2 text-right">{r.total_qty ?? "—"}</td>
+                              <td className="py-2 px-2 border-r text-right">{r.total_qty ?? "—"}</td>
+                              <td className="py-2 px-2">
+                                {reportMode === "saved" ? (
+                                  <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                                ) : (r as LiveAnnexureRow)._createdState === "created" ? (
+                                  <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                                ) : (r as LiveAnnexureRow)._createdState === "partial" ? (
+                                  <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">—</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -860,7 +872,8 @@ export default function RequisitionPlan() {
                           <tfoot>
                             <tr className="bg-muted/30 font-medium">
                               <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
-                              <td className="py-2 px-2 text-right">{total}</td>
+                              <td className="py-2 px-2 text-right border-r">{total}</td>
+                              <td className="py-2 px-2"></td>
                             </tr>
                           </tfoot>
                         )}
