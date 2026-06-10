@@ -122,7 +122,11 @@ export default function RequisitionPlan() {
       ));
       setSaveStatus("saved");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const e = err as { message?: string; details?: string; hint?: string; code?: string } | null;
+      const msg =
+        (e && (e.message || e.details || e.hint))
+          ? [e.message, e.details, e.hint].filter(Boolean).join(" — ")
+          : (err instanceof Error ? err.message : (() => { try { return JSON.stringify(err); } catch { return String(err); } })());
       setSaveStatus("error");
       toast({ title: "Autosave failed", description: msg, variant: "destructive" });
     }
