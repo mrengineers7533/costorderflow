@@ -1,59 +1,48 @@
 ## Goal
-Split the single **Steel** classification into five separate categories — **Pipe, Sheet SS, Sheet MS, Sheet GI, Structure** — across Requisition Planning, Annexure generation, Purchase Material, PO creation, and PO Folder, without disturbing existing rows already marked as `steel`.
+Add **Project Cost Sheet Number** as a first-class identifier on the Requisitions page — visible, searchable, filterable, clickable (project view), and usable as an entry point to add additional requisitions under an existing project. No existing column, action, or workflow changes.
 
-## New status set
-`machine`, `3p`, `pipe`, `sheet_ss`, `sheet_ms`, `sheet_gi`, `structure` — plus a read-only legacy value `steel` (label: "Steel (legacy)") shown only when an existing row already holds it.
-
-## Routing rules
-| plan_status | Annexure / report bucket |
-|---|---|
-| `machine` | Machine List |
-| `3p` | Outside Purchase |
-| `pipe` | Pipe annexure |
-| `sheet_ss` | Sheet SS annexure |
-| `sheet_ms` | Sheet MS annexure |
-| `sheet_gi` | Sheet GI annexure |
-| `structure` | Structure annexure |
-| `steel` (legacy) | Read-only "Steel (legacy)" bucket — surfaced so old rows stay visible until a user re-classifies them. |
+## Data source (no schema change needed)
+- `orders.cost_sheet_number` already exists and is set when an OA is created from a Cost Sheet / Manufacturing Model.
+- Each requisition links to an order via `requisitions.order_root_id` → `orders.id` (root). So the Project Cost Sheet Number for a requisition = `cost_sheet_number` on the root order.
+- No migration required. The link is implicit and persistent through `order_root_id`.
 
 ## Changes by file
 
-1. **`src/lib/requisition/types.ts`** — widen the `plan_status` union to the seven new values plus `"steel"` (legacy) on both `Annexure` and the raw-material plan types.
+### 1. `src/pages/requisitions/RequisitionsList.tsx`
+- Fetch `cost_sheet_number` for every `order_root_id` shown (single `orders` query keyed by root id) and build a `costSheetByRoot` map.
+- Insert a new column **"Project Cost Sheet #"** between **OA #** and **BOQ #** (keeps existing columns in place).
+  - Renders as a clickable link/button. Empty when the root order has no cost-sheet number.
+  - Clicking it filters the list to all requisitions sharing that cost-sheet number (sets the search to `cs:<number>` and a small "Project: 001 ✕" chip is shown above the table to clear).
+- Extend the existing search to also match `cost_sheet_number` so users can type a project number into the search box and find every linked requisition.
+- Add a **"+ Add Requisition to Project"** button in the page header that opens a small dialog:
+  - Step 1: pick an existing Project Cost Sheet Number (typeahead over distinct `cost_sheet_number`s from `orders`).
+  - Step 2: pick which OA / BOQ revision under that project to base the new requisition on (list of approved BOQs whose root order has the selected cost-sheet number).
+  - Step 3: confirm → reuse the existing requisition-creation path (same edge function / RPC used today by `CreateRequisitionDialog`) so the new requisition is created against that BOQ and therefore automatically inherits the same `order_root_id` and thus the same Project Cost Sheet Number.
+  - Existing requisitions under that project are untouched.
 
-2. **`src/pages/requisitions/RequisitionPlan.tsx`**
-   - Update the `STATUS_LABEL` map and both `<Select>` dropdowns (raw-material row + consolidated bulk) to list the seven categories (no Steel option for new selections).
-   - Update the per-category report renderer / titles loop so it iterates over the seven kinds and produces a section/title per kind (Machine List, Outside Purchase, Pipe, Sheet SS, Sheet MS, Sheet GI, Structure). Keep existing quantity-consolidation logic untouched.
-   - When rendering existing rows whose value is `steel`, show "Steel (legacy)" as a disabled option in the Select so the value stays selectable/visible but users can switch it.
+### 2. `src/components/manufacturing/CreateRequisitionDialog.tsx`
+- No behavior change. Already creates requisitions against an order/BOQ — the cost-sheet linkage flows through naturally.
 
-3. **`src/pages/requisitions/RequisitionDetail.tsx`**
-   - Replace the single "Steel List" tab with one tab per new category (Pipe / Sheet SS / Sheet MS / Sheet GI / Structure), keeping Machine List as-is.
-   - Replace the `steel` `<SelectItem>` with the five new options.
-   - Add a "Steel (legacy)" tab that only appears when at least one row still has `plan_status = 'steel'`.
-
-4. **`src/pages/requisitions/AnnexureFolder.tsx`**
-   - Expand `TYPE_LABEL` and the type-filter Select to include the new five categories (Pipe / Sheet SS / Sheet MS / Sheet GI / Structure), plus a "Steel (legacy)" entry shown only when legacy annexures exist.
-   - Grouping by `(lot_no, plan_status)` already handles the new values without further changes.
-
-5. **`src/pages/purchase/PurchaseMaterial.tsx`**
-   - Extend the `plan_status` union, `catLabel` map, and the category filter dropdown to the new values (+ legacy Steel shown only when present).
-   - Per-category PO grouping already keys off `plan_status`, so it picks up new categories automatically.
-
-6. **`src/pages/purchase/PoCreateFromAnnexure.tsx`**
-   - Widen `Cat` and `CAT_LABEL` to include the five new categories. The existing `eq("plan_status", type)` filter then works for each one.
-
-7. **`src/pages/purchase/PoFolder.tsx`**
-   - Widen `Category`, update `catLabel`, and extend the category-filter Select with the new five options (+ legacy Steel option appearing only when historical POs with `category = 'steel'` exist).
+### 3. (Optional, light touch) `src/pages/requisitions/RequisitionDetail.tsx`
+- Show the Project Cost Sheet Number at the top of the detail header as read-only context. Pure display, no logic change.
 
 ## Backend
-- No schema migration: `plan_status` and `category` are free-text. The seven new values write directly.
-- No data backfill: existing rows keep `plan_status = 'steel'` and surface under the read-only "Steel (legacy)" label per your choice.
+- None. No migration, no new tables, no edge function changes. Read-only joins on existing `orders.cost_sheet_number`.
 
-## Out of scope
-- Requisition creation, PO PDF template, vendor master, ES flow — unchanged.
-- Quantity consolidation logic and annexure row schema — unchanged.
+## UI behavior summary
+- New column **Project Cost Sheet #** visible on `/requisitions`.
+- Search box matches requisition #, OA #, BOQ #, client, AND cost-sheet number.
+- Clicking the cost-sheet cell filters the table to that project; a chip clears the filter.
+- Header button **"+ Add Requisition to Project"** lets a user create another requisition under an existing project (e.g. project `001`).
+- Multiple requisitions can share the same Project Cost Sheet Number (already supported by the data model).
+
+## Out of scope (explicitly unchanged)
+- Existing columns, status badges, row actions (view / PDF / copy link / send to purchase), bulk-plan flow, requisition generation rules, BOQ/OA/revision logic, PO PDF output.
+- No new permissions, no schema migration, no changes to existing requisitions.
 
 ## Verification
-- Plan page: each of the seven categories appears in the dropdown; selecting Sheet SS for a row makes it show up under the "Sheet SS" section/report.
-- Annexure Folder: filter by Pipe / Sheet SS / etc. lists the corresponding annexures; an existing steel annexure still appears under "Steel (legacy)".
-- Purchase Material → PO creation: choosing a Sheet GI annexure produces a PO with category `sheet_gi`; the PO appears under the Sheet GI filter in PO Folder.
-- A row still set to `steel` remains visible everywhere as "Steel (legacy)" and can be re-classified by the user.
+- Requisitions page shows the new column populated for requisitions whose root order has a cost-sheet number.
+- Typing a project number into search narrows the list to matching requisitions.
+- Clicking a cost-sheet cell filters to all requisitions for that project.
+- "+ Add Requisition to Project" creates a new requisition that appears under the same Project Cost Sheet Number with all other features (PDF, send to purchase, etc.) working as before.
+- Requisitions whose root order has no cost-sheet number still render normally with an empty project cell.
