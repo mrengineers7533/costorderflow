@@ -273,10 +273,8 @@ export default function RequisitionPlan() {
     return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
   }, [rms, reqById]);
 
-  async function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
-    const { error } = await sb.from("requisition_raw_materials").update(patch).in("id", rmIds);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    setRms((prev) => prev.map((r) => rmIds.includes(r.id) ? { ...r, ...patch } : r));
+  function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
+    rmIds.forEach((id) => patchRm(id, patch));
   }
 
   async function createAnnexure() {
@@ -421,33 +419,111 @@ export default function RequisitionPlan() {
                       <tr key={r.id} className="border-b last:border-0">
                         {idx === 0 && (
                           <>
-                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
-                            <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
-                            <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
+                            <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
+                              <div className="text-[10px] text-muted-foreground mb-0.5">[{g.reqNo}]</div>
+                              {g.item ? (
+                                <Input
+                                  className="h-7 w-44 text-sm"
+                                  defaultValue={g.item.model_number || g.item.description || ""}
+                                  onBlur={(e) => {
+                                    const v = e.target.value.trim();
+                                    if (!g.item) return;
+                                    if ((g.item.model_number || "") === v) return;
+                                    patchItem(g.item.id, { model_number: v });
+                                  }}
+                                />
+                              ) : <span className="text-sm">{g.fgLabel}</span>}
+                            </td>
+                            <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
+                              {g.item ? (
+                                <Input
+                                  className="h-7 w-28 text-sm"
+                                  defaultValue={fgMake}
+                                  onBlur={(e) => {
+                                    const v = e.target.value.trim();
+                                    if (!g.item) return;
+                                    if (fgMake === v) return;
+                                    patchItemMake(g.item.id, v);
+                                  }}
+                                />
+                              ) : "—"}
+                            </td>
+                            <td className="py-2 px-1 align-top border-r text-right" rowSpan={g.rms.length}>
+                              {g.item ? (
+                                <Input
+                                  type="number"
+                                  className="h-7 w-20 text-sm text-right"
+                                  defaultValue={g.item.quantity ?? ""}
+                                  onBlur={(e) => {
+                                    const raw = e.target.value.trim();
+                                    const v = raw === "" ? null : Math.max(0, Number(raw));
+                                    if (!g.item) return;
+                                    if ((g.item.quantity ?? null) === v) return;
+                                    patchItem(g.item.id, { quantity: v });
+                                  }}
+                                />
+                              ) : fgQty}
+                            </td>
                           </>
                         )}
-                        <td className="py-2 px-2 border-r">{r.material}</td>
-                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
-                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
-                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
-                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                        <td className="py-2 px-2 border-r">
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-40 text-sm" defaultValue={r.material}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (r.material === v) return;
+                              patchRm(r.id, { material: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-28 text-sm" defaultValue={r.size_model || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.size_model || null) === v) return;
+                              patchRm(r.id, { size_model: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r text-right">
+                          <Input type="number" className="h-7 w-20 text-sm text-right" defaultValue={r.required_qty ?? ""}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              const v = raw === "" ? null : Math.max(0, Number(raw));
+                              if ((r.required_qty ?? null) === v) return;
+                              patchRm(r.id, { required_qty: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-24 text-sm" defaultValue={r.make || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.make || null) === v) return;
+                              patchRm(r.id, { make: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input className="h-7 w-16 text-sm" defaultValue={r.unit || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.unit || null) === v) return;
+                              patchRm(r.id, { unit: v });
+                            }} />
+                        </td>
+                        <td className="py-2 px-1 border-r">
                           <Input
-                            className="h-7 w-24"
+                            className="h-7 w-24 text-sm"
                             defaultValue={r.lot_no || ""}
                             onBlur={(e) => {
                               const v = e.target.value.trim() || null;
                               if ((r.lot_no || null) === v) return;
-                              updateRm(r.id, { lot_no: v });
+                              patchRm(r.id, { lot_no: v });
                             }}
                           />
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-1">
                           <Select
                             value={r.plan_status || ""}
-                            onValueChange={(v) => updateRm(r.id, { plan_status: v as PlanStatus })}
+                            onValueChange={(v) => patchRm(r.id, { plan_status: v as PlanStatus })}
                           >
-                            <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="machine">Machine</SelectItem>
                               <SelectItem value="3p">3P / Third Party</SelectItem>
