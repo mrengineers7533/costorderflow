@@ -174,7 +174,10 @@ export default function PoCreateFromAnnexure() {
       contact_person: vendor.contact_person || undefined,
       phone: vendor.phone || undefined,
     } : { name: "—" },
-    buyer: { invoice_to: invoiceTo, ship_to: shipTo },
+    buyer: {
+      invoice_to: { name: invoiceTo.name || "—", ...invoiceTo },
+      ship_to: { name: shipTo.name || "—", ...shipTo },
+    },
     reqLine: reqLine || undefined,
     preparedBy: preparedBy || undefined,
     dispatchThrough: dispatch || undefined,
