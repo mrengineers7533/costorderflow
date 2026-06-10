@@ -60,6 +60,33 @@ export interface RequisitionRawMaterialRecord {
   updated_at: string;
   make?: string | null;
   size_model?: string | null;
+  lot_no?: string | null;
+  plan_status?: "machine" | "3p" | "steel" | null;
+}
+
+export interface AnnexureRecord {
+  id: string;
+  requisition_ids: string[];
+  lot_numbers: string[];
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnexureRowRecord {
+  id: string;
+  annexure_id: string;
+  lot_no: string;
+  plan_status: "machine" | "3p" | "steel";
+  material: string;
+  size_model: string | null;
+  make: string | null;
+  unit: string | null;
+  total_qty: number | null;
+  source_rm_ids: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FgRawMaterialMapRow {

@@ -275,7 +275,7 @@ export default function RequisitionDetail() {
         <TabsList>
           <TabsTrigger value="generated">Generated</TabsTrigger>
           <TabsTrigger value="raw">Raw Materials</TabsTrigger>
-          <TabsTrigger value="items">Items</TabsTrigger>
+          <TabsTrigger value="items">Machine List</TabsTrigger>
           <TabsTrigger value="steel">Steel List</TabsTrigger>
           <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
         </TabsList>
@@ -437,7 +437,15 @@ export default function RequisitionDetail() {
         <TabsContent value="items">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-              <CardTitle className="text-sm">Finish Good items</CardTitle>
+              <div>
+                <CardTitle className="text-sm">Machine List</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Lot Number(s):{" "}
+                  <span className="font-medium text-foreground">
+                    {Array.from(new Set(items.map((i) => i.lot_no).filter(Boolean))).join(", ") || "—"}
+                  </span>
+                </p>
+              </div>
               <Button
                 type="button"
                 variant={showMake ? "secondary" : "outline"}
@@ -515,7 +523,15 @@ export default function RequisitionDetail() {
           <TabsContent key={cat} value={cat}>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-                <CardTitle className="text-sm capitalize">{cat} purchase list</CardTitle>
+                <div>
+                  <CardTitle className="text-sm capitalize">{cat} purchase list</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Lot Number(s):{" "}
+                    <span className="font-medium text-foreground">
+                      {Array.from(new Set(items.filter((i) => i.purchase_category === cat).map((i) => i.lot_no).filter(Boolean))).join(", ") || "—"}
+                    </span>
+                  </p>
+                </div>
                 <Button
                   type="button"
                   variant={showMake ? "secondary" : "outline"}

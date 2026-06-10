@@ -1,0 +1,561 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/hooks/use-toast";
+import { Download, FileText, Send } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import type {
+  AnnexureRecord,
+  AnnexureRowRecord,
+  RequisitionItemRecord,
+  RequisitionRawMaterialRecord,
+  RequisitionRecord,
+} from "@/lib/requisition/types";
+import type { BoqRecord } from "@/lib/boq/types";
+import type { OrderRecord } from "@/lib/orders/types";
+import { buildMakeResolver } from "@/lib/boq/makeResolver";
+
+type PlanStatus = "machine" | "3p" | "steel";
+const STATUS_LABEL: Record<PlanStatus, string> = {
+  machine: "Machine",
+  "3p": "3P / Third Party",
+  steel: "Steel",
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
+
+export default function RequisitionPlan() {
+  const [sp] = useSearchParams();
+  const ids = useMemo(
+    () => (sp.get("ids") || "").split(",").map((s) => s.trim()).filter(Boolean),
+    [sp],
+  );
+
+  const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
+  const [items, setItems] = useState<RequisitionItemRecord[]>([]);
+  const [rms, setRms] = useState<RequisitionRawMaterialRecord[]>([]);
+  const [boqs, setBoqs] = useState<Record<string, BoqRecord>>({});
+  const [orders, setOrders] = useState<Record<string, OrderRecord>>({});
+  const [annexures, setAnnexures] = useState<AnnexureRecord[]>([]);
+  const [annexureRows, setAnnexureRows] = useState<AnnexureRowRecord[]>([]);
+  const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("generated");
+
+  async function load() {
+    if (ids.length === 0) { setLoading(false); return; }
+    const [{ data: r }, { data: its }, { data: rmRows }] = await Promise.all([
+      sb.from("requisitions").select("*").in("id", ids),
+      sb.from("requisition_items").select("*").in("requisition_id", ids),
+      sb.from("requisition_raw_materials").select("*").in("requisition_id", ids),
+    ]);
+    const rList = (r as RequisitionRecord[]) || [];
+    setReqs(rList);
+    setItems((its as RequisitionItemRecord[]) || []);
+    setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
+    const boqIds = Array.from(new Set(rList.map((x) => x.boq_id)));
+    if (boqIds.length) {
+      const { data: b } = await supabase.from("boqs").select("*").in("id", boqIds);
+      const bm: Record<string, BoqRecord> = {};
+      ((b as unknown as BoqRecord[]) || []).forEach((x) => { bm[x.id] = x; });
+      setBoqs(bm);
+      const oaIds = Array.from(new Set(((b as unknown as BoqRecord[]) || [])
+        .map((x) => (x as { source_order_id?: string; order_id?: string }).source_order_id || x.order_id)
+        .filter(Boolean)));
+      if (oaIds.length) {
+        const { data: oRows } = await supabase.from("orders").select("*").in("id", oaIds);
+        const om: Record<string, OrderRecord> = {};
+        ((oRows as unknown as OrderRecord[]) || []).forEach((x) => { om[x.id] = x; });
+        setOrders(om);
+      }
+    }
+    // most recent annexure that covers exactly this set of reqs
+    const { data: ax } = await sb.from("requisition_annexures").select("*").order("created_at", { ascending: false }).limit(50);
+    const matching = ((ax as AnnexureRecord[]) || []).filter((a) => {
+      const s = new Set(a.requisition_ids);
+      return ids.length === s.size && ids.every((i) => s.has(i));
+    });
+    setAnnexures(matching);
+    if (matching[0]) {
+      setActiveAnnexureId(matching[0].id);
+      const { data: axr } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", matching[0].id);
+      setAnnexureRows((axr as AnnexureRowRecord[]) || []);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [ids.join(",")]);
+
+  // Make resolver per BOQ
+  const makeResolvers = useMemo(() => {
+    const m = new Map<string, (it: RequisitionItemRecord) => string>();
+    Object.values(boqs).forEach((b) => {
+      const oaId = (b as { source_order_id?: string; order_id?: string }).source_order_id || b.order_id;
+      const oa = oaId ? orders[oaId] : null;
+      const fromOa = buildMakeResolver(oa?.line_items);
+      const boqItems = Array.isArray(b.line_items) ? b.line_items : [];
+      const byId = new Map(boqItems.map((bi, i) => [bi.id, { item: bi, index: i }] as const));
+      m.set(b.id, (it) => {
+        const snap = (it.fg_snapshot as { make?: string } | null)?.make;
+        if (snap && snap.trim()) return snap.trim();
+        const hit = byId.get(it.boq_item_id);
+        if (hit) return fromOa(hit.item, hit.index);
+        return "";
+      });
+    });
+    return m;
+  }, [boqs, orders]);
+
+  const reqById = useMemo(() => {
+    const m = new Map<string, RequisitionRecord>();
+    reqs.forEach((r) => m.set(r.id, r));
+    return m;
+  }, [reqs]);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, RequisitionItemRecord>();
+    items.forEach((it) => m.set(it.id, it));
+    return m;
+  }, [items]);
+
+  function resolveMake(it: RequisitionItemRecord): string {
+    const r = reqById.get(it.requisition_id);
+    if (!r) return "";
+    const fn = makeResolvers.get(r.boq_id);
+    return fn ? fn(it) : "";
+  }
+
+  // Build flat generated rows grouped by (reqId, fgItemId)
+  type Group = { reqNo: string; item: RequisitionItemRecord | null; fgLabel: string; rms: RequisitionRawMaterialRecord[] };
+  const groups: Group[] = useMemo(() => {
+    const order: string[] = [];
+    const buckets = new Map<string, Group>();
+    rms.forEach((rm) => {
+      const req = reqById.get(rm.requisition_id);
+      const reqNo = req?.requisition_number || "—";
+      const key = `${rm.requisition_id}::${rm.requisition_item_id || "_m_" + (rm.model_number || "")}`;
+      let g = buckets.get(key);
+      if (!g) {
+        const it = rm.requisition_item_id ? itemById.get(rm.requisition_item_id) || null : null;
+        g = {
+          reqNo,
+          item: it,
+          fgLabel: it?.model_number || it?.description || rm.model_number || "—",
+          rms: [],
+        };
+        buckets.set(key, g);
+        order.push(key);
+      }
+      g.rms.push(rm);
+    });
+    return order.map((k) => buckets.get(k)!);
+  }, [rms, reqById, itemById]);
+
+  async function updateRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
+    const { error } = await sb.from("requisition_raw_materials").update(patch).eq("id", id);
+    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
+    setRms((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r));
+  }
+
+  // Consolidate raw materials by material+size+make+unit+lot+status
+  type ConsKey = string;
+  type ConsRow = {
+    key: ConsKey;
+    material: string;
+    size_model: string | null;
+    make: string | null;
+    unit: string | null;
+    lot_no: string | null;
+    plan_status: PlanStatus | null;
+    total: number;
+    sourceRmIds: string[];
+    sourceReqNos: string[];
+  };
+  const consolidated: ConsRow[] = useMemo(() => {
+    const map = new Map<ConsKey, ConsRow>();
+    rms.forEach((rm) => {
+      const key = [
+        (rm.material || "").trim().toLowerCase(),
+        (rm.size_model || "").trim().toLowerCase(),
+        (rm.make || "").trim().toLowerCase(),
+        (rm.unit || "").trim().toLowerCase(),
+        (rm.lot_no || "").trim().toLowerCase(),
+        (rm.plan_status || "").trim().toLowerCase(),
+      ].join("|");
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          key,
+          material: rm.material,
+          size_model: rm.size_model || null,
+          make: rm.make || null,
+          unit: rm.unit || null,
+          lot_no: rm.lot_no || null,
+          plan_status: (rm.plan_status as PlanStatus | null) || null,
+          total: 0,
+          sourceRmIds: [],
+          sourceReqNos: [],
+        };
+        map.set(key, row);
+      }
+      row.total += Number(rm.required_qty || 0);
+      row.sourceRmIds.push(rm.id);
+      const reqNo = reqById.get(rm.requisition_id)?.requisition_number;
+      if (reqNo && !row.sourceReqNos.includes(reqNo)) row.sourceReqNos.push(reqNo);
+    });
+    return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
+  }, [rms, reqById]);
+
+  async function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
+    const { error } = await sb.from("requisition_raw_materials").update(patch).in("id", rmIds);
+    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
+    setRms((prev) => prev.map((r) => rmIds.includes(r.id) ? { ...r, ...patch } : r));
+  }
+
+  async function createAnnexure() {
+    const missing = consolidated.filter((c) => !c.lot_no || !c.plan_status);
+    if (missing.length > 0) {
+      toast({
+        title: "Lot and Status required",
+        description: `${missing.length} row(s) missing Lot or Status (e.g. ${missing[0].material}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const lots = Array.from(new Set(consolidated.map((c) => c.lot_no!).filter(Boolean)));
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
+      requisition_ids: ids,
+      lot_numbers: lots,
+      created_by: user?.id ?? null,
+    }).select("*").maybeSingle();
+    if (e1 || !ax) { toast({ title: "Create failed", description: e1?.message, variant: "destructive" }); return; }
+    const rows = consolidated.map((c) => ({
+      annexure_id: (ax as AnnexureRecord).id,
+      lot_no: c.lot_no!,
+      plan_status: c.plan_status!,
+      material: c.material,
+      size_model: c.size_model,
+      make: c.make,
+      unit: c.unit,
+      total_qty: c.total,
+      source_rm_ids: c.sourceRmIds,
+    }));
+    const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
+    if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
+    setAnnexures((p) => [ax as AnnexureRecord, ...p]);
+    setAnnexureRows((axRows as AnnexureRowRecord[]) || []);
+    setActiveAnnexureId((ax as AnnexureRecord).id);
+    toast({ title: "Annexure created", description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).` });
+    setTab("reports");
+  }
+
+  async function forwardToPurchase() {
+    const { error } = await sb.from("requisitions").update({ status: "in_purchase" }).in("id", ids);
+    if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Forwarded to Purchase", description: `${ids.length} requisition(s) marked in_purchase.` });
+    setReqs((p) => p.map((r) => ({ ...r, status: "in_purchase" })));
+  }
+
+  const activeAnnexure = annexures.find((a) => a.id === activeAnnexureId) || null;
+  const reportRows = annexureRows.filter((r) => r.annexure_id === activeAnnexureId);
+
+  function downloadReportPdf(kind: PlanStatus) {
+    const rows = reportRows.filter((r) => r.plan_status === kind);
+    const doc = new jsPDF({ orientation: "landscape" });
+    const title = `${STATUS_LABEL[kind]} — Annexure`;
+    doc.setFontSize(14); doc.text(title, 14, 14);
+    doc.setFontSize(10);
+    const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
+    doc.text(`Lot Number(s): ${lots || "—"}`, 14, 22);
+    doc.text(`Requisitions: ${reqs.map((r) => r.requisition_number).join(", ")}`, 14, 28);
+    const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
+    autoTable(doc, {
+      startY: 34,
+      head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
+      body: rows.map((r) => [
+        r.lot_no,
+        r.material,
+        r.size_model || "—",
+        r.make || "—",
+        r.unit || "—",
+        String(r.total_qty ?? "—"),
+      ]),
+      foot: [["", "", "", "", "Grand Total", String(total)]],
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [40, 40, 40] },
+    });
+    doc.save(`${kind}_annexure.pdf`);
+  }
+
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (ids.length === 0) return <div className="p-6 text-sm text-muted-foreground">No requisitions selected. <Link to="/requisitions" className="underline">Back</Link></div>;
+
+  const distinctLots = new Set(rms.map((r) => r.lot_no).filter(Boolean));
+
+  return (
+    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Requisition Planning ({ids.length})</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            {reqs.map((r) => r.requisition_number).join(" · ")}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
+          <Button size="sm" onClick={forwardToPurchase}><Send className="mr-1 h-4 w-4" />Forward to Purchase</Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="py-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <div><span className="font-semibold text-foreground">{items.length}</span> Finished Goods</div>
+          <div><span className="font-semibold text-foreground">{rms.length}</span> RM rows</div>
+          <div><span className="font-semibold text-foreground">{consolidated.length}</span> consolidated</div>
+          <div><span className="font-semibold text-foreground">{distinctLots.size}</span> distinct lots</div>
+        </CardContent>
+      </Card>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="generated">Generated Requisition</TabsTrigger>
+          <TabsTrigger value="raw">Raw Materials</TabsTrigger>
+          <TabsTrigger value="reports">Annexure Reports</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="generated">
+          <Card>
+            <CardHeader className="py-3"><CardTitle className="text-sm">Consolidated generated requisition</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm border">
+                <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+                  <tr>
+                    <th className="text-left py-2 px-2 border-r">Finished Good</th>
+                    <th className="text-left py-2 px-2 border-r">Make</th>
+                    <th className="text-right py-2 px-2 border-r">Qty</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material</th>
+                    <th className="text-left py-2 px-2 border-r">Size</th>
+                    <th className="text-right py-2 px-2 border-r">RM Qty</th>
+                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">UOM</th>
+                    <th className="text-left py-2 px-2 border-r">Lot</th>
+                    <th className="text-left py-2 px-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.length === 0 ? (
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                  ) : groups.flatMap((g) => {
+                    const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
+                    const fgMake = g.item ? resolveMake(g.item) : "";
+                    const fgQty = g.item?.quantity != null ? String(g.item.quantity) : "—";
+                    return g.rms.map((r, idx) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        {idx === 0 && (
+                          <>
+                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
+                            <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
+                            <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
+                          </>
+                        )}
+                        <td className="py-2 px-2 border-r">{r.material}</td>
+                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
+                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
+                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
+                        <td className="py-2 px-2 border-r">
+                          <Input
+                            className="h-7 w-24"
+                            defaultValue={r.lot_no || ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.lot_no || null) === v) return;
+                              updateRm(r.id, { lot_no: v });
+                            }}
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <Select
+                            value={r.plan_status || ""}
+                            onValueChange={(v) => updateRm(r.id, { plan_status: v as PlanStatus })}
+                          >
+                            <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="machine">Machine</SelectItem>
+                              <SelectItem value="3p">3P / Third Party</SelectItem>
+                              <SelectItem value="steel">Steel</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    ));
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="raw">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 py-3">
+              <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
+              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure</Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm border">
+                <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+                  <tr>
+                    <th className="text-left py-2 px-2 border-r">Raw Material</th>
+                    <th className="text-left py-2 px-2 border-r">Size</th>
+                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">UOM</th>
+                    <th className="text-right py-2 px-2 border-r">Total Qty</th>
+                    <th className="text-left py-2 px-2 border-r">Lot</th>
+                    <th className="text-left py-2 px-2 border-r">Status</th>
+                    <th className="text-left py-2 px-2">Source Req(s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidated.length === 0 ? (
+                    <tr><td colSpan={8} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                  ) : consolidated.map((c) => (
+                    <tr key={c.key} className="border-b last:border-0">
+                      <td className="py-2 px-2 border-r font-medium">{c.material}</td>
+                      <td className="py-2 px-2 border-r">{c.size_model || "—"}</td>
+                      <td className="py-2 px-2 border-r">{c.make || "—"}</td>
+                      <td className="py-2 px-2 border-r">{c.unit || "—"}</td>
+                      <td className="py-2 px-2 border-r text-right">{c.total}</td>
+                      <td className="py-2 px-2 border-r">
+                        <Input
+                          className="h-7 w-24"
+                          defaultValue={c.lot_no || ""}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim() || null;
+                            if ((c.lot_no || null) === v) return;
+                            bulkPatch(c.sourceRmIds, { lot_no: v });
+                          }}
+                        />
+                      </td>
+                      <td className="py-2 px-2 border-r">
+                        <Select
+                          value={c.plan_status || ""}
+                          onValueChange={(v) => bulkPatch(c.sourceRmIds, { plan_status: v as PlanStatus })}
+                        >
+                          <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="machine">Machine</SelectItem>
+                            <SelectItem value="3p">3P / Third Party</SelectItem>
+                            <SelectItem value="steel">Steel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="py-2 px-2 text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reports">
+          {!activeAnnexure ? (
+            <Card><CardContent className="py-6 text-sm text-muted-foreground">No annexure yet. Click <strong>Create Annexure</strong> on the Raw Materials tab.</CardContent></Card>
+          ) : (
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
+                  <Badge variant="secondary">Annexure</Badge>
+                  <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
+                  <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
+                  {annexures.length > 1 && (
+                    <Select value={activeAnnexureId || ""} onValueChange={async (v) => {
+                      setActiveAnnexureId(v);
+                      const { data } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", v);
+                      setAnnexureRows((data as AnnexureRowRecord[]) || []);
+                    }}>
+                      <SelectTrigger className="h-7 w-64 ml-auto"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {annexures.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {new Date(a.created_at).toLocaleString("en-IN")} — {a.lot_numbers.join(", ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </CardContent>
+              </Card>
+
+              {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
+                const rows = reportRows.filter((r) => r.plan_status === kind);
+                const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
+                const title = kind === "machine" ? "Machine List" : kind === "steel" ? "Steel List" : "Outside Purchase";
+                const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
+                return (
+                  <Card key={kind}>
+                    <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 py-3">
+                      <div>
+                        <CardTitle className="text-sm">{title}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">Lot Number(s): <span className="font-medium text-foreground">{lots || "—"}</span></p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => downloadReportPdf(kind)} disabled={rows.length === 0}>
+                        <Download className="mr-1 h-4 w-4" />PDF
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto">
+                      <table className="w-full text-sm border">
+                        <thead className="text-xs text-muted-foreground border-b bg-muted/40">
+                          <tr>
+                            <th className="text-left py-2 px-2 border-r">Lot</th>
+                            <th className="text-left py-2 px-2 border-r">Raw Material</th>
+                            <th className="text-left py-2 px-2 border-r">Size</th>
+                            <th className="text-left py-2 px-2 border-r">RM Make</th>
+                            <th className="text-left py-2 px-2 border-r">UOM</th>
+                            <th className="text-right py-2 px-2">Total Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No rows in this category.</td></tr>
+                          ) : rows.map((r) => (
+                            <tr key={r.id} className="border-b last:border-0">
+                              <td className="py-2 px-2 border-r">{r.lot_no}</td>
+                              <td className="py-2 px-2 border-r">{r.material}</td>
+                              <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
+                              <td className="py-2 px-2 border-r">{r.make || "—"}</td>
+                              <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
+                              <td className="py-2 px-2 text-right">{r.total_qty ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {rows.length > 0 && (
+                          <tfoot>
+                            <tr className="bg-muted/30 font-medium">
+                              <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
+                              <td className="py-2 px-2 text-right">{total}</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

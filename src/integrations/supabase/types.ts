@@ -1364,6 +1364,89 @@ export type Database = {
         }
         Relationships: []
       }
+      requisition_annexure_rows: {
+        Row: {
+          annexure_id: string
+          created_at: string
+          id: string
+          lot_no: string
+          make: string | null
+          material: string
+          plan_status: string
+          size_model: string | null
+          source_rm_ids: string[]
+          total_qty: number | null
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          annexure_id: string
+          created_at?: string
+          id?: string
+          lot_no: string
+          make?: string | null
+          material: string
+          plan_status: string
+          size_model?: string | null
+          source_rm_ids?: string[]
+          total_qty?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          annexure_id?: string
+          created_at?: string
+          id?: string
+          lot_no?: string
+          make?: string | null
+          material?: string
+          plan_status?: string
+          size_model?: string | null
+          source_rm_ids?: string[]
+          total_qty?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requisition_annexure_rows_annexure_id_fkey"
+            columns: ["annexure_id"]
+            isOneToOne: false
+            referencedRelation: "requisition_annexures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requisition_annexures: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          lot_numbers: string[]
+          notes: string | null
+          requisition_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_numbers?: string[]
+          notes?: string | null
+          requisition_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_numbers?: string[]
+          notes?: string | null
+          requisition_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       requisition_counters: {
         Row: {
           id: string
@@ -1526,10 +1609,12 @@ export type Database = {
           created_at: string
           fg_quantity: number | null
           id: string
+          lot_no: string | null
           make: string | null
           material: string
           model_number: string | null
           notes: string | null
+          plan_status: string | null
           purchase_status: string
           qty_per_unit: number | null
           required_qty: number | null
@@ -1544,10 +1629,12 @@ export type Database = {
           created_at?: string
           fg_quantity?: number | null
           id?: string
+          lot_no?: string | null
           make?: string | null
           material: string
           model_number?: string | null
           notes?: string | null
+          plan_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
           required_qty?: number | null
@@ -1562,10 +1649,12 @@ export type Database = {
           created_at?: string
           fg_quantity?: number | null
           id?: string
+          lot_no?: string | null
           make?: string | null
           material?: string
           model_number?: string | null
           notes?: string | null
+          plan_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
           required_qty?: number | null
@@ -1989,10 +2078,12 @@ export type Database = {
           created_at: string
           fg_quantity: number | null
           id: string
+          lot_no: string | null
           make: string | null
           material: string
           model_number: string | null
           notes: string | null
+          plan_status: string | null
           purchase_status: string
           qty_per_unit: number | null
           required_qty: number | null
