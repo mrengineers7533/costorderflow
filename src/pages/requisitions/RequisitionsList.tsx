@@ -308,7 +308,7 @@ export default function RequisitionsList() {
                       </td>
                       <td className="py-2 px-3">{b?.boq_number || "—"}</td>
                       <td className="py-2 px-3">R{r.boq_revision}</td>
-                      <td className="py-2 px-3 max-w-[220px] truncate">{b?.client_name || "—"}</td>
+                      <td className="py-2 px-3 max-w-[220px] truncate">{r.client_name_override || b?.client_name || "—"}</td>
                       <td className="py-2 px-3 text-xs text-muted-foreground">{fmtDate(r.created_at)}</td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1 flex-wrap">
