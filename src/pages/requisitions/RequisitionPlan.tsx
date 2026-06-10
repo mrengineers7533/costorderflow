@@ -52,6 +52,9 @@ export default function RequisitionPlan() {
   const [tab, setTab] = useState("generated");
   const [reportMode, setReportMode] = useState<"live" | "saved">("live");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Lot-wise selection state for annexure creation (Raw Materials tab)
+  const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set());
+  const [excludedRowKeys, setExcludedRowKeys] = useState<Set<string>>(new Set());
 
   // ---- Debounced autosave plumbing ----
   // pendingPatches keyed by `${table}:${id}` -> merged patch
