@@ -23,11 +23,43 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 
-type PlanStatus = "machine" | "3p" | "steel";
+type PlanStatus =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel"; // legacy
 const STATUS_LABEL: Record<PlanStatus, string> = {
   machine: "Machine",
   "3p": "3P / Third Party",
-  steel: "Steel",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
+};
+const ACTIVE_STATUSES: PlanStatus[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
+const REPORT_TITLE: Record<PlanStatus, string> = {
+  machine: "Machine List",
+  "3p": "Outside Purchase",
+  pipe: "Pipe Annexure",
+  sheet_ss: "Sheet SS Annexure",
+  sheet_ms: "Sheet MS Annexure",
+  sheet_gi: "Sheet GI Annexure",
+  structure: "Structure Annexure",
+  steel: "Steel List (legacy)",
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
