@@ -63,7 +63,7 @@ export default function PoCreateFromAnnexure() {
     (async () => {
       if (!annexureId) return;
       setLoading(true);
-      const [{ data: a }, { data: r }, { data: s }, { data: u }] = await Promise.all([
+      const [{ data: a }, { data: r }, { data: s }, userRes] = await Promise.all([
         sb.from("requisition_annexures").select("*").eq("id", annexureId).maybeSingle(),
         sb.from("requisition_annexure_rows").select("*").eq("annexure_id", annexureId).eq("lot_no", lot).eq("plan_status", type).order("material"),
         sb.from("purchase_settings").select("*").eq("id", 1).maybeSingle(),
@@ -97,7 +97,7 @@ export default function PoCreateFromAnnexure() {
       setPaymentMode(s?.default_payment_mode || "NEFT/RTGS");
 
       // prepared by
-      const uid = u?.data?.user?.id;
+      const uid = userRes?.data?.user?.id;
       if (uid) {
         const { data: p } = await sb.from("profiles").select("full_name, email").eq("id", uid).maybeSingle();
         setPreparedBy(p?.full_name || p?.email || "");
