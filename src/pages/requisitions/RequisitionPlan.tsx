@@ -637,36 +637,55 @@ export default function RequisitionPlan() {
         </TabsContent>
 
         <TabsContent value="reports">
-          {!activeAnnexure ? (
-            <Card><CardContent className="py-6 text-sm text-muted-foreground">No annexure yet. Click <strong>Create Annexure</strong> on the Raw Materials tab.</CardContent></Card>
-          ) : (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
-                  <Badge variant="secondary">Annexure</Badge>
-                  <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
-                  <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
-                  {annexures.length > 1 && (
-                    <Select value={activeAnnexureId || ""} onValueChange={async (v) => {
-                      setActiveAnnexureId(v);
-                      const { data } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", v);
-                      setAnnexureRows((data as AnnexureRowRecord[]) || []);
-                    }}>
-                      <SelectTrigger className="h-7 w-64 ml-auto"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {annexures.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {new Date(a.created_at).toLocaleString("en-IN")} — {a.lot_numbers.join(", ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </CardContent>
-              </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="py-3 flex flex-wrap items-center gap-3 text-xs">
+                <div className="inline-flex rounded-md border bg-muted p-0.5">
+                  <button
+                    onClick={() => setReportMode("live")}
+                    className={`px-3 py-1 rounded text-xs ${reportMode === "live" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >Live preview</button>
+                  <button
+                    onClick={() => setReportMode("saved")}
+                    className={`px-3 py-1 rounded text-xs ${reportMode === "saved" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                  >Saved annexures ({annexures.length})</button>
+                </div>
+                {reportMode === "live" ? (
+                  <>
+                    <Badge variant="secondary">Live</Badge>
+                    <span><strong>Lots:</strong> {displayLotNumbers.join(", ") || "—"}</span>
+                    <span className="text-muted-foreground">Reflecting current Generated Requisition edits</span>
+                  </>
+                ) : !activeAnnexure ? (
+                  <span className="text-muted-foreground">No saved annexures yet. Use <strong>Create Annexure</strong> on the Raw Materials tab.</span>
+                ) : (
+                  <>
+                    <Badge variant="secondary">Snapshot</Badge>
+                    <span><strong>Lots:</strong> {activeAnnexure.lot_numbers.join(", ") || "—"}</span>
+                    <span className="text-muted-foreground">Created {new Date(activeAnnexure.created_at).toLocaleString("en-IN")}</span>
+                    {annexures.length > 1 && (
+                      <Select value={activeAnnexureId || ""} onValueChange={async (v) => {
+                        setActiveAnnexureId(v);
+                        const { data } = await sb.from("requisition_annexure_rows").select("*").eq("annexure_id", v);
+                        setAnnexureRows((data as AnnexureRowRecord[]) || []);
+                      }}>
+                        <SelectTrigger className="h-7 w-64 ml-auto"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {annexures.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {new Date(a.created_at).toLocaleString("en-IN")} — {a.lot_numbers.join(", ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
-              {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
-                const rows = reportRows.filter((r) => r.plan_status === kind);
+            {(["machine", "steel", "3p"] as PlanStatus[]).map((kind) => {
+                const rows = displayReportRows.filter((r) => r.plan_status === kind);
                 const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
                 const title = kind === "machine" ? "Machine List" : kind === "steel" ? "Steel List" : "Outside Purchase";
                 const lots = Array.from(new Set(rows.map((r) => r.lot_no))).join(", ");
@@ -720,8 +739,7 @@ export default function RequisitionPlan() {
                   </Card>
                 );
               })}
-            </div>
-          )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
