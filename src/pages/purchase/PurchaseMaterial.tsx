@@ -13,7 +13,15 @@ import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
 import { Download, FileText } from "lucide-react";
 
-type Category = "steel" | "machine" | "3p";
+type Category =
+  | "machine"
+  | "3p"
+  | "pipe"
+  | "sheet_ss"
+  | "sheet_ms"
+  | "sheet_gi"
+  | "structure"
+  | "steel"; // legacy
 
 interface RawRow {
   id: string;
@@ -24,7 +32,7 @@ interface RawRow {
   make: string | null;
   unit: string | null;
   required_qty: number | null;
-  plan_status: "machine" | "3p" | "steel" | null;
+  plan_status: Category | null;
   annexure_status: "created" | null;
   annexure_id: string | null;
   po_status: "created" | null;
@@ -42,11 +50,24 @@ interface PoRecord {
   created_at: string;
 }
 
-const CATEGORIES: Category[] = ["steel", "machine", "3p"];
+const CATEGORIES: Category[] = [
+  "machine",
+  "3p",
+  "pipe",
+  "sheet_ss",
+  "sheet_ms",
+  "sheet_gi",
+  "structure",
+];
 const catLabel: Record<Category, string> = {
-  steel: "Steel",
   machine: "Machine",
   "3p": "3P / Outside",
+  pipe: "Pipe",
+  sheet_ss: "Sheet SS",
+  sheet_ms: "Sheet MS",
+  sheet_gi: "Sheet GI",
+  structure: "Structure",
+  steel: "Steel (legacy)",
 };
 
 export default function PurchaseMaterial() {
