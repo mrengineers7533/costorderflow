@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Download, FileText, Send } from "lucide-react";
+import { Check, Download, FileText, Loader2, Send } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type {
@@ -49,6 +49,69 @@ export default function RequisitionPlan() {
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
+  const [reportMode, setReportMode] = useState<"live" | "saved">("live");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // ---- Debounced autosave plumbing ----
+  // pendingPatches keyed by `${table}:${id}` -> merged patch
+  const pendingRef = useRef<Map<string, { table: "requisition_items" | "requisition_raw_materials"; id: string; patch: Record<string, unknown> }>>(new Map());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleFlush() {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    setSaveStatus("saving");
+    flushTimerRef.current = setTimeout(flushPending, 600);
+  }
+
+  async function flushPending() {
+    const entries = Array.from(pendingRef.current.values());
+    pendingRef.current.clear();
+    if (entries.length === 0) { setSaveStatus("saved"); return; }
+    try {
+      await Promise.all(entries.map((e) =>
+        sb.from(e.table).update(e.patch).eq("id", e.id).then((res: { error: unknown }) => {
+          if (res.error) throw res.error;
+        })
+      ));
+      setSaveStatus("saved");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveStatus("error");
+      toast({ title: "Autosave failed", description: msg, variant: "destructive" });
+    }
+  }
+
+  function queuePatch(table: "requisition_items" | "requisition_raw_materials", id: string, patch: Record<string, unknown>) {
+    const key = `${table}:${id}`;
+    const existing = pendingRef.current.get(key);
+    pendingRef.current.set(key, {
+      table,
+      id,
+      patch: { ...(existing?.patch || {}), ...patch },
+    });
+    scheduleFlush();
+  }
+
+  // Optimistic local updaters (also push to autosave queue)
+  function patchItem(id: string, patch: Partial<RequisitionItemRecord>) {
+    setItems((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionItemRecord : x));
+    queuePatch("requisition_items", id, patch as Record<string, unknown>);
+  }
+  function patchItemMake(id: string, make: string) {
+    setItems((prev) => prev.map((x) => {
+      if (x.id !== id) return x;
+      const snap = { ...(x.fg_snapshot as Record<string, unknown> | null || {}), make };
+      return { ...x, fg_snapshot: snap } as RequisitionItemRecord;
+    }));
+    // persist into fg_snapshot
+    const current = items.find((x) => x.id === id);
+    const snap = { ...((current?.fg_snapshot as Record<string, unknown>) || {}), make };
+    queuePatch("requisition_items", id, { fg_snapshot: snap });
+  }
+  function patchRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
+    setRms((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionRawMaterialRecord : x));
+    queuePatch("requisition_raw_materials", id, patch as Record<string, unknown>);
+  }
 
   async function load() {
     if (ids.length === 0) { setLoading(false); return; }
@@ -159,11 +222,7 @@ export default function RequisitionPlan() {
     return order.map((k) => buckets.get(k)!);
   }, [rms, reqById, itemById]);
 
-  async function updateRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
-    const { error } = await sb.from("requisition_raw_materials").update(patch).eq("id", id);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    setRms((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r));
-  }
+  // Legacy direct-save helper kept for spots that don't need debouncing (none after refactor)
 
   // Consolidate raw materials by material+size+make+unit+lot+status
   type ConsKey = string;
