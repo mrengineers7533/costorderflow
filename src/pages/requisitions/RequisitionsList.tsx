@@ -9,10 +9,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp } from "lucide-react";
+import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
 import type {
   RequisitionRecord,
   RequisitionItemRecord,
@@ -39,10 +44,21 @@ export default function RequisitionsList() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [addBoq, setAddBoq] = useState<BoqRecord | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<RequisitionRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id ?? null;
+      setCurrentUserId(uid);
+      if (uid) {
+        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+        setIsAdmin(((roles as Array<{ role: string }>) || []).some((r) => r.role === "admin"));
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const { data: r } = await sb.from("requisitions").select("*").order("created_at", { ascending: false });
@@ -159,6 +175,30 @@ export default function RequisitionsList() {
     }
     setReqs((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: "in_purchase" } : x)));
     toast({ title: "Sent to Purchase" });
+  }
+
+  async function handleDelete(r: RequisitionRecord) {
+    setDeleting(true);
+    try {
+      await deleteRequisitionCascade(r);
+      setReqs((prev) => prev.filter((x) => x.id !== r.id));
+      setSelected((prev) => { const n = new Set(prev); n.delete(r.id); return n; });
+      toast({ title: "Requisition deleted", description: r.requisition_number });
+      setConfirmDel(null);
+    } catch (e) {
+      const err = e as Error;
+      toast({
+        title: err instanceof RequisitionDeleteBlockedError ? "Cannot delete" : "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function canDelete(r: RequisitionRecord) {
+    return isAdmin || (currentUserId != null && r.user_id === currentUserId);
   }
 
   const distinctProjects = useMemo(() => {
@@ -339,6 +379,17 @@ export default function RequisitionsList() {
                             <Send className="h-4 w-4 mr-1" />
                             {sent ? "Sent" : "Send"}
                           </Button>
+                          {canDelete(r) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Delete"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmDel(r)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -357,6 +408,29 @@ export default function RequisitionsList() {
           boq={addBoq}
         />
       )}
+
+      <AlertDialog open={!!confirmDel} onOpenChange={(o) => { if (!o && !deleting) setConfirmDel(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete requisition {confirmDel?.requisition_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the requisition along with its items, raw-material rows,
+              annexures, and the uploaded source file (if any). Active purchase orders that
+              reference this requisition will block deletion — cancel those POs first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); if (confirmDel) handleDelete(confirmDel); }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
