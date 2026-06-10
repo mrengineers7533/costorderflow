@@ -353,9 +353,16 @@ export default function RequisitionPlan() {
     }
     const missing = eligible.filter((c) => !c.lot_no || !c.plan_status);
     if (missing.length > 0) {
+      const m = missing[0];
+      const where = [
+        m.lot_no ? `Lot ${m.lot_no}` : "no Lot",
+        m.material,
+        m.size_model || "",
+      ].filter(Boolean).join(" • ");
       toast({
-        title: "Lot and Status required",
-        description: `${missing.length} row(s) missing Lot or Status (e.g. ${missing[0].material}).`,
+        title: "Status required",
+        description:
+          `${missing.length} selected row(s) have no Status. Set a Status on the Generated Requisition tab for: ${where}.`,
         variant: "destructive",
       });
       return;
