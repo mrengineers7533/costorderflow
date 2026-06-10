@@ -8,6 +8,7 @@ const tabs = [
   { to: "/admin/domains", label: "Domains" },
   { to: "/admin/boq-verification", label: "BOQ Verification" },
   { to: "/admin/raw-materials", label: "Raw Materials" },
+  { to: "/admin/vendors", label: "Vendors" },
   { to: "/admin/notifications", label: "Notifications" },
 ];
 

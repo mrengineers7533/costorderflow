@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Download, FileText, Search, XCircle, RotateCcw, Eye } from "lucide-react";
+import { Download, FileText, Search, XCircle, RotateCcw, Eye, ShoppingCart } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
@@ -277,6 +277,11 @@ export default function AnnexureFolder() {
                           <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => downloadPdf(e)}>
                             <Download className="h-3 w-3 mr-1" />PDF
                           </Button>
+                          {!cancelled && (
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => navigate(`/purchase/materials?lots=${encodeURIComponent(e.lot_no)}`)}>
+                              <ShoppingCart className="h-3 w-3 mr-1" />Generate PO
+                            </Button>
+                          )}
                           {cancelled ? (
                             <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => recreate(e.annexure)}>
                               <RotateCcw className="h-3 w-3 mr-1" />Recreate

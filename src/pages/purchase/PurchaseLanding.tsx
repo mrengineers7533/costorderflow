@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { FolderOpen, Layers, ShoppingCart } from "lucide-react";
+import { FolderOpen, Layers, ShoppingCart, FileText } from "lucide-react";
 
 const cards = [
   {
@@ -20,6 +20,12 @@ const cards = [
     title: "Purchase Material",
     desc: "Lot-wise annexure-created raw materials. Create vendor POs.",
     icon: ShoppingCart,
+  },
+  {
+    to: "/purchase/po-folder",
+    title: "PO Folder",
+    desc: "All generated Purchase Orders. Download, send, cancel.",
+    icon: FileText,
   },
 ];
 

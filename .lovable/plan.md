@@ -1,111 +1,158 @@
 ## Goal
 
-On the Purchase page, add two new sections without changing existing behavior:
-
-1. **BOQ Folder** → **MR BOQ** and **GMS BOQ** sub-folders that filter the existing approved-BOQ list by order format.
-2. **Purchase Material** folder → lot-wise list of annexure-created raw materials, with vendor selection (Steel / Machine / 3P) and multi-vendor PO creation (PDF download).
-
-Existing Purchase list/detail and all other pages stay untouched.
+Add a complete annexure → PO flow. From a created annexure the user picks materials, assigns vendors (from a small vendor master), generates POs in the K.D Enterprises layout, downloads or emails them, sees them in a new PO Folder, and can cancel/recreate. Nothing in existing ES, annexure, raw material, requisition, or current purchase flows changes.
 
 ---
 
-## 1. Purchase landing redesign (`src/pages/purchase/PurchaseList.tsx` + module)
+## 1. Vendor master (new)
 
-Replace the single approved-BOQ list with a folder grid (3 cards):
+New table `public.vendors`:
+- `name`, `category` (`steel` | `machine` | `3p`), `address`, `gstin`, `state_code`, `contact_person`, `phone`, `email`, `payment_terms`, `notes`, `is_active`, `created_by`.
+- One vendor can serve any category (category stored per row; vendors used in multiple categories are added as multiple rows OR `category` is `text[]` — using `text[]` to keep it simple).
+
+Admin UI: new tab in `AdminTabs` → `AdminVendors.tsx` (list / add / edit / deactivate). Route `/admin/vendors`.
+
+On the PO create panel, vendor inputs become searchable comboboxes (filter by category) with an inline "+ Add new vendor" mini-dialog so users never need to leave the flow.
+
+## 2. PO creation: two entry points
+
+a) **From annexure detail** (new button on `AnnexureFolder.tsx` row → opens annexure → "Generate PO" button). Items are pre-selected from that annexure's rows.
+
+b) **From Purchase Material** (existing page) — keep as today, just swap the free-text vendor inputs for the new vendor-master comboboxes and route through the same `createPO` helper.
+
+Shared helper `src/lib/purchase/createPo.ts`: takes selected raw-material rows, vendor IDs per category, buyer block, terms; produces 1–N PO records (one per category that has rows + vendor); marks contributing `requisition_raw_materials` as `po_status='created'`, `po_id=...`.
+
+## 3. PO layout (hardcoded K.D-style)
+
+New `src/lib/purchase/poPdf.ts` replaces the current simple PDF. Layout matches the uploaded sample exactly:
 
 ```text
-┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐
-│  BOQ Folder  │  │ Approved BOQs│  │  Purchase Material  │
-│ MR · GMS     │  │ (existing)   │  │ Lot-wise · PO       │
-└──────────────┘  └──────────────┘  └─────────────────────┘
+                        PURCHASE ORDER
+                                              DATE: 23-May-2025
+PO No: 07
+
+Invoice To :                       SHIP TO:
+GRAIN MILLING GROUPS PVT LTD       GRAIN MILLING GROUPS PVT LTD
+Shed No.19 HSIIDC ...              Shed No.19 HSIIDC ...
+GSTIN 06AALCG0511C1Z9              GSTIN 06AALCG0511C1Z9
+EMAIL ...                          EMAIL ...
+STATE CODE: 06                     STATE CODE: 06
+
+VENDOR DETAILS:                    REQ NO. / PROJECT     Mode & Terms Of Payment
+M/s K.D ENTERPRISES                                       NEFT/RTGS
+Address ...                        Supplier's Ref/Order   Prepared By: <user>
+GSTIN ...                          DIspatch through       Destination
+Contact / Phone / Email            Transport BY ROAD      MURTHAL/SONIPAT
+
+┌────┬──────────────┬───────┬──────┬──────┬────────┬─────┬──────────┬────────┐
+│S.NO│ DESCRIPTION  │DUE ON │QTY   │RATE  │DISCOUNT│GST %│GST AMOUNT│ AMOUNT │
+└────┴──────────────┴───────┴──────┴──────┴────────┴─────┴──────────┴────────┘
+
+TOTAL QTY  N                       BASIC        ...
+<amount in words>                  IGST 18%     ...
+                                   GRAND TOTAL  ...
+
+Terms Of Delivery: Freight Extra…  Payment 30 Days After Delivery…
 ```
 
-- The existing "Approved BOQs" list stays exactly as today (kept as a card link / second tab).
-- New routes:
-  - `/purchase/boq-folder` → tabs `MR BOQ` | `GMS BOQ`, each rendering the existing approved-BOQ list filtered by `orders.format = 'MR'` / `'GMS'`. Reuses `pickLatestApprovedPerFamily` and the same row card → "Open" links into the existing `/purchase/:boqId` detail.
-  - `/purchase/materials` → Purchase Material page (below).
+Built with pdf-lib (manual layout, not jspdf-autotable) for pixel-control. Same helper exposes `generatePoPdfBytes(po)` (used by download + email attachment).
 
-No schema change for the BOQ folder — purely a filtered view.
+**Editable per PO** at create time: buyer block (Invoice To/Ship To/GSTIN/state code/email — defaults stored in a new singleton `purchase_settings` row, prefilled into the form, user can override). Vendor block comes from the chosen vendor. Item rows from annexure. Rate/Discount/GST% per row are entered by the user on the create panel (defaults: rate=0, discount=0%, GST=18%); totals computed live.
 
-## 2. Purchase Material page (`src/pages/purchase/PurchaseMaterial.tsx`, new)
+## 4. PO Folder (new)
 
-Source data: only raw materials where `requisition_raw_materials.annexure_status = 'created'` AND their `annexure_id` points to a `requisition_annexures` row with `status = 'active'` (cancelled annexures auto-disappear, matching the existing folder behaviour).
+Route `/purchase/po-folder` and a 4th card on `PurchaseLanding`.
 
-UI:
+Table columns: PO No · Lot No(s) · Vendor · Category · Annexure Ref · Created Date · Created By · Status · Actions (Download / Send / Cancel).
 
-- **Lot selector** (multi-select chips) listing every distinct `lot_no` that has annexure-created materials. Selecting one or more lots filters the table.
-- **Category filter** (All / Steel / Machine / 3P) using existing `plan_status` (`steel`, `machine`, `3p`).
-- **Material table** columns: checkbox · Lot · Category · Material · Size/Model · Make · Qty · Unit · PO status badge (Pending / PO Created · PO No.).
-- **Vendor & PO panel** (right side or sticky footer):
-  - Three free-text vendor inputs: `Steel Vendor`, `Machine Vendor`, `3P Vendor` (only the categories present in the selection are required).
-  - Optional contact line per vendor (single text field — phone/email free text).
-  - **Create PO** button: groups selected rows by category, generates one PO per category that has a vendor + selected rows (so 1–3 POs per click). Each PO gets a unique PO number, persists rows, and triggers a PDF download.
+Filters: status (all/active/cancelled), category, vendor, lot, date range.
 
-PO numbering: `PO/{FY}/{seq}` via a new `po_counters` table (one row per FY, atomic increment in a `next_po_number` function, mirroring `next_requisition_number`).
+Row click → PO detail drawer (line items, totals, buyer/vendor blocks, send/cancel history).
 
-PDF: new helper `src/lib/purchase/poPdf.ts` (pdf-lib, same style as `src/lib/requisition/pdf.ts`) showing PO No · Date · Vendor block · Category · Lot(s) · line items · totals.
+## 5. Cancel & recreate
 
-## 3. Database (single migration)
+`Cancel` on a PO:
+- Sets `purchase_orders.status='cancelled'`, records `cancelled_by/at/reason`.
+- Clears `po_status` and `po_id` on its `requisition_raw_materials` rows (via existing FK ON DELETE pattern — handled in a `cancel_purchase_order` SECURITY DEFINER function so it's atomic).
+- Logs an entry in `purchase_order_audit` (new small table: `po_id`, `action`, `actor`, `at`, `notes`).
 
-New tables (all in `public`, with GRANTs + RLS + `set_updated_at` triggers):
+Cancelled POs stay visible in PO Folder (filtered out from "active" badge counts). Their items are immediately eligible for a fresh PO. New PO gets a new PO number; the cancelled one is retained as history. Linked annexure/raw-material rows reflect "PO Cancelled · eligible to re-PO".
 
-- `purchase_orders`
-  - `po_number text unique`, `category text check in ('steel','machine','3p')`,
-  - `vendor_name text`, `vendor_contact text`,
-  - `lot_numbers text[]`,
-  - `requisition_ids uuid[]`, `annexure_ids uuid[]`,
-  - `status text default 'active' check in ('active','cancelled')`,
-  - `notes text`, `created_by uuid references auth.users`, `created_at`, `updated_at`.
+Duplicate guard: `createPo` rejects any row whose current `po_status='created'` (DB-side check + UI badge), so the only way to make a second PO for the same item is to cancel the first.
 
-- `purchase_order_rows`
-  - `po_id uuid references purchase_orders on delete cascade`,
-  - `raw_material_id uuid` (snapshot reference to `requisition_raw_materials.id`),
-  - `lot_no`, `material`, `size_model`, `make`, `unit`, `qty numeric`,
-  - `created_at`, `updated_at`.
+## 6. Send via Resend
 
-- `po_counters` (`financial_year text primary key`, `last_number int`, `updated_at`).
+- Use the Resend connector (`standard_connectors--connect` with `connector_id: resend`).
+- New Edge Function `send-po` (`supabase/functions/send-po/index.ts`):
+  - Auth: validate JWT, load PO + rows server-side from `po_id`.
+  - Regenerates PDF server-side (port of `poPdf.ts` to Deno using pdf-lib via `npm:pdf-lib`).
+  - Calls Resend `/emails` through the gateway with PDF as base64 attachment, `to=vendor.email`, `cc=optional buyer email`, subject `PO <po_number> – <buyer name>`.
+  - On success writes `purchase_order_sends` row (`po_id`, `to_email`, `cc`, `sent_by`, `sent_at`, `status`, `error`).
+- Frontend `Send` button asks for optional CC + custom message, then invokes the function. Disabled if vendor has no email.
+- Resend domain step happens through the connector flow — user is not asked for a secret directly.
 
-- `requisition_raw_materials` add columns `po_status text check in (null,'created')` and `po_id uuid references purchase_orders(id) on delete set null` (kept null until a PO is created for that row; cancelled annexure flow already nulls `annexure_status`, this is an independent flag).
+## 7. Database (one migration)
 
-- Function `public.next_po_number(_fy text)` (security definer, mirrors `next_requisition_number`).
+New tables (all in `public`, with GRANTs + RLS + `set_updated_at`):
+- `vendors`
+- `purchase_settings` (singleton row id=1 for default buyer block)
+- `purchase_order_audit`
+- `purchase_order_sends`
 
-RLS: authenticated users can read/insert/update their own POs (`auth.uid() = created_by` for write; admins via `has_role`); rows inherit via `po_id` join policy. `service_role` full access.
+Extend existing:
+- `purchase_orders`: add `annexure_ids uuid[]` (already there), `buyer_block jsonb`, `terms text`, `subtotal numeric`, `tax_total numeric`, `grand_total numeric`, `amount_in_words text`, `prepared_by_name text`, `cancelled_by`, `cancelled_at`, `cancel_reason`, `vendor_id uuid references vendors(id)`.
+- `purchase_order_rows`: add `due_on date`, `rate numeric`, `discount_pct numeric`, `gst_pct numeric`, `gst_amount numeric`, `line_amount numeric`.
 
-## 4. Sync rules
+New SECURITY DEFINER function: `cancel_purchase_order(_po_id uuid, _reason text)` — checks ownership/role, flips status, clears `po_status/po_id` on contributing rows, writes audit row.
 
-- After PO insert: update each contributing `requisition_raw_materials` row → `po_status = 'created'`, `po_id = <new>`. Surface a "PO Created" badge in the Raw Materials / Annexure Folder views by reading these fields (no UI change required this round beyond the badge in Purchase Material — existing tabs unchanged).
-- Cancelling a PO (future, simple `Cancel` action in Purchase Material list of POs) sets `purchase_orders.status='cancelled'` and clears `po_status`/`po_id` on its rows, mirroring annexure cancel.
+RLS: authenticated users read all POs; insert/cancel limited to `created_by = auth.uid()` OR `has_role(auth.uid(),'admin')`. `service_role` full access. Vendors readable by all authenticated, write by admin only.
 
-## 5. Routing & sidebar
+## 8. Sidebar / routing
 
-- `src/App.tsx`: register `/purchase/boq-folder` and `/purchase/materials` under the same `RequireModule module="purchase"` guard.
-- `src/components/AppSidebar.tsx`: keep "Purchase" as the parent link; no sub-nav added (entry points live as cards on the Purchase landing). Folder pages have a "Back to Purchase" button.
+- `App.tsx`: add `/admin/vendors`, `/purchase/po-folder`, and `/annexures/:id/create-po` (under `RequireModule module="purchase"` for PO routes, admin guard for vendors).
+- `PurchaseLanding.tsx`: 4 cards (BOQ Folder, Approved BOQs, Purchase Material, PO Folder).
+- `AnnexureFolder.tsx`: add "Generate PO" action on each annexure row → routes to `/annexures/:id/create-po`.
+- `AdminTabs.tsx`: add "Vendors" tab.
 
-## 6. Out of scope (explicit)
+No changes to ES Page, Requisition Plan business logic, BOQ flow, or existing approved-BOQ list.
 
-- No changes to: Annexure Folder, Requisition Plan, Raw Materials tab logic, Generated Requisition behaviour, manufacturing flow, ES Page, BOQ list/editor, admin pages.
-- No vendor master table (per user's choice — vendor is free text on each PO).
-- No PO email sending in this round.
-- No edits to existing approved-BOQ detail page; it remains reachable from both the legacy list card and from MR/GMS folders.
+## 9. Files
 
-## Technical notes
+Added:
+- `src/pages/admin/AdminVendors.tsx`
+- `src/pages/purchase/PoFolder.tsx`
+- `src/pages/purchase/PoCreate.tsx` (used from annexure entry point; Purchase Material reuses the same form component)
+- `src/components/purchase/PoCreatePanel.tsx`
+- `src/components/purchase/VendorCombobox.tsx`
+- `src/lib/purchase/poPdf.ts` (rewritten with pdf-lib, K.D layout)
+- `src/lib/purchase/createPo.ts`
+- `src/lib/purchase/amountInWords.ts`
+- `supabase/functions/send-po/index.ts`
+- `supabase/migrations/<ts>_po_vendors_send.sql`
 
-Files added:
-- `src/pages/purchase/PurchaseLanding.tsx` (folder grid; new default for `/purchase`)
-- `src/pages/purchase/BoqFolder.tsx` (MR/GMS tabs reusing `pickLatestApprovedPerFamily`)
-- `src/pages/purchase/PurchaseMaterial.tsx`
-- `src/lib/purchase/poPdf.ts`
-- `supabase/migrations/<ts>_purchase_orders.sql`
+Edited:
+- `src/pages/purchase/PurchaseLanding.tsx` (+ PO Folder card)
+- `src/pages/purchase/PurchaseMaterial.tsx` (swap free-text vendor inputs → VendorCombobox; route through `createPo`)
+- `src/pages/requisitions/AnnexureFolder.tsx` (Generate PO action)
+- `src/components/admin/AdminTabs.tsx`, `src/App.tsx`
+- `src/integrations/supabase/types.ts` (auto)
 
-Files edited:
-- `src/pages/purchase/PurchaseList.tsx` → render `PurchaseLanding` instead of `ApprovedBoqListPage` directly (existing list still mounted inside one of the cards as "All Approved BOQs").
-- `src/App.tsx` → add 2 routes.
-- `src/lib/requisition/types.ts` → add `po_status?: 'created' | null`, `po_id?: string | null` to `RequisitionRawMaterial`.
+## 10. Out of scope
 
-## Acceptance
+- Marketing emails / bulk send / vendor portal.
+- No edits to ES Page, BOQ editor, requisition flow, annexure creation logic.
+- No payment processing, GRN/inward, or PO acceptance workflow.
+- No XLSX template upload — layout is hardcoded per your decision.
 
-- `/purchase` shows three cards: BOQ Folder, All Approved BOQs (existing flow), Purchase Material.
-- BOQ Folder → MR BOQ tab lists only `format='MR'` approved BOQs; GMS BOQ tab lists only `format='GMS'`. "Open" jumps to the unchanged detail page.
-- Purchase Material lists only raw materials with `annexure_status='created'` and active annexure, filterable by lot/category.
-- Selecting rows + entering vendors + clicking Create PO produces 1–N POs (one per category), each downloads a PDF and shows up as "PO Created" badge on those rows.
-- All existing Purchase flows, lists, and routes continue to work unchanged.
+## 11. Acceptance
+
+- Admin → Vendors tab can add/edit Steel/Machine/3P vendors with email.
+- From an active annexure row, "Generate PO" opens a form pre-filled with annexure items; assigning vendors per category and clicking Create produces 1–N POs, each with a PDF download in K.D-style layout.
+- Same flow available from Purchase Material with lot/category filters.
+- PO Folder lists every PO with the requested columns, filters, and Download / Send / Cancel actions.
+- Send delivers PDF via Resend to the vendor email; log row recorded.
+- Cancelling a PO marks it cancelled, frees its items for re-PO, and keeps the cancelled PO visible.
+- Trying to PO an item that already has `po_status='created'` is blocked in UI and DB.
+- All existing purchase, annexure, requisition, ES flows continue to work unchanged.
+
+To enable Send, I'll prompt you to connect the Resend connector when we hit that step.
