@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X } from "lucide-react";
+import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
@@ -19,6 +19,10 @@ import type {
   RequisitionRawMaterialRecord,
 } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
