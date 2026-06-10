@@ -13,6 +13,11 @@ export interface RequisitionRecord {
   user_id: string | null;
   created_at: string;
   updated_at: string;
+  source?: "generated" | "uploaded";
+  upload_file_path?: string | null;
+  upload_file_name?: string | null;
+  upload_mime_type?: string | null;
+  client_name_override?: string | null;
 }
 
 export interface RequisitionItemRecord {
