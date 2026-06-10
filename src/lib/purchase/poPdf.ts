@@ -108,7 +108,7 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
   const col3 = (W - 2 * M) / 3;
   doc.setFont("helvetica", "bold");
   doc.text("VENDOR DETAILS :", M, y);
-  doc.text(ctx.reqLine ? "REQ / PROJECT" : "", M + col3, y);
+  doc.text("Supplier's Ref/Order", M + col3, y);
   doc.text("Mode & Terms Of Payment", M + col3 * 2, y);
   doc.setFont("helvetica", "normal");
   y += 4;
@@ -124,9 +124,6 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
   vLines.forEach((l, i) => doc.text(l, M, y + i * 4));
 
   const midLines = [
-    ctx.reqLine || "",
-    "",
-    "Supplier's Ref/Order No.",
     "",
     "Dispatch through",
     ctx.dispatchThrough || "",

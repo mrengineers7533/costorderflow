@@ -263,7 +263,6 @@ export default function PurchaseMaterial() {
             phone: v.phone || undefined,
           },
           buyer: (pSettings?.buyer_block as Record<string, unknown> as never) || {},
-          reqLine: Array.from(reqSet).slice(0, 2).join(", ") || undefined,
           preparedBy,
           dispatchThrough: pSettings?.default_dispatch ?? undefined,
           destination: pSettings?.default_destination ?? undefined,

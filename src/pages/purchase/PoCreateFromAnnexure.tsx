@@ -178,7 +178,6 @@ export default function PoCreateFromAnnexure() {
       invoice_to: { name: invoiceTo.name || "—", ...invoiceTo },
       ship_to: { name: shipTo.name || "—", ...shipTo },
     },
-    reqLine: reqLine || undefined,
     preparedBy: preparedBy || undefined,
     dispatchThrough: dispatch || undefined,
     destination: destination || undefined,
