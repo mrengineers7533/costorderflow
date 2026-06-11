@@ -460,6 +460,9 @@ export default function PoCreateFromAnnexure() {
           </div>
           <div><Label className="text-xs">Prepared By</Label><Input className="h-8" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} /></div>
           <div><Label className="text-xs">Supplier's Ref / Order</Label><Input className="h-8" value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} /></div>
+          <div><Label className="text-xs">PO Number</Label><Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO/YY-YY/0001" /></div>
+          <div><Label className="text-xs">PO Date</Label><Input type="date" className="h-8" value={poDate} onChange={(e) => setPoDate(e.target.value)} /></div>
+          <div><Label className="text-xs">Due On</Label><Input type="date" className="h-8" value={dueOn} onChange={(e) => setDueOn(e.target.value)} /></div>
           <div><Label className="text-xs">Dispatch Through</Label><Input className="h-8" value={dispatch} onChange={(e) => setDispatch(e.target.value)} /></div>
           <div><Label className="text-xs">Destination</Label><Input className="h-8" value={destination} onChange={(e) => setDestination(e.target.value)} /></div>
           <div><Label className="text-xs">Mode &amp; Terms Of Payment</Label><Input className="h-8" value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} /></div>
