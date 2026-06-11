@@ -97,6 +97,30 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          created_at: string
+          details: Json
+          id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+        }
+        Relationships: []
+      }
       allowed_domains: {
         Row: {
           created_at: string
@@ -2215,6 +2239,7 @@ export type Database = {
       }
     }
     Functions: {
+      admin_reset_generated_data: { Args: never; Returns: Json }
       cancel_purchase_order: {
         Args: { _po_id: string; _reason: string }
         Returns: {
