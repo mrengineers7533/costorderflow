@@ -382,6 +382,39 @@ export default function RequisitionDetail() {
         </Card>
       )}
 
+      {isGeneral ? (
+        <Card>
+          <CardHeader className="space-y-0 py-3">
+            <CardTitle className="text-sm">Items ({items.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b">
+                <tr>
+                  <th className="text-left py-2 pr-3 w-12">#</th>
+                  <th className="text-left py-2 pr-3">Description</th>
+                  <th className="text-right py-2 pr-3 w-20">Qty</th>
+                  <th className="text-left py-2 pr-3 w-20">Unit</th>
+                  <th className="text-left py-2 pr-3">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
+                ) : items.map((it) => (
+                  <tr key={it.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">{it.item_no}</td>
+                    <td className="py-2 pr-3">{it.description}</td>
+                    <td className="py-2 pr-3 text-right">{it.quantity ?? "—"}</td>
+                    <td className="py-2 pr-3">{it.unit || "—"}</td>
+                    <td className="py-2 pr-3 text-xs text-muted-foreground">{it.remarks || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : (
       <Tabs defaultValue="generated">
         <TabsList>
           <TabsTrigger value="generated">Generated</TabsTrigger>
@@ -691,6 +724,7 @@ export default function RequisitionDetail() {
           </TabsContent>
         ))}
       </Tabs>
+      )}
     </div>
   );
 }
