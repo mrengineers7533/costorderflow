@@ -677,6 +677,7 @@ function UploadRequisitionButton({
                 unit: it.unit,
                 remarks: [it.make ? `Make: ${it.make}` : null, it.material ? `Material: ${it.material}` : null, it.remarks]
                   .filter(Boolean).join(" · ") || null,
+                ...{}, // keep formatting
                 fg_snapshot: it as unknown as Record<string, unknown>,
                 included_in_requisition: true,
               }));
