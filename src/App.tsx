@@ -30,6 +30,7 @@ import RequisitionPlan from "./pages/requisitions/RequisitionPlan";
 import AnnexureFolder from "./pages/requisitions/AnnexureFolder";
 import PublicRequisition from "./pages/requisitions/PublicRequisition";
 import RawMaterialMaster from "./pages/RawMaterialMaster";
+import GrnList from "./pages/grn/GrnList";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -95,6 +96,7 @@ const App = () => (
                       <Route path="/requisitions/annexures" element={<RequireModule user={user} module="requisitions"><AnnexureFolder /></RequireModule>} />
                       <Route path="/requisitions/:id" element={<RequireModule user={user} module="requisitions"><RequisitionDetail /></RequireModule>} />
                       <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
+                      <Route path="/grn" element={<RequireModule user={user} module="grn"><GrnList /></RequireModule>} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}
