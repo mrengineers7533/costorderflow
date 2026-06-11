@@ -6,15 +6,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const BUCKETS = ["cost-sheets", "oa-documents", "boq-documents", "pi-documents"];
-const TABLES_IN_ORDER = [
-  "client_copies",
-  "proforma_invoice_documents",
-  "proforma_invoices",
-  "boqs",
-  "orders",
-  "cost_sheets",
-] as const;
+const BUCKETS = [
+  "cost-sheets",
+  "oa-documents",
+  "boq-documents",
+  "pi-documents",
+  "design-review-docs",
+  "boq-item-docs",
+  "requisition-uploads",
+];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,16 +44,14 @@ Deno.serve(async (req) => {
     const isAdmin = (roleRows ?? []).some((r: { role: string }) => r.role === "admin");
     if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
-    const counts: Record<string, number> = {};
-
-    // Delete table rows (children first).
-    for (const t of TABLES_IN_ORDER) {
-      const { count: before } = await admin.from(t).select("*", { count: "exact", head: true });
-      const { error: delErr } = await admin
-        .from(t).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      if (delErr) return json({ error: `Delete ${t} failed: ${delErr.message}` }, 500);
-      counts[t] = before ?? 0;
-    }
+    // Centralized transactional delete via SECURITY DEFINER RPC.
+    // Call it as the user (authHeader) so auth.uid() / has_role work.
+    const userAdmin = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: rpcCounts, error: rpcErr } = await userAdmin.rpc("admin_reset_generated_data");
+    if (rpcErr) return json({ error: `Reset failed: ${rpcErr.message}` }, 500);
+    const counts: Record<string, number> = (rpcCounts as Record<string, number>) ?? {};
 
     // Purge storage buckets.
     let filesRemoved = 0;

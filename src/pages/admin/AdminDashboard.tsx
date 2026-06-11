@@ -50,8 +50,8 @@ export default function AdminDashboard() {
       if (error) throw error;
       const c = (data as { counts?: Record<string, number> })?.counts || {};
       toast({
-        title: "Cost Order Flow data cleared",
-        description: `Removed: ${c.orders ?? 0} OAs, ${c.boqs ?? 0} BOQs, ${c.proforma_invoices ?? 0} PIs, ${c.client_copies ?? 0} client copies, ${c.cost_sheets ?? 0} SOT sheets, ${c.filesRemoved ?? 0} files.`,
+        title: "Generated data reset successfully. Master data and settings were not changed.",
+        description: `Removed: ${c.orders ?? 0} OAs · ${c.boqs ?? 0} BOQs · ${c.proforma_invoices ?? 0} PIs · ${c.requisitions ?? 0} PRs · ${c.purchase_orders ?? 0} POs · ${c.cost_sheets ?? 0} SOT sheets · ${c.filesRemoved ?? 0} files.`,
       });
       setResetOpen(false);
       setConfirmText("");
@@ -88,9 +88,11 @@ export default function AdminDashboard() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Permanently delete all generated Cost Order Flow data (uploaded SOT sheets, OAs, BOQs, PIs,
-            revisions, and linked documents). Calculation templates, formulas, app settings, and master
-            data will not be touched.
+            Permanently delete all generated transactional data: uploaded SOT sheets, OAs, BOQs, PIs,
+            PI revisions, linked documents, Purchase Requisitions, Purchase Orders, PR/PO revisions, and
+            their attachments, audit logs and status history. Calculation templates, formulas, app
+            settings, master data (vendors, items, customers, tax), users, roles, permissions, and
+            numbering configuration will not be touched.
           </p>
           <Button variant="destructive" onClick={() => setResetOpen(true)}>
             Reset Generated Data
@@ -101,26 +103,27 @@ export default function AdminDashboard() {
       <AlertDialog open={resetOpen} onOpenChange={(o) => { setResetOpen(o); if (!o) setConfirmText(""); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset Cost Order Flow data?</AlertDialogTitle>
+            <AlertDialogTitle>Reset all generated transactional data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove all generated Cost Order Flow data including uploaded SOT sheets, BOQ, OA, PI,
-              revision copies, and linked generated documents. Calculation templates, formulas, app settings,
-              and master data will not be changed.
+              This will remove all generated transactional data: SOT sheets, OAs, BOQs, PIs, Purchase
+              Requisitions, Purchase Orders, their revisions, attachments, audit logs and status history.
+              Master data, settings, formulas, templates, users, roles and numbering configuration will
+              not be changed. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
-            <p className="text-sm">Type <span className="font-mono font-semibold">DELETE</span> to confirm:</p>
+            <p className="text-sm">Type <span className="font-mono font-semibold">RESET GENERATED DATA</span> to confirm:</p>
             <Input
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="DELETE"
+              placeholder="RESET GENERATED DATA"
               autoFocus
             />
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={confirmText !== "DELETE" || resetting}
+              disabled={confirmText !== "RESET GENERATED DATA" || resetting}
               onClick={(e) => { e.preventDefault(); runReset(); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
