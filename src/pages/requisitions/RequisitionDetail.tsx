@@ -63,26 +63,26 @@ export default function RequisitionDetail() {
     setItems((its as RequisitionItemRecord[]) || []);
     const { data: rmRows } = await sb.from("requisition_raw_materials").select("*").eq("requisition_id", id).order("material");
     setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
-    const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
-    setBoq(b as unknown as BoqRecord);
-    // latest approved revision for the family
-    const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
-    const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
-    // also fetch the linked OA revision in full so we can resolve Make from OA
-    const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
-      || (b as { order_id?: string } | null)?.order_id;
-    if (oaId) {
-      const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
-      setOrder((full as unknown as OrderRecord) || null);
-    }
-    if (root) {
-      const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
-      const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
-      const { data: allBoqs } = await supabase.from("boqs")
-        .select("revision, verification_status")
-        .in("order_id", ids).eq("verification_status", "approved");
-      const max = ((allBoqs as Array<{ revision: number }>) || []).reduce((m, x) => Math.max(m, x.revision ?? 0), 0);
-      setLatestRev(max);
+    if (r.boq_id) {
+      const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
+      setBoq(b as unknown as BoqRecord);
+      const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
+      const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
+      const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
+        || (b as { order_id?: string } | null)?.order_id;
+      if (oaId) {
+        const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
+        setOrder((full as unknown as OrderRecord) || null);
+      }
+      if (root) {
+        const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+        const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
+        const { data: allBoqs } = await supabase.from("boqs")
+          .select("revision, verification_status")
+          .in("order_id", ids).eq("verification_status", "approved");
+        const max = ((allBoqs as Array<{ revision: number }>) || []).reduce((m, x) => Math.max(m, x.revision ?? 0), 0);
+        setLatestRev(max);
+      }
     }
     setLoading(false);
   }
@@ -260,6 +260,8 @@ export default function RequisitionDetail() {
   if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
 
   const canDelete = isAdmin || (currentUserId != null && req.user_id === currentUserId);
+  const isGeneral = (req as unknown as { kind?: string }).kind === "general";
+  const genTitle = (req as unknown as { title?: string | null }).title || "";
 
   async function handleDelete() {
     if (!req) return;
@@ -286,19 +288,26 @@ export default function RequisitionDetail() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-semibold tracking-tight">{req.requisition_number}</h1>
-            <Badge variant="secondary">BOQ R{req.boq_revision}</Badge>
+            {!isGeneral && <Badge variant="secondary">BOQ R{req.boq_revision}</Badge>}
+            {isGeneral && <Badge variant="outline">General</Badge>}
             <Badge>{req.status}</Badge>
-            {stale && <Badge variant="destructive">BOQ revised to R{latestRev}</Badge>}
+            {!isGeneral && stale && <Badge variant="destructive">BOQ revised to R{latestRev}</Badge>}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {req.client_name_override || boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
-          </p>
+          {isGeneral ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              {genTitle || "Untitled"} · {req.client_name_override || "—"}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              {req.client_name_override || boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
-          {stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
-          <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>
-          <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>
+          {!isGeneral && stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
+          {!isGeneral && <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>}
+          {!isGeneral && <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>}
           {canDelete && (
             <Button
               size="sm"
@@ -373,6 +382,39 @@ export default function RequisitionDetail() {
         </Card>
       )}
 
+      {isGeneral ? (
+        <Card>
+          <CardHeader className="space-y-0 py-3">
+            <CardTitle className="text-sm">Items ({items.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b">
+                <tr>
+                  <th className="text-left py-2 pr-3 w-12">#</th>
+                  <th className="text-left py-2 pr-3">Description</th>
+                  <th className="text-right py-2 pr-3 w-20">Qty</th>
+                  <th className="text-left py-2 pr-3 w-20">Unit</th>
+                  <th className="text-left py-2 pr-3">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
+                ) : items.map((it) => (
+                  <tr key={it.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">{it.item_no}</td>
+                    <td className="py-2 pr-3">{it.description}</td>
+                    <td className="py-2 pr-3 text-right">{it.quantity ?? "—"}</td>
+                    <td className="py-2 pr-3">{it.unit || "—"}</td>
+                    <td className="py-2 pr-3 text-xs text-muted-foreground">{it.remarks || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : (
       <Tabs defaultValue="generated">
         <TabsList>
           <TabsTrigger value="generated">Generated</TabsTrigger>
@@ -682,6 +724,7 @@ export default function RequisitionDetail() {
           </TabsContent>
         ))}
       </Tabs>
+      )}
     </div>
   );
 }
