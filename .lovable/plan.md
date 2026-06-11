@@ -1,43 +1,79 @@
-## Diagnosis
 
-Items ARE being parsed and inserted (verified in DB: REQ/GEN/26-27/0001 has 20 rows in `requisition_items`). The real bug is in `RequisitionDetail.tsx`:
+# Data Consistency Check
 
-- It calls `supabase.from("boqs").select("*").eq("id", r.boq_id)` with `boq_id = null` → no BOQ loads → header reads `boq.client_name` (works, optional chained) but the default tab is **"Generated"** (raw-materials view) which is empty for general requisitions. Users see "No raw materials generated." and assume the upload failed. The Machine List tab (which actually shows the parsed Excel rows) is hidden behind a tab click.
-- The header also shows `BOQ R0` / `OA —` / `BOQ —`, which is meaningless for general requisitions and obscures the `title`.
-- The "PDF (Generated)" button + stale-BOQ banner have no meaning for general requisitions.
-- The Excel template is also missing the user-requested columns `Required Date` and `Purpose / Department`.
+A read-only validation feature that verifies whether data flows correctly from BOQ → Requisition → Raw Materials → Annexure. No existing flow is modified.
 
-## Fix (UI + template only — no schema changes, no changes to project/OA flow)
+## 1. Overview page — `/requisitions/consistency`
 
-### 1. `src/lib/requisition/uploadTemplate.ts`
-Extend headers to:
-`S.No | Item Description | Make | Size / Model | Material | Qty | Unit | Required Date | Purpose / Department | Remarks`
-Update the sample row and the Instructions sheet wording.
+Linked from a new toolbar button "Consistency Check" on the Requisitions list.
 
-### 2. `src/lib/requisition/parseUpload.ts`
-Add two optional fields on `ParsedRequisitionItem`: `required_date`, `purpose`. Map them with the same `pick()` helper (aliases: `Required Date`, `Need By`, `Purpose`, `Department`, `Purpose / Department`).
+Columns:
+- OA / BOQ reference (or "General" for general requisitions)
+- Requisition number
+- BOQ item count
+- Requisition Finished Goods count
+- BOQ vs FG status (Matched / Mismatch / N/A) + difference
+- Requisition Raw Material total count
+- Annexure Created count
+- Annexure Not Created count
+- RM vs Annexure status (Matched / Mismatch) + difference
+- Overall status badge
 
-### 3. `src/pages/requisitions/RequisitionsList.tsx` (general branch only)
-When building `requisition_items` rows, fold the two new fields into the existing `remarks` string (no schema change):
-`Make: … · Material: … · Required: <date> · For: <dept> · <remarks>`.
-`fg_snapshot` already stores the full parsed object so nothing is lost. Project/OA branches untouched.
+Features:
+- Filters: status (All / Matched / Mismatch only / N/A), search by OA/BOQ/Req number, source (Generated / Uploaded / General).
+- Summary header tiles: total requisitions checked, total matched, total mismatched, N/A.
+- Mismatch rows highlighted with destructive/amber styling and a warning icon. Each mismatched cell shows the delta (e.g. `+2` or `-1`).
+- Eye/link icon → opens that requisition's detail page on the new Consistency tab.
 
-### 4. `src/pages/requisitions/RequisitionDetail.tsx`
-Detect `isGeneral = req.kind === 'general'` (read via cast since `RequisitionRecord` may not yet expose it).
-- Skip the `boqs` and `orders` queries when `r.boq_id` is null (guard with `if (r.boq_id)`).
-- When `isGeneral`:
-  - Header subtitle becomes: `<title> · <client_name_override or "—">` — hide OA/BOQ chips and the `BOQ R{n}` badge.
-  - Hide the stale-BOQ badge, "Regenerate" button, and "PDF (Generated)" button. Keep "PDF" and "Delete".
-  - Render only the **Machine List** view (no Tabs wrapper) using the existing items table, with the columns: `# | Description | Qty | Unit | Remarks`. Skip the Lot / Category / Make controls and the Steel/Outside/Raw/Generated tabs entirely.
-- Project requisitions render exactly as today.
+## 2. Per-requisition tab — Requisition Detail
 
-### 5. Out of scope
-No migrations. No changes to PR/PO/GRN/CS/OA/BOQ/PI/PDF generation. Existing project + OA upload branches and their detail rendering are not touched.
+New tab "Consistency" inside `RequisitionDetail.tsx` alongside the existing tabs. Shows for that single requisition:
 
-## Files touched
-```text
-src/lib/requisition/uploadTemplate.ts
-src/lib/requisition/parseUpload.ts
-src/pages/requisitions/RequisitionsList.tsx   (general submit branch only)
-src/pages/requisitions/RequisitionDetail.tsx  (conditional render for kind='general')
-```
+- Summary card with:
+  - OA / BOQ reference (or "General Requisition — Not Applicable" for the BOQ check)
+  - BOQ item count
+  - Requisition Finished Goods item count
+  - Requisition Raw Material total count
+  - Annexure Created count
+  - Annexure Not Created (pending) count
+- Two check rows, each with a green "Matched" badge, red "Mismatch" badge with delta, or grey "Not Applicable" badge:
+  - Check 1: BOQ vs Finished Goods (N/A for general requisitions)
+  - Check 2: Raw Material total vs (Annexure Created + Not Created)
+- When mismatched, an Alert (destructive variant) explains exactly what's missing (e.g. "BOQ has 12 items but Requisition has 10 Finished Goods — 2 missing").
+
+## 3. Count definitions
+
+- BOQ item count = number of rows in `boqs.line_items` for the BOQ linked to the requisition (`requisitions.boq_id`).
+- Requisition Finished Goods count = `requisition_items` rows for the requisition.
+- Raw Material total = `requisition_raw_materials` rows for the requisition.
+- Annexure Created = raw material rows where `annexure_status = 'created'` AND `annexure_id` points to an active (non-cancelled) annexure.
+- Annexure Not Created = raw material rows where `annexure_status` is null OR the linked annexure is cancelled.
+- Matched when counts are strictly equal; otherwise Mismatch.
+- General requisition detection: `requisitions.source = 'uploaded'` AND `boq_id is null` (or no matching BOQ). BOQ vs FG check is marked N/A and not counted toward mismatch totals.
+
+## 4. Highlighting rules
+
+- Matched → green Badge.
+- Mismatch → red Badge with `Δ` value; row gets `bg-destructive/5` and a `AlertTriangle` icon.
+- N/A → muted Badge.
+- Overall row status = Mismatch if any non-N/A check fails, else Matched.
+
+## 5. Files to add / edit
+
+- `src/pages/requisitions/ConsistencyCheck.tsx` — new overview page.
+- `src/pages/requisitions/RequisitionDetail.tsx` — add "Consistency" tab (new component `ConsistencyTab` inline or in `src/components/requisitions/ConsistencyTab.tsx`).
+- `src/lib/requisition/consistency.ts` — shared helper that loads counts for one or many requisitions and returns `{ boqCount, fgCount, rmTotal, annexCreated, annexPending, boqVsFg, rmVsAnnex, isGeneral }`.
+- `src/App.tsx` — register `/requisitions/consistency` route.
+- `src/pages/requisitions/RequisitionsList.tsx` — add toolbar Button linking to the new page (no other changes).
+
+## 6. Non-goals / guarantees
+
+- No writes to any table. All queries are SELECT-only.
+- No edits to BOQ, Requisition upload/parse, Planning, PR, PO, GRN, PDF, or Reset code paths.
+- No schema changes / no migrations.
+
+## Technical notes
+
+- Data loading: single page-level fetch joins `requisitions` → `requisition_items` (count), `requisition_raw_materials` (rows with `annexure_status`, `annexure_id`), and `boqs` (line_items length). Use `supabase.from(...).select('id', { count: 'exact', head: true })` per requisition batched with `Promise.all`, or aggregate client-side after one `in()` fetch keyed by `requisition_id` to stay within one round trip per table.
+- Cancelled annexure detection: fetch distinct `annexure_id`s from raw materials, then `requisition_annexures.select('id,status').in('id', ids)`; treat `status = 'cancelled'` linked rows as Not Created.
+- Reuse existing `Badge`, `Card`, `Alert`, `AlertTriangle` (lucide) components and design tokens — no new colors.
