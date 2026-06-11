@@ -340,8 +340,19 @@ export default function PoCreateFromAnnexure() {
       toast.success(`PO ${finalPo} created.`);
       navigate("/purchase/po-folder");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Failed to create PO: ${msg}`);
+      console.error("PO create failed", e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : (e && typeof e === "object")
+            ? [
+                (e as { message?: string }).message,
+                (e as { details?: string }).details,
+                (e as { hint?: string }).hint,
+                (e as { code?: string }).code,
+              ].filter(Boolean).join(" · ")
+            : String(e);
+      toast.error(`Failed to create PO: ${msg || "Unknown error"}`);
     } finally {
       setSubmitting(false);
     }
