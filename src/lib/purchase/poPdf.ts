@@ -57,21 +57,12 @@ export interface PoPdfContext {
   notes?: string;
   rows: PoPdfRow[];
   createdAt: string;
+  poDate?: string;
+  dueOn?: string;
   subtotal?: number;
   taxTotal?: number;
   grandTotal?: number;
 }
-
-const catLabel: Record<PoPdfCategory, string> = {
-  machine: "Machine",
-  "3p": "3P / Outside Purchase",
-  pipe: "Pipe",
-  sheet_ss: "Sheet SS",
-  sheet_ms: "Sheet MS",
-  sheet_gi: "Sheet GI",
-  structure: "Structure",
-  steel: "Steel (legacy)",
-};
 
 function fmtINR(n: number | undefined | null): string {
   if (n == null || isNaN(Number(n))) return "";
@@ -82,7 +73,10 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 10;
-  const date = new Date(ctx.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const fmtDate = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+  const date = fmtDate(ctx.poDate || ctx.createdAt);
+  const dueDate = ctx.dueOn ? fmtDate(ctx.dueOn) : "";
 
   // Title
   doc.setFont("helvetica", "bold").setFontSize(15);
@@ -91,11 +85,13 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
   doc.setFont("helvetica", "normal").setFontSize(9);
   doc.text(`PO No : ${ctx.poNumber}`, M, 22);
   doc.text(`DATE : ${date}`, W - M, 22, { align: "right" });
-  doc.text(`Category : ${catLabel[ctx.category]}`, M, 27);
+  if (dueDate) {
+    doc.text(`DUE ON : ${dueDate}`, W - M, 27, { align: "right" });
+  }
 
   // Invoice To / Ship To split
   const colW = (W - 2 * M) / 2;
-  let y = 33;
+  let y = dueDate ? 33 : 28;
   doc.setFont("helvetica", "bold").text("Invoice To :", M, y);
   doc.text("SHIP TO :", M + colW, y);
   doc.setFont("helvetica", "normal");
