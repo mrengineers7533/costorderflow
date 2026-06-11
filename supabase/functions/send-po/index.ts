@@ -39,10 +39,14 @@ async function buildPdf(po: Record<string, unknown>, rows: PoRow[], vendor: Reco
   drawText('PURCHASE ORDER', width / 2 - 50, y, { bold: true, size: 14 });
   y -= 18;
   drawText(`PO No : ${po.po_number}`, M, y);
-  drawText(`Date : ${new Date(String(po.created_at)).toLocaleDateString('en-IN')}`, width - 150, y);
+  const _poDate = po.po_date ? new Date(String(po.po_date)) : new Date(String(po.created_at));
+  drawText(`Date : ${_poDate.toLocaleDateString('en-IN')}`, width - 150, y);
   y -= 12;
-  drawText(`Category : ${po.category}`, M, y);
-  y -= 16;
+  if (po.due_on) {
+    drawText(`Due On : ${new Date(String(po.due_on)).toLocaleDateString('en-IN')}`, width - 150, y);
+    y -= 12;
+  }
+  y -= 4;
 
   const buyer = (po.buyer_block as Record<string, Record<string, string>>) || {};
   const inv = buyer.invoice_to || {};
