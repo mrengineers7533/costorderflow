@@ -29,7 +29,7 @@ export function useActivityFeed(opts: { orderRootId?: string; enabled?: boolean 
   useEffect(() => {
     if (!enabled) return;
     const ch = supabase
-      .channel(`activity_events_${orderRootId ?? "all"}`)
+      .channel(`activity_events_${orderRootId ?? "all"}_${Math.random().toString(36).slice(2)}`)
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         "postgres_changes" as any,
