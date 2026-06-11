@@ -515,7 +515,7 @@ function UploadRequisitionButton({
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"project" | "oa">("project");
+  const [mode, setMode] = useState<"project" | "oa" | "general">("project");
   const [csQuery, setCsQuery] = useState("");
   const [pickedCs, setPickedCs] = useState<string | null>(null);
   const [oaQuery, setOaQuery] = useState("");
@@ -527,6 +527,7 @@ function UploadRequisitionButton({
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [genTitle, setGenTitle] = useState("");
 
   function reset() {
     setMode("project");
@@ -534,6 +535,7 @@ function UploadRequisitionButton({
     setOaQuery(""); setOaResults([]); setPickedOa(null);
     setBoqOptions([]); setPickedBoqId(null);
     setClientName(""); setNotes(""); setFile(null);
+    setGenTitle("");
   }
 
   const filteredProjects = useMemo(() => {
