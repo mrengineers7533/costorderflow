@@ -781,10 +781,11 @@ function UploadRequisitionButton({
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={mode} onValueChange={(v) => setMode(v as "project" | "oa")}>
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as "project" | "oa" | "general")}>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="project">By Project CS #</TabsTrigger>
               <TabsTrigger value="oa">By OA / BOQ</TabsTrigger>
+              <TabsTrigger value="general">General</TabsTrigger>
             </TabsList>
 
             <TabsContent value="project" className="space-y-2 pt-2">
