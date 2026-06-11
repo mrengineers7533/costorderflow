@@ -63,26 +63,26 @@ export default function RequisitionDetail() {
     setItems((its as RequisitionItemRecord[]) || []);
     const { data: rmRows } = await sb.from("requisition_raw_materials").select("*").eq("requisition_id", id).order("material");
     setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
-    const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
-    setBoq(b as unknown as BoqRecord);
-    // latest approved revision for the family
-    const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
-    const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
-    // also fetch the linked OA revision in full so we can resolve Make from OA
-    const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
-      || (b as { order_id?: string } | null)?.order_id;
-    if (oaId) {
-      const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
-      setOrder((full as unknown as OrderRecord) || null);
-    }
-    if (root) {
-      const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
-      const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
-      const { data: allBoqs } = await supabase.from("boqs")
-        .select("revision, verification_status")
-        .in("order_id", ids).eq("verification_status", "approved");
-      const max = ((allBoqs as Array<{ revision: number }>) || []).reduce((m, x) => Math.max(m, x.revision ?? 0), 0);
-      setLatestRev(max);
+    if (r.boq_id) {
+      const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
+      setBoq(b as unknown as BoqRecord);
+      const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
+      const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
+      const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
+        || (b as { order_id?: string } | null)?.order_id;
+      if (oaId) {
+        const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
+        setOrder((full as unknown as OrderRecord) || null);
+      }
+      if (root) {
+        const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+        const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
+        const { data: allBoqs } = await supabase.from("boqs")
+          .select("revision, verification_status")
+          .in("order_id", ids).eq("verification_status", "approved");
+        const max = ((allBoqs as Array<{ revision: number }>) || []).reduce((m, x) => Math.max(m, x.revision ?? 0), 0);
+        setLatestRev(max);
+      }
     }
     setLoading(false);
   }
