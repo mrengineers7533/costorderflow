@@ -1,67 +1,43 @@
-## Goal
-Extend the existing "Upload Requisition" dialog with a third mode — **General / Other Requisition** — that does not require a Cost Sheet, OA, or BOQ. Provide a downloadable Excel template so users can fill requisition data offline and upload it back. Existing Planning, PR, PO, GRN, CS, OA, BOQ, PI and PDF logic stay untouched.
+## Diagnosis
 
-## 1. Database (one migration)
-Existing `requisitions` table has `order_root_id` and `boq_id` as `NOT NULL`. To support unlinked requisitions:
+Items ARE being parsed and inserted (verified in DB: REQ/GEN/26-27/0001 has 20 rows in `requisition_items`). The real bug is in `RequisitionDetail.tsx`:
 
-- `ALTER TABLE public.requisitions ALTER COLUMN order_root_id DROP NOT NULL;`
-- `ALTER TABLE public.requisitions ALTER COLUMN boq_id DROP NOT NULL;`
-- Add `kind text NOT NULL DEFAULT 'project'` with check `kind in ('project','general')`.
-- Add `title text` (free-form name for general requisitions, e.g. "Workshop consumables – Nov 2026").
-- Add new RPC `next_general_requisition_number()` → `REQ/GEN/YY-YY/0001` (new counter row in `requisition_counters` keyed by a sentinel UUID, or new tiny table `general_requisition_counters`). New counter table is cleaner — `general_requisition_counters(financial_year text PK, last_number int)`.
-- Grants + RLS policies on the new counter table mirror `requisition_counters`.
+- It calls `supabase.from("boqs").select("*").eq("id", r.boq_id)` with `boq_id = null` → no BOQ loads → header reads `boq.client_name` (works, optional chained) but the default tab is **"Generated"** (raw-materials view) which is empty for general requisitions. Users see "No raw materials generated." and assume the upload failed. The Machine List tab (which actually shows the parsed Excel rows) is hidden behind a tab click.
+- The header also shows `BOQ R0` / `OA —` / `BOQ —`, which is meaningless for general requisitions and obscures the `title`.
+- The "PDF (Generated)" button + stale-BOQ banner have no meaning for general requisitions.
+- The Excel template is also missing the user-requested columns `Required Date` and `Purpose / Department`.
 
-Existing RLS on `requisitions` already keys off `user_id` / module access, so nullable linkage columns are safe. Triggers/functions that read `order_root_id` (e.g. `get_requisition_by_token`) already tolerate missing linked BOQs (LEFT JOIN).
+## Fix (UI + template only — no schema changes, no changes to project/OA flow)
 
-## 2. Excel template
-Add a static template generator (client-side, using existing `xlsx` lib already in the project for BOQ/PI exports).
+### 1. `src/lib/requisition/uploadTemplate.ts`
+Extend headers to:
+`S.No | Item Description | Make | Size / Model | Material | Qty | Unit | Required Date | Purpose / Department | Remarks`
+Update the sample row and the Instructions sheet wording.
 
-Sheet **Requisition Items** with columns:
-`S.No | Item Description | Make | Size / Model | Material | Qty | Unit | Remarks`
+### 2. `src/lib/requisition/parseUpload.ts`
+Add two optional fields on `ParsedRequisitionItem`: `required_date`, `purpose`. Map them with the same `pick()` helper (aliases: `Required Date`, `Need By`, `Purpose`, `Department`, `Purpose / Department`).
 
-Sheet **Instructions** with usage notes (one row per item, do not rename headers, leave S.No blank or sequential).
+### 3. `src/pages/requisitions/RequisitionsList.tsx` (general branch only)
+When building `requisition_items` rows, fold the two new fields into the existing `remarks` string (no schema change):
+`Make: … · Material: … · Required: <date> · For: <dept> · <remarks>`.
+`fg_snapshot` already stores the full parsed object so nothing is lost. Project/OA branches untouched.
 
-A "Download Template" button in the new tab triggers `exportRequisitionTemplate()` in `src/lib/requisition/uploadTemplate.ts`.
+### 4. `src/pages/requisitions/RequisitionDetail.tsx`
+Detect `isGeneral = req.kind === 'general'` (read via cast since `RequisitionRecord` may not yet expose it).
+- Skip the `boqs` and `orders` queries when `r.boq_id` is null (guard with `if (r.boq_id)`).
+- When `isGeneral`:
+  - Header subtitle becomes: `<title> · <client_name_override or "—">` — hide OA/BOQ chips and the `BOQ R{n}` badge.
+  - Hide the stale-BOQ badge, "Regenerate" button, and "PDF (Generated)" button. Keep "PDF" and "Delete".
+  - Render only the **Machine List** view (no Tabs wrapper) using the existing items table, with the columns: `# | Description | Qty | Unit | Remarks`. Skip the Lot / Category / Make controls and the Steel/Outside/Raw/Generated tabs entirely.
+- Project requisitions render exactly as today.
 
-## 3. Upload dialog changes (`src/pages/requisitions/RequisitionsList.tsx`)
-- Add a third `TabsTrigger` value `"general"` next to existing "By Project CS #" and "By OA / BOQ".
-- General tab contents:
-  - Text input: **Requisition Title** (required).
-  - Text input: **Client / Department** (optional, stored in `client_name_override`).
-  - Textarea: notes.
-  - File picker: accepts `.xlsx`, `.xls`, `.pdf` (same as today).
-  - "Download Excel Template" link button.
-- `canSubmit` extended: general mode requires title + file.
-- New branch in `submit()`:
-  - Skip `resolveLinkage`, family token, and BOQ lookup.
-  - Call new RPC `next_general_requisition_number` for the number.
-  - Insert `requisitions` row with `kind='general'`, `order_root_id=null`, `boq_id=null`, `boq_revision=0`, `title`, `client_name_override`, `source='uploaded'`.
-  - If file is `.xlsx`/`.xls`, parse it client-side and insert rows into `requisition_items` with `boq_item_id = 'gen-<row>'`, mapping the template columns. PDF uploads skip parsing (file is just stored).
-  - Upload file to `requisition-uploads` bucket using existing path scheme.
+### 5. Out of scope
+No migrations. No changes to PR/PO/GRN/CS/OA/BOQ/PI/PDF generation. Existing project + OA upload branches and their detail rendering are not touched.
 
-Existing project/OA branches are unchanged.
-
-## 4. List + detail rendering
-- `RequisitionsList` table: show `title` (when `kind='general'`) in place of OA/BOQ columns; add a small "General" badge.
-- `RequisitionDetail`: when `kind='general'`, hide OA/BOQ/Cost Sheet sections, render `title`, uploaded file link, parsed items table, notes. All existing project requisition rendering untouched.
-- No changes to PR/PO/GRN selection flows — general requisitions remain visible there only as items if/when a user picks them; out of scope to wire automatic flow (call out explicitly).
-
-## 5. Files touched
+## Files touched
 ```text
-supabase/migrations/<new>.sql           -- nullable cols, kind, title, general counter + RPC
-src/lib/requisition/uploadTemplate.ts   -- new: build & download .xlsx template
-src/lib/requisition/parseUpload.ts      -- new: parse uploaded .xlsx into item rows
-src/pages/requisitions/RequisitionsList.tsx
-                                         -- new "General" tab, submit branch, badge in table
-src/pages/requisitions/RequisitionDetail.tsx
-                                         -- conditional render for kind='general'
-src/integrations/supabase/types.ts       -- regenerated after migration
+src/lib/requisition/uploadTemplate.ts
+src/lib/requisition/parseUpload.ts
+src/pages/requisitions/RequisitionsList.tsx   (general submit branch only)
+src/pages/requisitions/RequisitionDetail.tsx  (conditional render for kind='general')
 ```
-
-## 6. Explicitly out of scope
-- No change to Planning, PR, PO, GRN, Cost Sheet, OA, BOQ, PI, or PDF generation.
-- No change to existing project/OA upload branches or to `create-requisition` edge function.
-- No automatic PR/PO generation from general requisitions in this pass.
-
-## Open question
-Should general requisitions appear in **Purchase → Requisitions** lists for PR/PO creation, or stay isolated as a record-only upload? Default in this plan: visible in the list with a "General" badge, but NOT auto-pushed into PR flow.
