@@ -22,6 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
+import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -383,37 +384,48 @@ export default function RequisitionDetail() {
       )}
 
       {isGeneral ? (
-        <Card>
-          <CardHeader className="space-y-0 py-3">
-            <CardTitle className="text-sm">Items ({items.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b">
-                <tr>
-                  <th className="text-left py-2 pr-3 w-12">#</th>
-                  <th className="text-left py-2 pr-3">Description</th>
-                  <th className="text-right py-2 pr-3 w-20">Qty</th>
-                  <th className="text-left py-2 pr-3 w-20">Unit</th>
-                  <th className="text-left py-2 pr-3">Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
-                ) : items.map((it) => (
-                  <tr key={it.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3">{it.item_no}</td>
-                    <td className="py-2 pr-3">{it.description}</td>
-                    <td className="py-2 pr-3 text-right">{it.quantity ?? "—"}</td>
-                    <td className="py-2 pr-3">{it.unit || "—"}</td>
-                    <td className="py-2 pr-3 text-xs text-muted-foreground">{it.remarks || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="items">
+          <TabsList>
+            <TabsTrigger value="items">Items</TabsTrigger>
+            <TabsTrigger value="consistency">Consistency</TabsTrigger>
+          </TabsList>
+          <TabsContent value="items">
+            <Card>
+              <CardHeader className="space-y-0 py-3">
+                <CardTitle className="text-sm">Items ({items.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-muted-foreground border-b">
+                    <tr>
+                      <th className="text-left py-2 pr-3 w-12">#</th>
+                      <th className="text-left py-2 pr-3">Description</th>
+                      <th className="text-right py-2 pr-3 w-20">Qty</th>
+                      <th className="text-left py-2 pr-3 w-20">Unit</th>
+                      <th className="text-left py-2 pr-3">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.length === 0 ? (
+                      <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
+                    ) : items.map((it) => (
+                      <tr key={it.id} className="border-b last:border-0">
+                        <td className="py-2 pr-3">{it.item_no}</td>
+                        <td className="py-2 pr-3">{it.description}</td>
+                        <td className="py-2 pr-3 text-right">{it.quantity ?? "—"}</td>
+                        <td className="py-2 pr-3">{it.unit || "—"}</td>
+                        <td className="py-2 pr-3 text-xs text-muted-foreground">{it.remarks || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="consistency">
+            <ConsistencyTab requisitionId={req.id} />
+          </TabsContent>
+        </Tabs>
       ) : (
       <Tabs defaultValue="generated">
         <TabsList>
@@ -422,6 +434,7 @@ export default function RequisitionDetail() {
           <TabsTrigger value="items">Machine List</TabsTrigger>
           <TabsTrigger value="steel">Steel List</TabsTrigger>
           <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
+          <TabsTrigger value="consistency">Consistency</TabsTrigger>
         </TabsList>
 
         <TabsContent value="generated">
@@ -723,6 +736,9 @@ export default function RequisitionDetail() {
             </Card>
           </TabsContent>
         ))}
+        <TabsContent value="consistency">
+          <ConsistencyTab requisitionId={req.id} />
+        </TabsContent>
       </Tabs>
       )}
     </div>
