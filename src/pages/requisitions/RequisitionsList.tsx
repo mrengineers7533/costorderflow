@@ -869,6 +869,25 @@ function UploadRequisitionButton({
                 </div>
               )}
             </TabsContent>
+
+            <TabsContent value="general" className="space-y-2 pt-2">
+              <div className="space-y-1">
+                <Label htmlFor="gen-title" className="text-xs">Requisition Title <span className="text-destructive">*</span></Label>
+                <Input
+                  id="gen-title"
+                  className="h-8"
+                  value={genTitle}
+                  onChange={(e) => setGenTitle(e.target.value)}
+                  placeholder="e.g. Workshop consumables — Nov 2026"
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 p-2 text-xs">
+                <span>Use the Excel template for clean parsing.</span>
+                <Button size="sm" variant="outline" type="button" onClick={() => exportRequisitionTemplate()}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> Download Template
+                </Button>
+              </div>
+            </TabsContent>
           </Tabs>
 
           <div className="space-y-1">
