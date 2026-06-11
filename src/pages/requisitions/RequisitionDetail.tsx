@@ -736,6 +736,9 @@ export default function RequisitionDetail() {
             </Card>
           </TabsContent>
         ))}
+        <TabsContent value="consistency">
+          <ConsistencyTab requisitionId={req.id} />
+        </TabsContent>
       </Tabs>
       )}
     </div>
