@@ -8,6 +8,8 @@ export interface ParsedRequisitionItem {
   material: string | null;
   qty: number | null;
   unit: string | null;
+  required_date: string | null;
+  purpose: string | null;
   remarks: string | null;
 }
 
@@ -47,6 +49,8 @@ export async function parseRequisitionExcel(file: File): Promise<ParsedRequisiti
       material: pick(r, ["Material"]) || null,
       qty: qtyStr ? Number(qtyStr) || null : null,
       unit: pick(r, ["Unit", "UOM"]) || null,
+      required_date: pick(r, ["Required Date", "Need By", "Required By", "Due Date"]) || null,
+      purpose: pick(r, ["Purpose / Department", "Purpose", "Department", "For"]) || null,
       remarks: pick(r, ["Remarks", "Notes"]) || null,
     });
   }
