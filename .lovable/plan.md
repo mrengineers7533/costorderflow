@@ -1,79 +1,59 @@
+# Fix PO Create / Download Failure
 
-# Data Consistency Check
+## Root cause
 
-A read-only validation feature that verifies whether data flows correctly from BOQ → Requisition → Raw Materials → Annexure. No existing flow is modified.
+The toast shows `Failed to create PO: [object Object]` — two real problems:
 
-## 1. Overview page — `/requisitions/consistency`
+1. **DB CHECK constraint mismatch (the actual blocker).**
+   `purchase_orders.category` is constrained to only `('steel','machine','3p')`:
+   ```
+   purchase_orders_category_check CHECK (category = ANY (ARRAY['steel','machine','3p']))
+   ```
+   But the Annexure → PO flow sends categories like `sheet_ss`, `sheet_ms`, `sheet_gi`, `pipe`, `structure` (passed via the `?type=sheet_ss` URL param). Every insert from those categories fails with a check-violation, which the UI then swallows.
 
-Linked from a new toolbar button "Consistency Check" on the Requisitions list.
+2. **Error reporting bug.**
+   The `catch` does `e instanceof Error ? e.message : String(e)`. Supabase returns a plain object `{ message, code, details, hint }`, which is not an `Error`, so `String(e)` becomes `"[object Object]"`. That's why the toast shows no useful reason. Same pattern would hide the cause of any future failure.
 
-Columns:
-- OA / BOQ reference (or "General" for general requisitions)
-- Requisition number
-- BOQ item count
-- Requisition Finished Goods count
-- BOQ vs FG status (Matched / Mismatch / N/A) + difference
-- Requisition Raw Material total count
-- Annexure Created count
-- Annexure Not Created count
-- RM vs Annexure status (Matched / Mismatch) + difference
-- Overall status badge
+## Changes
 
-Features:
-- Filters: status (All / Matched / Mismatch only / N/A), search by OA/BOQ/Req number, source (Generated / Uploaded / General).
-- Summary header tiles: total requisitions checked, total matched, total mismatched, N/A.
-- Mismatch rows highlighted with destructive/amber styling and a warning icon. Each mismatched cell shows the delta (e.g. `+2` or `-1`).
-- Eye/link icon → opens that requisition's detail page on the new Consistency tab.
+### 1. New migration: widen `purchase_orders.category` check
 
-## 2. Per-requisition tab — Requisition Detail
+```sql
+ALTER TABLE public.purchase_orders
+  DROP CONSTRAINT IF EXISTS purchase_orders_category_check;
 
-New tab "Consistency" inside `RequisitionDetail.tsx` alongside the existing tabs. Shows for that single requisition:
+ALTER TABLE public.purchase_orders
+  ADD CONSTRAINT purchase_orders_category_check
+  CHECK (category = ANY (ARRAY[
+    'machine','3p','pipe',
+    'sheet_ss','sheet_ms','sheet_gi',
+    'structure','steel'
+  ]));
+```
 
-- Summary card with:
-  - OA / BOQ reference (or "General Requisition — Not Applicable" for the BOQ check)
-  - BOQ item count
-  - Requisition Finished Goods item count
-  - Requisition Raw Material total count
-  - Annexure Created count
-  - Annexure Not Created (pending) count
-- Two check rows, each with a green "Matched" badge, red "Mismatch" badge with delta, or grey "Not Applicable" badge:
-  - Check 1: BOQ vs Finished Goods (N/A for general requisitions)
-  - Check 2: Raw Material total vs (Annexure Created + Not Created)
-- When mismatched, an Alert (destructive variant) explains exactly what's missing (e.g. "BOQ has 12 items but Requisition has 10 Finished Goods — 2 missing").
+No data changes, no other column or table touched. Existing rows (only `machine`/`3p`/`steel` were possible before) remain valid.
 
-## 3. Count definitions
+### 2. `src/pages/purchase/PoCreateFromAnnexure.tsx` — better error messages
 
-- BOQ item count = number of rows in `boqs.line_items` for the BOQ linked to the requisition (`requisitions.boq_id`).
-- Requisition Finished Goods count = `requisition_items` rows for the requisition.
-- Raw Material total = `requisition_raw_materials` rows for the requisition.
-- Annexure Created = raw material rows where `annexure_status = 'created'` AND `annexure_id` points to an active (non-cancelled) annexure.
-- Annexure Not Created = raw material rows where `annexure_status` is null OR the linked annexure is cancelled.
-- Matched when counts are strictly equal; otherwise Mismatch.
-- General requisition detection: `requisitions.source = 'uploaded'` AND `boq_id is null` (or no matching BOQ). BOQ vs FG check is marked N/A and not counted toward mismatch totals.
+In `generate()`'s `catch`, build a readable message from Supabase error shape so future failures are visible:
+```ts
+const msg =
+  e instanceof Error ? e.message
+  : (e && typeof e === "object")
+    ? [e.message, e.details, e.hint, e.code].filter(Boolean).join(" · ")
+    : String(e);
+toast.error(`Failed to create PO: ${msg || "Unknown error"}`);
+console.error("PO create failed", e);
+```
+Apply the same defensive formatter to `downloadPreview` for consistency. No other logic changes.
 
-## 4. Highlighting rules
+## Out of scope / unchanged
 
-- Matched → green Badge.
-- Mismatch → red Badge with `Δ` value; row gets `bg-destructive/5` and a `AlertTriangle` icon.
-- N/A → muted Badge.
-- Overall row status = Mismatch if any non-N/A check fails, else Matched.
+- No changes to PO PDF rendering, annexure logic, raw-material locking, PO counter RPCs, RLS policies, grants, or any other module (BOQ, Requisition, Planning, GRN, etc.).
+- No edits to `supabase/functions/send-po` or `poPdf.ts`.
 
-## 5. Files to add / edit
+## Verification
 
-- `src/pages/requisitions/ConsistencyCheck.tsx` — new overview page.
-- `src/pages/requisitions/RequisitionDetail.tsx` — add "Consistency" tab (new component `ConsistencyTab` inline or in `src/components/requisitions/ConsistencyTab.tsx`).
-- `src/lib/requisition/consistency.ts` — shared helper that loads counts for one or many requisitions and returns `{ boqCount, fgCount, rmTotal, annexCreated, annexPending, boqVsFg, rmVsAnnex, isGeneral }`.
-- `src/App.tsx` — register `/requisitions/consistency` route.
-- `src/pages/requisitions/RequisitionsList.tsx` — add toolbar Button linking to the new page (no other changes).
-
-## 6. Non-goals / guarantees
-
-- No writes to any table. All queries are SELECT-only.
-- No edits to BOQ, Requisition upload/parse, Planning, PR, PO, GRN, PDF, or Reset code paths.
-- No schema changes / no migrations.
-
-## Technical notes
-
-- Data loading: single page-level fetch joins `requisitions` → `requisition_items` (count), `requisition_raw_materials` (rows with `annexure_status`, `annexure_id`), and `boqs` (line_items length). Use `supabase.from(...).select('id', { count: 'exact', head: true })` per requisition batched with `Promise.all`, or aggregate client-side after one `in()` fetch keyed by `requisition_id` to stay within one round trip per table.
-- Cancelled annexure detection: fetch distinct `annexure_id`s from raw materials, then `requisition_annexures.select('id,status').in('id', ids)`; treat `status = 'cancelled'` linked rows as Not Created.
-- Reuse existing `Badge`, `Card`, `Alert`, `AlertTriangle` (lucide) components and design tokens — no new colors.
+1. Open `/annexures/<id>/po/new?lot=1&type=sheet_ss`, select a row, set rate, click **Generate PO & Download** — insert succeeds, PDF downloads, toast shows success.
+2. Repeat with `type=pipe` and `type=structure` to confirm all categories pass the constraint.
+3. Force a failure (e.g. duplicate PO number) → toast now shows the actual message/details instead of `[object Object]`.
