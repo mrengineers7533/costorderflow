@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, Plus, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Category =
   | "machine"
@@ -70,6 +71,31 @@ const catLabel: Record<Category, string> = {
   steel: "Steel (legacy)",
 };
 
+interface CustomRow {
+  id: string;
+  lot_no: string;
+  category: Category;
+  material: string;
+  size_model: string;
+  make: string;
+  unit: string;
+  qty: string;
+  rate: string;
+  discount: string;
+  gst: string;
+  due: string;
+}
+
+interface RowMeta {
+  rate: string;
+  discount: string;
+  gst: string;
+  due: string;
+  qty: string;
+}
+
+const emptyMeta = (): RowMeta => ({ rate: "0", discount: "0", gst: "18", due: "", qty: "" });
+
 export default function PurchaseMaterial() {
   const [rows, setRows] = useState<RawRow[]>([]);
   const [activeAnnexIds, setActiveAnnexIds] = useState<Set<string>>(new Set());
@@ -83,7 +109,8 @@ export default function PurchaseMaterial() {
   const [vendors, setVendors] = useState<Record<Category, Vendor | null>>(
     () => Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>,
   );
-  const [rates, setRates] = useState<Record<string, { rate: string; discount: string; gst: string }>>({});
+  const [meta, setMeta] = useState<Record<string, RowMeta>>({});
+  const [customRows, setCustomRows] = useState<CustomRow[]>([]);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [params] = useSearchParams();
@@ -149,7 +176,39 @@ export default function PurchaseMaterial() {
       else n.add(id);
       return n;
     });
+    setMeta((m) => (m[id] ? m : { ...m, [id]: emptyMeta() }));
   };
+
+  const setRowMeta = (id: string, patch: Partial<RowMeta>) =>
+    setMeta((m) => ({ ...m, [id]: { ...(m[id] || emptyMeta()), ...patch } }));
+
+  const addCustomRow = () => {
+    const defaultCat: Category = (Array.from(categoriesInSelection)[0] as Category) || "machine";
+    const defaultLot = Array.from(selectedLots)[0] || "";
+    setCustomRows((cs) => [
+      ...cs,
+      {
+        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        lot_no: defaultLot,
+        category: defaultCat,
+        material: "",
+        size_model: "",
+        make: "",
+        unit: "",
+        qty: "1",
+        rate: "0",
+        discount: "0",
+        gst: "18",
+        due: "",
+      },
+    ]);
+  };
+
+  const updateCustomRow = (id: string, patch: Partial<CustomRow>) =>
+    setCustomRows((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+
+  const deleteCustomRow = (id: string) =>
+    setCustomRows((cs) => cs.filter((c) => c.id !== id));
 
   const selectedRowList = useMemo(
     () => filteredRows.filter((r) => selectedRows.has(r.id) && !r.po_status),
@@ -158,18 +217,69 @@ export default function PurchaseMaterial() {
   const categoriesInSelection = useMemo(() => {
     const s = new Set<Category>();
     selectedRowList.forEach((r) => r.plan_status && s.add(r.plan_status));
+    customRows.forEach((c) => s.add(c.category));
     return s;
-  }, [selectedRowList]);
+  }, [selectedRowList, customRows]);
+
+  const computeLine = (qty: number, rate: number, discPct: number, gstPct: number) => {
+    const gross = qty * rate;
+    const afterDisc = gross * (1 - discPct / 100);
+    const gstAmount = afterDisc * (gstPct / 100);
+    return { basic: afterDisc, gstAmount, lineAmount: afterDisc + gstAmount };
+  };
+
+  const totalsByCategory = useMemo(() => {
+    const out: Record<string, { basic: number; tax: number; grand: number }> = {};
+    const add = (cat: Category, basic: number, tax: number) => {
+      if (!out[cat]) out[cat] = { basic: 0, tax: 0, grand: 0 };
+      out[cat].basic += basic;
+      out[cat].tax += tax;
+      out[cat].grand += basic + tax;
+    };
+    selectedRowList.forEach((r) => {
+      const m = meta[r.id] || emptyMeta();
+      const qty = Number(m.qty || r.required_qty || 0);
+      const { basic, gstAmount } = computeLine(qty, Number(m.rate || 0), Number(m.discount || 0), Number(m.gst || 0));
+      if (r.plan_status) add(r.plan_status, basic, gstAmount);
+    });
+    customRows.forEach((c) => {
+      const { basic, gstAmount } = computeLine(Number(c.qty || 0), Number(c.rate || 0), Number(c.discount || 0), Number(c.gst || 0));
+      add(c.category, basic, gstAmount);
+    });
+    return out;
+  }, [selectedRowList, customRows, meta]);
+
+  const grandTotals = useMemo(() => {
+    return Object.values(totalsByCategory).reduce(
+      (s, x) => ({ basic: s.basic + x.basic, tax: s.tax + x.tax, grand: s.grand + x.grand }),
+      { basic: 0, tax: 0, grand: 0 },
+    );
+  }, [totalsByCategory]);
+
+  const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleCreatePo = async () => {
-    if (selectedRowList.length === 0) {
-      toast.error("Select at least one raw material row (without an existing PO).");
+    if (selectedRowList.length === 0 && customRows.length === 0) {
+      toast.error("Select at least one raw material row or add a custom item.");
       return;
     }
     const missingVendor = Array.from(categoriesInSelection).filter((c) => !vendors[c]);
     if (missingVendor.length > 0) {
       toast.error(`Vendor name required for: ${missingVendor.map((c) => catLabel[c]).join(", ")}`);
       return;
+    }
+    // validate rows
+    for (const r of selectedRowList) {
+      const m = meta[r.id] || emptyMeta();
+      if (!(Number(m.rate) > 0)) {
+        toast.error(`Enter Rate > 0 for "${r.material}".`);
+        return;
+      }
+    }
+    for (const c of customRows) {
+      if (!c.material.trim()) { toast.error("Custom item: material is required."); return; }
+      if (!(Number(c.qty) > 0)) { toast.error(`Custom item "${c.material}": Qty > 0 required.`); return; }
+      if (!(Number(c.rate) > 0)) { toast.error(`Custom item "${c.material}": Rate > 0 required.`); return; }
     }
     setSubmitting(true);
     try {
@@ -185,7 +295,8 @@ export default function PurchaseMaterial() {
       const createdPdfs: Array<{ poNumber: string }> = [];
       for (const cat of categoriesInSelection) {
         const catRows = selectedRowList.filter((r) => r.plan_status === cat);
-        if (catRows.length === 0) continue;
+        const catCustom = customRows.filter((c) => c.category === cat);
+        if (catRows.length === 0 && catCustom.length === 0) continue;
 
         const { data: numData, error: numErr } = await sb.rpc("next_po_number", { _fy: fy });
         if (numErr) throw numErr;
@@ -199,22 +310,31 @@ export default function PurchaseMaterial() {
           if (r.requisition_id) reqSet.add(r.requisition_id);
           if (r.annexure_id) annexSet.add(r.annexure_id);
         });
+        catCustom.forEach((c) => { if (c.lot_no) lotSet.add(c.lot_no); });
 
         // compute totals
         const computed = catRows.map((r) => {
-          const meta = rates[r.id] || { rate: "0", discount: "0", gst: "18" };
-          const qty = Number(r.required_qty || 0);
-          const rate = Number(meta.rate || 0);
-          const discountPct = Number(meta.discount || 0);
-          const gstPct = Number(meta.gst || 0);
-          const gross = qty * rate;
-          const afterDisc = gross * (1 - discountPct / 100);
-          const gstAmount = afterDisc * (gstPct / 100);
-          return { r, qty, rate, discountPct, gstPct, gstAmount, lineAmount: afterDisc + gstAmount, basic: afterDisc };
+          const m = meta[r.id] || emptyMeta();
+          const qty = Number(m.qty || r.required_qty || 0);
+          const rate = Number(m.rate || 0);
+          const discountPct = Number(m.discount || 0);
+          const gstPct = Number(m.gst || 0);
+          const { basic, gstAmount, lineAmount } = computeLine(qty, rate, discountPct, gstPct);
+          return { r, qty, rate, discountPct, gstPct, gstAmount, lineAmount, basic, due: m.due };
+        });
+        const computedCustom = catCustom.map((c) => {
+          const qty = Number(c.qty || 0);
+          const rate = Number(c.rate || 0);
+          const discountPct = Number(c.discount || 0);
+          const gstPct = Number(c.gst || 0);
+          const { basic, gstAmount, lineAmount } = computeLine(qty, rate, discountPct, gstPct);
+          return { c, qty, rate, discountPct, gstPct, gstAmount, lineAmount, basic };
         });
         const subtotal = computed.reduce((s, x) => s + x.basic, 0);
         const taxTotal = computed.reduce((s, x) => s + x.gstAmount, 0);
-        const grand = subtotal + taxTotal;
+        const customSubtotal = computedCustom.reduce((s, x) => s + x.basic, 0);
+        const customTax = computedCustom.reduce((s, x) => s + x.gstAmount, 0);
+        const grand = subtotal + taxTotal + customSubtotal + customTax;
         const v = vendors[cat]!;
 
         const { data: poIns, error: poErr } = await sb
@@ -230,8 +350,8 @@ export default function PurchaseMaterial() {
             dispatch_through: pSettings?.default_dispatch ?? null,
             destination: pSettings?.default_destination ?? null,
             payment_mode: pSettings?.default_payment_mode ?? null,
-            subtotal,
-            tax_total: taxTotal,
+            subtotal: subtotal + customSubtotal,
+            tax_total: taxTotal + customTax,
             grand_total: grand,
             prepared_by_name: preparedBy,
             lot_numbers: Array.from(lotSet),
@@ -245,8 +365,8 @@ export default function PurchaseMaterial() {
         if (poErr) throw poErr;
         const poId = (poIns as { id: string }).id;
 
-        const { error: rowErr } = await sb.from("purchase_order_rows").insert(
-          computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+        const rowsPayload = [
+          ...computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount, due }) => ({
             po_id: poId,
             raw_material_id: r.id,
             lot_no: r.lot_no,
@@ -254,6 +374,7 @@ export default function PurchaseMaterial() {
             size_model: r.size_model,
             make: r.make,
             unit: r.unit,
+            due_on: due || null,
             qty,
             rate,
             discount_pct: discountPct,
@@ -261,14 +382,33 @@ export default function PurchaseMaterial() {
             gst_amount: gstAmount,
             line_amount: lineAmount,
           })),
-        );
+          ...computedCustom.map(({ c, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+            po_id: poId,
+            raw_material_id: null,
+            lot_no: c.lot_no || null,
+            material: c.material,
+            size_model: c.size_model || null,
+            make: c.make || null,
+            unit: c.unit || null,
+            due_on: c.due || null,
+            qty,
+            rate,
+            discount_pct: discountPct,
+            gst_pct: gstPct,
+            gst_amount: gstAmount,
+            line_amount: lineAmount,
+          })),
+        ];
+        const { error: rowErr } = await sb.from("purchase_order_rows").insert(rowsPayload);
         if (rowErr) throw rowErr;
 
-        const { error: updErr } = await sb
-          .from("requisition_raw_materials")
-          .update({ po_status: "created", po_id: poId })
-          .in("id", catRows.map((r) => r.id));
-        if (updErr) throw updErr;
+        if (catRows.length > 0) {
+          const { error: updErr } = await sb
+            .from("requisition_raw_materials")
+            .update({ po_status: "created", po_id: poId })
+            .in("id", catRows.map((r) => r.id));
+          if (updErr) throw updErr;
+        }
 
         // Generate PDF
         const pdf = generatePoPDF({
@@ -289,19 +429,30 @@ export default function PurchaseMaterial() {
           destination: pSettings?.default_destination ?? undefined,
           paymentMode: pSettings?.default_payment_mode ?? undefined,
           terms: pSettings?.default_terms ?? undefined,
-          subtotal, taxTotal, grandTotal: grand,
+          subtotal: subtotal + customSubtotal, taxTotal: taxTotal + customTax, grandTotal: grand,
           lots: Array.from(lotSet),
           notes: notes.trim() || undefined,
           createdAt: new Date().toISOString(),
-          rows: computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
-            lot: r.lot_no || "—",
-            material: r.material,
-            size: r.size_model || "—",
-            make: r.make || "—",
-            qty,
-            unit: r.unit || "—",
-            rate, discountPct, gstPct, gstAmount, lineAmount,
-          })),
+          rows: [
+            ...computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+              lot: r.lot_no || "—",
+              material: r.material,
+              size: r.size_model || "—",
+              make: r.make || "—",
+              qty,
+              unit: r.unit || "—",
+              rate, discountPct, gstPct, gstAmount, lineAmount,
+            })),
+            ...computedCustom.map(({ c, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+              lot: c.lot_no || "—",
+              material: c.material,
+              size: c.size_model || "—",
+              make: c.make || "—",
+              qty,
+              unit: c.unit || "—",
+              rate, discountPct, gstPct, gstAmount, lineAmount,
+            })),
+          ],
         });
         pdf.save(`${poNumber.replace(/\//g, "_")}.pdf`);
         createdPdfs.push({ poNumber });
@@ -309,8 +460,9 @@ export default function PurchaseMaterial() {
 
       toast.success(`Created ${createdPdfs.length} PO${createdPdfs.length === 1 ? "" : "s"}.`);
       setSelectedRows(new Set());
+      setCustomRows([]);
+      setMeta({});
       setVendors(Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>);
-      setRates({});
       setNotes("");
       await loadAll();
     } catch (e) {
