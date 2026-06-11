@@ -498,10 +498,12 @@ export default function PoCreateFromAnnexure() {
           <div className="border rounded-md bg-white text-black p-4 font-mono text-[11px] leading-tight">
             <div className="text-center font-bold text-sm tracking-wider mb-1">PURCHASE ORDER</div>
             <div className="flex justify-between text-[11px] mb-2">
-              <span>PO No : {poPreviewNumber}</span>
-              <span>DATE : {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+              <span>PO No : {poNumber}</span>
+              <span>DATE : {poDate ? new Date(poDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
             </div>
-            <div className="text-[11px] mb-3">Category : {CAT_LABEL[type]}</div>
+            {dueOn && (
+              <div className="text-[11px] mb-2 text-right">DUE ON : {new Date(dueOn).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
+            )}
             <div className="grid grid-cols-2 gap-3 mb-3 border-t border-b py-2">
               <div>
                 <div className="font-bold">Invoice To :</div>
