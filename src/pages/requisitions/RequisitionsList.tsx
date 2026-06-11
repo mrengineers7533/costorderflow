@@ -611,12 +611,92 @@ function UploadRequisitionButton({
     return { orderRootId: rootId, boq, oaNumber: pickedOa.oa_number };
   }
 
-  const canSubmit = !!file && !busy && ((mode === "project" && !!pickedCs) || (mode === "oa" && !!pickedOa && !!pickedBoqId));
+  const canSubmit = !!file && !busy && (
+    (mode === "project" && !!pickedCs) ||
+    (mode === "oa" && !!pickedOa && !!pickedBoqId) ||
+    (mode === "general" && genTitle.trim().length > 0)
+  );
 
   async function submit() {
     if (!file) return;
     setBusy(true);
     try {
+      // ===== GENERAL / OTHER REQUISITION =====
+      if (mode === "general") {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) { toast({ title: "Please sign in", variant: "destructive" }); return; }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = supabase as any;
+        const fy = financialYearOf();
+        const { data: reqNum, error: rnErr } = await sb.rpc("next_general_requisition_number", { _fy: fy });
+        if (rnErr) throw rnErr;
+
+        const { data: created, error: cErr } = await sb.from("requisitions").insert({
+          requisition_number: reqNum,
+          order_root_id: null,
+          boq_id: null,
+          boq_revision: 0,
+          family_token: null,
+          notes: notes || null,
+          client_name_override: clientName.trim() || null,
+          title: genTitle.trim(),
+          kind: "general",
+          user_id: userId,
+          status: "issued",
+          source: "uploaded",
+        }).select("*").single();
+        if (cErr) throw cErr;
+
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+        const path = `${userId}/${created.id}/${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("requisition-uploads")
+          .upload(path, file, { upsert: true, contentType: file.type || undefined });
+        if (upErr) throw upErr;
+
+        await sb.from("requisitions").update({
+          upload_file_path: path,
+          upload_file_name: file.name,
+          upload_mime_type: file.type || null,
+        }).eq("id", created.id);
+
+        // Parse Excel items if applicable
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+          try {
+            const items = await parseRequisitionExcel(file);
+            if (items.length) {
+              const rows = items.map((it, idx) => ({
+                requisition_id: created.id,
+                boq_item_id: `gen-${idx + 1}`,
+                item_no: it.s_no != null ? String(it.s_no) : String(idx + 1),
+                model_number: it.size_model,
+                description: it.description,
+                quantity: it.qty,
+                unit: it.unit,
+                remarks: [it.make ? `Make: ${it.make}` : null, it.material ? `Material: ${it.material}` : null, it.remarks]
+                  .filter(Boolean).join(" · ") || null,
+                fg_snapshot: it as unknown as Record<string, unknown>,
+                included_in_requisition: true,
+              }));
+              const { error: itErr } = await sb.from("requisition_items").insert(rows);
+              if (itErr) throw itErr;
+            }
+          } catch (parseErr) {
+            toast({
+              title: "Uploaded, but could not parse items",
+              description: (parseErr as Error).message,
+            });
+          }
+        }
+
+        toast({ title: "General requisition uploaded", description: reqNum });
+        setOpen(false); reset();
+        onCreated();
+        return;
+      }
+
       const linkage = await resolveLinkage();
       if (!linkage) {
         toast({ title: "Could not find an approved BOQ for the selection", variant: "destructive" });
