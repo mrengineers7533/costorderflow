@@ -675,9 +675,13 @@ function UploadRequisitionButton({
                 description: it.description,
                 quantity: it.qty,
                 unit: it.unit,
-                remarks: [it.make ? `Make: ${it.make}` : null, it.material ? `Material: ${it.material}` : null, it.remarks]
-                  .filter(Boolean).join(" · ") || null,
-                ...{}, // keep formatting
+                remarks: [
+                  it.make ? `Make: ${it.make}` : null,
+                  it.material ? `Material: ${it.material}` : null,
+                  it.required_date ? `Required: ${it.required_date}` : null,
+                  it.purpose ? `For: ${it.purpose}` : null,
+                  it.remarks,
+                ].filter(Boolean).join(" · ") || null,
                 fg_snapshot: it as unknown as Record<string, unknown>,
                 included_in_requisition: true,
               }));
