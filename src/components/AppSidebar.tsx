@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { useUserAccess } from "@/hooks/useUserAccess";
@@ -26,6 +26,7 @@ const items: { title: string; url: string; icon: typeof LayoutGrid; module: Modu
   { title: "Requisitions", url: "/requisitions", icon: ClipboardCheck, module: "requisitions" },
   { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "requisitions" },
   { title: "Raw Material Master", url: "/raw-materials", icon: Boxes, module: "raw_materials" },
+  { title: "GRN", url: "/grn", icon: PackageCheck, module: "grn" },
   { title: "Flow Report", url: "/reports", icon: BarChart3, module: "reports" },
 ];
 

@@ -8,6 +8,7 @@ export type ModuleKey =
   | "manufacturing"
   | "requisitions"
   | "raw_materials"
+  | "grn"
   | "reports";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
@@ -20,5 +21,6 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "manufacturing", label: "Manufacturing" },
   { key: "requisitions", label: "Requisitions" },
   { key: "raw_materials", label: "Raw Materials" },
+  { key: "grn", label: "GRN" },
   { key: "reports", label: "Flow Report" },
 ];
