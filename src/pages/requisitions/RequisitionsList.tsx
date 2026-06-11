@@ -261,9 +261,9 @@ export default function RequisitionsList() {
               <Badge variant="secondary">{selected.size} selected</Badge>
               <Button
                 size="sm"
-                disabled={selected.size < 2}
+                disabled={selected.size < 1}
                 onClick={() => navigate(`/requisitions/plan?ids=${Array.from(selected).join(",")}`)}
-                title={selected.size < 2 ? "Select 2 or more to plan together" : "Open plan"}
+                title={selected.size < 1 ? "Select at least 1 to plan" : "Open plan"}
               >
                 <ClipboardList className="mr-1 h-4 w-4" />Open Plan
               </Button>
