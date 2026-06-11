@@ -587,21 +587,31 @@ export default function PurchaseMaterial() {
                     <th className="text-left py-2 pr-3">Make</th>
                     <th className="text-right py-2 pr-3">Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
+                    <th className="text-left py-2 pr-3">Due On</th>
+                    <th className="text-right py-2 pr-3">Rate</th>
+                    <th className="text-right py-2 pr-3">Disc %</th>
+                    <th className="text-right py-2 pr-3">GST %</th>
+                    <th className="text-right py-2 pr-3">Amount</th>
                     <th className="text-left py-2 pr-3">PO</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.length === 0 ? (
-                    <tr><td colSpan={9} className="py-6 text-center text-muted-foreground">
+                    <tr><td colSpan={14} className="py-6 text-center text-muted-foreground">
                       {selectedLots.size === 0 ? "Select a lot to view raw materials." : "No rows match the filter."}
                     </td></tr>
                   ) : filteredRows.map((r) => {
                     const po = r.po_id ? poById.get(r.po_id) : null;
+                    const isSel = selectedRows.has(r.id);
+                    const m = meta[r.id] || emptyMeta();
+                    const qtyVal = Number(m.qty || r.required_qty || 0);
+                    const { lineAmount } = computeLine(qtyVal, Number(m.rate || 0), Number(m.discount || 0), Number(m.gst || 0));
+                    const editable = isSel && !r.po_status;
                     return (
                       <tr key={r.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">
                           <Checkbox
-                            checked={selectedRows.has(r.id)}
+                            checked={isSel}
                             disabled={!!r.po_status}
                             onCheckedChange={() => toggleRow(r.id)}
                           />
@@ -611,8 +621,31 @@ export default function PurchaseMaterial() {
                         <td className="py-2 pr-3">{r.material}</td>
                         <td className="py-2 pr-3">{r.size_model || "—"}</td>
                         <td className="py-2 pr-3">{r.make || "—"}</td>
-                        <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 pr-3 text-right">
+                          {editable ? (
+                            <Input type="number" className="h-7 text-xs text-right w-20"
+                              value={m.qty || String(r.required_qty ?? "")}
+                              onChange={(e) => setRowMeta(r.id, { qty: e.target.value })} />
+                          ) : (r.required_qty ?? "—")}
+                        </td>
                         <td className="py-2 pr-3">{r.unit || "—"}</td>
+                        <td className="py-2 pr-3">
+                          <Input type="date" className="h-7 text-xs" disabled={!editable}
+                            value={m.due} onChange={(e) => setRowMeta(r.id, { due: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-24" disabled={!editable}
+                            value={m.rate} onChange={(e) => setRowMeta(r.id, { rate: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-16" disabled={!editable}
+                            value={m.discount} onChange={(e) => setRowMeta(r.id, { discount: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-16" disabled={!editable}
+                            value={m.gst} onChange={(e) => setRowMeta(r.id, { gst: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{editable ? fmt(lineAmount) : "—"}</td>
                         <td className="py-2 pr-3">
                           {r.po_status === "created" && po ? (
                             <Badge className="bg-emerald-600 hover:bg-emerald-600">{po.po_number}</Badge>
@@ -631,16 +664,106 @@ export default function PurchaseMaterial() {
           </Card>
 
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-sm">Custom items ({customRows.length})</CardTitle>
+              <Button size="sm" variant="outline" onClick={addCustomRow}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Add custom item
+              </Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {customRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No custom items. Use "Add custom item" to add ad-hoc lines not tied to any annexure.</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground border-b">
+                    <tr>
+                      <th className="text-left py-2 pr-2">Lot</th>
+                      <th className="text-left py-2 pr-2">Category</th>
+                      <th className="text-left py-2 pr-2">Material *</th>
+                      <th className="text-left py-2 pr-2">Size</th>
+                      <th className="text-left py-2 pr-2">Make</th>
+                      <th className="text-left py-2 pr-2">Unit</th>
+                      <th className="text-right py-2 pr-2">Qty</th>
+                      <th className="text-left py-2 pr-2">Due</th>
+                      <th className="text-right py-2 pr-2">Rate</th>
+                      <th className="text-right py-2 pr-2">Disc%</th>
+                      <th className="text-right py-2 pr-2">GST%</th>
+                      <th className="text-right py-2 pr-2">Amount</th>
+                      <th className="py-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customRows.map((c) => {
+                      const { lineAmount } = computeLine(Number(c.qty || 0), Number(c.rate || 0), Number(c.discount || 0), Number(c.gst || 0));
+                      return (
+                        <tr key={c.id} className="border-b last:border-0">
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-20" value={c.lot_no} onChange={(e) => updateCustomRow(c.id, { lot_no: e.target.value })} placeholder="Lot" />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Select value={c.category} onValueChange={(v) => updateCustomRow(c.id, { category: v as Category })}>
+                              <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {CATEGORIES.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{catLabel[cat]}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-40" value={c.material} onChange={(e) => updateCustomRow(c.id, { material: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-28" value={c.size_model} onChange={(e) => updateCustomRow(c.id, { size_model: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-24" value={c.make} onChange={(e) => updateCustomRow(c.id, { make: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-16" value={c.unit} onChange={(e) => updateCustomRow(c.id, { unit: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-20" value={c.qty} onChange={(e) => updateCustomRow(c.id, { qty: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="date" className="h-7 text-xs" value={c.due} onChange={(e) => updateCustomRow(c.id, { due: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-24" value={c.rate} onChange={(e) => updateCustomRow(c.id, { rate: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-16" value={c.discount} onChange={(e) => updateCustomRow(c.id, { discount: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-16" value={c.gst} onChange={(e) => updateCustomRow(c.id, { gst: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2 text-right tabular-nums">{fmt(lineAmount)}</td>
+                          <td className="py-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteCustomRow(c.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader><CardTitle className="text-sm">Vendor selection & PO creation</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Selected: {selectedRowList.length} row(s) ·{" "}
+                Selected: {selectedRowList.length} row(s) · Custom: {customRows.length} ·{" "}
                 Categories: {Array.from(categoriesInSelection).map((c) => catLabel[c]).join(", ") || "—"}.
                 One PO will be created per category that has a vendor.
               </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 {CATEGORIES.map((c) => {
                   const needed = categoriesInSelection.has(c);
+                  const t = totalsByCategory[c];
                   return (
                     <div key={c} className={`rounded-md border p-3 space-y-2 ${needed ? "" : "opacity-60"}`}>
                       <div className="flex items-center justify-between">
@@ -658,9 +781,19 @@ export default function PurchaseMaterial() {
                           {vendors[c]!.phone && <div>{vendors[c]!.phone}</div>}
                         </div>
                       )}
+                      {needed && t && (
+                        <div className="text-[10px] text-muted-foreground border-t pt-1 mt-1 tabular-nums">
+                          Basic {fmt(t.basic)} · Tax {fmt(t.tax)} · <span className="font-semibold text-foreground">Grand {fmt(t.grand)}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
+              </div>
+              <div className="flex items-center justify-end gap-4 text-xs border-t pt-3 tabular-nums">
+                <span>Subtotal: <b>{fmt(grandTotals.basic)}</b></span>
+                <span>Tax: <b>{fmt(grandTotals.tax)}</b></span>
+                <span className="text-sm">Grand Total: <b>{fmt(grandTotals.grand)}</b></span>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Notes (optional)</Label>
@@ -672,7 +805,7 @@ export default function PurchaseMaterial() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleCreatePo} disabled={submitting || selectedRowList.length === 0}>
+                <Button onClick={handleCreatePo} disabled={submitting || (selectedRowList.length === 0 && customRows.length === 0)}>
                   <Download className="mr-1 h-4 w-4" />
                   {submitting ? "Creating…" : "Create PO & download PDF"}
                 </Button>
