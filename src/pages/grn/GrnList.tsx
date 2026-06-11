@@ -57,9 +57,8 @@ type Requisition = {
   order_root_id: string;
   boq_id: string;
 };
-type Order = { id: string; oa_number: string | null; cost_sheet_id: string | null };
+type Order = { id: string; oa_number: string | null; cost_sheet_number: string | null };
 type Boq = { id: string; boq_number: string | null };
-type CostSheet = { id: string; name: string | null };
 type Profile = { id: string; full_name: string | null; email: string | null };
 
 type Joined = {
@@ -114,7 +113,6 @@ export default function GrnList() {
   const [reqs, setReqs] = useState<Record<string, Requisition>>({});
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [boqs, setBoqs] = useState<Record<string, Boq>>({});
-  const [costSheets, setCostSheets] = useState<Record<string, CostSheet>>({});
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
 
@@ -165,19 +163,11 @@ export default function GrnList() {
       if (rootIds.length) {
         const { data: oData } = await sb
           .from("orders")
-          .select("id,oa_number,cost_sheet_id")
+          .select("id,oa_number,cost_sheet_number")
           .in("id", rootIds);
         const omap: Record<string, Order> = {};
         ((oData || []) as Order[]).forEach((o) => { omap[o.id] = o; });
         setOrders(omap);
-
-        const csIds = Array.from(new Set((oData || []).map((o: Order) => o.cost_sheet_id).filter(Boolean) as string[]));
-        if (csIds.length) {
-          const { data: csData } = await sb.from("cost_sheets").select("id,name").in("id", csIds);
-          const cmap: Record<string, CostSheet> = {};
-          ((csData || []) as CostSheet[]).forEach((c) => { cmap[c.id] = c; });
-          setCostSheets(cmap);
-        }
       }
       if (boqIds.length) {
         const { data: bData } = await sb.from("boqs").select("id,boq_number").in("id", boqIds);
@@ -216,10 +206,7 @@ export default function GrnList() {
         if (rq.requisition_number) req.push(rq.requisition_number);
         const ord = orders[rq.order_root_id];
         if (ord?.oa_number) oa.push(ord.oa_number);
-        if (ord?.cost_sheet_id) {
-          const c = costSheets[ord.cost_sheet_id];
-          if (c?.name) cs.push(c.name);
-        }
+        if (ord?.cost_sheet_number) cs.push(ord.cost_sheet_number);
         const b = boqs[rq.boq_id];
         if (b?.boq_number) boq.push(b.boq_number);
       });
@@ -233,7 +220,7 @@ export default function GrnList() {
         },
       } as Joined;
     }).filter(Boolean) as Joined[];
-  }, [pos, rows, grns, reqs, orders, boqs, costSheets]);
+  }, [pos, rows, grns, reqs, orders, boqs]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
