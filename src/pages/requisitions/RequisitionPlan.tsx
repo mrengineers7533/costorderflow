@@ -173,11 +173,64 @@ export default function RequisitionPlan() {
     ]);
     const rList = (r as RequisitionRecord[]) || [];
     setReqs(rList);
-    setItems((its as RequisitionItemRecord[]) || []);
-    setRms((rmRows as RequisitionRawMaterialRecord[]) || []);
+    const itemsList = (its as RequisitionItemRecord[]) || [];
+    let rmList = (rmRows as RequisitionRawMaterialRecord[]) || [];
+    setItems(itemsList);
+
+    // Bootstrap raw-material rows for general (non-BOQ) requisitions so
+    // their items show in the Generated/Raw tabs and support lot/status edits.
+    const generalReqIds = new Set(
+      rList
+        .filter((r) => ((r as unknown as { kind?: string }).kind === "general") || !r.boq_id)
+        .map((r) => r.id),
+    );
+    if (generalReqIds.size > 0) {
+      const rmItemIds = new Set(rmList.map((x) => x.requisition_item_id).filter(Boolean) as string[]);
+      const toCreate = itemsList
+        .filter((it) => generalReqIds.has(it.requisition_id) && !rmItemIds.has(it.id))
+        .map((it) => {
+          const snap = (it.fg_snapshot as Record<string, unknown> | null) || {};
+          const make = typeof snap.make === "string" ? (snap.make as string) : null;
+          const material = (typeof snap.material === "string" && (snap.material as string).trim())
+            ? (snap.material as string).trim()
+            : (it.description || it.model_number || "Item");
+          const size = (typeof snap.size_model === "string" && (snap.size_model as string).trim())
+            ? (snap.size_model as string).trim()
+            : (it.model_number || null);
+          const qty = it.quantity != null ? Number(it.quantity) : null;
+          return {
+            requisition_id: it.requisition_id,
+            requisition_item_id: it.id,
+            model_number: it.model_number || it.description || null,
+            material,
+            size_model: size,
+            make,
+            unit: it.unit,
+            qty_per_unit: 1,
+            fg_quantity: qty,
+            required_qty: qty,
+            source: "manual" as const,
+            purchase_status: "pending" as const,
+            notes: it.remarks || null,
+          };
+        });
+      if (toCreate.length > 0) {
+        const { data: inserted, error: insErr } = await sb
+          .from("requisition_raw_materials")
+          .insert(toCreate)
+          .select("*");
+        if (insErr) {
+          console.error("[plan] bootstrap general rm rows failed", insErr);
+        } else if (inserted) {
+          rmList = [...rmList, ...(inserted as RequisitionRawMaterialRecord[])];
+        }
+      }
+    }
+    setRms(rmList);
     const boqIds = Array.from(new Set(rList.map((x) => x.boq_id)));
-    if (boqIds.length) {
-      const { data: b } = await supabase.from("boqs").select("*").in("id", boqIds);
+    const nonNullBoqIds = boqIds.filter(Boolean) as string[];
+    if (nonNullBoqIds.length) {
+      const { data: b } = await supabase.from("boqs").select("*").in("id", nonNullBoqIds);
       const bm: Record<string, BoqRecord> = {};
       ((b as unknown as BoqRecord[]) || []).forEach((x) => { bm[x.id] = x; });
       setBoqs(bm);
