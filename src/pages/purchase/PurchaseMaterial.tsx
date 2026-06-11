@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, Plus, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Category =
   | "machine"
@@ -70,6 +71,31 @@ const catLabel: Record<Category, string> = {
   steel: "Steel (legacy)",
 };
 
+interface CustomRow {
+  id: string;
+  lot_no: string;
+  category: Category;
+  material: string;
+  size_model: string;
+  make: string;
+  unit: string;
+  qty: string;
+  rate: string;
+  discount: string;
+  gst: string;
+  due: string;
+}
+
+interface RowMeta {
+  rate: string;
+  discount: string;
+  gst: string;
+  due: string;
+  qty: string;
+}
+
+const emptyMeta = (): RowMeta => ({ rate: "0", discount: "0", gst: "18", due: "", qty: "" });
+
 export default function PurchaseMaterial() {
   const [rows, setRows] = useState<RawRow[]>([]);
   const [activeAnnexIds, setActiveAnnexIds] = useState<Set<string>>(new Set());
@@ -83,7 +109,8 @@ export default function PurchaseMaterial() {
   const [vendors, setVendors] = useState<Record<Category, Vendor | null>>(
     () => Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>,
   );
-  const [rates, setRates] = useState<Record<string, { rate: string; discount: string; gst: string }>>({});
+  const [meta, setMeta] = useState<Record<string, RowMeta>>({});
+  const [customRows, setCustomRows] = useState<CustomRow[]>([]);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [params] = useSearchParams();
@@ -149,7 +176,39 @@ export default function PurchaseMaterial() {
       else n.add(id);
       return n;
     });
+    setMeta((m) => (m[id] ? m : { ...m, [id]: emptyMeta() }));
   };
+
+  const setRowMeta = (id: string, patch: Partial<RowMeta>) =>
+    setMeta((m) => ({ ...m, [id]: { ...(m[id] || emptyMeta()), ...patch } }));
+
+  const addCustomRow = () => {
+    const defaultCat: Category = (Array.from(categoriesInSelection)[0] as Category) || "machine";
+    const defaultLot = Array.from(selectedLots)[0] || "";
+    setCustomRows((cs) => [
+      ...cs,
+      {
+        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        lot_no: defaultLot,
+        category: defaultCat,
+        material: "",
+        size_model: "",
+        make: "",
+        unit: "",
+        qty: "1",
+        rate: "0",
+        discount: "0",
+        gst: "18",
+        due: "",
+      },
+    ]);
+  };
+
+  const updateCustomRow = (id: string, patch: Partial<CustomRow>) =>
+    setCustomRows((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+
+  const deleteCustomRow = (id: string) =>
+    setCustomRows((cs) => cs.filter((c) => c.id !== id));
 
   const selectedRowList = useMemo(
     () => filteredRows.filter((r) => selectedRows.has(r.id) && !r.po_status),
@@ -158,18 +217,69 @@ export default function PurchaseMaterial() {
   const categoriesInSelection = useMemo(() => {
     const s = new Set<Category>();
     selectedRowList.forEach((r) => r.plan_status && s.add(r.plan_status));
+    customRows.forEach((c) => s.add(c.category));
     return s;
-  }, [selectedRowList]);
+  }, [selectedRowList, customRows]);
+
+  const computeLine = (qty: number, rate: number, discPct: number, gstPct: number) => {
+    const gross = qty * rate;
+    const afterDisc = gross * (1 - discPct / 100);
+    const gstAmount = afterDisc * (gstPct / 100);
+    return { basic: afterDisc, gstAmount, lineAmount: afterDisc + gstAmount };
+  };
+
+  const totalsByCategory = useMemo(() => {
+    const out: Record<string, { basic: number; tax: number; grand: number }> = {};
+    const add = (cat: Category, basic: number, tax: number) => {
+      if (!out[cat]) out[cat] = { basic: 0, tax: 0, grand: 0 };
+      out[cat].basic += basic;
+      out[cat].tax += tax;
+      out[cat].grand += basic + tax;
+    };
+    selectedRowList.forEach((r) => {
+      const m = meta[r.id] || emptyMeta();
+      const qty = Number(m.qty || r.required_qty || 0);
+      const { basic, gstAmount } = computeLine(qty, Number(m.rate || 0), Number(m.discount || 0), Number(m.gst || 0));
+      if (r.plan_status) add(r.plan_status, basic, gstAmount);
+    });
+    customRows.forEach((c) => {
+      const { basic, gstAmount } = computeLine(Number(c.qty || 0), Number(c.rate || 0), Number(c.discount || 0), Number(c.gst || 0));
+      add(c.category, basic, gstAmount);
+    });
+    return out;
+  }, [selectedRowList, customRows, meta]);
+
+  const grandTotals = useMemo(() => {
+    return Object.values(totalsByCategory).reduce(
+      (s, x) => ({ basic: s.basic + x.basic, tax: s.tax + x.tax, grand: s.grand + x.grand }),
+      { basic: 0, tax: 0, grand: 0 },
+    );
+  }, [totalsByCategory]);
+
+  const fmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleCreatePo = async () => {
-    if (selectedRowList.length === 0) {
-      toast.error("Select at least one raw material row (without an existing PO).");
+    if (selectedRowList.length === 0 && customRows.length === 0) {
+      toast.error("Select at least one raw material row or add a custom item.");
       return;
     }
     const missingVendor = Array.from(categoriesInSelection).filter((c) => !vendors[c]);
     if (missingVendor.length > 0) {
       toast.error(`Vendor name required for: ${missingVendor.map((c) => catLabel[c]).join(", ")}`);
       return;
+    }
+    // validate rows
+    for (const r of selectedRowList) {
+      const m = meta[r.id] || emptyMeta();
+      if (!(Number(m.rate) > 0)) {
+        toast.error(`Enter Rate > 0 for "${r.material}".`);
+        return;
+      }
+    }
+    for (const c of customRows) {
+      if (!c.material.trim()) { toast.error("Custom item: material is required."); return; }
+      if (!(Number(c.qty) > 0)) { toast.error(`Custom item "${c.material}": Qty > 0 required.`); return; }
+      if (!(Number(c.rate) > 0)) { toast.error(`Custom item "${c.material}": Rate > 0 required.`); return; }
     }
     setSubmitting(true);
     try {
@@ -185,7 +295,8 @@ export default function PurchaseMaterial() {
       const createdPdfs: Array<{ poNumber: string }> = [];
       for (const cat of categoriesInSelection) {
         const catRows = selectedRowList.filter((r) => r.plan_status === cat);
-        if (catRows.length === 0) continue;
+        const catCustom = customRows.filter((c) => c.category === cat);
+        if (catRows.length === 0 && catCustom.length === 0) continue;
 
         const { data: numData, error: numErr } = await sb.rpc("next_po_number", { _fy: fy });
         if (numErr) throw numErr;
@@ -199,22 +310,31 @@ export default function PurchaseMaterial() {
           if (r.requisition_id) reqSet.add(r.requisition_id);
           if (r.annexure_id) annexSet.add(r.annexure_id);
         });
+        catCustom.forEach((c) => { if (c.lot_no) lotSet.add(c.lot_no); });
 
         // compute totals
         const computed = catRows.map((r) => {
-          const meta = rates[r.id] || { rate: "0", discount: "0", gst: "18" };
-          const qty = Number(r.required_qty || 0);
-          const rate = Number(meta.rate || 0);
-          const discountPct = Number(meta.discount || 0);
-          const gstPct = Number(meta.gst || 0);
-          const gross = qty * rate;
-          const afterDisc = gross * (1 - discountPct / 100);
-          const gstAmount = afterDisc * (gstPct / 100);
-          return { r, qty, rate, discountPct, gstPct, gstAmount, lineAmount: afterDisc + gstAmount, basic: afterDisc };
+          const m = meta[r.id] || emptyMeta();
+          const qty = Number(m.qty || r.required_qty || 0);
+          const rate = Number(m.rate || 0);
+          const discountPct = Number(m.discount || 0);
+          const gstPct = Number(m.gst || 0);
+          const { basic, gstAmount, lineAmount } = computeLine(qty, rate, discountPct, gstPct);
+          return { r, qty, rate, discountPct, gstPct, gstAmount, lineAmount, basic, due: m.due };
+        });
+        const computedCustom = catCustom.map((c) => {
+          const qty = Number(c.qty || 0);
+          const rate = Number(c.rate || 0);
+          const discountPct = Number(c.discount || 0);
+          const gstPct = Number(c.gst || 0);
+          const { basic, gstAmount, lineAmount } = computeLine(qty, rate, discountPct, gstPct);
+          return { c, qty, rate, discountPct, gstPct, gstAmount, lineAmount, basic };
         });
         const subtotal = computed.reduce((s, x) => s + x.basic, 0);
         const taxTotal = computed.reduce((s, x) => s + x.gstAmount, 0);
-        const grand = subtotal + taxTotal;
+        const customSubtotal = computedCustom.reduce((s, x) => s + x.basic, 0);
+        const customTax = computedCustom.reduce((s, x) => s + x.gstAmount, 0);
+        const grand = subtotal + taxTotal + customSubtotal + customTax;
         const v = vendors[cat]!;
 
         const { data: poIns, error: poErr } = await sb
@@ -230,8 +350,8 @@ export default function PurchaseMaterial() {
             dispatch_through: pSettings?.default_dispatch ?? null,
             destination: pSettings?.default_destination ?? null,
             payment_mode: pSettings?.default_payment_mode ?? null,
-            subtotal,
-            tax_total: taxTotal,
+            subtotal: subtotal + customSubtotal,
+            tax_total: taxTotal + customTax,
             grand_total: grand,
             prepared_by_name: preparedBy,
             lot_numbers: Array.from(lotSet),
@@ -245,8 +365,8 @@ export default function PurchaseMaterial() {
         if (poErr) throw poErr;
         const poId = (poIns as { id: string }).id;
 
-        const { error: rowErr } = await sb.from("purchase_order_rows").insert(
-          computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+        const rowsPayload = [
+          ...computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount, due }) => ({
             po_id: poId,
             raw_material_id: r.id,
             lot_no: r.lot_no,
@@ -254,6 +374,7 @@ export default function PurchaseMaterial() {
             size_model: r.size_model,
             make: r.make,
             unit: r.unit,
+            due_on: due || null,
             qty,
             rate,
             discount_pct: discountPct,
@@ -261,14 +382,33 @@ export default function PurchaseMaterial() {
             gst_amount: gstAmount,
             line_amount: lineAmount,
           })),
-        );
+          ...computedCustom.map(({ c, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+            po_id: poId,
+            raw_material_id: null,
+            lot_no: c.lot_no || null,
+            material: c.material,
+            size_model: c.size_model || null,
+            make: c.make || null,
+            unit: c.unit || null,
+            due_on: c.due || null,
+            qty,
+            rate,
+            discount_pct: discountPct,
+            gst_pct: gstPct,
+            gst_amount: gstAmount,
+            line_amount: lineAmount,
+          })),
+        ];
+        const { error: rowErr } = await sb.from("purchase_order_rows").insert(rowsPayload);
         if (rowErr) throw rowErr;
 
-        const { error: updErr } = await sb
-          .from("requisition_raw_materials")
-          .update({ po_status: "created", po_id: poId })
-          .in("id", catRows.map((r) => r.id));
-        if (updErr) throw updErr;
+        if (catRows.length > 0) {
+          const { error: updErr } = await sb
+            .from("requisition_raw_materials")
+            .update({ po_status: "created", po_id: poId })
+            .in("id", catRows.map((r) => r.id));
+          if (updErr) throw updErr;
+        }
 
         // Generate PDF
         const pdf = generatePoPDF({
@@ -289,19 +429,30 @@ export default function PurchaseMaterial() {
           destination: pSettings?.default_destination ?? undefined,
           paymentMode: pSettings?.default_payment_mode ?? undefined,
           terms: pSettings?.default_terms ?? undefined,
-          subtotal, taxTotal, grandTotal: grand,
+          subtotal: subtotal + customSubtotal, taxTotal: taxTotal + customTax, grandTotal: grand,
           lots: Array.from(lotSet),
           notes: notes.trim() || undefined,
           createdAt: new Date().toISOString(),
-          rows: computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
-            lot: r.lot_no || "—",
-            material: r.material,
-            size: r.size_model || "—",
-            make: r.make || "—",
-            qty,
-            unit: r.unit || "—",
-            rate, discountPct, gstPct, gstAmount, lineAmount,
-          })),
+          rows: [
+            ...computed.map(({ r, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+              lot: r.lot_no || "—",
+              material: r.material,
+              size: r.size_model || "—",
+              make: r.make || "—",
+              qty,
+              unit: r.unit || "—",
+              rate, discountPct, gstPct, gstAmount, lineAmount,
+            })),
+            ...computedCustom.map(({ c, qty, rate, discountPct, gstPct, gstAmount, lineAmount }) => ({
+              lot: c.lot_no || "—",
+              material: c.material,
+              size: c.size_model || "—",
+              make: c.make || "—",
+              qty,
+              unit: c.unit || "—",
+              rate, discountPct, gstPct, gstAmount, lineAmount,
+            })),
+          ],
         });
         pdf.save(`${poNumber.replace(/\//g, "_")}.pdf`);
         createdPdfs.push({ poNumber });
@@ -309,8 +460,9 @@ export default function PurchaseMaterial() {
 
       toast.success(`Created ${createdPdfs.length} PO${createdPdfs.length === 1 ? "" : "s"}.`);
       setSelectedRows(new Set());
+      setCustomRows([]);
+      setMeta({});
       setVendors(Object.fromEntries(CATEGORIES.map((c) => [c, null])) as Record<Category, Vendor | null>);
-      setRates({});
       setNotes("");
       await loadAll();
     } catch (e) {
@@ -435,21 +587,31 @@ export default function PurchaseMaterial() {
                     <th className="text-left py-2 pr-3">Make</th>
                     <th className="text-right py-2 pr-3">Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
+                    <th className="text-left py-2 pr-3">Due On</th>
+                    <th className="text-right py-2 pr-3">Rate</th>
+                    <th className="text-right py-2 pr-3">Disc %</th>
+                    <th className="text-right py-2 pr-3">GST %</th>
+                    <th className="text-right py-2 pr-3">Amount</th>
                     <th className="text-left py-2 pr-3">PO</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.length === 0 ? (
-                    <tr><td colSpan={9} className="py-6 text-center text-muted-foreground">
+                    <tr><td colSpan={14} className="py-6 text-center text-muted-foreground">
                       {selectedLots.size === 0 ? "Select a lot to view raw materials." : "No rows match the filter."}
                     </td></tr>
                   ) : filteredRows.map((r) => {
                     const po = r.po_id ? poById.get(r.po_id) : null;
+                    const isSel = selectedRows.has(r.id);
+                    const m = meta[r.id] || emptyMeta();
+                    const qtyVal = Number(m.qty || r.required_qty || 0);
+                    const { lineAmount } = computeLine(qtyVal, Number(m.rate || 0), Number(m.discount || 0), Number(m.gst || 0));
+                    const editable = isSel && !r.po_status;
                     return (
                       <tr key={r.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">
                           <Checkbox
-                            checked={selectedRows.has(r.id)}
+                            checked={isSel}
                             disabled={!!r.po_status}
                             onCheckedChange={() => toggleRow(r.id)}
                           />
@@ -459,8 +621,31 @@ export default function PurchaseMaterial() {
                         <td className="py-2 pr-3">{r.material}</td>
                         <td className="py-2 pr-3">{r.size_model || "—"}</td>
                         <td className="py-2 pr-3">{r.make || "—"}</td>
-                        <td className="py-2 pr-3 text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 pr-3 text-right">
+                          {editable ? (
+                            <Input type="number" className="h-7 text-xs text-right w-20"
+                              value={m.qty || String(r.required_qty ?? "")}
+                              onChange={(e) => setRowMeta(r.id, { qty: e.target.value })} />
+                          ) : (r.required_qty ?? "—")}
+                        </td>
                         <td className="py-2 pr-3">{r.unit || "—"}</td>
+                        <td className="py-2 pr-3">
+                          <Input type="date" className="h-7 text-xs" disabled={!editable}
+                            value={m.due} onChange={(e) => setRowMeta(r.id, { due: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-24" disabled={!editable}
+                            value={m.rate} onChange={(e) => setRowMeta(r.id, { rate: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-16" disabled={!editable}
+                            value={m.discount} onChange={(e) => setRowMeta(r.id, { discount: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Input type="number" className="h-7 text-xs text-right w-16" disabled={!editable}
+                            value={m.gst} onChange={(e) => setRowMeta(r.id, { gst: e.target.value })} />
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{editable ? fmt(lineAmount) : "—"}</td>
                         <td className="py-2 pr-3">
                           {r.po_status === "created" && po ? (
                             <Badge className="bg-emerald-600 hover:bg-emerald-600">{po.po_number}</Badge>
@@ -479,16 +664,106 @@ export default function PurchaseMaterial() {
           </Card>
 
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-sm">Custom items ({customRows.length})</CardTitle>
+              <Button size="sm" variant="outline" onClick={addCustomRow}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Add custom item
+              </Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {customRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No custom items. Use "Add custom item" to add ad-hoc lines not tied to any annexure.</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground border-b">
+                    <tr>
+                      <th className="text-left py-2 pr-2">Lot</th>
+                      <th className="text-left py-2 pr-2">Category</th>
+                      <th className="text-left py-2 pr-2">Material *</th>
+                      <th className="text-left py-2 pr-2">Size</th>
+                      <th className="text-left py-2 pr-2">Make</th>
+                      <th className="text-left py-2 pr-2">Unit</th>
+                      <th className="text-right py-2 pr-2">Qty</th>
+                      <th className="text-left py-2 pr-2">Due</th>
+                      <th className="text-right py-2 pr-2">Rate</th>
+                      <th className="text-right py-2 pr-2">Disc%</th>
+                      <th className="text-right py-2 pr-2">GST%</th>
+                      <th className="text-right py-2 pr-2">Amount</th>
+                      <th className="py-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customRows.map((c) => {
+                      const { lineAmount } = computeLine(Number(c.qty || 0), Number(c.rate || 0), Number(c.discount || 0), Number(c.gst || 0));
+                      return (
+                        <tr key={c.id} className="border-b last:border-0">
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-20" value={c.lot_no} onChange={(e) => updateCustomRow(c.id, { lot_no: e.target.value })} placeholder="Lot" />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Select value={c.category} onValueChange={(v) => updateCustomRow(c.id, { category: v as Category })}>
+                              <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {CATEGORIES.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{catLabel[cat]}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-40" value={c.material} onChange={(e) => updateCustomRow(c.id, { material: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-28" value={c.size_model} onChange={(e) => updateCustomRow(c.id, { size_model: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-24" value={c.make} onChange={(e) => updateCustomRow(c.id, { make: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input className="h-7 text-xs w-16" value={c.unit} onChange={(e) => updateCustomRow(c.id, { unit: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-20" value={c.qty} onChange={(e) => updateCustomRow(c.id, { qty: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="date" className="h-7 text-xs" value={c.due} onChange={(e) => updateCustomRow(c.id, { due: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-24" value={c.rate} onChange={(e) => updateCustomRow(c.id, { rate: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-16" value={c.discount} onChange={(e) => updateCustomRow(c.id, { discount: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <Input type="number" className="h-7 text-xs text-right w-16" value={c.gst} onChange={(e) => updateCustomRow(c.id, { gst: e.target.value })} />
+                          </td>
+                          <td className="py-1 pr-2 text-right tabular-nums">{fmt(lineAmount)}</td>
+                          <td className="py-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteCustomRow(c.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader><CardTitle className="text-sm">Vendor selection & PO creation</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Selected: {selectedRowList.length} row(s) ·{" "}
+                Selected: {selectedRowList.length} row(s) · Custom: {customRows.length} ·{" "}
                 Categories: {Array.from(categoriesInSelection).map((c) => catLabel[c]).join(", ") || "—"}.
                 One PO will be created per category that has a vendor.
               </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 {CATEGORIES.map((c) => {
                   const needed = categoriesInSelection.has(c);
+                  const t = totalsByCategory[c];
                   return (
                     <div key={c} className={`rounded-md border p-3 space-y-2 ${needed ? "" : "opacity-60"}`}>
                       <div className="flex items-center justify-between">
@@ -506,9 +781,19 @@ export default function PurchaseMaterial() {
                           {vendors[c]!.phone && <div>{vendors[c]!.phone}</div>}
                         </div>
                       )}
+                      {needed && t && (
+                        <div className="text-[10px] text-muted-foreground border-t pt-1 mt-1 tabular-nums">
+                          Basic {fmt(t.basic)} · Tax {fmt(t.tax)} · <span className="font-semibold text-foreground">Grand {fmt(t.grand)}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
+              </div>
+              <div className="flex items-center justify-end gap-4 text-xs border-t pt-3 tabular-nums">
+                <span>Subtotal: <b>{fmt(grandTotals.basic)}</b></span>
+                <span>Tax: <b>{fmt(grandTotals.tax)}</b></span>
+                <span className="text-sm">Grand Total: <b>{fmt(grandTotals.grand)}</b></span>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Notes (optional)</Label>
@@ -520,7 +805,7 @@ export default function PurchaseMaterial() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleCreatePo} disabled={submitting || selectedRowList.length === 0}>
+                <Button onClick={handleCreatePo} disabled={submitting || (selectedRowList.length === 0 && customRows.length === 0)}>
                   <Download className="mr-1 h-4 w-4" />
                   {submitting ? "Creating…" : "Create PO & download PDF"}
                 </Button>
