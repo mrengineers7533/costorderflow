@@ -73,7 +73,10 @@ export default function PoCreateFromAnnexure() {
   const [preparedBy, setPreparedBy] = useState("");
   const [terms, setTerms] = useState("");
   const [notes, setNotes] = useState("");
-  const [poPreviewNumber, setPoPreviewNumber] = useState("PO/—");
+  const [poNumber, setPoNumber] = useState("PO/—");
+  const today = new Date().toISOString().slice(0, 10);
+  const [poDate, setPoDate] = useState<string>(today);
+  const [dueOn, setDueOn] = useState<string>("");
 
   // Load annexure, rows, settings, profile
   useEffect(() => {
@@ -120,8 +123,13 @@ export default function PoCreateFromAnnexure() {
         setPreparedBy(p?.full_name || p?.email || "");
       }
 
-      // preview PO number (FY only — actual number assigned on insert)
-      setPoPreviewNumber(`PO/${financialYearOf()}/####`);
+      // peek next PO number (does not consume counter); user can edit
+      try {
+        const { data: peek } = await sb.rpc("peek_next_po_number", { _fy: financialYearOf() });
+        setPoNumber((peek as string) || `PO/${financialYearOf()}/0001`);
+      } catch {
+        setPoNumber(`PO/${financialYearOf()}/0001`);
+      }
 
       // req line
       if (a?.requisition_ids?.length) {
@@ -203,6 +211,8 @@ export default function PoCreateFromAnnexure() {
     lots: [lot],
     notes: notes || undefined,
     createdAt: new Date().toISOString(),
+    poDate: poDate || undefined,
+    dueOn: dueOn || undefined,
     subtotal, taxTotal, grandTotal: grand,
     rows: computed.map((x) => ({
       lot: x.row.lot_no,
@@ -230,20 +240,25 @@ export default function PoCreateFromAnnexure() {
   const downloadPreview = () => {
     const err = validate();
     if (err) { toast.error(err); return; }
-    const ctx = buildCtx(poPreviewNumber);
+    const ctx = buildCtx(poNumber);
     const pdf = generatePoPDF(ctx);
-    pdf.save(`${poPreviewNumber.replace(/\//g, "_")}_preview.pdf`);
+    pdf.save(`${poNumber.replace(/\//g, "_")}_preview.pdf`);
   };
 
   const generate = async () => {
     const err = validate();
     if (err) { toast.error(err); return; }
+    const trimmedPo = poNumber.trim();
+    if (!/^PO\/\d{2}-\d{2}\/\d{3,5}$/.test(trimmedPo)) {
+      toast.error("PO number must be in format PO/YY-YY/0001"); return;
+    }
     setSubmitting(true);
     try {
       const fy = financialYearOf();
-      const { data: numData, error: numErr } = await sb.rpc("next_po_number", { _fy: fy });
-      if (numErr) throw numErr;
-      const poNumber = numData as string;
+      // duplicate check
+      const { data: dup } = await sb.from("purchase_orders").select("id").eq("po_number", trimmedPo).maybeSingle();
+      if (dup) { toast.error(`PO number ${trimmedPo} already exists`); setSubmitting(false); return; }
+      const finalPo = trimmedPo;
 
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id ?? null;
@@ -254,7 +269,9 @@ export default function PoCreateFromAnnexure() {
       const { data: poIns, error: poErr } = await sb
         .from("purchase_orders")
         .insert({
-          po_number: poNumber,
+          po_number: finalPo,
+          po_date: poDate || null,
+          due_on: dueOn || null,
           category: type,
           vendor_id: vendor!.id,
           vendor_name: vendor!.name,
@@ -279,6 +296,12 @@ export default function PoCreateFromAnnexure() {
         .single();
       if (poErr) throw poErr;
       const poId = (poIns as { id: string }).id;
+
+      // keep counter in sync with whatever number was actually used
+      const suffixMatch = finalPo.match(/\/(\d+)$/);
+      if (suffixMatch) {
+        await sb.rpc("sync_po_counter", { _fy: fy, _used_number: Number(suffixMatch[1]) });
+      }
 
       const { error: rowErr } = await sb.from("purchase_order_rows").insert(
         computed.map((x) => ({
@@ -311,10 +334,10 @@ export default function PoCreateFromAnnexure() {
       }
 
       // PDF
-      const pdf = generatePoPDF(buildCtx(poNumber));
-      pdf.save(`${poNumber.replace(/\//g, "_")}.pdf`);
+      const pdf = generatePoPDF(buildCtx(finalPo));
+      pdf.save(`${finalPo.replace(/\//g, "_")}.pdf`);
 
-      toast.success(`PO ${poNumber} created.`);
+      toast.success(`PO ${finalPo} created.`);
       navigate("/purchase/po-folder");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -437,6 +460,9 @@ export default function PoCreateFromAnnexure() {
           </div>
           <div><Label className="text-xs">Prepared By</Label><Input className="h-8" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} /></div>
           <div><Label className="text-xs">Supplier's Ref / Order</Label><Input className="h-8" value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} /></div>
+          <div><Label className="text-xs">PO Number</Label><Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="PO/YY-YY/0001" /></div>
+          <div><Label className="text-xs">PO Date</Label><Input type="date" className="h-8" value={poDate} onChange={(e) => setPoDate(e.target.value)} /></div>
+          <div><Label className="text-xs">Due On</Label><Input type="date" className="h-8" value={dueOn} onChange={(e) => setDueOn(e.target.value)} /></div>
           <div><Label className="text-xs">Dispatch Through</Label><Input className="h-8" value={dispatch} onChange={(e) => setDispatch(e.target.value)} /></div>
           <div><Label className="text-xs">Destination</Label><Input className="h-8" value={destination} onChange={(e) => setDestination(e.target.value)} /></div>
           <div><Label className="text-xs">Mode &amp; Terms Of Payment</Label><Input className="h-8" value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} /></div>
@@ -475,10 +501,12 @@ export default function PoCreateFromAnnexure() {
           <div className="border rounded-md bg-white text-black p-4 font-mono text-[11px] leading-tight">
             <div className="text-center font-bold text-sm tracking-wider mb-1">PURCHASE ORDER</div>
             <div className="flex justify-between text-[11px] mb-2">
-              <span>PO No : {poPreviewNumber}</span>
-              <span>DATE : {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+              <span>PO No : {poNumber}</span>
+              <span>DATE : {poDate ? new Date(poDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
             </div>
-            <div className="text-[11px] mb-3">Category : {CAT_LABEL[type]}</div>
+            {dueOn && (
+              <div className="text-[11px] mb-2 text-right">DUE ON : {new Date(dueOn).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
+            )}
             <div className="grid grid-cols-2 gap-3 mb-3 border-t border-b py-2">
               <div>
                 <div className="font-bold">Invoice To :</div>

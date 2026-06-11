@@ -1569,11 +1569,13 @@ export type Database = {
           created_by: string | null
           destination: string | null
           dispatch_through: string | null
+          due_on: string | null
           grand_total: number | null
           id: string
           lot_numbers: string[]
           notes: string | null
           payment_mode: string | null
+          po_date: string | null
           po_number: string
           prepared_by_name: string | null
           requisition_ids: string[]
@@ -1598,11 +1600,13 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           dispatch_through?: string | null
+          due_on?: string | null
           grand_total?: number | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
           payment_mode?: string | null
+          po_date?: string | null
           po_number: string
           prepared_by_name?: string | null
           requisition_ids?: string[]
@@ -1627,11 +1631,13 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           dispatch_through?: string | null
+          due_on?: string | null
           grand_total?: number | null
           id?: string
           lot_numbers?: string[]
           notes?: string | null
           payment_mode?: string | null
+          po_date?: string | null
           po_number?: string
           prepared_by_name?: string | null
           requisition_ids?: string[]
@@ -2254,11 +2260,13 @@ export type Database = {
           created_by: string | null
           destination: string | null
           dispatch_through: string | null
+          due_on: string | null
           grand_total: number | null
           id: string
           lot_numbers: string[]
           notes: string | null
           payment_mode: string | null
+          po_date: string | null
           po_number: string
           prepared_by_name: string | null
           requisition_ids: string[]
@@ -2606,6 +2614,7 @@ export type Database = {
         Args: { _oa_number: string; _revision: number; _root: string }
         Returns: string
       }
+      peek_next_po_number: { Args: { _fy: string }; Returns: string }
       sign_boq_item_doc_by_token: {
         Args: { _path: string; _token: string }
         Returns: string
@@ -2650,6 +2659,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sync_po_counter: {
+        Args: { _fy: string; _used_number: number }
+        Returns: undefined
       }
       verify_boq_items_with_token: {
         Args: { _items: Json; _token: string; _verifier_email: string }
