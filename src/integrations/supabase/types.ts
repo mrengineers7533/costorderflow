@@ -876,6 +876,24 @@ export type Database = {
         }
         Relationships: []
       }
+      general_requisition_counters: {
+        Row: {
+          financial_year: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          financial_year: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          financial_year?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       grn_receipts: {
         Row: {
           created_at: string
@@ -2100,20 +2118,22 @@ export type Database = {
       }
       requisitions: {
         Row: {
-          boq_id: string
+          boq_id: string | null
           boq_revision: number
           client_name_override: string | null
           created_at: string
           family_token: string | null
           id: string
+          kind: string
           notes: string | null
-          order_root_id: string
+          order_root_id: string | null
           pdf_path: string | null
           requisition_number: string
           share_token: string
           source: string
           status: string
           superseded_by_id: string | null
+          title: string | null
           updated_at: string
           upload_file_name: string | null
           upload_file_path: string | null
@@ -2121,20 +2141,22 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          boq_id: string
+          boq_id?: string | null
           boq_revision?: number
           client_name_override?: string | null
           created_at?: string
           family_token?: string | null
           id?: string
+          kind?: string
           notes?: string | null
-          order_root_id: string
+          order_root_id?: string | null
           pdf_path?: string | null
           requisition_number: string
           share_token?: string
           source?: string
           status?: string
           superseded_by_id?: string | null
+          title?: string | null
           updated_at?: string
           upload_file_name?: string | null
           upload_file_path?: string | null
@@ -2142,20 +2164,22 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          boq_id?: string
+          boq_id?: string | null
           boq_revision?: number
           client_name_override?: string | null
           created_at?: string
           family_token?: string | null
           id?: string
+          kind?: string
           notes?: string | null
-          order_root_id?: string
+          order_root_id?: string | null
           pdf_path?: string | null
           requisition_number?: string
           share_token?: string
           source?: string
           status?: string
           superseded_by_id?: string | null
+          title?: string | null
           updated_at?: string
           upload_file_name?: string | null
           upload_file_path?: string | null
@@ -2661,6 +2685,10 @@ export type Database = {
       is_design_review_owner: { Args: { _review_id: string }; Returns: boolean }
       is_domain_allowed: { Args: { _domain: string }; Returns: boolean }
       is_open_design_review: { Args: { _review_id: string }; Returns: boolean }
+      next_general_requisition_number: {
+        Args: { _fy: string }
+        Returns: string
+      }
       next_oa_number: {
         Args: {
           _financial_year: string

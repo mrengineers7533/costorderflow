@@ -1,34 +1,67 @@
-## Changes to Purchase Order flow
+## Goal
+Extend the existing "Upload Requisition" dialog with a third mode — **General / Other Requisition** — that does not require a Cost Sheet, OA, or BOQ. Provide a downloadable Excel template so users can fill requisition data offline and upload it back. Existing Planning, PR, PO, GRN, CS, OA, BOQ, PI and PDF logic stay untouched.
 
-### 1. Auto-generate + editable PO Number (sequence continues)
-- On entering `PoCreateFromAnnexure`, call new RPC `peek_next_po_number(_fy)` that returns the next PO number **without consuming the counter** (computed as `max(last_number, max suffix from existing purchase_orders for that FY) + 1`, formatted `PO/YY-YY/0001`).
-- Show it in a new editable `Input` field (`poNumber` state) defaulting to that value; user may overwrite.
-- On submit:
-  - Validate format `PO/\d{2}-\d{2}/\d{4}`.
-  - Check duplicates: `select id from purchase_orders where po_number = ?` → if exists, error "PO number already exists".
-  - If user-edited and equals peeked value → call existing `next_po_number` (advances counter). If user provided a different number → insert with that number and `update po_counters` so `last_number = max(last_number, suffix)` to keep sequence consistent.
-- Add DB unique index on `purchase_orders.po_number` if not present (it likely already is — migration will be idempotent).
+## 1. Database (one migration)
+Existing `requisitions` table has `order_root_id` and `boq_id` as `NOT NULL`. To support unlinked requisitions:
 
-### 2. Editable PO Date (defaults to today) + Due On (PO-level)
-- Add migration adding `po_date date` and `due_on date` columns to `public.purchase_orders` (nullable; backfill `po_date = created_at::date`).
-- UI: two `Input type="date"` fields in the header card.
-  - `poDate` defaults to today's ISO date.
-  - `dueOn` blank by default, optional.
-- Persist on insert. Use `poDate` for PDF "DATE" line (replace `new Date(ctx.createdAt)` usage by passing `poDate`).
-- `dueOn` shown in PDF header block (e.g. "Due On : dd Mon yyyy") and in PO detail page (`PurchaseDetail.tsx` — add a labeled line).
-- Keep existing per-row "Due On" field as-is (separate per-line dates already supported).
+- `ALTER TABLE public.requisitions ALTER COLUMN order_root_id DROP NOT NULL;`
+- `ALTER TABLE public.requisitions ALTER COLUMN boq_id DROP NOT NULL;`
+- Add `kind text NOT NULL DEFAULT 'project'` with check `kind in ('project','general')`.
+- Add `title text` (free-form name for general requisitions, e.g. "Workshop consumables – Nov 2026").
+- Add new RPC `next_general_requisition_number()` → `REQ/GEN/YY-YY/0001` (new counter row in `requisition_counters` keyed by a sentinel UUID, or new tiny table `general_requisition_counters`). New counter table is cleaner — `general_requisition_counters(financial_year text PK, last_number int)`.
+- Grants + RLS policies on the new counter table mirror `requisition_counters`.
 
-### 3. Remove "Category" line from PO PDF
-- In `src/lib/purchase/poPdf.ts`, delete the `doc.text(\`Category : ${catLabel[ctx.category]}\`, M, 27)` line and shift the starting `y` accordingly.
-- In `supabase/functions/send-po/index.ts`, remove the `drawText(\`Category : ${po.category}\`, M, y)` block + its `y -= 16`.
-- Category still stored in DB; only hidden from PDF.
+Existing RLS on `requisitions` already keys off `user_id` / module access, so nullable linkage columns are safe. Triggers/functions that read `order_root_id` (e.g. `get_requisition_by_token`) already tolerate missing linked BOQs (LEFT JOIN).
 
-### 4. Files touched
-- `supabase/migrations/<new>.sql` — add `po_date`, `due_on` columns + `peek_next_po_number` RPC + bump-counter helper.
-- `src/pages/purchase/PoCreateFromAnnexure.tsx` — new state (`poNumber`, `poDate`, `dueOn`), UI inputs, peek RPC call, duplicate check, conditional counter advance, pass `poDate`/`dueOn` to `buildCtx` and insert.
-- `src/lib/purchase/poPdf.ts` — remove Category line; render `poDate` and optional `Due On`; extend `PoPdfContext` with `poDate?` and `dueOn?`.
-- `src/pages/purchase/PurchaseDetail.tsx` — display `po_date` and `due_on`.
-- `supabase/functions/send-po/index.ts` — remove Category line; use `po.po_date` for date; show `due_on`.
+## 2. Excel template
+Add a static template generator (client-side, using existing `xlsx` lib already in the project for BOQ/PI exports).
 
-### 5. Out of scope
-- No change to row-level Due On, PO editing after creation, send/email flow logic, or any other PO behaviour.
+Sheet **Requisition Items** with columns:
+`S.No | Item Description | Make | Size / Model | Material | Qty | Unit | Remarks`
+
+Sheet **Instructions** with usage notes (one row per item, do not rename headers, leave S.No blank or sequential).
+
+A "Download Template" button in the new tab triggers `exportRequisitionTemplate()` in `src/lib/requisition/uploadTemplate.ts`.
+
+## 3. Upload dialog changes (`src/pages/requisitions/RequisitionsList.tsx`)
+- Add a third `TabsTrigger` value `"general"` next to existing "By Project CS #" and "By OA / BOQ".
+- General tab contents:
+  - Text input: **Requisition Title** (required).
+  - Text input: **Client / Department** (optional, stored in `client_name_override`).
+  - Textarea: notes.
+  - File picker: accepts `.xlsx`, `.xls`, `.pdf` (same as today).
+  - "Download Excel Template" link button.
+- `canSubmit` extended: general mode requires title + file.
+- New branch in `submit()`:
+  - Skip `resolveLinkage`, family token, and BOQ lookup.
+  - Call new RPC `next_general_requisition_number` for the number.
+  - Insert `requisitions` row with `kind='general'`, `order_root_id=null`, `boq_id=null`, `boq_revision=0`, `title`, `client_name_override`, `source='uploaded'`.
+  - If file is `.xlsx`/`.xls`, parse it client-side and insert rows into `requisition_items` with `boq_item_id = 'gen-<row>'`, mapping the template columns. PDF uploads skip parsing (file is just stored).
+  - Upload file to `requisition-uploads` bucket using existing path scheme.
+
+Existing project/OA branches are unchanged.
+
+## 4. List + detail rendering
+- `RequisitionsList` table: show `title` (when `kind='general'`) in place of OA/BOQ columns; add a small "General" badge.
+- `RequisitionDetail`: when `kind='general'`, hide OA/BOQ/Cost Sheet sections, render `title`, uploaded file link, parsed items table, notes. All existing project requisition rendering untouched.
+- No changes to PR/PO/GRN selection flows — general requisitions remain visible there only as items if/when a user picks them; out of scope to wire automatic flow (call out explicitly).
+
+## 5. Files touched
+```text
+supabase/migrations/<new>.sql           -- nullable cols, kind, title, general counter + RPC
+src/lib/requisition/uploadTemplate.ts   -- new: build & download .xlsx template
+src/lib/requisition/parseUpload.ts      -- new: parse uploaded .xlsx into item rows
+src/pages/requisitions/RequisitionsList.tsx
+                                         -- new "General" tab, submit branch, badge in table
+src/pages/requisitions/RequisitionDetail.tsx
+                                         -- conditional render for kind='general'
+src/integrations/supabase/types.ts       -- regenerated after migration
+```
+
+## 6. Explicitly out of scope
+- No change to Planning, PR, PO, GRN, Cost Sheet, OA, BOQ, PI, or PDF generation.
+- No change to existing project/OA upload branches or to `create-requisition` edge function.
+- No automatic PR/PO generation from general requisitions in this pass.
+
+## Open question
+Should general requisitions appear in **Purchase → Requisitions** lists for PR/PO creation, or stay isolated as a record-only upload? Default in this plan: visible in the list with a "General" badge, but NOT auto-pushed into PR flow.
