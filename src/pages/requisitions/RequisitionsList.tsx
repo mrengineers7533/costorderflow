@@ -620,18 +620,34 @@ function UploadRequisitionButton({
   async function submit() {
     if (!file) return;
     setBusy(true);
+    let stage = "init";
+    const fmtErr = (e: unknown) => {
+      const x = e as { message?: string; code?: string; details?: string; hint?: string; name?: string };
+      const parts = [
+        x?.message || String(e),
+        x?.code ? `code=${x.code}` : null,
+        x?.details ? `details=${x.details}` : null,
+        x?.hint ? `hint=${x.hint}` : null,
+      ].filter(Boolean);
+      return parts.join(" · ");
+    };
     try {
       // ===== GENERAL / OTHER REQUISITION =====
       if (mode === "general") {
+        stage = "auth";
         const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) { toast({ title: "Please sign in", variant: "destructive" }); return; }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sb = supabase as any;
         const fy = financialYearOf();
+        stage = "rpc:next_general_requisition_number";
+        console.info("[gen-req]", stage, { fy });
         const { data: reqNum, error: rnErr } = await sb.rpc("next_general_requisition_number", { _fy: fy });
-        if (rnErr) throw rnErr;
+        if (rnErr) { console.error("[gen-req]", stage, rnErr); throw rnErr; }
+        console.info("[gen-req] got number", reqNum);
 
+        stage = "insert:requisitions";
         const { data: created, error: cErr } = await sb.from("requisitions").insert({
           requisition_number: reqNum,
           order_root_id: null,
@@ -646,26 +662,33 @@ function UploadRequisitionButton({
           status: "issued",
           source: "uploaded",
         }).select("*").single();
-        if (cErr) throw cErr;
+        if (cErr) { console.error("[gen-req]", stage, cErr); throw cErr; }
+        console.info("[gen-req] inserted requisition", created?.id);
 
+        stage = "storage:upload";
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
         const path = `${userId}/${created.id}/${safeName}`;
+        console.info("[gen-req]", stage, { path, size: file.size, type: file.type });
         const { error: upErr } = await supabase.storage
           .from("requisition-uploads")
           .upload(path, file, { upsert: true, contentType: file.type || undefined });
-        if (upErr) throw upErr;
+        if (upErr) { console.error("[gen-req]", stage, upErr); throw upErr; }
 
-        await sb.from("requisitions").update({
+        stage = "update:requisitions(file path)";
+        const { error: updErr } = await sb.from("requisitions").update({
           upload_file_path: path,
           upload_file_name: file.name,
           upload_mime_type: file.type || null,
         }).eq("id", created.id);
+        if (updErr) { console.error("[gen-req]", stage, updErr); throw updErr; }
 
         // Parse Excel items if applicable
         const lower = file.name.toLowerCase();
         if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
           try {
+            stage = "parse:excel";
             const items = await parseRequisitionExcel(file);
+            console.info("[gen-req] parsed items", items.length, items.slice(0, 2));
             if (items.length) {
               const rows = items.map((it, idx) => ({
                 requisition_id: created.id,
@@ -685,13 +708,23 @@ function UploadRequisitionButton({
                 fg_snapshot: it as unknown as Record<string, unknown>,
                 included_in_requisition: true,
               }));
+              stage = "insert:requisition_items";
+              console.info("[gen-req]", stage, "rows", rows.length, rows[0]);
               const { error: itErr } = await sb.from("requisition_items").insert(rows);
-              if (itErr) throw itErr;
+              if (itErr) { console.error("[gen-req]", stage, itErr); throw itErr; }
+            } else {
+              toast({
+                title: "No items found in Excel",
+                description: "The first sheet had no parseable rows. Check that the header row matches the template exactly (Item Description, Qty, …).",
+                variant: "destructive",
+              });
             }
           } catch (parseErr) {
+            console.error("[gen-req] parse/insert error", parseErr);
             toast({
-              title: "Uploaded, but could not parse items",
-              description: (parseErr as Error).message,
+              title: `Items not saved (stage: ${stage})`,
+              description: fmtErr(parseErr),
+              variant: "destructive",
             });
           }
         }
@@ -766,7 +799,12 @@ function UploadRequisitionButton({
       setOpen(false); reset();
       onCreated();
     } catch (e) {
-      toast({ title: "Upload failed", description: (e as Error).message, variant: "destructive" });
+      console.error("[req-upload] failed at stage", stage, e);
+      toast({
+        title: `Upload failed (stage: ${stage})`,
+        description: fmtErr(e),
+        variant: "destructive",
+      });
     } finally {
       setBusy(false);
     }
