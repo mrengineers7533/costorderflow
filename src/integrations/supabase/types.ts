@@ -876,6 +876,72 @@ export type Database = {
         }
         Relationships: []
       }
+      grn_receipts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delay_days: number | null
+          gate_entry_at: string | null
+          gate_entry_by: string | null
+          gate_entry_done: boolean
+          id: string
+          late_comment: string | null
+          material_reached_date: string | null
+          po_id: string
+          po_row_id: string
+          received_qty: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delay_days?: number | null
+          gate_entry_at?: string | null
+          gate_entry_by?: string | null
+          gate_entry_done?: boolean
+          id?: string
+          late_comment?: string | null
+          material_reached_date?: string | null
+          po_id: string
+          po_row_id: string
+          received_qty?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delay_days?: number | null
+          gate_entry_at?: string | null
+          gate_entry_by?: string | null
+          gate_entry_done?: boolean
+          id?: string
+          late_comment?: string | null
+          material_reached_date?: string | null
+          po_id?: string
+          po_row_id?: string
+          received_qty?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grn_receipts_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grn_receipts_po_row_id_fkey"
+            columns: ["po_row_id"]
+            isOneToOne: true
+            referencedRelation: "purchase_order_rows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_activity: {
         Row: {
           created_at: string
