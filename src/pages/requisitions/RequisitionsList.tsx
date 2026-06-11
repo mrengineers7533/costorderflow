@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp, Trash2 } from "lucide-react";
+import { Search, Eye, Download, Link2, Send, ClipboardList, Plus, X, Upload, FileUp, Trash2, ShieldCheck } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
@@ -220,6 +220,11 @@ export default function RequisitionsList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link to="/requisitions/consistency">
+            <Button size="sm" variant="outline" className="gap-1" title="Verify BOQ ↔ Requisition ↔ Annexure counts">
+              <ShieldCheck className="h-4 w-4" />Consistency Check
+            </Button>
+          </Link>
           <UploadRequisitionButton
             projects={distinctProjects}
             costSheetByRoot={costSheetByRoot}
