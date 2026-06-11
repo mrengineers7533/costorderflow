@@ -3,6 +3,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { ActivityBell } from "@/components/activity/ActivityBell";
+import { UserMenu } from "@/components/UserMenu";
 import { useLocation } from "react-router-dom";
 
 const PAGE_META: Record<string, { title: string; desc?: string }> = {
@@ -38,6 +39,7 @@ export function AppLayout({ children, user }: { children: React.ReactNode; user:
             <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
               <ActivityBell />
+              <UserMenu user={user} />
             </div>
           </header>
           <main className="flex-1 min-w-0">{children}</main>
