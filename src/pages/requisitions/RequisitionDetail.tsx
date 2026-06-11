@@ -260,6 +260,8 @@ export default function RequisitionDetail() {
   if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
 
   const canDelete = isAdmin || (currentUserId != null && req.user_id === currentUserId);
+  const isGeneral = (req as unknown as { kind?: string }).kind === "general";
+  const genTitle = (req as unknown as { title?: string | null }).title || "";
 
   async function handleDelete() {
     if (!req) return;
@@ -286,19 +288,26 @@ export default function RequisitionDetail() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-semibold tracking-tight">{req.requisition_number}</h1>
-            <Badge variant="secondary">BOQ R{req.boq_revision}</Badge>
+            {!isGeneral && <Badge variant="secondary">BOQ R{req.boq_revision}</Badge>}
+            {isGeneral && <Badge variant="outline">General</Badge>}
             <Badge>{req.status}</Badge>
-            {stale && <Badge variant="destructive">BOQ revised to R{latestRev}</Badge>}
+            {!isGeneral && stale && <Badge variant="destructive">BOQ revised to R{latestRev}</Badge>}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {req.client_name_override || boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
-          </p>
+          {isGeneral ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              {genTitle || "Untitled"} · {req.client_name_override || "—"}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              {req.client_name_override || boq?.client_name || "—"} · OA {boq?.reference_oa_number || "—"} · BOQ {boq?.boq_number || "—"}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
-          {stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
-          <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>
-          <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>
+          {!isGeneral && stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
+          {!isGeneral && <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>}
+          {!isGeneral && <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>}
           {canDelete && (
             <Button
               size="sm"
