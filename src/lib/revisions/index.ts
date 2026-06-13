@@ -421,6 +421,8 @@ export async function createPendingBoqRevision(
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const prev = prevByModel.get(model.trim().toLowerCase());
+    const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
+    const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
       id: crypto.randomUUID(),
       item_no: String(i + 1),
@@ -428,8 +430,11 @@ export async function createPendingBoqRevision(
       description: it.description || "",
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
-      remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+      remarks: (ext.remarks || "").trim() || prev?.remarks || "",
       make: (it.make_label || "").trim() || prev?.make || "",
+      motor: (ext.motor || "").trim() || prevExt.motor,
+      motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
+      motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
     };
   });
   const token = crypto.randomUUID();
