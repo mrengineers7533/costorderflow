@@ -510,16 +510,22 @@ export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqR
     ownerId = auth.user?.id ?? null;
   }
 
-  const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => ({
-    id: crypto.randomUUID(),
-    item_no: String(i + 1),
-    model_number: it.hsn_code || "",
-    description: it.description || "",
-    quantity: Number(it.quantity) || 0,
-    unit: it.unit || "Nos",
-    remarks: "",
-    make: (it.make_label || "").trim() || "",
-  }));
+  const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => {
+    const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string; model?: string };
+    return {
+      id: crypto.randomUUID(),
+      item_no: String(i + 1),
+      model_number: (ext.model || "").trim() || it.hsn_code || "",
+      description: it.description || "",
+      quantity: Number(it.quantity) || 0,
+      unit: it.unit || "Nos",
+      remarks: (ext.remarks || "").trim(),
+      make: (it.make_label || "").trim() || "",
+      motor: (ext.motor || "").trim() || undefined,
+      motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : undefined,
+      motor_price: ext.motor_price != null ? Number(ext.motor_price) : undefined,
+    };
+  });
 
   const payload = {
     order_id: order.id,
