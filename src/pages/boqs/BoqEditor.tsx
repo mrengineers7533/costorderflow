@@ -369,7 +369,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval, showMotor });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -388,6 +388,7 @@ export default function BoqEditor() {
       prepared_by: preparedBy || null, boq_date: boqDate,
       reference_oa_number: referenceOa || null, project_number: projectNumber || null,
       client_name: clientName || null, line_items: items, terms, notes,
+      show_motor: showMotor,
     };
     let savedId = boqId;
     if (!savedId) {
@@ -399,7 +400,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval, showMotor });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
