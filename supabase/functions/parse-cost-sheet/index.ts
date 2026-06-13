@@ -62,8 +62,16 @@ CRITICAL EXTRACTION RULES:
       - "Motor Qty" / "Motor Quantity"
       - "Motor Price" (numeric, ₹; strip "Rs." and commas)
       - "Remarks" (free text)
-    For every line item, when these columns are present, return them as: motor (string), motor_quantity (number), motor_price (number), remarks (string).
-    If a column is missing or blank for a given row, omit that field on that item. Old portrait cost sheets without these columns must still parse exactly as before.
+    For every line item, when ANY of these columns appears anywhere in the detail table, return ALL four fields for EVERY row in that table — even if some cells are blank — using the exact JSON keys: motor (string), motor_quantity (number), motor_price (number), remarks (string).
+    Rules:
+      - motor: copy verbatim text; if the cell spans multiple lines, join with a single space; if blank → omit field.
+      - motor_quantity: parse as a number; "2", "2 Nos", "2.0" → 2. If blank → omit.
+      - motor_price: parse the numeric Rupee value; "Rs. 12,345.50", "₹12345", "12,345" → 12345.5. If blank → omit.
+      - remarks: verbatim free text; blank → omit.
+    Do NOT invent values, do NOT copy the description into motor, and do NOT abbreviate. Old portrait cost sheets without these columns must still parse exactly as before (just omit all four fields).
+    Example landscape row → JSON:
+      Row: "Pre-Cleaner -MRSP- SD-15 | Qty 1 | ₹16,62,114 | Motor: 5.5 kW ABB | Qty 1 | ₹45,000 | Remarks: Includes coupling"
+      JSON: { "description": "Pre-Cleaner -MRSP- SD-15", "quantity": 1, "unit_rate": 1662114, "amount": 1662114, "motor": "5.5 kW ABB", "motor_quantity": 1, "motor_price": 45000, "remarks": "Includes coupling" }
 
 Return your output by calling the extract_cost_sheet function. If a field is not present, omit it. Numbers must be plain numbers (no currency symbols, no commas).`;
 
@@ -297,13 +305,43 @@ Deno.serve(async (req) => {
     }
 
     // Compute amounts where missing
+    function toNum(v: unknown): number | undefined {
+      if (v == null) return undefined;
+      if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+      const s = String(v).replace(/[₹$,\s]/g, "").replace(/[^\d.\-]/g, "");
+      if (!s) return undefined;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : undefined;
+    }
     const items = Array.isArray((extracted as { line_items?: unknown[] }).line_items)
-      ? (extracted as { line_items: Array<Record<string, number>> }).line_items.map((it) => ({
-          ...it,
-          amount: typeof it.amount === "number" && it.amount > 0 ? it.amount : (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
-        }))
+      ? (extracted as { line_items: Array<Record<string, unknown>> }).line_items.map((it) => {
+          const out: Record<string, unknown> = { ...it };
+          // Accept alternate AI key spellings for motor fields.
+          const mq = out.motor_quantity ?? (it as Record<string, unknown>).motor_qty ?? (it as Record<string, unknown>).motorQty;
+          const mp = out.motor_price ?? (it as Record<string, unknown>).motorPrice;
+          const mqN = toNum(mq);
+          const mpN = toNum(mp);
+          if (mqN !== undefined && mqN > 0) out.motor_quantity = mqN; else delete out.motor_quantity;
+          if (mpN !== undefined && mpN > 0) out.motor_price = mpN; else delete out.motor_price;
+          if (typeof out.motor === "string" && !out.motor.trim()) delete out.motor;
+          if (typeof out.remarks === "string" && !out.remarks.trim()) delete out.remarks;
+          const amt = typeof out.amount === "number" && out.amount > 0
+            ? out.amount
+            : (Number(out.quantity) || 0) * (Number(out.unit_rate) || 0);
+          out.amount = amt;
+          return out;
+        })
       : [];
     extracted.line_items = items;
+    // Diagnostic: surface how many rows carried motor data so users can tell
+    // whether the PDF actually had landscape motor columns vs. an extraction miss.
+    const motorCount = items.filter((it) => {
+      const x = it as Record<string, unknown>;
+      return (typeof x.motor === "string" && (x.motor as string).trim()) ||
+        (typeof x.motor_price === "number" && (x.motor_price as number) > 0) ||
+        (typeof x.motor_quantity === "number" && (x.motor_quantity as number) > 0);
+    }).length;
+    console.log(`[parse-cost-sheet] ${sheet.original_filename}: ${items.length} items, ${motorCount} with motor data`);
 
     await admin.from("cost_sheets").update({
       status: "parsed", extracted, parse_error: null,
