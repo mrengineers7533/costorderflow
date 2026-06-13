@@ -31,8 +31,7 @@ export default function FinalBoq() {
 
   async function dl() {
     if (!boq) return;
-    const showApproval = (() => { try { return window.localStorage.getItem("boq.pdf.approval") === "1"; } catch { return false; } })();
-    const doc = await generateBoqPDF(boq, { showApproval });
+    const doc = await generateBoqPDF(boq, { showApproval: false });
     doc.save(`${boq.boq_number.replace(/[/\\]/g, "_")}.pdf`);
   }
 

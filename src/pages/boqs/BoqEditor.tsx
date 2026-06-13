@@ -381,7 +381,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval, showMotor });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: false, showMotor });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -412,7 +412,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval, showMotor });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: false, showMotor });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
@@ -569,17 +569,6 @@ export default function BoqEditor() {
                   </Button>
                   <Button
                     type="button"
-                    variant={showApproval ? "secondary" : "outline"}
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setShowApproval(!showApproval)}
-                    title="Affects PDF / print only. The on-screen items table is unchanged."
-                  >
-                    <Columns3 className="h-4 w-4" />
-                    {showApproval ? "Hide 'Approved by Design' in PDF" : "Show 'Approved by Design' in PDF"}
-                  </Button>
-                  <Button
-                    type="button"
                     variant={showMotor ? "secondary" : "outline"}
                     size="sm"
                     className="gap-2"
@@ -683,7 +672,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={showApproval} showMotor={showMotor} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={false} showMotor={showMotor} />
           </div>
           </TabsContent>
 
