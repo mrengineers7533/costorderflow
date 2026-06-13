@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { useUserAccess } from "@/hooks/useUserAccess";
@@ -28,6 +28,7 @@ const items: { title: string; url: string; icon: typeof LayoutGrid; module: Modu
   { title: "Raw Material Master", url: "/raw-materials", icon: Boxes, module: "raw_materials" },
   { title: "GRN", url: "/grn", icon: PackageCheck, module: "grn" },
   { title: "Flow Report", url: "/reports", icon: BarChart3, module: "reports" },
+  { title: "Cost Sheets", url: "/cost-sheets", icon: FileSpreadsheet, module: "cost_sheets" },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {

@@ -31,6 +31,12 @@ export interface LineItem {
    *  and propagated to the BOQ. Do not affect calculations or PDF totals. */
   model?: string;
   remarks?: string;
+  /** Optional Motor details captured from new landscape cost-sheet format.
+   *  Surfaced in OA editor (hidden by default). Do NOT affect amount,
+   *  unit_rate, totals, or existing OA/quotation PDF output. */
+  motor?: string;
+  motor_quantity?: number;
+  motor_price?: number;
 }
 
 export interface Charges {
