@@ -746,9 +746,16 @@ export default function OrderEditor() {
             make_label?: string;
             motor?: string;
             motor_quantity?: number;
+            motor_qty?: number;
+            motorQty?: number;
             motor_price?: number;
+            motorPrice?: number;
             remarks?: string;
           };
+          const motorQtyRaw = ext.motor_quantity ?? ext.motor_qty ?? ext.motorQty;
+          const motorPriceRaw = ext.motor_price ?? ext.motorPrice;
+          const motorQtyNum = motorQtyRaw != null ? Number(motorQtyRaw) : NaN;
+          const motorPriceNum = motorPriceRaw != null ? Number(motorPriceRaw) : NaN;
           return {
             id: crypto.randomUUID(),
             ...base,
@@ -757,10 +764,10 @@ export default function OrderEditor() {
             unit_rate: Number(it.unit_rate) || 0,
             amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
             make,
-            motor: ext.motor || undefined,
-            motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) || 0 : undefined,
-            motor_price: ext.motor_price != null ? Number(ext.motor_price) || 0 : undefined,
-            remarks: ext.remarks || undefined,
+            motor: (ext.motor || "").trim() || undefined,
+            motor_quantity: Number.isFinite(motorQtyNum) && motorQtyNum > 0 ? motorQtyNum : undefined,
+            motor_price: Number.isFinite(motorPriceNum) && motorPriceNum > 0 ? motorPriceNum : undefined,
+            remarks: (ext.remarks || "").trim() || undefined,
           };
         });
       // When the user picked a specific company on the chooser page, only keep

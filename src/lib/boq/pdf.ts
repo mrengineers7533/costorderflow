@@ -51,6 +51,12 @@ export interface BoqPdfOptions {
 export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): Promise<jsPDF> {
   const showMake = !!opts.showMake;
   const showApproval = !!opts.showApproval;
+  // Auto-show motor / motor-qty / motor-price columns when at least one row
+  // carries that data — legacy BOQs (no motor data) render identically.
+  const hasMotor = (boq.line_items || []).some((it) => {
+    const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
+    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0 || (x.motor_price ?? 0) > 0;
+  });
   // Refresh per-item approval status from the latest design-review round so
   // the PDF always reflects current decisions, regardless of which screen
   // initiated the export. Failures fall back silently to whatever is on
@@ -180,6 +186,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   const headRow: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
   if (showMake) headRow.push("MAKE");
   headRow.push("QTY", "UNIT", "Remarks");
+  if (hasMotor) headRow.push("MOTOR", "MOTOR QTY", "MOTOR PRICE");
   if (showApproval) headRow.push("Approved by Design");
   const approvalIdx = showApproval ? headRow.length - 1 : -1;
   const rows = sortByItemNo(boq.line_items).map((it, i) => {
@@ -198,6 +205,14 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       it.remarks || "",
     ];
     if (showMake) base.splice(3, 0, (it.make || "").trim());
+    if (hasMotor) {
+      const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
+      base.push(
+        (x.motor || "").trim(),
+        x.motor_quantity != null && x.motor_quantity > 0 ? String(x.motor_quantity) : "",
+        x.motor_price != null && x.motor_price > 0 ? x.motor_price.toLocaleString("en-IN") : "",
+      );
+    }
     if (showApproval) base.push(approval);
     return base;
   });
@@ -219,6 +234,12 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   columnStyles[ci++] = { cellWidth: 12, halign: "center" };
   // Remarks — wider when approval column is hidden so layout matches existing look.
   columnStyles[ci++] = { cellWidth: showApproval ? (showMake ? 32 : 38) : (showMake ? 54 : 62) };
+  // Motor / Motor Qty / Motor Price (optional)
+  if (hasMotor) {
+    columnStyles[ci++] = { cellWidth: 26 };
+    columnStyles[ci++] = { cellWidth: 14, halign: "center" };
+    columnStyles[ci++] = { cellWidth: 20, halign: "right" };
+  }
   // Approved by Design (optional)
   if (showApproval) columnStyles[ci++] = { cellWidth: showMake ? 22 : 24, halign: "center", fontStyle: "bold" };
 

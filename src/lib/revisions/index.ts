@@ -174,6 +174,8 @@ export async function reviseBoqFromOrder(
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
     const prev = prevByKey.get(key);
+    const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
+    const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
       id: crypto.randomUUID(),
       item_no: String(i + 1),
@@ -181,8 +183,11 @@ export async function reviseBoqFromOrder(
       description: desc,
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
-      remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+      remarks: (ext.remarks || "").trim() || prev?.remarks || "",
       make: (it.make_label || "").trim() || prev?.make || "",
+      motor: (ext.motor || "").trim() || prevExt.motor,
+      motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
+      motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
     };
   });
 
@@ -283,6 +288,8 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
     const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => {
       const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
       const prev = prevByModel.get(model.trim().toLowerCase());
+      const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
+      const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
       return {
         id: prev?.id || crypto.randomUUID(),
         item_no: String(i + 1),
@@ -291,8 +298,11 @@ export async function syncBoqsAndPisForOrder(order: OrderRecord): Promise<void> 
         description: it.description || "",
         quantity: Number(it.quantity) || 0,
         unit: it.unit || "Nos",
-        remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+        remarks: (ext.remarks || "").trim() || prev?.remarks || "",
         make: (it.make_label || "").trim() || prev?.make || "",
+        motor: (ext.motor || "").trim() || prevExt.motor,
+        motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
+        motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
         // Reset per-item approval whenever OA changes (sync resets review).
         approval_status: isOpen ? "pending" : prev?.approval_status,
         approval_comment: isOpen ? "" : prev?.approval_comment,
@@ -411,6 +421,8 @@ export async function createPendingBoqRevision(
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const prev = prevByModel.get(model.trim().toLowerCase());
+    const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
+    const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
       id: crypto.randomUUID(),
       item_no: String(i + 1),
@@ -418,8 +430,11 @@ export async function createPendingBoqRevision(
       description: it.description || "",
       quantity: Number(it.quantity) || 0,
       unit: it.unit || "Nos",
-      remarks: ((it as unknown as { remarks?: string }).remarks || "").trim() || prev?.remarks || "",
+      remarks: (ext.remarks || "").trim() || prev?.remarks || "",
       make: (it.make_label || "").trim() || prev?.make || "",
+      motor: (ext.motor || "").trim() || prevExt.motor,
+      motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
+      motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
     };
   });
   const token = crypto.randomUUID();
@@ -495,16 +510,22 @@ export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqR
     ownerId = auth.user?.id ?? null;
   }
 
-  const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => ({
-    id: crypto.randomUUID(),
-    item_no: String(i + 1),
-    model_number: it.hsn_code || "",
-    description: it.description || "",
-    quantity: Number(it.quantity) || 0,
-    unit: it.unit || "Nos",
-    remarks: "",
-    make: (it.make_label || "").trim() || "",
-  }));
+  const items: BoqLineItem[] = (order.line_items || []).map((it: LineItem, i: number) => {
+    const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string; model?: string };
+    return {
+      id: crypto.randomUUID(),
+      item_no: String(i + 1),
+      model_number: (ext.model || "").trim() || it.hsn_code || "",
+      description: it.description || "",
+      quantity: Number(it.quantity) || 0,
+      unit: it.unit || "Nos",
+      remarks: (ext.remarks || "").trim(),
+      make: (it.make_label || "").trim() || "",
+      motor: (ext.motor || "").trim() || undefined,
+      motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : undefined,
+      motor_price: ext.motor_price != null ? Number(ext.motor_price) : undefined,
+    };
+  });
 
   const payload = {
     order_id: order.id,
