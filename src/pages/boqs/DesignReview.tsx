@@ -361,7 +361,7 @@ export default function DesignReview() {
                                 <TableCell className="py-1 align-top">
                                   <span className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold">Previous{baselineRoundNo ? ` · R${baselineRoundNo}` : ""}</span>
                                 </TableCell>
-                                {DIFF_FIELDS.map(({ key }) => {
+                                {DIFF_FIELDS.filter(({ key }) => motorShown || (key !== "motor" && key !== "motor_quantity")).map(({ key }) => {
                                   const prev = wasChanged(key);
                                   return (
                                     <TableCell key={key} className="py-1 text-xs text-muted-foreground line-through whitespace-pre-wrap">
@@ -378,6 +378,12 @@ export default function DesignReview() {
                               <TableCell className="py-2 text-sm whitespace-pre-wrap">{it.description}</TableCell>
                               <TableCell className="py-2">{it.quantity ?? 0}</TableCell>
                               <TableCell className="py-2">{it.unit || "Nos"}</TableCell>
+                              {motorShown && (
+                                <TableCell className="py-2 text-xs whitespace-pre-wrap">{(it as { motor?: string | null }).motor || ""}</TableCell>
+                              )}
+                              {motorShown && (
+                                <TableCell className="py-2 text-xs">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</TableCell>
+                              )}
                               <TableCell className="py-2 text-xs">{it.remarks || ""}</TableCell>
                               {!isComment && (
                                 <TableCell className="py-2">
@@ -409,14 +415,22 @@ export default function DesignReview() {
                                 </div>
                               </TableCell>
                               {COL_KEYS.map((k) => (
-                                <TableCell key={k} className="py-2">
-                                  <Textarea
-                                    placeholder="Comment"
-                                    value={cols[k] || ""}
-                                    onChange={(e) => updateCol(it.boq_item_id, k, e.target.value)}
-                                    className="min-h-[44px] text-xs"
-                                  />
-                                </TableCell>
+                                <Fragment key={k}>
+                                  {k === "remarks" && motorShown && (
+                                    <>
+                                      <TableCell className="py-2" />
+                                      <TableCell className="py-2" />
+                                    </>
+                                  )}
+                                  <TableCell className="py-2">
+                                    <Textarea
+                                      placeholder="Comment"
+                                      value={cols[k] || ""}
+                                      onChange={(e) => updateCol(it.boq_item_id, k, e.target.value)}
+                                      className="min-h-[44px] text-xs"
+                                    />
+                                  </TableCell>
+                                </Fragment>
                               ))}
                               {!isComment && (
                                 <TableCell className="py-2">
