@@ -641,7 +641,7 @@ export default function BoqEditor() {
             <PendingChangesPanel boqId={boqId} items={items} designReviewStatus={designReviewStatus} />
 
             <DesignReviewPanel
-              boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber }}
+              boq={{ id: boqId, user_id: oaOwnerId, boq_number: boqNumber, client_name: clientName, project_number: projectNumber, show_motor: showMotor }}
               items={items}
               designReviewStatus={designReviewStatus}
               onChange={async () => {
