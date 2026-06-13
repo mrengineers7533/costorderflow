@@ -447,7 +447,7 @@ export default function DesignReview() {
                             </TableRow>
                             {itemDocs.length > 0 && (
                               <TableRow>
-                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                <TableCell colSpan={(isComment ? 6 : 7) + (motorShown ? 2 : 0)} className="py-1 text-xs">
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
                                       <DocLink key={i} filePath={dc.file_path} fileName={dc.file_name} className="underline truncate max-w-[200px]" />
@@ -458,7 +458,7 @@ export default function DesignReview() {
                             )}
                             {instructions.length > 0 && (
                               <TableRow>
-                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                <TableCell colSpan={(isComment ? 6 : 7) + (motorShown ? 2 : 0)} className="py-1 text-xs">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Instructions:</span>
                                     {instructions.map((a) => (
