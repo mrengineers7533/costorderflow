@@ -24,9 +24,6 @@ export default function BoqVerify() {
   const [doneStatus, setDoneStatus] = useState<"approved" | "rejected" | "pending_verification" | null>(null);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [showMotor, setShowMotor] = useState<boolean>(true);
-  const hasMotorData = (boq?.line_items || []).some(
-    (it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0,
-  );
 
   useEffect(() => {
     (async () => {
@@ -219,16 +216,13 @@ export default function BoqVerify() {
                 <div className="space-y-0.5">
                   <Label htmlFor="approver-show-motor" className="text-sm">Show Motor Details in BOQ</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    {hasMotorData
-                      ? "Toggle off to hide Motor & Motor Qty from the approved BOQ and its PDF."
-                      : "No motor data on this BOQ — toggle has no effect."}
+                    Toggle off to hide Motor & Motor Qty columns from the approved BOQ and its PDF/Excel exports.
                   </p>
                 </div>
                 <Switch
                   id="approver-show-motor"
                   checked={showMotor}
                   onCheckedChange={setShowMotor}
-                  disabled={!hasMotorData}
                 />
               </div>
               <Button onClick={submit} disabled={submitting} className="w-full">

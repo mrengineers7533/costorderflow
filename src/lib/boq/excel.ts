@@ -11,14 +11,12 @@ export function buildBoqXlsx(
 ): Blob {
   const showMake = !!opts.showMake;
   const showMotor = opts.showMotor !== false;
-  const hasMotor = showMotor && (b.line_items || []).some((it) => {
-    const x = it as { motor?: string; motor_quantity?: number };
-    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0;
-  });
-  const baseHeader = showMake
-    ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks"]
-    : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"];
+  // Toggle is the single source of truth — columns always render when ON.
+  const hasMotor = showMotor;
+  const baseHeader: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
+  if (showMake) baseHeader.push("MAKE");
   if (hasMotor) baseHeader.push("MOTOR", "MOTOR QTY");
+  baseHeader.push("QTY", "UNIT", "Remarks");
   const header: (string | number)[][] = [
     [`BOQ No.: ${b.boq_number}`],
     [`Revision: R${b.revision ?? 0}${b.is_current ? " (Current)" : " (Superseded)"}`],
@@ -35,11 +33,8 @@ export function buildBoqXlsx(
       it.item_no || String(i + 1),
       it.model_number || "",
       it.description || "",
-      Number(it.quantity) || 0,
-      it.unit || "",
-      it.remarks || "",
     ];
-    if (showMake) base.splice(3, 0, (it.make || "").trim());
+    if (showMake) base.push((it.make || "").trim());
     if (hasMotor) {
       const x = it as { motor?: string; motor_quantity?: number };
       base.push(
@@ -47,6 +42,11 @@ export function buildBoqXlsx(
         x.motor_quantity != null ? Number(x.motor_quantity) : "",
       );
     }
+    base.push(
+      Number(it.quantity) || 0,
+      it.unit || "",
+      it.remarks || "",
+    );
     return base;
   });
   const tail: (string | number)[][] = [];
@@ -57,10 +57,10 @@ export function buildBoqXlsx(
     tail.push([], ["Notes:"], [b.notes]);
   }
   const ws = XLSX.utils.aoa_to_sheet([...header, ...body, ...tail]);
-  const baseCols = showMake
-    ? [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 40 }]
-    : [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 8 }, { wch: 8 }, { wch: 40 }];
+  const baseCols: { wch: number }[] = [{ wch: 10 }, { wch: 24 }, { wch: 60 }];
+  if (showMake) baseCols.push({ wch: 18 });
   if (hasMotor) baseCols.push({ wch: 24 }, { wch: 10 });
+  baseCols.push({ wch: 8 }, { wch: 8 }, { wch: 40 });
   ws["!cols"] = baseCols;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "BOQ");

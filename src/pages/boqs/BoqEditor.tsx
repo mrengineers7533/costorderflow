@@ -578,18 +578,21 @@ export default function BoqEditor() {
                     {showMotor ? "Hide Motor Details" : "Show Motor Details"}
                   </Button>
                   <span className="text-[11px] text-muted-foreground">
-                    Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
+                    Visible by default. Toggle persists per BOQ and is honored by the on-screen table, PDF, Excel, distribution link and approver page.
                   </span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div
-                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                  className="grid gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1"
+                  style={{ gridTemplateColumns: buildBoqGridColumns({ showMake, showMotor }) }}
                 >
                   <div>Item</div>
                   <div>Model</div>
                   <div>Description</div>
                   {showMake && <div>Make</div>}
+                  {showMotor && <div>Motor</div>}
+                  {showMotor && <div>Motor Qty</div>}
                   <div>Qty</div>
                   <div>Unit</div>
                   <div>Remarks</div>
@@ -698,6 +701,27 @@ export default function BoqEditor() {
   // come from the linked OA. Helper kept for future use.
 }
 
+/** Build the items table grid columns. Motor / Motor Qty slot between
+ *  MAKE (or DESCRIPTION when MAKE hidden) and QTY so the on-screen table
+ *  mirrors the PDF/Excel column order. */
+function buildBoqGridColumns({ showMake, showMotor }: { showMake: boolean; showMotor: boolean }): string {
+  const cols: string[] = [
+    "42px",                 // Item
+    "minmax(100px,1fr)",    // Model
+    "minmax(160px,2fr)",    // Description
+  ];
+  if (showMake) cols.push("minmax(80px,0.9fr)"); // Make
+  if (showMotor) {
+    cols.push("minmax(100px,1fr)"); // Motor
+    cols.push("80px");              // Motor Qty
+  }
+  cols.push("60px");                // Qty
+  cols.push("60px");                // Unit
+  cols.push("minmax(120px,1.4fr)"); // Remarks
+  cols.push("90px");                // Approval
+  return cols.join(" ");
+}
+
 function BoqItemsList({
   items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake, showMotor,
 }: {
@@ -713,11 +737,12 @@ function BoqItemsList({
   // Latest submitted design-review round for this BOQ. Used to surface
   // per-row comments and approval decisions inline beneath each item.
   const designReview = useLatestDesignReview(boqId);
+  const gridCols = buildBoqGridColumns({ showMake: !!showMake, showMotor: !!showMotor });
   return (
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
+            <div className="grid gap-1.5 items-start" style={{ gridTemplateColumns: gridCols }}>
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
               {canEditFull ? (
                 <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
@@ -734,6 +759,34 @@ function BoqItemsList({
                   <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
                 ) : (
                   <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
+                )
+              )}
+              {showMotor && (
+                canEditFull ? (
+                  <Input
+                    value={it.motor || ""}
+                    onChange={(e) => onUpdate(it.id, { motor: e.target.value })}
+                    className="h-9"
+                    placeholder="—"
+                  />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.motor || ""}</div>
+                )
+              )}
+              {showMotor && (
+                canEditFull ? (
+                  <Input
+                    type="number"
+                    value={it.motor_quantity ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onUpdate(it.id, { motor_quantity: v === "" ? undefined : Number(v) || 0 });
+                    }}
+                    className="h-9"
+                    placeholder="—"
+                  />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</div>
                 )
               )}
               {canEditFull ? (
@@ -766,15 +819,6 @@ function BoqItemsList({
             <div className="flex justify-end -mt-1">
               <BoqItemAttachments boqId={boqId} itemId={it.id} />
             </div>
-            {showMotor && ((it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0) && (
-              <div className="text-[11px] text-muted-foreground px-1">
-                <span className="font-semibold uppercase tracking-wider mr-1">Motor:</span>
-                {(it.motor || "—").trim() || "—"}
-                <span className="mx-2 opacity-50">·</span>
-                <span className="font-semibold uppercase tracking-wider mr-1">Qty:</span>
-                {it.motor_quantity ?? "—"}
-              </div>
-            )}
             {designReview && (
               <BoqDesignSuggestionRow
                 reviewItem={findReviewItemForOaItem(designReview.items, it as never, idx)}
@@ -892,9 +936,9 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
-  const hasMotor = showMotor && (rec.line_items || []).some(
-    (it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0,
-  );
+  // Toggle is the single source of truth — render the columns for every row
+  // when ON (empty cells where no motor data). Matches PDF/Excel layout.
+  const hasMotor = showMotor;
   return (
     <Card className="overflow-hidden bg-muted/40 print:bg-white print:border-0 print:shadow-none">
       <div className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground border-b print:hidden">
@@ -966,11 +1010,11 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
             <col style={{ width: "32mm" }} />
             <col />
             {showMake && <col style={{ width: "22mm" }} />}
+            {hasMotor && <col style={{ width: "26mm" }} />}
+            {hasMotor && <col style={{ width: "14mm" }} />}
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "38mm" }} />
-            {hasMotor && <col style={{ width: "26mm" }} />}
-            {hasMotor && <col style={{ width: "14mm" }} />}
             {showApproval && <col style={{ width: "24mm" }} />}
           </colgroup>
           <thead>
@@ -978,15 +1022,15 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
               {(() => {
                 const heads: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
                 if (showMake) heads.push("MAKE");
-                heads.push("QTY", "UNIT", "Remarks");
                 if (hasMotor) heads.push("MOTOR", "MOTOR QTY");
+                heads.push("QTY", "UNIT", "Remarks");
                 if (showApproval) heads.push("Approved by Design");
                 return heads;
               })().map((h, i) => {
-                const lastIdx = 2 + (showMake ? 1 : 0) + 3 + (hasMotor ? 2 : 0) + (showApproval ? 1 : 0) - 1;
-                const qtyIdx = 2 + (showMake ? 1 : 0) + 1;
+                const lastIdx = 2 + (showMake ? 1 : 0) + (hasMotor ? 2 : 0) + 3 + (showApproval ? 1 : 0) - 1;
+                const qtyIdx = 2 + (showMake ? 1 : 0) + (hasMotor ? 2 : 0) + 1;
                 const unitIdx = qtyIdx + 1;
-                const motorQtyIdx = hasMotor ? 2 + (showMake ? 1 : 0) + 3 + 2 - 1 : -1;
+                const motorQtyIdx = hasMotor ? 2 + (showMake ? 1 : 0) + 2 : -1;
                 const center = i === 0 || i === qtyIdx || i === unitIdx || (hasMotor && i === motorQtyIdx) || (showApproval && i === lastIdx);
                 return (
                   <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
@@ -1003,15 +1047,15 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
                 {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
                 {hasMotor && (
                   <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.motor || "").trim()}</td>
                 )}
                 {hasMotor && (
                   <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</td>
                 )}
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
                 {showApproval && (() => {
                   const s = ((it as { approval_status?: string }).approval_status || "pending").toLowerCase();
                   const txt = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
