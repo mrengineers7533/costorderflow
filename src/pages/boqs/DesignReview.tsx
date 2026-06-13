@@ -46,7 +46,7 @@ interface ReviewMeta {
   kind: "comment" | "approval";
   status: string;
   expires_at: string;
-  boq_snapshot: { boq_number?: string; client_name?: string; project_number?: string };
+  boq_snapshot: { boq_number?: string; client_name?: string; project_number?: string; show_motor?: boolean };
 }
 
 interface DocDraft { boq_item_id: string; file_name: string; file_path: string; }
