@@ -288,6 +288,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                         <th className="py-1 pr-2">Description</th>
                         <th className="py-1 pr-2 w-16">Qty</th>
                         <th className="py-1 pr-2 w-16">Unit</th>
+                        {prepareMotorShown && <th className="py-1 pr-2 w-28">Motor</th>}
+                        {prepareMotorShown && <th className="py-1 pr-2 w-16">Motor Qty</th>}
                         <th className="py-1 pr-2 min-w-[220px]">Remarks</th>
                         <th className="py-1 pr-2 w-16 text-right">Files</th>
                       </tr>
@@ -300,6 +302,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                           <td className="py-1 pr-2 whitespace-pre-wrap">{it.description}</td>
                           <td className="py-1 pr-2">{it.quantity}</td>
                           <td className="py-1 pr-2">{it.unit}</td>
+                          {prepareMotorShown && (
+                            <td className="py-1 pr-2 whitespace-pre-wrap">{(it as { motor?: string | null }).motor || ""}</td>
+                          )}
+                          {prepareMotorShown && (
+                            <td className="py-1 pr-2">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</td>
+                          )}
                           <td className="py-1 pr-2">
                             <Textarea
                               value={it.remarks || ""}
