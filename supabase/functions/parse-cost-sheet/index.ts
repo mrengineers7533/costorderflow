@@ -56,6 +56,15 @@ CRITICAL EXTRACTION RULES:
    e. cost_sheet_date — the date printed on the cost sheet (any standard format; return as-is).
    All five fields must be plain numbers (no commas, no currency symbols); date is a string. Omit a field only if it is genuinely not printed anywhere on the PDF.
 
+10. NEW LANDSCAPE COST-SHEET COLUMNS (additive — do not break old portrait sheets):
+    The newer landscape-format cost sheet may include, after the Price / Amount column on the detail tables, the following columns:
+      - "Motor" (motor model / spec text, sometimes split across lines — collapse to one line)
+      - "Motor Qty" / "Motor Quantity"
+      - "Motor Price" (numeric, ₹; strip "Rs." and commas)
+      - "Remarks" (free text)
+    For every line item, when these columns are present, return them as: motor (string), motor_quantity (number), motor_price (number), remarks (string).
+    If a column is missing or blank for a given row, omit that field on that item. Old portrait cost sheets without these columns must still parse exactly as before.
+
 Return your output by calling the extract_cost_sheet function. If a field is not present, omit it. Numbers must be plain numbers (no currency symbols, no commas).`;
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
@@ -201,6 +210,10 @@ Deno.serve(async (req) => {
                   unit_rate: { type: "number" },
                   amount: { type: "number" },
                   make: { type: "string", enum: ["MR", "GMS", "OTHER"], description: "Which company makes this item: MR (M.R. Engineers / Fowler Westrup), GMS, or OTHER (third-party)." },
+                  motor: { type: "string", description: "Motor model / spec text from the new landscape cost-sheet 'Motor' column. Omit if blank." },
+                  motor_quantity: { type: "number", description: "Motor quantity from the new 'Motor Qty' column. Omit if blank." },
+                  motor_price: { type: "number", description: "Motor price (₹) from the new 'Motor Price' column. Omit if blank." },
+                  remarks: { type: "string", description: "Free-text remarks from the 'Remarks' column. Omit if blank." },
                 },
                 required: ["description", "quantity", "unit_rate"],
               },

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles, ExternalLink, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Upload, FileText, CheckCircle2, XCircle, Trash2, Wand2, Clock, Sparkles, ExternalLink, Plus, RefreshCw, Eye, Download } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
@@ -14,7 +14,18 @@ export interface ExtractedCostSheet {
   ship_to?: { name?: string; address?: string; gstin?: string; state?: string };
   cost_sheet_number?: string;
   reference?: string;
-  line_items?: Array<{ description: string; hsn_code?: string; make_label?: string; quantity: number; unit_rate: number; amount: number }>;
+  line_items?: Array<{
+    description: string;
+    hsn_code?: string;
+    make_label?: string;
+    quantity: number;
+    unit_rate: number;
+    amount: number;
+    motor?: string;
+    motor_quantity?: number;
+    motor_price?: number;
+    remarks?: string;
+  }>;
   charges?: { pf_percent?: number; pf_amount?: number; insurance?: number; freight?: number; gst_percent?: number; discount?: number };
   notes?: string;
   _progress?: { stage: string; percent: number; message: string };
@@ -184,6 +195,24 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
     if (!confirm(`Delete ${sheet.original_filename}?`)) return;
     await supabase.storage.from("cost-sheets").remove([sheet.file_path]);
     await supabase.from("cost_sheets").delete().eq("id", sheet.id);
+  }
+
+  async function openSheetInTab(sheet: CostSheetRow) {
+    const { data, error } = await supabase.storage
+      .from("cost-sheets").createSignedUrl(sheet.file_path, 600);
+    if (error || !data?.signedUrl) {
+      return toast({ title: "Could not open PDF", description: error?.message, variant: "destructive" });
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadSheet(sheet: CostSheetRow) {
+    const { data, error } = await supabase.storage
+      .from("cost-sheets").createSignedUrl(sheet.file_path, 600, { download: sheet.original_filename });
+    if (error || !data?.signedUrl) {
+      return toast({ title: "Download failed", description: error?.message, variant: "destructive" });
+    }
+    window.location.href = data.signedUrl;
   }
 
   return (
