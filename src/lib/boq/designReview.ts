@@ -33,6 +33,8 @@ export interface DesignReviewItemRow {
   quantity: number | null;
   unit: string | null;
   remarks: string | null;
+  motor: string | null;
+  motor_quantity: number | null;
   decision: Decision;
   comment: string | null;
   design_change_note: string | null;
@@ -112,6 +114,7 @@ export async function createReviewRound(
     client_name: boq.client_name,
     project_number: boq.project_number,
     item_count: items.length,
+    show_motor: (boq as { show_motor?: boolean }).show_motor ?? true,
     // Persist a stable baseline of the BOQ at the moment this link was
     // generated. Used by the Approval link to render "Previous → Updated"
     // even if items were later added/removed.
@@ -144,6 +147,8 @@ export async function createReviewRound(
       quantity: it.quantity,
       unit: it.unit,
       remarks: it.remarks,
+      motor: (it as { motor?: string | null }).motor ?? null,
+      motor_quantity: (it as { motor_quantity?: number | null }).motor_quantity ?? null,
       decision: "pending" as const,
     }));
     const { error: ie } = await supabase.from("boq_design_review_items").insert(rows);
@@ -318,12 +323,14 @@ export async function fetchLatestCommentBaseline(boqId: string): Promise<{ round
   return { round, items };
 }
 
-export type DiffField = "model_number" | "description" | "quantity" | "unit" | "remarks";
+export type DiffField = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 export const DIFF_FIELDS: { key: DiffField; label: string }[] = [
   { key: "model_number", label: "Model" },
   { key: "description", label: "Description" },
   { key: "quantity", label: "Qty" },
   { key: "unit", label: "Unit" },
+  { key: "motor", label: "Motor" },
+  { key: "motor_quantity", label: "Motor Qty" },
   { key: "remarks", label: "Remarks" },
 ];
 
