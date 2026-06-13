@@ -578,18 +578,21 @@ export default function BoqEditor() {
                     {showMotor ? "Hide Motor Details" : "Show Motor Details"}
                   </Button>
                   <span className="text-[11px] text-muted-foreground">
-                    Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
+                    Visible by default. Toggle persists per BOQ and is honored by the on-screen table, PDF, Excel, distribution link and approver page.
                   </span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div
-                  className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1`}
+                  className="grid gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1"
+                  style={{ gridTemplateColumns: buildBoqGridColumns({ showMake, showMotor }) }}
                 >
                   <div>Item</div>
                   <div>Model</div>
                   <div>Description</div>
                   {showMake && <div>Make</div>}
+                  {showMotor && <div>Motor</div>}
+                  {showMotor && <div>Motor Qty</div>}
                   <div>Qty</div>
                   <div>Unit</div>
                   <div>Remarks</div>
