@@ -318,6 +318,11 @@ export default function DesignReview() {
           <CardContent>
             {(() => {
               const isComment = meta?.kind === "comment";
+              const showMotorFlag = meta?.boq_snapshot?.show_motor !== false;
+              const anyMotor = items.some(
+                (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+              );
+              const motorShown = showMotorFlag && anyMotor;
               return (
                 <div className="border rounded-md overflow-x-auto">
                   <Table>
@@ -328,6 +333,8 @@ export default function DesignReview() {
                         <TableHead>Description</TableHead>
                         <TableHead className="w-20">Qty</TableHead>
                         <TableHead className="w-20">Unit</TableHead>
+                        {motorShown && <TableHead className="w-28">Motor</TableHead>}
+                        {motorShown && <TableHead className="w-20">Motor Qty</TableHead>}
                         <TableHead className="w-48">Remarks</TableHead>
                         {!isComment && <TableHead className="w-40">Status</TableHead>}
                       </TableRow>
