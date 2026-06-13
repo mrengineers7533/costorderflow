@@ -76,6 +76,10 @@ export default function BoqEditor() {
   const [distributeOpen, setDistributeOpen] = useState(false);
   const [showMake, setShowMake] = useColumnToggle("boq.columns.make", false);
   const [showApproval, setShowApproval] = useColumnToggle("boq.pdf.approval", false);
+  // Per-BOQ "Show Motor Details" toggle (defaults to true). Persisted on the
+  // BOQ row so creators and approvers see the same value. Only affects how
+  // Motor / Motor Qty are displayed on BOQ surfaces — never affects OA/PI.
+  const [showMotor, setShowMotor] = useState<boolean>(true);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
   // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
@@ -192,6 +196,7 @@ export default function BoqEditor() {
         setBoqUserId(b.user_id || null);
         setIsCurrentBoq(b.is_current !== false);
         setBoqRevision(b.revision ?? 0);
+        setShowMotor(((b as { show_motor?: boolean }).show_motor ?? true));
         // Saved BOQ is a fixed snapshot: header + items come from the saved
         // record and are NOT auto-refreshed from the linked OA. The OA is
         // fetched only to resolve the OA owner (for edit permissions).
