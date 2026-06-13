@@ -46,7 +46,7 @@ interface ReviewMeta {
   kind: "comment" | "approval";
   status: string;
   expires_at: string;
-  boq_snapshot: { boq_number?: string; client_name?: string; project_number?: string };
+  boq_snapshot: { boq_number?: string; client_name?: string; project_number?: string; show_motor?: boolean };
 }
 
 interface DocDraft { boq_item_id: string; file_name: string; file_path: string; }
@@ -318,6 +318,11 @@ export default function DesignReview() {
           <CardContent>
             {(() => {
               const isComment = meta?.kind === "comment";
+              const showMotorFlag = meta?.boq_snapshot?.show_motor !== false;
+              const anyMotor = items.some(
+                (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+              );
+              const motorShown = showMotorFlag && anyMotor;
               return (
                 <div className="border rounded-md overflow-x-auto">
                   <Table>
@@ -328,6 +333,8 @@ export default function DesignReview() {
                         <TableHead>Description</TableHead>
                         <TableHead className="w-20">Qty</TableHead>
                         <TableHead className="w-20">Unit</TableHead>
+                        {motorShown && <TableHead className="w-28">Motor</TableHead>}
+                        {motorShown && <TableHead className="w-20">Motor Qty</TableHead>}
                         <TableHead className="w-48">Remarks</TableHead>
                         {!isComment && <TableHead className="w-40">Status</TableHead>}
                       </TableRow>
@@ -354,7 +361,7 @@ export default function DesignReview() {
                                 <TableCell className="py-1 align-top">
                                   <span className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold">Previous{baselineRoundNo ? ` · R${baselineRoundNo}` : ""}</span>
                                 </TableCell>
-                                {DIFF_FIELDS.map(({ key }) => {
+                                {DIFF_FIELDS.filter(({ key }) => motorShown || (key !== "motor" && key !== "motor_quantity")).map(({ key }) => {
                                   const prev = wasChanged(key);
                                   return (
                                     <TableCell key={key} className="py-1 text-xs text-muted-foreground line-through whitespace-pre-wrap">
@@ -371,6 +378,12 @@ export default function DesignReview() {
                               <TableCell className="py-2 text-sm whitespace-pre-wrap">{it.description}</TableCell>
                               <TableCell className="py-2">{it.quantity ?? 0}</TableCell>
                               <TableCell className="py-2">{it.unit || "Nos"}</TableCell>
+                              {motorShown && (
+                                <TableCell className="py-2 text-xs whitespace-pre-wrap">{(it as { motor?: string | null }).motor || ""}</TableCell>
+                              )}
+                              {motorShown && (
+                                <TableCell className="py-2 text-xs">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</TableCell>
+                              )}
                               <TableCell className="py-2 text-xs">{it.remarks || ""}</TableCell>
                               {!isComment && (
                                 <TableCell className="py-2">
@@ -402,14 +415,22 @@ export default function DesignReview() {
                                 </div>
                               </TableCell>
                               {COL_KEYS.map((k) => (
-                                <TableCell key={k} className="py-2">
-                                  <Textarea
-                                    placeholder="Comment"
-                                    value={cols[k] || ""}
-                                    onChange={(e) => updateCol(it.boq_item_id, k, e.target.value)}
-                                    className="min-h-[44px] text-xs"
-                                  />
-                                </TableCell>
+                                <Fragment key={k}>
+                                  {k === "remarks" && motorShown && (
+                                    <>
+                                      <TableCell className="py-2" />
+                                      <TableCell className="py-2" />
+                                    </>
+                                  )}
+                                  <TableCell className="py-2">
+                                    <Textarea
+                                      placeholder="Comment"
+                                      value={cols[k] || ""}
+                                      onChange={(e) => updateCol(it.boq_item_id, k, e.target.value)}
+                                      className="min-h-[44px] text-xs"
+                                    />
+                                  </TableCell>
+                                </Fragment>
                               ))}
                               {!isComment && (
                                 <TableCell className="py-2">
@@ -426,7 +447,7 @@ export default function DesignReview() {
                             </TableRow>
                             {itemDocs.length > 0 && (
                               <TableRow>
-                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                <TableCell colSpan={(isComment ? 6 : 7) + (motorShown ? 2 : 0)} className="py-1 text-xs">
                                   <div className="flex flex-wrap gap-2">
                                     {itemDocs.map((dc, i) => (
                                       <DocLink key={i} filePath={dc.file_path} fileName={dc.file_name} className="underline truncate max-w-[200px]" />
@@ -437,7 +458,7 @@ export default function DesignReview() {
                             )}
                             {instructions.length > 0 && (
                               <TableRow>
-                                <TableCell colSpan={isComment ? 6 : 7} className="py-1 text-xs">
+                                <TableCell colSpan={(isComment ? 6 : 7) + (motorShown ? 2 : 0)} className="py-1 text-xs">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Instructions:</span>
                                     {instructions.map((a) => (

@@ -258,6 +258,8 @@ export type Database = {
           id: string
           item_no: string | null
           model_number: string | null
+          motor: string | null
+          motor_quantity: number | null
           quantity: number | null
           remarks: string | null
           review_id: string
@@ -275,6 +277,8 @@ export type Database = {
           id?: string
           item_no?: string | null
           model_number?: string | null
+          motor?: string | null
+          motor_quantity?: number | null
           quantity?: number | null
           remarks?: string | null
           review_id: string
@@ -292,6 +296,8 @@ export type Database = {
           id?: string
           item_no?: string | null
           model_number?: string | null
+          motor?: string | null
+          motor_quantity?: number | null
           quantity?: number | null
           remarks?: string | null
           review_id?: string
@@ -2506,6 +2512,8 @@ export type Database = {
           id: string
           item_no: string | null
           model_number: string | null
+          motor: string | null
+          motor_quantity: number | null
           quantity: number | null
           remarks: string | null
           review_id: string

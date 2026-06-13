@@ -32,7 +32,7 @@ import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo, type BoqLineItem } from "@/lib/boq/types";
 
 interface Props {
-  boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null };
+  boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null; show_motor?: boolean };
   items: BoqLineItem[];
   designReviewStatus?: string | null;
   onChange?: () => void;
@@ -65,6 +65,16 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const [prepareItems, setPrepareItems] = useState<BoqLineItem[]>(items);
   const [prepareOriginal, setPrepareOriginal] = useState<BoqLineItem[]>(items);
   const [savingRemarks, setSavingRemarks] = useState(false);
+
+  const showMotorFlag = boq.show_motor !== false;
+  const anyPrepareMotor = prepareItems.some(
+    (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+  );
+  const prepareMotorShown = showMotorFlag && anyPrepareMotor;
+  const anyOpenMotor = openItems.some(
+    (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+  );
+  const openMotorShown = showMotorFlag && anyOpenMotor;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
@@ -278,6 +288,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                         <th className="py-1 pr-2">Description</th>
                         <th className="py-1 pr-2 w-16">Qty</th>
                         <th className="py-1 pr-2 w-16">Unit</th>
+                        {prepareMotorShown && <th className="py-1 pr-2 w-28">Motor</th>}
+                        {prepareMotorShown && <th className="py-1 pr-2 w-16">Motor Qty</th>}
                         <th className="py-1 pr-2 min-w-[220px]">Remarks</th>
                         <th className="py-1 pr-2 w-16 text-right">Files</th>
                       </tr>
@@ -290,6 +302,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                           <td className="py-1 pr-2 whitespace-pre-wrap">{it.description}</td>
                           <td className="py-1 pr-2">{it.quantity}</td>
                           <td className="py-1 pr-2">{it.unit}</td>
+                          {prepareMotorShown && (
+                            <td className="py-1 pr-2 whitespace-pre-wrap">{(it as { motor?: string | null }).motor || ""}</td>
+                          )}
+                          {prepareMotorShown && (
+                            <td className="py-1 pr-2">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</td>
+                          )}
                           <td className="py-1 pr-2">
                             <Textarea
                               value={it.remarks || ""}
@@ -448,6 +466,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                     <th className="p-2">Description</th>
                     <th className="p-2 w-14">Qty</th>
                     <th className="p-2 w-14">Unit</th>
+                    {openMotorShown && <th className="p-2 w-28">Motor</th>}
+                    {openMotorShown && <th className="p-2 w-16">Motor Qty</th>}
                     <th className="p-2">Remarks</th>
                     <th className="p-2 w-32">Status</th>
                     <th className="p-2">Files</th>
@@ -472,6 +492,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                           <td className="p-2">{it.description}</td>
                           <td className="p-2">{it.quantity ?? 0}</td>
                           <td className="p-2">{it.unit || "Nos"}</td>
+                          {openMotorShown && (
+                            <td className="p-2">{(it as { motor?: string | null }).motor || ""}</td>
+                          )}
+                          {openMotorShown && (
+                            <td className="p-2">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</td>
+                          )}
                           <td className="p-2 text-muted-foreground">{it.remarks || <span className="opacity-50">—</span>}</td>
                           <td className="p-2">{decisionBadge(it.decision)}</td>
                           <td className="p-2">
@@ -483,9 +509,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                         {hasSuggestion && (
                           <tr className="bg-primary/5 border-b">
                             <td className="p-2 align-top text-[10px] uppercase tracking-wider text-primary font-semibold">Design</td>
-                            {colMap.map(({ key, label }) => {
+                            {colMap.map(({ key, label }, idx) => {
                               const v = (cols[key] || "").trim();
+                              const isRemarks = key === "remarks";
                               return (
+                                <Fragment key={key}>
+                                {isRemarks && openMotorShown && (<><td className="p-2" /><td className="p-2" /></>)}
                                 <td key={key} className="p-2 align-top whitespace-pre-wrap">
                                   {v ? <span className="text-foreground">{v}</span> : <span className="text-muted-foreground opacity-50">—</span>}
                                   {key === "remarks" && it.design_change_note && (
@@ -493,6 +522,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                                   )}
                                   {label === undefined && null}
                                 </td>
+                                </Fragment>
                               );
                             })}
                             <td className="p-2" colSpan={2} />

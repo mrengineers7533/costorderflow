@@ -1,46 +1,57 @@
 ## Goal
 
-Make Motor and Motor Qty proper columns in the BOQ Items table (between MAKE and QTY), default the "Show Motor Details" toggle to ON, ensure values persist to `boqs.line_items` on every save, and honor the toggle uniformly on PDF, distribution PDF, and the approver/verify page.
+Show **Motor** and **Motor Qty** columns (read-only) wherever BOQ items are listed inside the Design Review flow:
 
-Out of scope: OA PDF, PI PDF, Quotation PDF, PO/GRN, pricing/calculations, item selection, cost-sheet schema.
+1. **OA-side Design Review panel** (`DesignReviewPanel.tsx`)
+   - "Prepare items for Design" table
+   - Submitted/in-flight review items table (shows designer's comments/decisions)
+2. **Designer-facing review link page** (`src/pages/boqs/DesignReview.tsx`)
+   - Items table the designer sees and comments on
+   - Previous-round diff row (so motor changes are tracked)
+
+Columns are inserted between **Unit** and **Remarks** (mirrors BOQ layout where Motor sits before Qty/Unit/Remarks — here Qty/Unit come first in design-review tables, so Motor goes after Unit, before Remarks). Both columns render whenever the parent BOQ's `show_motor` flag is on (default true). Per-column comments are not added for Motor (designer can comment in Remarks/Change Note as today).
+
+Out of scope: pricing, OA/PI/Quotation/PO PDFs, approval logic, per-column comment schema, BOQ PDF (already done in prior turn).
 
 ## Changes
 
-### 1. `src/pages/boqs/BoqEditor.tsx` — Items table as real columns
-- Replace the inline Motor note (≈ lines 769–778) with two real grid columns inserted between MAKE and QTY.
-- Update the items list grid template + header row to include `MOTOR` and `MOTOR QTY` headers when `showMotor` is true. Render for every row (empty cell when row has no motor data). No truncation/inline note.
-- Header helper text: change "Hidden by default" → "Visible by default. Toggle persists per BOQ".
-- `setShowMotor` default stays `true`; ensure load path also defaults to `true` when `b.show_motor` is `null/undefined` (already the case at line 199).
-- Save path (`buildRecord` / handlers around lines 289 & 391) already writes `show_motor` and `line_items` (which include `motor`, `motor_quantity`). Verify the line-item serializer preserves `motor` and `motor_quantity` fields on every save — add explicit pick if currently filtered.
+### 1. Database — snapshot motor on the design-review items row
+**Migration** on `boq_design_review_items`:
+- Add `motor text` (nullable)
+- Add `motor_quantity numeric` (nullable)
 
-### 2. `src/pages/boqs/BoqEditor.tsx` → `BoqDocPreview` — on-screen preview
-Already renders columns when `hasMotor`. Keep as-is. Just match new "always show columns when toggle on" rule: change `hasMotor` to `showMotor` (do not gate on row data presence) so empty cells render instead of hiding columns.
+No GRANT or RLS changes needed (table already configured). No backfill — existing rounds simply render empty Motor cells.
 
-### 3. `src/lib/boq/pdf.ts` — Generated BOQ PDF
-- Change `hasMotor = showMotor && hasMotorData` to `hasMotor = showMotor` (default ON). Columns appear whenever toggle on; empty string for rows without motor data.
-- Keep Motor Price column removed.
+### 2. `src/lib/boq/designReview.ts`
+- `DesignReviewItemRow` type: add `motor?: string | null; motor_quantity?: number | null`.
+- `createDesignReview` insert (≈ line 138): include `motor: it.motor ?? null, motor_quantity: it.motor_quantity ?? null` when persisting items.
+- Any other place that builds `DesignReviewItemRow` baselines (e.g. `buildChangeLog`, `diffItemsAgainstBaseline`, `fetchLatestApprovalRound`): include the two fields when needed for diffing (only if currently mapping limited columns; otherwise they ride along automatically).
 
-### 4. `src/lib/boq/excel.ts` — Excel export
-- Same change: gate columns on `showMotor` only, not on row data presence.
+### 3. `src/components/boqs/DesignReviewPanel.tsx`
+- "Prepare items for Design" table (≈ lines 273–311):
+  - Add `<th>Motor</th><th>Motor Qty</th>` after Unit, before Remarks (gated on `boq.show_motor !== false && anyRowHasMotorData`).
+  - Add matching `<td>` cells showing `it.motor` / `it.motor_quantity ?? ""`.
+- Submitted review table (≈ lines 443–508):
+  - Same two `<th>` + `<td>` cells, same gating using `boq.show_motor` from the BOQ row already loaded by the panel.
+  - The "Design" suggestion sub-row (`colMap.map(...)`) keeps its 5 column cells; add 2 empty `<td>` spacers so column alignment is preserved.
 
-### 5. `src/lib/boq/pdfDistribution.ts` & `src/components/boqs/DistributeBoqDialog.tsx`
-- Verify distribution PDF passes `showMotor: boq.show_motor ?? true` through to `generateBoqPDF`. If currently passing the local dialog switch state, persist that to `boqs.show_motor` before generating the link, so approver page and "always-latest" PDF stay in sync.
+### 4. `src/pages/boqs/DesignReview.tsx`
+- Fetch `show_motor` flag: extend `meta` / `boq_snapshot` typing to read `show_motor` (already stored implicitly only if we add it). Add `show_motor: boq.show_motor` to the snapshot in `createDesignReview` (step 2). Default true when absent.
+- Items table header (≈ line 326): add Motor + Motor Qty `<TableHead>`s after Unit, before Remarks, gated on `showMotor && anyMotorData`.
+- Items table body (≈ line 368): add two `<TableCell>` cells showing `it.motor` / `it.motor_quantity ?? ""`.
+- Previous-round diff row (≈ line 352): if Motor cell shown, render the previous value strike-through alongside the other diff fields. Extend `DIFF_FIELDS` with `motor` and `motor_quantity` entries so existing diff machinery handles it.
+- Comments sub-row (≈ line 394): add two empty `<TableCell>` spacers in the Motor positions to keep column alignment — designer cannot leave per-column comments on Motor (matches scope rule).
 
-### 6. `src/pages/boqs/BoqVerify.tsx` — Approver / verify page
-- Render Motor and Motor Qty as real columns (not inline note) between MAKE and QTY when `show_motor` from RPC is true.
-- Keep the approver's "Show Motor Details in BOQ" switch; its final value is sent via `verify_boq_items_with_token(..., _show_motor)` (already wired in the RPC).
-
-### 7. Database
-No schema migration needed. `boqs.show_motor` already exists (default `true`) and `verify_boq_items_with_token` already accepts `_show_motor`. `line_items` JSON already carries `motor` / `motor_quantity` from OA → BOQ generation.
-
-### 8. QA
-- Open existing BOQ → Motor + Motor Qty columns visible by default; toggle hides both.
-- Save BOQ → reload → toggle state + motor values persist.
-- Generate BOQ PDF & Excel → columns match on-screen toggle, no Motor Price column.
-- Generate distribution link → approver page shows same columns; approver toggling and submitting persists `show_motor` back to BOQ row.
-- OA editor / OA PDF / PI PDF / Quotation PDF unchanged.
+### 5. QA
+- Open OA → BOQ with motor data → DesignReviewPanel "Prepare" table shows Motor + Motor Qty.
+- Generate Comment Link → designer page shows the two columns + previous-round diff if the row's motor changed.
+- Submit comments → return to panel → submitted table shows Motor + Motor Qty alongside designer's per-column comments (no Motor comment column).
+- BOQ with `show_motor=false` → columns hidden everywhere in design review (matches BOQ rule).
+- BOQ with zero motor data on any row → columns hidden (keeps legacy BOQs visually unchanged).
+- OA/PI/Quotation PDFs unchanged.
 
 ## Technical notes
 
-- File touch list: `src/pages/boqs/BoqEditor.tsx`, `src/lib/boq/pdf.ts`, `src/lib/boq/excel.ts`, `src/lib/boq/pdfDistribution.ts`, `src/components/boqs/DistributeBoqDialog.tsx`, `src/pages/boqs/BoqVerify.tsx`.
-- No new dependencies. No migration. No edge-function changes.
+Files touched: `supabase/migrations/<new>.sql`, `src/lib/boq/designReview.ts`, `src/components/boqs/DesignReviewPanel.tsx`, `src/pages/boqs/DesignReview.tsx`.
+
+No new dependencies, no edge-function changes, no RLS changes.
