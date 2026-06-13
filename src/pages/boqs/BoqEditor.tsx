@@ -286,7 +286,8 @@ export default function BoqEditor() {
       reference_oa_number: referenceOa || null, project_number: projectNumber || null,
       client_name: clientName || null, line_items: items, terms, notes,
       ...(shouldFlipStatus ? { design_review_status: "boq_updated" } : {}),
-    };
+    } as Record<string, unknown>;
+    payload.show_motor = showMotor;
     const res = isNew
       ? await supabase.from("boqs").insert(payload as never).select().single()
       : await supabase.from("boqs").update(payload as never).eq("id", boqId!).select().single();
