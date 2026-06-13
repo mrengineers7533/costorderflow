@@ -88,12 +88,15 @@ export default function BoqVerify() {
       }
     }
     setSubmitting(true);
-    const { data, error } = await supabase.rpc("verify_boq_items_with_token", {
-      _token: token,
-      _verifier_email: verifierEmail.trim(),
-      _items: items,
-      _show_motor: showMotor,
-    });
+    const { data, error } = await supabase.rpc(
+      "verify_boq_items_with_token",
+      {
+        _token: token,
+        _verifier_email: verifierEmail.trim(),
+        _items: items,
+        _show_motor: showMotor,
+      } as never,
+    );
     setSubmitting(false);
     if (error) {
       toast({ title: "Submission failed", description: error.message, variant: "destructive" });
