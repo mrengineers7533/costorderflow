@@ -285,6 +285,12 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
                         <RefreshCw className="h-3.5 w-3.5 mr-1" />Re-parse
                       </Button>
                     )}
+                   <Button size="icon" variant="ghost" disabled={isParsing} onClick={() => openSheetInTab(s)} title="View PDF">
+                     <Eye className="h-4 w-4" />
+                   </Button>
+                   <Button size="icon" variant="ghost" disabled={isParsing} onClick={() => downloadSheet(s)} title="Download PDF">
+                     <Download className="h-4 w-4" />
+                   </Button>
                    <Button size="sm" variant="default" disabled={isParsing} onClick={() => applySheet(s)}>
                      {isParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
                       s.status === "parsed" ? <><Wand2 className="h-3.5 w-3.5 mr-1" />Apply</> :

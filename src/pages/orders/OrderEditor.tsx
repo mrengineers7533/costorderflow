@@ -742,14 +742,25 @@ export default function OrderEditor() {
           };
           const make = (it as { make?: "MR" | "GMS" | "OTHER" }).make
             || inferItemMake(base);
+          const ext = it as {
+            make_label?: string;
+            motor?: string;
+            motor_quantity?: number;
+            motor_price?: number;
+            remarks?: string;
+          };
           return {
             id: crypto.randomUUID(),
             ...base,
-            make_label: (it as { make_label?: string }).make_label || "",
+            make_label: ext.make_label || "",
             quantity: Number(it.quantity) || 0,
             unit_rate: Number(it.unit_rate) || 0,
             amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0),
             make,
+            motor: ext.motor || undefined,
+            motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) || 0 : undefined,
+            motor_price: ext.motor_price != null ? Number(ext.motor_price) || 0 : undefined,
+            remarks: ext.remarks || undefined,
           };
         });
       // When the user picked a specific company on the chooser page, only keep
