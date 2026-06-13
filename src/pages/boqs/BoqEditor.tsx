@@ -701,6 +701,27 @@ export default function BoqEditor() {
   // come from the linked OA. Helper kept for future use.
 }
 
+/** Build the items table grid columns. Motor / Motor Qty slot between
+ *  MAKE (or DESCRIPTION when MAKE hidden) and QTY so the on-screen table
+ *  mirrors the PDF/Excel column order. */
+function buildBoqGridColumns({ showMake, showMotor }: { showMake: boolean; showMotor: boolean }): string {
+  const cols: string[] = [
+    "42px",                 // Item
+    "minmax(100px,1fr)",    // Model
+    "minmax(160px,2fr)",    // Description
+  ];
+  if (showMake) cols.push("minmax(80px,0.9fr)"); // Make
+  if (showMotor) {
+    cols.push("minmax(100px,1fr)"); // Motor
+    cols.push("80px");              // Motor Qty
+  }
+  cols.push("60px");                // Qty
+  cols.push("60px");                // Unit
+  cols.push("minmax(120px,1.4fr)"); // Remarks
+  cols.push("90px");                // Approval
+  return cols.join(" ");
+}
+
 function BoqItemsList({
   items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake, showMotor,
 }: {
