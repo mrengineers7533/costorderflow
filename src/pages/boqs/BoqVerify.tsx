@@ -24,9 +24,6 @@ export default function BoqVerify() {
   const [doneStatus, setDoneStatus] = useState<"approved" | "rejected" | "pending_verification" | null>(null);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [showMotor, setShowMotor] = useState<boolean>(true);
-  const hasMotorData = (boq?.line_items || []).some(
-    (it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0,
-  );
 
   useEffect(() => {
     (async () => {
