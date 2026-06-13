@@ -12,6 +12,12 @@ export interface BoqLineItem {
    *  (`LineItem.make_label`). Optional — hidden from every BOQ surface by
    *  default and only rendered when the user toggles the Make column on. */
   make?: string;
+  /** Optional Motor details propagated from the OA line item.
+   *  Surfaced in the BOQ PDF / Excel only when any row has data; legacy
+   *  BOQs render identically when these are absent. */
+  motor?: string;
+  motor_quantity?: number;
+  motor_price?: number;
   /** Senior approval state per line item. */
   approval_status?: "pending" | "approved" | "rejected";
   approval_comment?: string;
