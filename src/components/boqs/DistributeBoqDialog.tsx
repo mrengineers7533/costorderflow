@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Copy, Download, Link2, Loader2, Send } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqDistributionPDF } from "@/lib/boq/pdfDistribution";
 
@@ -28,6 +29,26 @@ export function DistributeBoqDialog({ open, onOpenChange, boq }: Props) {
   const [orderRootId, setOrderRootId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ensuring, setEnsuring] = useState(false);
+  const [showMotor, setShowMotor] = useState<boolean>(boq?.show_motor !== false);
+
+  const hasMotorData = useMemo(
+    () => (boq?.line_items || []).some((it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0),
+    [boq?.line_items],
+  );
+
+  useEffect(() => {
+    if (open) setShowMotor(boq?.show_motor !== false);
+  }, [open, boq?.show_motor]);
+
+  async function persistShowMotor(next: boolean) {
+    setShowMotor(next);
+    if (!boq?.id) return;
+    try {
+      await supabase.from("boqs").update({ show_motor: next } as never).eq("id", boq.id);
+    } catch (e) {
+      console.warn("persist show_motor failed", e);
+    }
+  }
 
   const familyLink = useMemo(
     () => (familyToken ? `${window.location.origin}/boq/family/${familyToken}` : ""),
@@ -95,7 +116,7 @@ export function DistributeBoqDialog({ open, onOpenChange, boq }: Props) {
     if (!familyLink) return;
     setBusy(true);
     try {
-      const doc = await generateBoqDistributionPDF(boq, familyLink);
+      const doc = await generateBoqDistributionPDF({ ...boq, show_motor: showMotor }, familyLink, { showMotor });
       const safe = (boq.boq_number || "BOQ").replace(/[/\\]/g, "_");
       doc.save(`${safe}_R${boq.revision ?? 0}_distribution.pdf`);
     } finally {
@@ -114,7 +135,7 @@ export function DistributeBoqDialog({ open, onOpenChange, boq }: Props) {
     setBusy(true);
     try {
       // Generate PDF and upload to storage so the link can attach it for recipients.
-      const doc = await generateBoqDistributionPDF(boq, familyLink);
+      const doc = await generateBoqDistributionPDF({ ...boq, show_motor: showMotor }, familyLink, { showMotor });
       const blob = doc.output("blob");
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id || "anon";
