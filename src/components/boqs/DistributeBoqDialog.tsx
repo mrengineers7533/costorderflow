@@ -252,6 +252,23 @@ export function DistributeBoqDialog({ open, onOpenChange, boq }: Props) {
               This link is stable. Whenever a newer revision is approved, the same link automatically resolves to the latest approved BOQ.
             </p>
           </div>
+
+          <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="show-motor" className="text-sm">Show Motor Details</Label>
+              <p className="text-[11px] text-muted-foreground">
+                {hasMotorData
+                  ? "Includes Motor & Motor Qty in the distribution PDF and on the always-latest link."
+                  : "No motor data on this BOQ — toggle has no effect."}
+              </p>
+            </div>
+            <Switch
+              id="show-motor"
+              checked={showMotor}
+              onCheckedChange={persistShowMotor}
+              disabled={!hasMotorData}
+            />
+          </div>
         </div>
 
         <DialogFooter className="gap-2">
