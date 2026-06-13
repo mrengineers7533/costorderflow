@@ -569,17 +569,6 @@ export default function BoqEditor() {
                   </Button>
                   <Button
                     type="button"
-                    variant={showApproval ? "secondary" : "outline"}
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setShowApproval(!showApproval)}
-                    title="Affects PDF / print only. The on-screen items table is unchanged."
-                  >
-                    <Columns3 className="h-4 w-4" />
-                    {showApproval ? "Hide 'Approved by Design' in PDF" : "Show 'Approved by Design' in PDF"}
-                  </Button>
-                  <Button
-                    type="button"
                     variant={showMotor ? "secondary" : "outline"}
                     size="sm"
                     className="gap-2"
