@@ -716,11 +716,12 @@ function BoqItemsList({
   // Latest submitted design-review round for this BOQ. Used to surface
   // per-row comments and approval decisions inline beneath each item.
   const designReview = useLatestDesignReview(boqId);
+  const gridCols = buildBoqGridColumns({ showMake: !!showMake, showMotor: !!showMotor });
   return (
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className={`grid ${showMake ? "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_minmax(80px,0.9fr)_60px_60px_minmax(120px,1.4fr)_90px]" : "grid-cols-[42px_minmax(100px,1fr)_minmax(160px,2fr)_60px_60px_minmax(120px,1.4fr)_90px]"} gap-1.5 items-start`}>
+            <div className="grid gap-1.5 items-start" style={{ gridTemplateColumns: gridCols }}>
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
               {canEditFull ? (
                 <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
@@ -737,6 +738,34 @@ function BoqItemsList({
                   <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
                 ) : (
                   <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
+                )
+              )}
+              {showMotor && (
+                canEditFull ? (
+                  <Input
+                    value={it.motor || ""}
+                    onChange={(e) => onUpdate(it.id, { motor: e.target.value })}
+                    className="h-9"
+                    placeholder="—"
+                  />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.motor || ""}</div>
+                )
+              )}
+              {showMotor && (
+                canEditFull ? (
+                  <Input
+                    type="number"
+                    value={it.motor_quantity ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onUpdate(it.id, { motor_quantity: v === "" ? undefined : Number(v) || 0 });
+                    }}
+                    className="h-9"
+                    placeholder="—"
+                  />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</div>
                 )
               )}
               {canEditFull ? (
@@ -769,15 +798,6 @@ function BoqItemsList({
             <div className="flex justify-end -mt-1">
               <BoqItemAttachments boqId={boqId} itemId={it.id} />
             </div>
-            {showMotor && ((it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0) && (
-              <div className="text-[11px] text-muted-foreground px-1">
-                <span className="font-semibold uppercase tracking-wider mr-1">Motor:</span>
-                {(it.motor || "—").trim() || "—"}
-                <span className="mx-2 opacity-50">·</span>
-                <span className="font-semibold uppercase tracking-wider mr-1">Qty:</span>
-                {it.motor_quantity ?? "—"}
-              </div>
-            )}
             {designReview && (
               <BoqDesignSuggestionRow
                 reviewItem={findReviewItemForOaItem(designReview.items, it as never, idx)}
