@@ -32,6 +32,7 @@ import ConsistencyCheck from "./pages/requisitions/ConsistencyCheck";
 import PublicRequisition from "./pages/requisitions/PublicRequisition";
 import RawMaterialMaster from "./pages/RawMaterialMaster";
 import GrnList from "./pages/grn/GrnList";
+import CostSheetsList from "./pages/cost-sheets/CostSheetsList";
 import { AppLayout } from "./components/AppLayout";
 import { AuthGate } from "./components/AuthGate";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -99,6 +100,7 @@ const App = () => (
                       <Route path="/requisitions/:id" element={<RequireModule user={user} module="requisitions"><RequisitionDetail /></RequireModule>} />
                       <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
                       <Route path="/grn" element={<RequireModule user={user} module="grn"><GrnList /></RequireModule>} />
+                      <Route path="/cost-sheets" element={<RequireModule user={user} module="cost_sheets"><CostSheetsList /></RequireModule>} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}

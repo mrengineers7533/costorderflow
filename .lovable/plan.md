@@ -1,59 +1,69 @@
-# Fix PO Create / Download Failure
 
-## Root cause
+# Cost Sheet — Motor fields + History
 
-The toast shows `Failed to create PO: [object Object]` — two real problems:
+Only additive changes. OA/quotation PDF, calculations, item selection, sections, totals, existing flows untouched.
 
-1. **DB CHECK constraint mismatch (the actual blocker).**
-   `purchase_orders.category` is constrained to only `('steel','machine','3p')`:
-   ```
-   purchase_orders_category_check CHECK (category = ANY (ARRAY['steel','machine','3p']))
-   ```
-   But the Annexure → PO flow sends categories like `sheet_ss`, `sheet_ms`, `sheet_gi`, `pipe`, `structure` (passed via the `?type=sheet_ss` URL param). Every insert from those categories fails with a check-violation, which the UI then swallows.
+## 1. AI extraction (parse-cost-sheet)
 
-2. **Error reporting bug.**
-   The `catch` does `e instanceof Error ? e.message : String(e)`. Supabase returns a plain object `{ message, code, details, hint }`, which is not an `Error`, so `String(e)` becomes `"[object Object]"`. That's why the toast shows no useful reason. Same pattern would hide the cause of any future failure.
+`supabase/functions/parse-cost-sheet/index.ts`
+- Extend the system prompt to describe the new landscape layout: after Price/Amount the detail table may contain `Motor`, `Motor Qty`, `Motor Price`, `Remarks`. Extract verbatim; if not present, omit.
+- Add to the `extract_cost_sheet` tool schema on each line item:
+  - `motor` (string) — model/spec text as printed
+  - `motor_quantity` (number)
+  - `motor_price` (number)
+  - `remarks` (string) — **reuse existing `remarks` field on `LineItem`; do not duplicate**
+- Old portrait sheets keep working — all four fields are optional.
 
-## Changes
+## 2. Types & item mapping
 
-### 1. New migration: widen `purchase_orders.category` check
-
-```sql
-ALTER TABLE public.purchase_orders
-  DROP CONSTRAINT IF EXISTS purchase_orders_category_check;
-
-ALTER TABLE public.purchase_orders
-  ADD CONSTRAINT purchase_orders_category_check
-  CHECK (category = ANY (ARRAY[
-    'machine','3p','pipe',
-    'sheet_ss','sheet_ms','sheet_gi',
-    'structure','steel'
-  ]));
-```
-
-No data changes, no other column or table touched. Existing rows (only `machine`/`3p`/`steel` were possible before) remain valid.
-
-### 2. `src/pages/purchase/PoCreateFromAnnexure.tsx` — better error messages
-
-In `generate()`'s `catch`, build a readable message from Supabase error shape so future failures are visible:
+`src/lib/orders/types.ts` — add optional fields on `LineItem`:
 ```ts
-const msg =
-  e instanceof Error ? e.message
-  : (e && typeof e === "object")
-    ? [e.message, e.details, e.hint, e.code].filter(Boolean).join(" · ")
-    : String(e);
-toast.error(`Failed to create PO: ${msg || "Unknown error"}`);
-console.error("PO create failed", e);
+motor?: string;
+motor_quantity?: number;
+motor_price?: number;
+// remarks?: string  — already exists, reused
 ```
-Apply the same defensive formatter to `downloadPreview` for consistency. No other logic changes.
 
-## Out of scope / unchanged
+Wherever extracted cost-sheet payloads are mapped into `LineItem` (OrderEditor + CostSheetPicker `ExtractedCostSheet.line_items`), pass through the four new fields. No effect on `amount`, `unit_rate`, totals, or PDF.
 
-- No changes to PO PDF rendering, annexure logic, raw-material locking, PO counter RPCs, RLS policies, grants, or any other module (BOQ, Requisition, Planning, GRN, etc.).
-- No edits to `supabase/functions/send-po` or `poPdf.ts`.
+## 3. OA editor — optional hidden columns
+
+`src/pages/orders/OrderEditor.tsx` (+ `pdfColumns.ts` only if needed for the in-editor column toggle, NOT for the PDF):
+- Add four columns to the OA items table: **Motor**, **Motor Qty**, **Motor Price**, **Remarks**. Hidden by default behind the existing column-visibility toggle.
+- Editable inline; values persist on `line_items`.
+- `Remarks` column binds to the existing `remarks` field — no new field.
+- **No change** to `src/lib/orders/pdf.ts`, PDF column set, totals, calc.ts, preview math.
+
+## 4. Cost Sheets history — dedicated page + picker polish
+
+New sidebar entry **Cost Sheets** → `/cost-sheets` (icon `FileText`), gated by `RequireModule` with new module key `cost_sheets` in `src/lib/access/modules.ts`.
+
+New `src/pages/cost-sheets/CostSheetsList.tsx`:
+- Table of all rows from `cost_sheets` (existing table, no schema change).
+- Columns: file name, uploader, uploaded at, status, parsed cost-sheet number, linked OAs (MR/GMS if any), actions.
+- Actions per row: **View PDF** (signed URL in new tab), **Download**, **Re-parse**, **Delete** (admin or owner).
+- Search by filename / cost-sheet number / company; filter by status.
+- Reuses existing `cost-sheets` storage bucket and current RLS.
+
+Enhance `src/components/orders/CostSheetPicker.tsx`:
+- Add explicit **View** and **Download** buttons next to each row (currently only Parse/Apply/Delete exist). Uses `createSignedUrl` on the existing bucket.
+
+Route wired in `src/App.tsx` inside the authenticated layout.
+
+## 5. Existing cost sheets
+
+The Re-parse button already exists in the picker and will be added to the new history page, so older sheets can be re-parsed on demand to fill motor fields. No automatic backfill.
+
+## Out of scope (explicitly unchanged)
+
+- `src/lib/orders/pdf.ts`, `pdfColumns.ts` PDF column set, quotation PDF, BOQ/PR/PO/GRN, requisition flow.
+- `src/lib/orders/calc.ts` totals, charges, GST, freight, MR/GMS split.
+- `cost_sheets` table schema, RLS, storage bucket.
+- `parse-cost-sheet` rate limiting, auth, model selection.
 
 ## Verification
 
-1. Open `/annexures/<id>/po/new?lot=1&type=sheet_ss`, select a row, set rate, click **Generate PO & Download** — insert succeeds, PDF downloads, toast shows success.
-2. Repeat with `type=pipe` and `type=structure` to confirm all categories pass the constraint.
-3. Force a failure (e.g. duplicate PO number) → toast now shows the actual message/details instead of `[object Object]`.
+1. Upload a new landscape PDF with motor columns → parse → open OA editor → enable Motor/Motor Qty/Motor Price/Remarks columns → values are filled. Generate OA PDF → identical to today (no motor columns shown).
+2. Upload an old portrait PDF → parses as before, motor fields blank, no regressions.
+3. `/cost-sheets` lists every uploaded sheet; View opens PDF, Download saves it, Re-parse refreshes extraction, Delete removes file+row.
+4. Sidebar shows Cost Sheets entry only for users with module access.

@@ -9,7 +9,8 @@ export type ModuleKey =
   | "requisitions"
   | "raw_materials"
   | "grn"
-  | "reports";
+  | "reports"
+  | "cost_sheets";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
@@ -23,4 +24,5 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "raw_materials", label: "Raw Materials" },
   { key: "grn", label: "GRN" },
   { key: "reports", label: "Flow Report" },
+  { key: "cost_sheets", label: "Cost Sheets" },
 ];
