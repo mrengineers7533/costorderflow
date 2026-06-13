@@ -566,6 +566,17 @@ export default function BoqEditor() {
                     <Columns3 className="h-4 w-4" />
                     {showApproval ? "Hide 'Approved by Design' in PDF" : "Show 'Approved by Design' in PDF"}
                   </Button>
+                  <Button
+                    type="button"
+                    variant={showMotor ? "secondary" : "outline"}
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowMotor(!showMotor)}
+                    title="Toggle Motor & Motor Qty visibility on BOQ table, PDF, distribution link and approval page."
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    {showMotor ? "Hide Motor Details" : "Show Motor Details"}
+                  </Button>
                   <span className="text-[11px] text-muted-foreground">
                     Hidden by default. Toggle persists per browser and is honored by the PDF/Excel export.
                   </span>
@@ -593,6 +604,7 @@ export default function BoqEditor() {
                   orderId={orderId || null}
                   onUpdate={updateItem}
                   showMake={showMake}
+                  showMotor={showMotor}
                 />
               </CardContent>
             </Card>
@@ -656,7 +668,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={showApproval} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={showApproval} showMotor={showMotor} />
           </div>
           </TabsContent>
 
