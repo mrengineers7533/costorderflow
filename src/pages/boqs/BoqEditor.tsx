@@ -699,7 +699,7 @@ export default function BoqEditor() {
 }
 
 function BoqItemsList({
-  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake,
+  items, canEditRemarks, canEditFull, boqId, orderId, onUpdate, showMake, showMotor,
 }: {
   items: BoqLineItem[];
   canEditRemarks: boolean;
@@ -708,6 +708,7 @@ function BoqItemsList({
   orderId: string | null;
   onUpdate: (id: string, patch: Partial<BoqLineItem>) => void;
   showMake?: boolean;
+  showMotor?: boolean;
 }) {
   // Latest submitted design-review round for this BOQ. Used to surface
   // per-row comments and approval decisions inline beneath each item.
@@ -765,6 +766,15 @@ function BoqItemsList({
             <div className="flex justify-end -mt-1">
               <BoqItemAttachments boqId={boqId} itemId={it.id} />
             </div>
+            {showMotor && ((it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0) && (
+              <div className="text-[11px] text-muted-foreground px-1">
+                <span className="font-semibold uppercase tracking-wider mr-1">Motor:</span>
+                {(it.motor || "—").trim() || "—"}
+                <span className="mx-2 opacity-50">·</span>
+                <span className="font-semibold uppercase tracking-wider mr-1">Qty:</span>
+                {it.motor_quantity ?? "—"}
+              </div>
+            )}
             {designReview && (
               <BoqDesignSuggestionRow
                 reviewItem={findReviewItemForOaItem(designReview.items, it as never, idx)}
@@ -878,10 +888,13 @@ function BoqDesignSuggestionRow({
    Uses A4 proportions (210x297mm) so on-screen layout matches the exported PDF
    exactly: same header, accent rule, BOQ title bar, two-column meta block,
    table column widths, header colors, terms box, and notes line. */
-function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: BoqRecord; showMake?: boolean; showApproval?: boolean }) {
+function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor = true }: { rec: BoqRecord; showMake?: boolean; showApproval?: boolean; showMotor?: boolean }) {
   const isMR = rec.format === "MR";
   const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-GB").replace(/\//g, "-");
   const accent = isMR ? "rgb(234,88,12)" : "rgb(120,120,120)";
+  const hasMotor = showMotor && (rec.line_items || []).some(
+    (it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0,
+  );
   return (
     <Card className="overflow-hidden bg-muted/40 print:bg-white print:border-0 print:shadow-none">
       <div className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground border-b print:hidden">
@@ -956,6 +969,8 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: B
             <col style={{ width: "14mm" }} />
             <col style={{ width: "14mm" }} />
             <col style={{ width: "38mm" }} />
+            {hasMotor && <col style={{ width: "26mm" }} />}
+            {hasMotor && <col style={{ width: "14mm" }} />}
             {showApproval && <col style={{ width: "24mm" }} />}
           </colgroup>
           <thead>
@@ -964,13 +979,15 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: B
                 const heads: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
                 if (showMake) heads.push("MAKE");
                 heads.push("QTY", "UNIT", "Remarks");
+                if (hasMotor) heads.push("MOTOR", "MOTOR QTY");
                 if (showApproval) heads.push("Approved by Design");
                 return heads;
               })().map((h, i) => {
-                const lastIdx = 2 + (showMake ? 1 : 0) + 3 + (showApproval ? 1 : 0) - 1;
+                const lastIdx = 2 + (showMake ? 1 : 0) + 3 + (hasMotor ? 2 : 0) + (showApproval ? 1 : 0) - 1;
                 const qtyIdx = 2 + (showMake ? 1 : 0) + 1;
                 const unitIdx = qtyIdx + 1;
-                const center = i === 0 || i === qtyIdx || i === unitIdx || (showApproval && i === lastIdx);
+                const motorQtyIdx = hasMotor ? 2 + (showMake ? 1 : 0) + 3 + 2 - 1 : -1;
+                const center = i === 0 || i === qtyIdx || i === unitIdx || (hasMotor && i === motorQtyIdx) || (showApproval && i === lastIdx);
                 return (
                   <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
                 );
@@ -979,7 +996,7 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: B
           </thead>
           <tbody>
             {rec.line_items.length === 0 ? (
-              <tr><td colSpan={6 + (showMake ? 1 : 0) + (showApproval ? 1 : 0)} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
+              <tr><td colSpan={6 + (showMake ? 1 : 0) + (hasMotor ? 2 : 0) + (showApproval ? 1 : 0)} style={{ border: "0.2mm solid #000", padding: "3mm", textAlign: "center", fontStyle: "italic", color: "#777" }}>(no items)</td></tr>
             ) : rec.line_items.map((it, i) => (
               <tr key={it.id} style={{ verticalAlign: "top" }}>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.item_no || i + 1}</td>
@@ -989,6 +1006,12 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false }: { rec: B
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
+                {hasMotor && (
+                  <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.motor || "").trim()}</td>
+                )}
+                {hasMotor && (
+                  <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</td>
+                )}
                 {showApproval && (() => {
                   const s = ((it as { approval_status?: string }).approval_status || "pending").toLowerCase();
                   const txt = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Pending";
