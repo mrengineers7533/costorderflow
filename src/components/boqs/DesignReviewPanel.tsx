@@ -466,6 +466,8 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                     <th className="p-2">Description</th>
                     <th className="p-2 w-14">Qty</th>
                     <th className="p-2 w-14">Unit</th>
+                    {openMotorShown && <th className="p-2 w-28">Motor</th>}
+                    {openMotorShown && <th className="p-2 w-16">Motor Qty</th>}
                     <th className="p-2">Remarks</th>
                     <th className="p-2 w-32">Status</th>
                     <th className="p-2">Files</th>
@@ -490,6 +492,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                           <td className="p-2">{it.description}</td>
                           <td className="p-2">{it.quantity ?? 0}</td>
                           <td className="p-2">{it.unit || "Nos"}</td>
+                          {openMotorShown && (
+                            <td className="p-2">{(it as { motor?: string | null }).motor || ""}</td>
+                          )}
+                          {openMotorShown && (
+                            <td className="p-2">{(it as { motor_quantity?: number | null }).motor_quantity ?? ""}</td>
+                          )}
                           <td className="p-2 text-muted-foreground">{it.remarks || <span className="opacity-50">—</span>}</td>
                           <td className="p-2">{decisionBadge(it.decision)}</td>
                           <td className="p-2">
@@ -501,9 +509,12 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                         {hasSuggestion && (
                           <tr className="bg-primary/5 border-b">
                             <td className="p-2 align-top text-[10px] uppercase tracking-wider text-primary font-semibold">Design</td>
-                            {colMap.map(({ key, label }) => {
+                            {colMap.map(({ key, label }, idx) => {
                               const v = (cols[key] || "").trim();
+                              const isRemarks = key === "remarks";
                               return (
+                                <Fragment key={key}>
+                                {isRemarks && openMotorShown && (<><td className="p-2" /><td className="p-2" /></>)}
                                 <td key={key} className="p-2 align-top whitespace-pre-wrap">
                                   {v ? <span className="text-foreground">{v}</span> : <span className="text-muted-foreground opacity-50">—</span>}
                                   {key === "remarks" && it.design_change_note && (
@@ -511,6 +522,7 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
                                   )}
                                   {label === undefined && null}
                                 </td>
+                                </Fragment>
                               );
                             })}
                             <td className="p-2" colSpan={2} />
