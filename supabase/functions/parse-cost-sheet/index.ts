@@ -155,13 +155,17 @@ Deno.serve(async (req) => {
       extracted: { _progress: { stage: "downloading", percent: 10, message: "Fetching PDF…" } },
     }).eq("id", costSheetId);
 
-    // Download the file
+    // Heavy work (download + AI call) runs in the background so the HTTP
+    // request returns immediately. Edge Functions enforce a 150s idle timeout
+    // on the response — Gemini parsing of large PDFs can exceed that. The
+    // client listens to realtime updates on `cost_sheets` to pick up progress
+    // and the final `parsed` row.
+    const runParse = async () => {
+      try {
     const dl = await admin.storage.from("cost-sheets").download(sheet.file_path);
     if (dl.error || !dl.data) {
       await admin.from("cost_sheets").update({ status: "failed", parse_error: `File not found: ${dl.error?.message}` }).eq("id", costSheetId);
-      return new Response(JSON.stringify({ error: `File not found: ${dl.error?.message}` }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return;
     }
     const ab = await dl.data.arrayBuffer();
     const base64 = arrayBufferToBase64(ab);
@@ -276,32 +280,21 @@ Deno.serve(async (req) => {
       const errText = await aiRes.text();
       console.error("AI gateway error:", aiRes.status, errText);
       await admin.from("cost_sheets").update({ status: "failed", parse_error: `AI ${aiRes.status}: ${errText.slice(0, 500)}` }).eq("id", costSheetId);
-      const status = aiRes.status === 429 ? 429 : aiRes.status === 402 ? 402 : 500;
-      const message =
-        aiRes.status === 429 ? "Rate limit exceeded. Please try again in a moment." :
-        aiRes.status === 402 ? "AI credits exhausted. Add credits in Settings → Workspace → Usage." :
-        "AI parsing failed.";
-      return new Response(JSON.stringify({ error: message }), {
-        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return;
     }
 
     const aiJson = await aiRes.json();
     const call = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) {
       await admin.from("cost_sheets").update({ status: "failed", parse_error: "No structured output returned" }).eq("id", costSheetId);
-      return new Response(JSON.stringify({ error: "Could not extract structured data from this PDF." }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return;
     }
 
     let extracted: Record<string, unknown> = {};
     try { extracted = JSON.parse(call.function.arguments); } catch (e) {
       console.error("JSON parse error:", e, call.function.arguments);
       await admin.from("cost_sheets").update({ status: "failed", parse_error: "Malformed AI response" }).eq("id", costSheetId);
-      return new Response(JSON.stringify({ error: "Malformed AI response." }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return;
     }
 
     // Compute amounts where missing
@@ -346,9 +339,21 @@ Deno.serve(async (req) => {
     await admin.from("cost_sheets").update({
       status: "parsed", extracted, parse_error: null,
     }).eq("id", costSheetId);
+      } catch (e) {
+        console.error("parse-cost-sheet background error:", e);
+        await admin.from("cost_sheets").update({
+          status: "failed",
+          parse_error: e instanceof Error ? e.message : "Unknown error",
+        }).eq("id", costSheetId);
+      }
+    };
 
-    return new Response(JSON.stringify({ extracted }), {
-      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Fire-and-forget; keep the worker alive until parsing completes.
+    const ER = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (ER?.waitUntil) ER.waitUntil(runParse()); else runParse();
+
+    return new Response(JSON.stringify({ status: "processing", cost_sheet_id: costSheetId }), {
+      status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("parse-cost-sheet error:", e);
