@@ -37,6 +37,18 @@ function newBoqItem(seq: number): BoqLineItem {
   return { id: crypto.randomUUID(), item_no: String(seq), model_number: "", description: "", quantity: 1, unit: "Nos", remarks: "", make: "" };
 }
 
+/** Build the items table grid columns. Motor / Motor Qty slot between
+ *  MAKE (or DESCRIPTION when MAKE hidden) and QTY so the on-screen table
+ *  mirrors the PDF/Excel column order. Declared as a const so Vite Fast
+ *  Refresh can't strip the hoisted declaration. */
+const buildBoqGridColumns = ({ showMake, showMotor }: { showMake: boolean; showMotor: boolean }): string => {
+  const cols: string[] = ["42px", "minmax(100px,1fr)", "minmax(160px,2fr)"];
+  if (showMake) cols.push("minmax(80px,0.9fr)");
+  if (showMotor) { cols.push("minmax(100px,1fr)"); cols.push("80px"); }
+  cols.push("60px", "60px", "minmax(120px,1.4fr)", "90px");
+  return cols.join(" ");
+};
+
 export default function BoqEditor() {
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
