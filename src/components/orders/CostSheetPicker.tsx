@@ -162,12 +162,15 @@ export function CostSheetPicker({ onApply, onParsingChange }: { onApply: (data: 
       await refresh();
       return;
     }
-    toast({ title: "Cost sheet parsed", description: "Review and apply to your order." });
     const extracted = (data as { extracted?: ExtractedCostSheet })?.extracted;
     if (extracted) {
-      // Find the refreshed row to pass along
+      // Legacy synchronous response — apply immediately.
+      toast({ title: "Cost sheet parsed", description: "Review and apply to your order." });
       const { data: row } = await supabase.from("cost_sheets").select("*").eq("id", id).maybeSingle();
       if (row) onApply(extracted, row as unknown as CostSheetRow);
+    } else {
+      // New async flow — parsing continues in background; realtime will deliver the result.
+      toast({ title: "Parsing started", description: "AI extraction is running in the background…" });
     }
   }
 
