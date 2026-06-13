@@ -1028,7 +1028,7 @@ export default function OrderEditor() {
               </div>
             )}
             <div className="space-y-2">
-              <div className="grid gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 20 : 14}, minmax(0, 1fr))` }}>
+              <div className="grid gap-2 text-xs font-medium text-muted-foreground px-1" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
                 <div className="col-span-4">Description</div>
                 <div className="col-span-2">Make</div>
                 <div className="col-span-1">Qty</div>
@@ -1037,13 +1037,16 @@ export default function OrderEditor() {
                 <div className="col-span-1">Make</div>
                 <div className="col-span-2 text-right">Amount</div>
                 {showItemExtras && <div className="col-span-2">Model</div>}
+                {showItemExtras && <div className="col-span-3">Motor</div>}
+                {showItemExtras && <div className="col-span-1">Motor Qty</div>}
+                {showItemExtras && <div className="col-span-2">Motor Price</div>}
                 {showItemExtras && <div className="col-span-2">Remarks</div>}
                 {showItemExtras && <div className="col-span-2">Approved by Design</div>}
                 <div className="col-span-1" />
               </div>
               {editorItems.map((it, idx) => (
                 <div key={it.id} className="space-y-1.5">
-                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 20 : 14}, minmax(0, 1fr))` }}>
+                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
                   <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
@@ -1064,6 +1067,34 @@ export default function OrderEditor() {
                       value={it.model || ""}
                       onChange={(e) => updateItemById(it.id, { model: e.target.value })}
                       placeholder="Model"
+                    />
+                  )}
+                  {showItemExtras && (
+                    <Input
+                      className="col-span-3"
+                      value={it.motor || ""}
+                      onChange={(e) => updateItemById(it.id, { motor: e.target.value })}
+                      placeholder="Motor"
+                    />
+                  )}
+                  {showItemExtras && (
+                    <Input
+                      className="col-span-1"
+                      type="number"
+                      step="any"
+                      value={it.motor_quantity ?? ""}
+                      onChange={(e) => updateItemById(it.id, { motor_quantity: e.target.value === "" ? undefined : +e.target.value })}
+                      placeholder="Qty"
+                    />
+                  )}
+                  {showItemExtras && (
+                    <Input
+                      className="col-span-2"
+                      type="number"
+                      step="any"
+                      value={it.motor_price ?? ""}
+                      onChange={(e) => updateItemById(it.id, { motor_price: e.target.value === "" ? undefined : +e.target.value })}
+                      placeholder="Motor Price"
                     />
                   )}
                   {showItemExtras && (
