@@ -175,8 +175,7 @@ export default function BoqList() {
 
   async function handleDownload(b: BoqRecord) {
     try {
-      const showApproval = (() => { try { return window.localStorage.getItem("boq.pdf.approval") === "1"; } catch { return false; } })();
-      const doc = await generateBoqPDF(b, { showApproval });
+      const doc = await generateBoqPDF(b, { showApproval: false });
       const safe = (b.boq_number || "BOQ").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
       toast({ title: "BOQ PDF downloaded" });
@@ -187,8 +186,7 @@ export default function BoqList() {
 
   async function handlePrint(b: BoqRecord) {
     try {
-      const showApproval = (() => { try { return window.localStorage.getItem("boq.pdf.approval") === "1"; } catch { return false; } })();
-      const doc = await generateBoqPDF(b, { showApproval });
+      const doc = await generateBoqPDF(b, { showApproval: false });
       const blobUrl = doc.output("bloburl") as unknown as string;
       const w = window.open(blobUrl, "_blank", "noopener");
       if (w) setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 1000);
