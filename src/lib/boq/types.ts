@@ -65,6 +65,11 @@ export interface BoqRecord {
   verification_requested_at?: string | null;
   verified_at?: string | null;
   verified_by_email?: string | null;
+  /** When false, Motor and Motor Qty are hidden from BOQ surfaces
+   *  (editor table, PDF, Excel, distribution link, approval page).
+   *  Defaults to true. Auto-hide rule still applies — columns only
+   *  render if at least one row actually carries motor data. */
+  show_motor?: boolean;
 }
 
 /** Derive BOQ number from an OA number. The BOQ number always mirrors

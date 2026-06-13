@@ -46,17 +46,23 @@ export interface BoqPdfOptions {
   /** When true, includes the "Approved by Design" column. Defaults to false
    *  so the column is hidden in PDF/print unless the user opts in. */
   showApproval?: boolean;
+  /** When false, hides the Motor / Motor Qty columns even when row data is
+   *  present. Defaults to true so existing behaviour is preserved. */
+  showMotor?: boolean;
 }
 
 export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): Promise<jsPDF> {
   const showMake = !!opts.showMake;
   const showApproval = !!opts.showApproval;
-  // Auto-show motor / motor-qty / motor-price columns when at least one row
-  // carries that data — legacy BOQs (no motor data) render identically.
-  const hasMotor = (boq.line_items || []).some((it) => {
-    const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
-    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0 || (x.motor_price ?? 0) > 0;
+  // Auto-show Motor / Motor Qty columns when at least one row carries that
+  // data AND the per-BOQ `show_motor` toggle is enabled (defaults to true).
+  // Legacy BOQs without motor data render identically.
+  const showMotor = opts.showMotor !== false;
+  const hasMotorData = (boq.line_items || []).some((it) => {
+    const x = it as { motor?: string; motor_quantity?: number };
+    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0;
   });
+  const hasMotor = showMotor && hasMotorData;
   // Refresh per-item approval status from the latest design-review round so
   // the PDF always reflects current decisions, regardless of which screen
   // initiated the export. Failures fall back silently to whatever is on
@@ -186,7 +192,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   const headRow: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
   if (showMake) headRow.push("MAKE");
   headRow.push("QTY", "UNIT", "Remarks");
-  if (hasMotor) headRow.push("MOTOR", "MOTOR QTY", "MOTOR PRICE");
+  if (hasMotor) headRow.push("MOTOR", "MOTOR QTY");
   if (showApproval) headRow.push("Approved by Design");
   const approvalIdx = showApproval ? headRow.length - 1 : -1;
   const rows = sortByItemNo(boq.line_items).map((it, i) => {
@@ -206,11 +212,10 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
     ];
     if (showMake) base.splice(3, 0, (it.make || "").trim());
     if (hasMotor) {
-      const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
+      const x = it as { motor?: string; motor_quantity?: number };
       base.push(
         (x.motor || "").trim(),
         x.motor_quantity != null && x.motor_quantity > 0 ? String(x.motor_quantity) : "",
-        x.motor_price != null && x.motor_price > 0 ? x.motor_price.toLocaleString("en-IN") : "",
       );
     }
     if (showApproval) base.push(approval);
@@ -234,11 +239,10 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   columnStyles[ci++] = { cellWidth: 12, halign: "center" };
   // Remarks — wider when approval column is hidden so layout matches existing look.
   columnStyles[ci++] = { cellWidth: showApproval ? (showMake ? 32 : 38) : (showMake ? 54 : 62) };
-  // Motor / Motor Qty / Motor Price (optional)
+  // Motor / Motor Qty (optional)
   if (hasMotor) {
     columnStyles[ci++] = { cellWidth: 26 };
     columnStyles[ci++] = { cellWidth: 14, halign: "center" };
-    columnStyles[ci++] = { cellWidth: 20, halign: "right" };
   }
   // Approved by Design (optional)
   if (showApproval) columnStyles[ci++] = { cellWidth: showMake ? 22 : 24, halign: "center", fontStyle: "bold" };

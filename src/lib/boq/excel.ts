@@ -5,16 +5,20 @@ import { sortByItemNo, type BoqRecord } from "./types";
  *  Pricing is intentionally omitted — BOQ has no rates. The optional
  *  "Make" column is only included when `opts.showMake === true`, so the
  *  default export stays byte-identical to the historical workbook. */
-export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): Blob {
+export function buildBoqXlsx(
+  b: BoqRecord,
+  opts: { showMake?: boolean; showMotor?: boolean } = {},
+): Blob {
   const showMake = !!opts.showMake;
-  const hasMotor = (b.line_items || []).some((it) => {
-    const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
-    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0 || (x.motor_price ?? 0) > 0;
+  const showMotor = opts.showMotor !== false;
+  const hasMotor = showMotor && (b.line_items || []).some((it) => {
+    const x = it as { motor?: string; motor_quantity?: number };
+    return (x.motor && x.motor.trim()) || (x.motor_quantity ?? 0) > 0;
   });
   const baseHeader = showMake
     ? ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "MAKE", "QTY", "UNIT", "Remarks"]
     : ["ITEM No.", "MODEL NUMBER", "DESCRIPTION", "QTY", "UNIT", "Remarks"];
-  if (hasMotor) baseHeader.push("MOTOR", "MOTOR QTY", "MOTOR PRICE");
+  if (hasMotor) baseHeader.push("MOTOR", "MOTOR QTY");
   const header: (string | number)[][] = [
     [`BOQ No.: ${b.boq_number}`],
     [`Revision: R${b.revision ?? 0}${b.is_current ? " (Current)" : " (Superseded)"}`],
@@ -37,11 +41,10 @@ export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): B
     ];
     if (showMake) base.splice(3, 0, (it.make || "").trim());
     if (hasMotor) {
-      const x = it as { motor?: string; motor_quantity?: number; motor_price?: number };
+      const x = it as { motor?: string; motor_quantity?: number };
       base.push(
         (x.motor || "").trim(),
         x.motor_quantity != null ? Number(x.motor_quantity) : "",
-        x.motor_price != null ? Number(x.motor_price) : "",
       );
     }
     return base;
@@ -57,7 +60,7 @@ export function buildBoqXlsx(b: BoqRecord, opts: { showMake?: boolean } = {}): B
   const baseCols = showMake
     ? [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 40 }]
     : [{ wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 8 }, { wch: 8 }, { wch: 40 }];
-  if (hasMotor) baseCols.push({ wch: 24 }, { wch: 10 }, { wch: 14 });
+  if (hasMotor) baseCols.push({ wch: 24 }, { wch: 10 });
   ws["!cols"] = baseCols;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "BOQ");

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { CheckCircle2, ShieldCheck, Loader2, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { sortByItemNo, type BoqLineItem, type BoqRecord } from "@/lib/boq/types";
@@ -22,6 +23,10 @@ export default function BoqVerify() {
   const [submitting, setSubmitting] = useState(false);
   const [doneStatus, setDoneStatus] = useState<"approved" | "rejected" | "pending_verification" | null>(null);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [showMotor, setShowMotor] = useState<boolean>(true);
+  const hasMotorData = (boq?.line_items || []).some(
+    (it) => (it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0,
+  );
 
   useEffect(() => {
     (async () => {
@@ -32,6 +37,7 @@ export default function BoqVerify() {
       } else {
         const b = data as unknown as BoqRecord;
         setBoq(b);
+        setShowMotor(b.show_motor !== false);
         const init: Record<string, Decision> = {};
         (b.line_items || []).forEach((it) => {
           init[it.id] = {
@@ -82,11 +88,15 @@ export default function BoqVerify() {
       }
     }
     setSubmitting(true);
-    const { data, error } = await supabase.rpc("verify_boq_items_with_token", {
-      _token: token,
-      _verifier_email: verifierEmail.trim(),
-      _items: items,
-    });
+    const { data, error } = await supabase.rpc(
+      "verify_boq_items_with_token",
+      {
+        _token: token,
+        _verifier_email: verifierEmail.trim(),
+        _items: items,
+        _show_motor: showMotor,
+      } as never,
+    );
     setSubmitting(false);
     if (error) {
       toast({ title: "Submission failed", description: error.message, variant: "destructive" });
@@ -150,6 +160,15 @@ export default function BoqVerify() {
                           <div className="text-[11px] text-muted-foreground mt-0.5">
                             Qty: {it.quantity} {it.unit}{it.remarks ? ` · Remarks: ${it.remarks}` : ""}
                           </div>
+                          {showMotor && ((it.motor && it.motor.trim()) || (it.motor_quantity ?? 0) > 0) && (
+                            <div className="text-[11px] text-foreground mt-0.5">
+                              <span className="font-semibold uppercase tracking-wider mr-1">Motor:</span>
+                              {(it.motor || "—").trim() || "—"}
+                              <span className="mx-2 opacity-50">·</span>
+                              <span className="font-semibold uppercase tracking-wider mr-1">Qty:</span>
+                              {it.motor_quantity ?? "—"}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-1 shrink-0">
                           <Button
@@ -195,6 +214,22 @@ export default function BoqVerify() {
                 <Label htmlFor="verifier-email">Your email</Label>
                 <Input id="verifier-email" type="email" value={verifierEmail} onChange={(e) => setVerifierEmail(e.target.value)} placeholder="senior@company.com" />
                 <p className="text-[11px] text-muted-foreground">Recorded for audit when you submit.</p>
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="approver-show-motor" className="text-sm">Show Motor Details in BOQ</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    {hasMotorData
+                      ? "Toggle off to hide Motor & Motor Qty from the approved BOQ and its PDF."
+                      : "No motor data on this BOQ — toggle has no effect."}
+                  </p>
+                </div>
+                <Switch
+                  id="approver-show-motor"
+                  checked={showMotor}
+                  onCheckedChange={setShowMotor}
+                  disabled={!hasMotorData}
+                />
               </div>
               <Button onClick={submit} disabled={submitting} className="w-full">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
