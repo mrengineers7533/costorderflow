@@ -32,7 +32,7 @@ import { DocLink } from "@/components/boqs/DocLink";
 import { sortByItemNo, type BoqLineItem } from "@/lib/boq/types";
 
 interface Props {
-  boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null };
+  boq: { id: string | null; user_id: string | null; boq_number: string; client_name: string | null; project_number: string | null; show_motor?: boolean };
   items: BoqLineItem[];
   designReviewStatus?: string | null;
   onChange?: () => void;
@@ -65,6 +65,16 @@ export function DesignReviewPanel({ boq, items, designReviewStatus, onChange }: 
   const [prepareItems, setPrepareItems] = useState<BoqLineItem[]>(items);
   const [prepareOriginal, setPrepareOriginal] = useState<BoqLineItem[]>(items);
   const [savingRemarks, setSavingRemarks] = useState(false);
+
+  const showMotorFlag = boq.show_motor !== false;
+  const anyPrepareMotor = prepareItems.some(
+    (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+  );
+  const prepareMotorShown = showMotorFlag && anyPrepareMotor;
+  const anyOpenMotor = openItems.some(
+    (i) => !!(i as { motor?: string | null }).motor || (i as { motor_quantity?: number | null }).motor_quantity != null,
+  );
+  const openMotorShown = showMotorFlag && anyOpenMotor;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
