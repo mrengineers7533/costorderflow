@@ -672,7 +672,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={showApproval} showMotor={showMotor} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={false} showMotor={showMotor} />
           </div>
           </TabsContent>
 
