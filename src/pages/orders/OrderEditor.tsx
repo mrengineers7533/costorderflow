@@ -995,7 +995,7 @@ export default function OrderEditor() {
                 onClick={() => setShowItemExtras((v) => !v)}
                 title="Show/hide Model, Remarks & Approval columns"
               >
-                {showItemExtras ? "Hide" : "Show"} Model, Remarks & Approval
+                {showItemExtras ? "Hide" : "Show"} Model, Motor, Remarks & Approval
               </Button>
               {(hasMR || hasGMS) && (
                 <ToggleGroup
