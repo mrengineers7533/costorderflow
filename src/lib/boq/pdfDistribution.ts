@@ -86,9 +86,13 @@ async function fetchLatestReview(boqId: string): Promise<{ round: DesignReviewRo
 export async function generateBoqDistributionPDF(
   boq: BoqRecord,
   familyLink: string,
-  opts: { showMake?: boolean; showApproval?: boolean } = {},
+  opts: { showMake?: boolean; showApproval?: boolean; showMotor?: boolean } = {},
 ): Promise<jsPDF> {
-  const doc = await generateBoqPDF(boq, { showMake: opts.showMake, showApproval: opts.showApproval });
+  const doc = await generateBoqPDF(boq, {
+    showMake: opts.showMake,
+    showApproval: opts.showApproval,
+    showMotor: opts.showMotor,
+  });
   const W = doc.internal.pageSize.getWidth();
   const M = 12;
 
