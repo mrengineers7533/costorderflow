@@ -401,6 +401,91 @@ export default function OrderEditor() {
     });
   }
 
+  // ---- Cell-wise Design comments (inline under each OA input) ----
+  const [designCellComments, setDesignCellComments] = useState<DesignCellComment[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!currentBoq?.id) { setDesignCellComments([]); return; }
+      const { data } = await supabase
+        .from("boq_design_comments" as never)
+        .select("id,boq_id,boq_item_id,column_key,comment,user_name,department,created_at,applied_to_oa_at")
+        .eq("boq_id", currentBoq.id)
+        .order("created_at", { ascending: false });
+      if (!cancelled) setDesignCellComments(((data || []) as unknown) as DesignCellComment[]);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [currentBoq?.id]);
+
+  /** boq_item_id → column_key → latest comment */
+  const designCommentByItemCol = useMemo(() => {
+    const m = new Map<string, Map<string, DesignCellComment>>();
+    for (const c of designCellComments) {
+      if (!c.column_key) continue;
+      let inner = m.get(c.boq_item_id);
+      if (!inner) { inner = new Map(); m.set(c.boq_item_id, inner); }
+      if (!inner.has(c.column_key)) inner.set(c.column_key, c); // first wins (newest)
+    }
+    return m;
+  }, [designCellComments]);
+
+  /** Map an OA item id → matching BOQ item id (id → norm description → positional). */
+  const oaToBoqItemId = useMemo(() => {
+    const out = new Map<string, string>();
+    const boqItems = (currentBoq?.line_items as BoqLineItem[] | undefined) || [];
+    if (!boqItems.length) return out;
+    const norm = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const byId = new Map(boqItems.map((b) => [b.id, b]));
+    const byDesc = new Map<string, BoqLineItem[]>();
+    boqItems.forEach((b) => {
+      const k = norm(b.description);
+      if (!k) return;
+      const arr = byDesc.get(k) || [];
+      arr.push(b);
+      byDesc.set(k, arr);
+    });
+    items.forEach((it, idx) => {
+      const direct = byId.get(it.id);
+      if (direct) { out.set(it.id, direct.id); return; }
+      const k = norm(it.description);
+      const cand = k ? byDesc.get(k) || [] : [];
+      const match = cand.length === 1 ? cand[0]
+        : cand.length > 1 ? cand[Math.min(idx, cand.length - 1)]
+        : boqItems[idx];
+      if (match) out.set(it.id, match.id);
+    });
+    return out;
+  }, [currentBoq, items]);
+
+  function cellComment(oaItemId: string, columnKey: string): DesignCellComment | undefined {
+    const boqItemId = oaToBoqItemId.get(oaItemId);
+    if (!boqItemId) return undefined;
+    return designCommentByItemCol.get(boqItemId)?.get(columnKey);
+  }
+
+  async function applyCellComment(
+    oaItemId: string,
+    field: keyof LineItem,
+    rawValue: string,
+    commentId: string,
+  ) {
+    const value: unknown = (field === "quantity" || field === "motor_quantity")
+      ? Number(String(rawValue).replace(/[^\d.-]/g, "")) || 0
+      : rawValue;
+    updateItemById(oaItemId, { [field]: value } as Partial<LineItem>);
+    try {
+      await supabase.rpc("apply_design_comment_to_oa" as never, {
+        _comment_id: commentId, _oa_id: orderId, _applied_value: rawValue,
+      } as never);
+    } catch { /* audit best-effort */ }
+    setDesignCellComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, applied_to_oa_at: new Date().toISOString() } : c)),
+    );
+    toast({ title: "Applied to editor", description: "Save / Revise to publish." });
+  }
+
   /** Apply Model / Remarks (BOQ-only design suggestions) directly to the
    *  current linked BOQ row. Looks up the BOQ row by `boq_item_id` first,
    *  then falls back to normalized-description match. Writes a single
