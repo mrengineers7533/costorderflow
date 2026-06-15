@@ -21,9 +21,27 @@ export default function DesignBoqList() {
       setLoading(true);
       const { data } = await supabase
         .from("boqs")
-        .select("id, boq_number, client_name, project_number, reference_oa_number, format, status, design_review_status, updated_at, prepared_by, revision, is_current")
+        .select("id, boq_number, client_name, project_number, reference_oa_number, format, status, design_review_status, updated_at, prepared_by, revision, is_current, order_id")
         .order("updated_at", { ascending: false });
-      setRows((data || []) as unknown as BoqRecord[]);
+      const all = ((data || []) as unknown as BoqRecord[]);
+      // Resolve OA family root for each BOQ so siblings collapse to the latest revision.
+      const orderIds = Array.from(new Set(all.map((b) => b.order_id).filter(Boolean))) as string[];
+      let rootById = new Map<string, string>();
+      if (orderIds.length) {
+        const { data: ords } = await supabase
+          .from("orders").select("id,parent_order_id").in("id", orderIds);
+        rootById = new Map(((ords || []) as Array<{ id: string; parent_order_id: string | null }>)
+          .map((o) => [o.id, o.parent_order_id || o.id]));
+      }
+      const byFamily = new Map<string, BoqRecord>();
+      for (const b of all) {
+        const fam = rootById.get(b.order_id) || b.order_id || b.id;
+        const ex = byFamily.get(fam);
+        if (!ex || (b.revision ?? 0) > (ex.revision ?? 0)) byFamily.set(fam, b);
+      }
+      const latest = Array.from(byFamily.values())
+        .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+      setRows(latest);
       setLoading(false);
     })();
   }, []);
@@ -98,7 +116,12 @@ export default function DesignBoqList() {
               <TableBody>
                 {visible.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.boq_number}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {r.boq_number}
+                        <Badge variant="secondary" className="text-[10px]">R{r.revision ?? 0}</Badge>
+                      </div>
+                    </TableCell>
                     <TableCell>{r.client_name || "—"}</TableCell>
                     <TableCell>{r.reference_oa_number || "—"}</TableCell>
                     <TableCell>{r.project_number || "—"}</TableCell>
