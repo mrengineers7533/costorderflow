@@ -160,22 +160,29 @@ export default function DesignBoqView() {
                         const val = (it as unknown as Record<string, unknown>)[c.key];
                         return (
                           <TableCell key={c.key} className="align-top">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveRow(it.id);
-                                setDraft({ itemId: it.id, column: c.key, text: "" });
-                              }}
-                              className="text-left w-full hover:bg-muted/40 rounded px-1 py-0.5"
-                              title="Click to add a comment on this cell"
-                            >
-                              <span className="whitespace-pre-wrap">{val == null || val === "" ? "—" : String(val)}</span>
-                              {count > 0 && (
-                                <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
-                                  {count}
-                                </Badge>
-                              )}
-                            </button>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-start gap-1">
+                                <span className="whitespace-pre-wrap">
+                                  {val == null || val === "" ? "—" : String(val)}
+                                </span>
+                                {count > 0 && (
+                                  <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                                    {count}
+                                  </Badge>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveRow(it.id);
+                                  setDraft({ itemId: it.id, column: c.key, text: "" });
+                                }}
+                                className="self-start text-[11px] text-muted-foreground hover:text-primary hover:underline"
+                                title={`Add a comment on ${c.label}`}
+                              >
+                                + Comment
+                              </button>
+                            </div>
                           </TableCell>
                         );
                       })}
