@@ -7,7 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 
-export function BoqRevisionHistory({ currentBoqId, orderId }: { currentBoqId: string | null; orderId: string | null }) {
+export function BoqRevisionHistory({
+  currentBoqId,
+  orderId,
+  linkBase = "/boqs",
+}: {
+  currentBoqId: string | null;
+  orderId: string | null;
+  /** Base path for the View link. Defaults to /boqs; pass /design for the Design view. */
+  linkBase?: string;
+}) {
   const [rows, setRows] = useState<BoqRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -85,8 +94,8 @@ export function BoqRevisionHistory({ currentBoqId, orderId }: { currentBoqId: st
                       {isViewing ? (
                         <span className="text-muted-foreground text-[11px]">—</span>
                       ) : (
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={`/boqs/${r.id}`}><Eye className="h-3 w-3 mr-1" />View</Link>
+                       <Button asChild size="sm" variant="outline">
+                          <Link to={`${linkBase}/${r.id}`}><Eye className="h-3 w-3 mr-1" />View</Link>
                         </Button>
                       )}
                     </td>
