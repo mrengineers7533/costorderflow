@@ -38,7 +38,7 @@ import {
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
 import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/convert";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
-import { OaDesignCommentsPanel } from "@/components/orders/OaDesignCommentsPanel";
+import { OaCellDesignComment, type DesignCellComment } from "@/components/orders/OaCellDesignComment";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import type { BoqLineItem } from "@/lib/boq/types";
@@ -399,6 +399,91 @@ export default function OrderEditor() {
       const next = prev.filter((it) => it.id !== itemId);
       return next.length === 0 ? [newItem()] : next;
     });
+  }
+
+  // ---- Cell-wise Design comments (inline under each OA input) ----
+  const [designCellComments, setDesignCellComments] = useState<DesignCellComment[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!currentBoq?.id) { setDesignCellComments([]); return; }
+      const { data } = await supabase
+        .from("boq_design_comments" as never)
+        .select("id,boq_id,boq_item_id,column_key,comment,user_name,department,created_at,applied_to_oa_at")
+        .eq("boq_id", currentBoq.id)
+        .order("created_at", { ascending: false });
+      if (!cancelled) setDesignCellComments(((data || []) as unknown) as DesignCellComment[]);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [currentBoq?.id]);
+
+  /** boq_item_id → column_key → latest comment */
+  const designCommentByItemCol = useMemo(() => {
+    const m = new Map<string, Map<string, DesignCellComment>>();
+    for (const c of designCellComments) {
+      if (!c.column_key) continue;
+      let inner = m.get(c.boq_item_id);
+      if (!inner) { inner = new Map(); m.set(c.boq_item_id, inner); }
+      if (!inner.has(c.column_key)) inner.set(c.column_key, c); // first wins (newest)
+    }
+    return m;
+  }, [designCellComments]);
+
+  /** Map an OA item id → matching BOQ item id (id → norm description → positional). */
+  const oaToBoqItemId = useMemo(() => {
+    const out = new Map<string, string>();
+    const boqItems = (currentBoq?.line_items as BoqLineItem[] | undefined) || [];
+    if (!boqItems.length) return out;
+    const norm = (s: string | null | undefined) =>
+      (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const byId = new Map(boqItems.map((b) => [b.id, b]));
+    const byDesc = new Map<string, BoqLineItem[]>();
+    boqItems.forEach((b) => {
+      const k = norm(b.description);
+      if (!k) return;
+      const arr = byDesc.get(k) || [];
+      arr.push(b);
+      byDesc.set(k, arr);
+    });
+    items.forEach((it, idx) => {
+      const direct = byId.get(it.id);
+      if (direct) { out.set(it.id, direct.id); return; }
+      const k = norm(it.description);
+      const cand = k ? byDesc.get(k) || [] : [];
+      const match = cand.length === 1 ? cand[0]
+        : cand.length > 1 ? cand[Math.min(idx, cand.length - 1)]
+        : boqItems[idx];
+      if (match) out.set(it.id, match.id);
+    });
+    return out;
+  }, [currentBoq, items]);
+
+  function cellComment(oaItemId: string, columnKey: string): DesignCellComment | undefined {
+    const boqItemId = oaToBoqItemId.get(oaItemId);
+    if (!boqItemId) return undefined;
+    return designCommentByItemCol.get(boqItemId)?.get(columnKey);
+  }
+
+  async function applyCellComment(
+    oaItemId: string,
+    field: keyof LineItem,
+    rawValue: string,
+    commentId: string,
+  ) {
+    const value: unknown = (field === "quantity" || field === "motor_quantity")
+      ? Number(String(rawValue).replace(/[^\d.-]/g, "")) || 0
+      : rawValue;
+    updateItemById(oaItemId, { [field]: value } as Partial<LineItem>);
+    try {
+      await supabase.rpc("apply_design_comment_to_oa" as never, {
+        _comment_id: commentId, _oa_id: orderId, _applied_value: rawValue,
+      } as never);
+    } catch { /* audit best-effort */ }
+    setDesignCellComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, applied_to_oa_at: new Date().toISOString() } : c)),
+    );
+    toast({ title: "Applied to editor", description: "Save / Revise to publish." });
   }
 
   /** Apply Model / Remarks (BOQ-only design suggestions) directly to the
@@ -1000,14 +1085,6 @@ export default function OrderEditor() {
           </Card>
         </div>
 
-        <OaDesignCommentsPanel
-          currentBoq={currentBoq}
-          oaNumber={oaNumber}
-          items={items}
-          setItems={setItems}
-          orderId={orderId}
-        />
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2"><CardTitle>Line Items</CardTitle>
             <div className="flex items-center gap-2">
@@ -1068,11 +1145,20 @@ export default function OrderEditor() {
               </div>
               {editorItems.map((it, idx) => (
                 <div key={it.id} className="space-y-1.5">
-                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
-                  <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
+                <div className="grid gap-2 items-start" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
+                  <div className="col-span-4">
+                    <Input value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
+                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
+                  </div>
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
-                  <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
-                  <Input className="col-span-1" value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
+                  <div className="col-span-1">
+                    <Input type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
+                    <OaCellDesignComment comment={cellComment(it.id, "quantity")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "quantity", v, cellComment(it.id, "quantity")!.id)} />
+                  </div>
+                  <div className="col-span-1">
+                    <Input value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
+                    <OaCellDesignComment comment={cellComment(it.id, "unit")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "unit", v, cellComment(it.id, "unit")!.id)} />
+                  </div>
                   <Input className="col-span-2" type="number" step="any" value={it.unit_rate} onChange={(e) => updateItemById(it.id, { unit_rate: +e.target.value })} />
                   <Select value={it.make || "MR"} onValueChange={(v) => updateItemById(it.id, { make: v as "MR" | "GMS" | "OTHER" })}>
                     <SelectTrigger className="col-span-1 h-9 px-2"><SelectValue /></SelectTrigger>
@@ -1084,30 +1170,28 @@ export default function OrderEditor() {
                   </Select>
                   <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
                   {showItemExtras && (
-                    <Input
-                      className="col-span-2"
-                      value={it.model || ""}
-                      onChange={(e) => updateItemById(it.id, { model: e.target.value })}
-                      placeholder="Model"
-                    />
+                    <div className="col-span-2">
+                      <Input value={it.model || ""} onChange={(e) => updateItemById(it.id, { model: e.target.value })} placeholder="Model" />
+                      <OaCellDesignComment comment={cellComment(it.id, "model_number")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "model", v, cellComment(it.id, "model_number")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-3"
-                      value={it.motor || ""}
-                      onChange={(e) => updateItemById(it.id, { motor: e.target.value })}
-                      placeholder="Motor"
-                    />
+                    <div className="col-span-3">
+                      <Input value={it.motor || ""} onChange={(e) => updateItemById(it.id, { motor: e.target.value })} placeholder="Motor" />
+                      <OaCellDesignComment comment={cellComment(it.id, "motor")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "motor", v, cellComment(it.id, "motor")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-1"
-                      type="number"
-                      step="any"
-                      value={it.motor_quantity ?? ""}
-                      onChange={(e) => updateItemById(it.id, { motor_quantity: e.target.value === "" ? undefined : +e.target.value })}
-                      placeholder="Qty"
-                    />
+                    <div className="col-span-1">
+                      <Input
+                        type="number"
+                        step="any"
+                        value={it.motor_quantity ?? ""}
+                        onChange={(e) => updateItemById(it.id, { motor_quantity: e.target.value === "" ? undefined : +e.target.value })}
+                        placeholder="Qty"
+                      />
+                      <OaCellDesignComment comment={cellComment(it.id, "motor_quantity")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "motor_quantity", v, cellComment(it.id, "motor_quantity")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
                     <Input
@@ -1120,12 +1204,10 @@ export default function OrderEditor() {
                     />
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-2"
-                      value={it.remarks || ""}
-                      onChange={(e) => updateItemById(it.id, { remarks: e.target.value })}
-                      placeholder="Remarks"
-                    />
+                    <div className="col-span-2">
+                      <Input value={it.remarks || ""} onChange={(e) => updateItemById(it.id, { remarks: e.target.value })} placeholder="Remarks" />
+                      <OaCellDesignComment comment={cellComment(it.id, "remarks")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "remarks", v, cellComment(it.id, "remarks")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (() => {
                     const s = approvalByOaItem.get(it.id) || "pending";
