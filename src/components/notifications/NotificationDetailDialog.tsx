@@ -438,185 +438,176 @@ function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
   );
 }
 
-function ChangeDetailsCard({
+function ChangedLineItemsHistory({
   notif,
-  changes,
+  history,
 }: {
   notif: NotifFull;
-  changes: LineChange[];
+  history: NotifFull[];
 }) {
-  const topFields = changedTopFields(notif);
-  const firstLineModified = changes.find((c) => c.kind === "modified");
-  const fieldChips: { key: string; before: unknown; after: unknown }[] = [];
-  for (const k of topFields) {
-    fieldChips.push({
-      key: k,
-      before: (notif.old_value || {})[k],
-      after: (notif.new_value || {})[k],
-    });
+  type Edit = {
+    field: string;
+    oldV: unknown;
+    newV: unknown;
+    by: string;
+    dept: string | null;
+    when: string;
+  };
+
+  // Merge current notification with history, dedupe by id, sort by created_at.
+  const seen = new Set<string>();
+  const all: NotifFull[] = [];
+  for (const h of [notif, ...(history || [])]) {
+    if (!h || seen.has(h.id)) continue;
+    seen.add(h.id);
+    all.push(h);
   }
-  if (firstLineModified) {
-    for (const k of firstLineModified.changed_fields) {
-      const a = (firstLineModified.before || {})[k];
-      const b = (firstLineModified.after || {})[k];
-      fieldChips.push({ key: k, before: a, after: b });
+  all.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+
+  const byLine = new Map<string, Edit[]>();
+  for (const h of all) {
+    const changes = Array.isArray(h.line_item_changes)
+      ? (h.line_item_changes as LineChange[])
+      : [];
+    for (let i = 0; i < changes.length; i++) {
+      const c = changes[i];
+      const lineNo = String(c.line_no ?? i + 1);
+      const base = {
+        by: h.actor_user_name || "—",
+        dept: h.actor_department || null,
+        when: h.created_at,
+      };
+      const pushEdit = (e: Edit) => {
+        if (!byLine.has(lineNo)) byLine.set(lineNo, []);
+        byLine.get(lineNo)!.push(e);
+      };
+      if (c.kind === "modified") {
+        for (const f of c.changed_fields || []) {
+          const oldV = (c.before || {})[f];
+          const newV = (c.after || {})[f];
+          if (JSON.stringify(oldV ?? null) === JSON.stringify(newV ?? null)) continue;
+          pushEdit({ ...base, field: f, oldV, newV });
+        }
+      } else if (c.kind === "added") {
+        pushEdit({ ...base, field: "status", oldV: "—", newV: "Added" });
+      } else if (c.kind === "removed") {
+        pushEdit({ ...base, field: "status", oldV: "Present", newV: "Removed" });
+      }
     }
   }
 
-  if (fieldChips.length === 0 && changes.length === 0) return null;
+  // Drop empty lines, sort edits within line, sort lines numerically.
+  const lines = Array.from(byLine.entries())
+    .filter(([, edits]) => edits.length > 0)
+    .map(([lineNo, edits]) => {
+      edits.sort((a, b) => (a.when || "").localeCompare(b.when || ""));
+      return [lineNo, edits] as const;
+    })
+    .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0));
 
-  const before = firstLineModified?.before || {};
-  const after = firstLineModified?.after || {};
-  const cols: { key: string; label: string }[] = [
-    { key: "line_no", label: "Item" },
-    { key: "description", label: "Description" },
-    { key: "make", label: "Make" },
-    { key: "qty", label: "Qty" },
-    { key: "unit", label: "Unit" },
-  ];
-  const lineNo = firstLineModified?.line_no ?? 1;
+  // Top-level (non line-item) changed fields as a fallback when no line edits.
+  const topFields = changedTopFields(notif);
 
-  const isChangedField = (k: string) =>
-    firstLineModified?.changed_fields.includes(k);
+  if (lines.length === 0 && topFields.length === 0) return null;
+
+  // Build the record reference line (OA / BOQ / PI).
+  const nv = notif.new_value || {};
+  const ov = notif.old_value || {};
+  const refs: string[] = [];
+  const oa = pickStr(nv, ["oa_no"]) || pickStr(ov, ["oa_no"]);
+  const boq = pickStr(nv, ["boq_no"]) || pickStr(ov, ["boq_no"]);
+  const pi = pickStr(nv, ["pi_no"]) || pickStr(ov, ["pi_no"]);
+  if (oa) refs.push(`OA: ${oa}`);
+  if (boq) refs.push(`BOQ: ${boq}`);
+  if (pi) refs.push(`PI: ${pi}`);
 
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        <History className="h-4 w-4 text-muted-foreground" />
         <div className="text-sm font-bold">Change Details</div>
-        {fieldChips.slice(0, 4).map((c, i) => (
-          <span
-            key={i}
-            className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
-          >
-            Changed field: {labelOf(c.key)} ({truncate(c.before, 30)} →{" "}
-            {truncate(c.after, 30)})
+        {refs.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {refs.join("   /   ")}
           </span>
-        ))}
+        )}
       </div>
 
-      {firstLineModified && (
-        <>
-          <div className="mt-2 text-[11px] font-bold tracking-wide text-red-600">
-            BEFORE CHANGE
+      {lines.length > 0 ? (
+        <div className="space-y-4">
+          {lines.map(([lineNo, edits]) => (
+            <div key={lineNo} className="overflow-hidden rounded-lg border">
+              <div className="flex items-center justify-between bg-muted/40 px-3 py-2 text-xs">
+                <div className="font-semibold">Line Item {lineNo}</div>
+                <div className="text-muted-foreground">
+                  Edited {edits.length} time{edits.length === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="divide-y">
+                {edits.map((e, i) => (
+                  <div
+                    key={i}
+                    className="grid grid-cols-1 gap-x-6 gap-y-1 px-3 py-2 text-xs sm:grid-cols-2"
+                  >
+                    <div>
+                      <span className="text-muted-foreground">Changed Cell: </span>
+                      <span className="font-medium">{labelOf(e.field)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Changed By: </span>
+                      <span className="font-medium">
+                        {e.by}
+                        {e.dept ? (
+                          <span className="text-muted-foreground"> ({e.dept})</span>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="break-words">
+                      <span className="text-muted-foreground">Old Value: </span>
+                      <span className="text-red-600 line-through">
+                        {truncate(e.oldV, 200)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Changed At: </span>
+                      <span className="whitespace-nowrap">
+                        {new Date(e.when).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="break-words sm:col-span-2">
+                      <span className="text-muted-foreground">New Value: </span>
+                      <span className="text-emerald-700">
+                        {truncate(e.newV, 200)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Header fields changed
           </div>
-          <DiffTable
-            tone="red"
-            cols={cols}
-            row={before as Record<string, unknown>}
-            lineNo={lineNo}
-            isChanged={isChangedField}
-            tag="Previous value"
-          />
-          <div className="my-2 flex justify-center text-muted-foreground">
-            <ChevronsDown className="h-4 w-4" />
-          </div>
-          <div className="text-[11px] font-bold tracking-wide text-emerald-600">
-            AFTER CHANGE
-          </div>
-          <DiffTable
-            tone="green"
-            cols={cols}
-            row={after as Record<string, unknown>}
-            lineNo={lineNo}
-            isChanged={isChangedField}
-            tag="Updated value"
-          />
-        </>
-      )}
-
-      {!firstLineModified && fieldChips.length > 0 && (
-        <div className="mt-3 grid gap-2">
-          {fieldChips.map((c) => (
+          {topFields.map((k) => (
             <div
-              key={c.key}
+              key={k}
               className="grid grid-cols-12 gap-2 rounded border px-3 py-2 text-xs"
             >
-              <div className="col-span-3 font-medium">{labelOf(c.key)}</div>
+              <div className="col-span-3 font-medium">{labelOf(k)}</div>
               <div className="col-span-4 break-words text-red-600 line-through">
-                {truncate(c.before, 200)}
+                {truncate((ov as Record<string, unknown>)[k], 200)}
               </div>
               <div className="col-span-1 text-center text-muted-foreground">→</div>
-              <div className="col-span-4 break-words text-emerald-600">
-                {truncate(c.after, 200)}
+              <div className="col-span-4 break-words text-emerald-700">
+                {truncate((nv as Record<string, unknown>)[k], 200)}
               </div>
             </div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function DiffTable({
-  tone,
-  cols,
-  row,
-  lineNo,
-  isChanged,
-  tag,
-}: {
-  tone: "red" | "green";
-  cols: { key: string; label: string }[];
-  row: Record<string, unknown>;
-  lineNo: string | number | null | undefined;
-  isChanged: (k: string) => boolean | undefined;
-  tag: string;
-}) {
-  const headerBg = tone === "red" ? "bg-red-50" : "bg-emerald-50";
-  const headerText = tone === "red" ? "text-red-700" : "text-emerald-700";
-  const cellHi =
-    tone === "red"
-      ? "bg-red-100 text-red-700"
-      : "bg-emerald-100 text-emerald-700";
-  const tagCls =
-    tone === "red"
-      ? "border-red-300 text-red-600"
-      : "border-emerald-300 text-emerald-600";
-
-  return (
-    <div className="mt-1 flex items-stretch gap-2">
-      <div className="flex-1 overflow-hidden rounded-lg border">
-        <table className="w-full text-xs">
-          <thead className={`${headerBg} ${headerText}`}>
-            <tr className="text-left">
-              {cols.map((c) => (
-                <th key={c.key} className="px-3 py-1.5 font-medium">
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {cols.map((c) => {
-                const v =
-                  c.key === "line_no"
-                    ? (lineNo ?? "—")
-                    : (row[c.key] ?? row[c.key === "qty" ? "quantity" : ""] ?? "—");
-                const hi = isChanged(c.key);
-                return (
-                  <td key={c.key} className="px-3 py-2">
-                    {hi ? (
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 ${cellHi}`}
-                      >
-                        {String(v)}
-                      </span>
-                    ) : (
-                      String(v)
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div
-        className={`flex shrink-0 items-center self-center rounded-md border px-3 py-1 text-[11px] font-medium ${tagCls}`}
-      >
-        {tag}
-      </div>
     </div>
   );
 }
