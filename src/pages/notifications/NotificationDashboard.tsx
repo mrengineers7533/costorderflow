@@ -129,6 +129,13 @@ export default function NotificationDashboard() {
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link: open detail dialog when ?id=<uuid> is present.
+  useEffect(() => {
+    const qid = searchParams.get("id");
+    if (qid && qid !== openId) setOpenId(qid);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true);
