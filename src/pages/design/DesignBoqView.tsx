@@ -13,7 +13,7 @@ import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { sortByItemNo } from "@/lib/boq/types";
 import { addDesignComment, fetchDesignComments, type DesignComment } from "@/lib/design/comments";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
-import { DesignStatusCell, statusBadge, type DesignStatus } from "@/components/design/DesignStatusCell";
+import { DesignStatusCell, type DesignStatus } from "@/components/design/DesignStatusCell";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
