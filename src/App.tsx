@@ -48,6 +48,9 @@ import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
 import FamilyBoq from "./pages/boqs/FamilyBoq";
+import DesignBoqList from "./pages/design/DesignBoqList";
+import DesignBoqView from "./pages/design/DesignBoqView";
+import NotificationDashboard from "./pages/notifications/NotificationDashboard";
 import { RequireModule } from "./components/RequireModule";
 
 const queryClient = new QueryClient();
@@ -101,6 +104,9 @@ const App = () => (
                       <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
                       <Route path="/grn" element={<RequireModule user={user} module="grn"><GrnList /></RequireModule>} />
                       <Route path="/cost-sheets" element={<RequireModule user={user} module="cost_sheets"><CostSheetsList /></RequireModule>} />
+                      <Route path="/design" element={<RequireModule user={user} module="design"><DesignBoqList /></RequireModule>} />
+                      <Route path="/design/:id" element={<RequireModule user={user} module="design"><DesignBoqView /></RequireModule>} />
+                      <Route path="/notifications" element={<RequireModule user={user} module="notifications"><NotificationDashboard /></RequireModule>} />
                       <Route
                         path="/admin"
                         element={<RequireAdmin user={user}><AdminDashboard /></RequireAdmin>}

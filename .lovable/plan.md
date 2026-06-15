@@ -1,57 +1,96 @@
 ## Goal
 
-Show **Motor** and **Motor Qty** columns (read-only) wherever BOQ items are listed inside the Design Review flow:
+Add two new sidebar entries — **Design** and **Notification Dashboard** — without touching any existing BOQ / OA / PI / Purchase / Manufacturing logic. Access is enforced through the existing `user_module_access` system.
 
-1. **OA-side Design Review panel** (`DesignReviewPanel.tsx`)
-   - "Prepare items for Design" table
-   - Submitted/in-flight review items table (shows designer's comments/decisions)
-2. **Designer-facing review link page** (`src/pages/boqs/DesignReview.tsx`)
-   - Items table the designer sees and comments on
-   - Previous-round diff row (so motor changes are tracked)
+## Sidebar (UI only)
 
-Columns are inserted between **Unit** and **Remarks** (mirrors BOQ layout where Motor sits before Qty/Unit/Remarks — here Qty/Unit come first in design-review tables, so Motor goes after Unit, before Remarks). Both columns render whenever the parent BOQ's `show_motor` flag is on (default true). Per-column comments are not added for Motor (designer can comment in Remarks/Change Note as today).
+In `src/components/AppSidebar.tsx`, insert two items right after the BOQs entry, using existing styles (orange active pill, icon + label, collapse behavior). New icons: `PencilRuler` for Design, `Bell` for Notification Dashboard. Bell shows an unread count badge fed by a small `useUnreadNotifications(user.id)` hook.
 
-Out of scope: pricing, OA/PI/Quotation/PO PDFs, approval logic, per-column comment schema, BOQ PDF (already done in prior turn).
+## New permission modules
 
-## Changes
+Add two keys to `src/lib/access/modules.ts`:
 
-### 1. Database — snapshot motor on the design-review items row
-**Migration** on `boq_design_review_items`:
-- Add `motor text` (nullable)
-- Add `motor_quantity numeric` (nullable)
+- `design` — "Design (BOQ View & Comments)"
+- `notifications` — "Notification Dashboard"
 
-No GRANT or RLS changes needed (table already configured). No backfill — existing rounds simply render empty Motor cells.
+Admins (`AdminAccess` page) can already toggle modules per user — no UI changes needed there, the two new rows show up automatically. No existing module key changes, so Costing / Manufacturing access stays exactly as-is.
 
-### 2. `src/lib/boq/designReview.ts`
-- `DesignReviewItemRow` type: add `motor?: string | null; motor_quantity?: number | null`.
-- `createDesignReview` insert (≈ line 138): include `motor: it.motor ?? null, motor_quantity: it.motor_quantity ?? null` when persisting items.
-- Any other place that builds `DesignReviewItemRow` baselines (e.g. `buildChangeLog`, `diffItemsAgainstBaseline`, `fetchLatestApprovalRound`): include the two fields when needed for diffing (only if currently mapping limited columns; otherwise they ride along automatically).
+Routes wrap each new page in `<RequireModule module="design">` / `<RequireModule module="notifications">`.
 
-### 3. `src/components/boqs/DesignReviewPanel.tsx`
-- "Prepare items for Design" table (≈ lines 273–311):
-  - Add `<th>Motor</th><th>Motor Qty</th>` after Unit, before Remarks (gated on `boq.show_motor !== false && anyRowHasMotorData`).
-  - Add matching `<td>` cells showing `it.motor` / `it.motor_quantity ?? ""`.
-- Submitted review table (≈ lines 443–508):
-  - Same two `<th>` + `<td>` cells, same gating using `boq.show_motor` from the BOQ row already loaded by the panel.
-  - The "Design" suggestion sub-row (`colMap.map(...)`) keeps its 5 column cells; add 2 empty `<td>` spacers so column alignment is preserved.
+## Page 1 — Design (`/design`)
 
-### 4. `src/pages/boqs/DesignReview.tsx`
-- Fetch `show_motor` flag: extend `meta` / `boq_snapshot` typing to read `show_motor` (already stored implicitly only if we add it). Add `show_motor: boq.show_motor` to the snapshot in `createDesignReview` (step 2). Default true when absent.
-- Items table header (≈ line 326): add Motor + Motor Qty `<TableHead>`s after Unit, before Remarks, gated on `showMotor && anyMotorData`.
-- Items table body (≈ line 368): add two `<TableCell>` cells showing `it.motor` / `it.motor_quantity ?? ""`.
-- Previous-round diff row (≈ line 352): if Motor cell shown, render the previous value strike-through alongside the other diff fields. Extend `DIFF_FIELDS` with `motor` and `motor_quantity` entries so existing diff machinery handles it.
-- Comments sub-row (≈ line 394): add two empty `<TableCell>` spacers in the Motor positions to keep column alignment — designer cannot leave per-column comments on Motor (matches scope rule).
+Read-only BOQ viewer with item/cell-level comments. **No editing of model, description, qty, unit, motor, rates, costing, or any BOQ field.**
 
-### 5. QA
-- Open OA → BOQ with motor data → DesignReviewPanel "Prepare" table shows Motor + Motor Qty.
-- Generate Comment Link → designer page shows the two columns + previous-round diff if the row's motor changed.
-- Submit comments → return to panel → submitted table shows Motor + Motor Qty alongside designer's per-column comments (no Motor comment column).
-- BOQ with `show_motor=false` → columns hidden everywhere in design review (matches BOQ rule).
-- BOQ with zero motor data on any row → columns hidden (keeps legacy BOQs visually unchanged).
-- OA/PI/Quotation PDFs unchanged.
+Layout:
 
-## Technical notes
+- Tabs at the top: **MR BOQs** | **GMS BOQs** — driven by the existing `boqs.format` column (`'MR' | 'GMS'`) which already classifies every BOQ (used by `next_oa_number`, etc.). No new field needed.
+- List view: BOQ number, customer/client, project / OA reference, current status, last updated by, last updated at, comment count, "Open" button.
+- Detail view (`/design/:boqId`): renders the BOQ line-item grid in **read-only** mode (re-using the same row renderer logic from `BoqEditor` but with inputs disabled), plus a comment thread under each row and a per-cell comment indicator on Model / Description / Qty / Unit / Motor / Remarks columns (re-uses the existing `column_comments` shape already used by Design Review).
 
-Files touched: `supabase/migrations/<new>.sql`, `src/lib/boq/designReview.ts`, `src/components/boqs/DesignReviewPanel.tsx`, `src/pages/boqs/DesignReview.tsx`.
+Comments:
 
-No new dependencies, no edge-function changes, no RLS changes.
+- New table `public.boq_design_comments` (item-wise + optional cell key). Created in a single migration with GRANTs + RLS.
+- Stored with `user_id`, `user_name`, `department` (read from `notification_recipients.department` for the user, falling back to "Design"), `created_at`, `comment`, `boq_id`, `boq_item_id`, optional `column_key`.
+- Read access: anyone with `boqs` OR `design` OR `notifications` module access; write access: users with `design` module access only.
+- Adding a comment triggers a notification (see below) via a small DB trigger so it works regardless of which client added the comment.
+
+Empty / loading / error states for the list and the detail view.
+
+## Page 2 — Notification Dashboard (`/notifications`)
+
+Cross-department notification feed and acknowledgement tracker.
+
+New tables (all in one migration, with GRANTs + RLS + `updated_at` triggers):
+
+1. `public.app_notifications`
+   - `module` (`'boq' | 'order' | 'pi' | 'purchase' | 'grn' | 'requisition' | 'manufacturing' | 'design_comment'`)
+   - `event_type` (`'created' | 'updated' | 'status_changed' | 'comment_added' | 'revision_created' | ...`)
+   - `record_id`, `record_ref` (BOQ #, OA #, PI #, PO #, REQ #, etc.), `client_name`
+   - `title`, `summary`, `old_value`, `new_value` (jsonb)
+   - `actor_user_id`, `actor_user_name`, `actor_department`
+   - `target_departments text[]` — which departments should see it
+   - `created_at`
+
+2. `public.app_notification_reads`
+   - `notification_id`, `user_id`, `user_name`, `department`, `seen_at`
+   - unique `(notification_id, user_id)`
+
+Generation:
+
+- One DB trigger per source table (`boqs`, `orders`, `proforma_invoices`, `purchase_orders`, `grn_receipts`, `requisitions`, `boq_design_comments`) that inserts an `app_notifications` row on `INSERT` / `UPDATE` of meaningful fields, capturing the diff into `old_value` / `new_value`. Triggers are additive — they do not modify existing rows or behavior.
+- `actor_department` resolved from `notification_recipients.department` for `auth.uid()` (falls back to `'Other'`).
+- `target_departments` defaults to every distinct `department` in `notification_recipients` minus the actor's department (so a change made by Costing notifies Design, Purchase, Manufacturing, etc.).
+
+UI (`/notifications`):
+
+- Filters: All / New / Acknowledged / Pending; by department (multi); by module (multi); date range; search by BOQ / OA / PI / PO / client.
+- Sidebar badge = count of notifications visible to this user where there is no row in `app_notification_reads` for `(notification_id, user_id)`.
+- Each row shows: title, module, record reference, actor + actor department, timestamp, old → new diff, status chip.
+- **Seen / Acknowledge** button — only marks read when explicitly clicked (writes a row in `app_notification_reads`). Opening the dashboard does NOT auto-mark.
+- Expandable "Tracking" panel for notifications where `actor_user_id = auth.uid()`: per target department shows received / seen / pending, with seen-by name + timestamp.
+
+Empty / loading / error states throughout.
+
+## Files added / changed
+
+```text
+src/lib/access/modules.ts                 (+ 'design', 'notifications')
+src/components/AppSidebar.tsx             (+2 items, unread badge)
+src/App.tsx                               (+3 routes)
+src/hooks/useUnreadNotifications.ts       (new)
+src/lib/notifications/api.ts              (new — fetch/ack helpers)
+src/lib/design/comments.ts                (new — list/add comment)
+src/pages/design/DesignBoqList.tsx        (new — MR/GMS tabs)
+src/pages/design/DesignBoqView.tsx        (new — read-only + comments)
+src/pages/notifications/NotificationDashboard.tsx  (new)
+src/components/notifications/AckTrackingPanel.tsx  (new)
+supabase/migrations/<ts>_design_and_notifications.sql  (new)
+```
+
+No existing component, page, table, RLS policy, RPC, or route is modified beyond adding the two sidebar items, two module keys, and three new routes.
+
+## Out of scope
+
+- No changes to existing BOQ editor, OA editor, PI editor, Purchase, Manufacturing, GRN, Requisitions, Annexure Folder, Raw Material Master.
+- No email sending for the new notifications in v1 (in-app only). Existing `order_revision_notifications` email flow is untouched.
+- No new permission for "acknowledge" — anyone with `notifications` module access can acknowledge their own department's notifications.

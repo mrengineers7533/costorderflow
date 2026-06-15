@@ -1,7 +1,8 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet, PencilRuler, Bell } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { useUserAccess } from "@/hooks/useUserAccess";
+import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 import type { ModuleKey } from "@/lib/access/modules";
 import {
   Sidebar,
@@ -19,6 +20,8 @@ const items: { title: string; url: string; icon: typeof LayoutGrid; module: Modu
   { title: "Dashboard", url: "/", icon: LayoutGrid, module: "dashboard" },
   { title: "Orders",    url: "/orders",     icon: FileText, module: "orders" },
   { title: "BOQs",      url: "/boqs",       icon: ClipboardList, module: "boqs" },
+  { title: "Design",    url: "/design",     icon: PencilRuler,   module: "design" },
+  { title: "Notifications", url: "/notifications", icon: Bell,   module: "notifications" },
   { title: "Proforma Invoices", url: "/pi", icon: Receipt, module: "pi" },
   { title: "Workflow",  url: "/workflow",   icon: Workflow, module: "workflow" },
   { title: "Purchase",  url: "/purchase",   icon: ShoppingCart, module: "purchase" },
@@ -36,6 +39,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
   const { isAdmin, canAccess } = useUserAccess(user?.id);
+  const unread = useUnreadNotifications(user?.id);
   const visibleItems = items.filter((it) =>
     it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
   );
@@ -88,6 +92,11 @@ export function AppSidebar({ user }: { user?: User | null }) {
                       >
                         <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
+                        {item.module === "notifications" && unread > 0 && (
+                          <span className={`ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold ${collapsed ? "absolute top-1 right-1" : ""}`}>
+                            {unread > 99 ? "99+" : unread}
+                          </span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
