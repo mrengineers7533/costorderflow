@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,7 +6,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Eye, Search, Loader2 } from "lucide-react";
+import { Check, Search, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 
 interface NotifRow {
@@ -35,15 +42,98 @@ interface ReadRow {
   seen_at: string;
 }
 
+// Field keys that are noisy / internal — hide from dashboard & detail.
+const HIDDEN_FIELDS = new Set<string>([
+  "id",
+  "user_id",
+  "order_id",
+  "boq_id",
+  "pi_id",
+  "po_id",
+  "grn_id",
+  "requisition_id",
+  "vendor_id",
+  "client_id",
+  "cost_sheet_id",
+  "created_at",
+  "updated_at",
+  "version",
+]);
+
+// Pretty labels for common technical keys.
+const FIELD_LABELS: Record<string, string> = {
+  boq_no: "BOQ No",
+  oa_no: "OA No",
+  pi_no: "PI No",
+  po_no: "PO No",
+  client_name: "Client",
+  format: "Format",
+  status: "Status",
+  notes: "Notes",
+  terms: "Terms & Conditions",
+  qty: "Qty",
+  rate: "Rate",
+  amount: "Amount",
+  model_number: "Model",
+  description: "Description",
+  unit: "Unit",
+  motor: "Motor",
+  boq_date: "BOQ Date",
+  oa_date: "OA Date",
+  pi_date: "PI Date",
+  po_date: "PO Date",
+};
+
+function labelOf(k: string) {
+  return FIELD_LABELS[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function isUuid(v: unknown): boolean {
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+  );
+}
+
+function truncate(v: unknown, n = 80): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+/** Returns the list of changed, user-meaningful field keys. */
+function changedFields(n: NotifRow): string[] {
+  const o = n.old_value || {};
+  const v = n.new_value || {};
+  const keys = new Set<string>([...Object.keys(o), ...Object.keys(v)]);
+  const out: string[] = [];
+  for (const k of keys) {
+    if (HIDDEN_FIELDS.has(k)) continue;
+    if (k.endsWith("_id")) continue;
+    const a = (o as Record<string, unknown>)[k];
+    const b = (v as Record<string, unknown>)[k];
+    if (isUuid(a) && isUuid(b)) continue;
+    if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) continue;
+    out.push(k);
+  }
+  return out;
+}
+
 export default function NotificationDashboard() {
   const [rows, setRows] = useState<NotifRow[]>([]);
   const [reads, setReads] = useState<ReadRow[]>([]);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"all" | "new" | "ack">("all");
+  const [tab, setTab] = useState<
+    "all" | "new" | "pending" | "ack" | "partial" | "full"
+  >("all");
   const [q, setQ] = useState("");
   const [moduleFilter, setModuleFilter] = useState<string>("all");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [actorDeptFilter, setActorDeptFilter] = useState<string>("all");
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -103,12 +193,60 @@ export default function NotificationDashboard() {
     return ["all", ...Array.from(s).sort()];
   }, [rows]);
 
+  const allDepts = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => r.target_departments.forEach((d) => s.add(d)));
+    return ["all", ...Array.from(s).sort()];
+  }, [rows]);
+
+  const actorDepts = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => r.actor_department && s.add(r.actor_department));
+    return ["all", ...Array.from(s).sort()];
+  }, [rows]);
+
+  function deptStatus(n: NotifRow): {
+    total: number;
+    seen: number;
+    pending: number;
+    label: "Pending" | "Partially Seen" | "Fully Seen" | "—";
+  } {
+    const total = n.target_departments.length;
+    const ackDepts = new Set(
+      (readsByNotif[n.id] || [])
+        .map((r) => r.department)
+        .filter((d): d is string => !!d && n.target_departments.includes(d)),
+    );
+    const seen = ackDepts.size;
+    const pending = Math.max(0, total - seen);
+    const label =
+      total === 0
+        ? "—"
+        : seen === 0
+          ? "Pending"
+          : seen >= total
+            ? "Fully Seen"
+            : "Partially Seen";
+    return { total, seen, pending, label };
+  }
+
   const visible = useMemo(() => {
     const term = q.trim().toLowerCase();
+    const fromTs = fromDate ? new Date(fromDate).getTime() : null;
+    const toTs = toDate ? new Date(toDate).getTime() + 86_400_000 : null;
     return rows.filter((r) => {
       if (moduleFilter !== "all" && r.module !== moduleFilter) return false;
+      if (deptFilter !== "all" && !r.target_departments.includes(deptFilter)) return false;
+      if (actorDeptFilter !== "all" && r.actor_department !== actorDeptFilter) return false;
+      const ts = new Date(r.created_at).getTime();
+      if (fromTs !== null && ts < fromTs) return false;
+      if (toTs !== null && ts > toTs) return false;
+      const ds = deptStatus(r);
       if (tab === "new" && myReadIds.has(r.id)) return false;
       if (tab === "ack" && !myReadIds.has(r.id)) return false;
+      if (tab === "pending" && ds.label !== "Pending") return false;
+      if (tab === "partial" && ds.label !== "Partially Seen") return false;
+      if (tab === "full" && ds.label !== "Fully Seen") return false;
       if (term) {
         const hay = [r.title, r.summary, r.record_ref, r.client_name, r.actor_user_name]
           .filter(Boolean)
@@ -118,7 +256,7 @@ export default function NotificationDashboard() {
       }
       return true;
     });
-  }, [rows, moduleFilter, tab, myReadIds, q]);
+  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif]);
 
   async function acknowledge(n: NotifRow) {
     if (!me) return;
@@ -136,29 +274,31 @@ export default function NotificationDashboard() {
     await load();
   }
 
-  function renderDiff(n: NotifRow) {
-    if (!n.old_value && !n.new_value) return null;
-    const keys = new Set<string>([
-      ...Object.keys(n.old_value || {}),
-      ...Object.keys(n.new_value || {}),
-    ]);
-    return (
-      <div className="text-xs space-y-0.5 mt-1">
-        {Array.from(keys).map((k) => (
-          <div key={k}>
-            <span className="text-muted-foreground">{k}:</span>{" "}
-            <span className="line-through text-destructive">
-              {String((n.old_value || {})[k] ?? "—")}
-            </span>{" "}
-            →{" "}
-            <span className="text-primary">
-              {String((n.new_value || {})[k] ?? "—")}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  // Summary counts
+  const counts = useMemo(() => {
+    let total = 0,
+      newC = 0,
+      ack = 0,
+      pendingNotif = 0;
+    let deptTotal = 0,
+      deptSeen = 0,
+      deptPending = 0;
+    const byModule: Record<string, number> = {};
+    rows.forEach((r) => {
+      total++;
+      if (myReadIds.has(r.id)) ack++;
+      else newC++;
+      const ds = deptStatus(r);
+      deptTotal += ds.total;
+      deptSeen += ds.seen;
+      deptPending += ds.pending;
+      if (ds.label === "Pending" || ds.label === "Partially Seen") pendingNotif++;
+      byModule[r.module] = (byModule[r.module] || 0) + 1;
+    });
+    return { total, newC, ack, pendingNotif, deptTotal, deptSeen, deptPending, byModule };
+  }, [rows, myReadIds, readsByNotif]);
+
+  const open = rows.find((r) => r.id === openId) || null;
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -169,12 +309,52 @@ export default function NotificationDashboard() {
         </p>
       </div>
 
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+        {[
+          { label: "Total", value: counts.total },
+          { label: "New", value: counts.newC, tone: "destructive" },
+          { label: "Pending Ack", value: counts.pendingNotif },
+          { label: "Acknowledged", value: counts.ack },
+          { label: "Depts Notified", value: counts.deptTotal },
+          { label: "Depts Pending", value: counts.deptPending, tone: "destructive" },
+          { label: "Depts Acknowledged", value: counts.deptSeen },
+        ].map((c) => (
+          <Card key={c.label}>
+            <CardContent className="p-3">
+              <div className="text-xs text-muted-foreground">{c.label}</div>
+              <div
+                className={`text-xl font-bold ${
+                  c.tone === "destructive" ? "text-destructive" : ""
+                }`}
+              >
+                {c.value}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Module-wise counts */}
+      {Object.keys(counts.byModule).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(counts.byModule).map(([m, n]) => (
+            <Badge key={m} variant="outline" className="text-xs">
+              {m}: <span className="font-semibold ml-1">{n}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-end gap-3">
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="new">New</TabsTrigger>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
             <TabsTrigger value="ack">Acknowledged</TabsTrigger>
+            <TabsTrigger value="partial">Partially Seen</TabsTrigger>
+            <TabsTrigger value="full">Fully Seen</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -190,6 +370,53 @@ export default function NotificationDashboard() {
               {m}
             </Button>
           ))}
+        </div>
+
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground">Target dept:</span>
+          <select
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="h-8 rounded-md border bg-background px-2"
+          >
+            {allDepts.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground">Changed by:</span>
+          <select
+            value={actorDeptFilter}
+            onChange={(e) => setActorDeptFilter(e.target.value)}
+            className="h-8 rounded-md border bg-background px-2"
+          >
+            {actorDepts.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground">From:</span>
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="h-8 w-36"
+          />
+          <span className="text-muted-foreground">To:</span>
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="h-8 w-36"
+          />
         </div>
 
         <div className="relative ml-auto">
@@ -218,99 +445,100 @@ export default function NotificationDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
+                  <TableHead>Change</TableHead>
                   <TableHead>Module</TableHead>
                   <TableHead>Ref</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>By</TableHead>
                   <TableHead>When</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead>Dept Status</TableHead>
+                  <TableHead>My Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visible.map((n) => {
                   const seen = myReadIds.has(n.id);
-                  const mine = me && n.actor_user_id === me.id;
-                  const ack = readsByNotif[n.id] || [];
-                  const isOpen = !!expanded[n.id];
+                  const ds = deptStatus(n);
+                  const fields = changedFields(n);
                   return (
-                    <Fragment key={n.id}>
-                      <TableRow>
-                        <TableCell className="max-w-[360px]">
-                          <div className="font-medium">{n.title}</div>
-                          {n.summary && <div className="text-xs text-muted-foreground">{n.summary}</div>}
-                          {renderDiff(n)}
-                        </TableCell>
-                        <TableCell><Badge variant="outline">{n.module}</Badge></TableCell>
-                        <TableCell className="text-xs">{n.record_ref || "—"}</TableCell>
-                        <TableCell className="text-xs">
-                          {n.actor_user_name || "—"}
-                          {n.actor_department && (
-                            <div className="text-muted-foreground">{n.actor_department}</div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(n.created_at).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          {seen ? (
-                            <Badge>Seen</Badge>
-                          ) : (
-                            <Badge variant="destructive">New</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {!seen && (
-                              <Button size="sm" onClick={() => acknowledge(n)}>
-                                <Check className="h-4 w-4 mr-1" /> Acknowledge
-                              </Button>
-                            )}
-                            {mine && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setExpanded((e) => ({ ...e, [n.id]: !e[n.id] }))}
-                              >
-                                <Eye className="h-4 w-4 mr-1" /> Tracking
-                              </Button>
-                            )}
+                    <TableRow
+                      key={n.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => setOpenId(n.id)}
+                    >
+                      <TableCell className="max-w-[280px]">
+                        <div className="font-medium truncate">{n.title}</div>
+                        {n.summary && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {n.summary}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                      {mine && isOpen && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="bg-muted/30">
-                            <div className="p-2 space-y-2">
-                              <div className="text-xs font-medium">Department acknowledgement</div>
-                              <div className="flex flex-wrap gap-2">
-                                {n.target_departments.length === 0 && (
-                                  <span className="text-xs text-muted-foreground">No target departments configured.</span>
-                                )}
-                                {n.target_departments.map((d) => {
-                                  const seenBy = ack.filter((r) => r.department === d);
-                                  return (
-                                    <div key={d} className="border rounded px-2 py-1 text-xs">
-                                      <div className="font-medium">{d}</div>
-                                      {seenBy.length === 0 ? (
-                                        <div className="text-muted-foreground">Pending</div>
-                                      ) : (
-                                        seenBy.map((s) => (
-                                          <div key={s.user_id} className="text-muted-foreground">
-                                            {s.user_name || s.user_id} ·{" "}
-                                            {new Date(s.seen_at).toLocaleString()}
-                                          </div>
-                                        ))
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="uppercase">
+                          {n.module}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">
+                        {n.record_ref || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">{n.client_name || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {n.actor_user_name || "—"}
+                        {n.actor_department && (
+                          <div className="text-muted-foreground">{n.actor_department}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(n.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant="secondary">{fields.length} field(s)</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge
+                          variant={
+                            ds.label === "Fully Seen"
+                              ? "default"
+                              : ds.label === "Pending"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {ds.label}
+                        </Badge>
+                        <div className="text-muted-foreground mt-0.5">
+                          {ds.seen}/{ds.total} seen · {ds.pending} pending
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {seen ? (
+                          <Badge>Seen</Badge>
+                        ) : (
+                          <Badge variant="destructive">New</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell
+                        className="text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {!seen ? (
+                          <Button size="sm" onClick={() => acknowledge(n)}>
+                            <Check className="h-4 w-4 mr-1" /> Acknowledge
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setOpenId(n.id)}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
@@ -318,6 +546,136 @@ export default function NotificationDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detail dialog */}
+      <Dialog open={!!open} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          {open && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{open.title}</DialogTitle>
+                <DialogDescription>
+                  {open.module.toUpperCase()} · {open.record_ref || "—"}
+                  {open.client_name ? ` · ${open.client_name}` : ""}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <div className="text-muted-foreground">Changed by</div>
+                  <div className="font-medium">{open.actor_user_name || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Department</div>
+                  <div className="font-medium">{open.actor_department || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">When</div>
+                  <div className="font-medium">
+                    {new Date(open.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Event</div>
+                  <div className="font-medium capitalize">{open.event_type}</div>
+                </div>
+              </div>
+
+              <div className="mt-2">
+                <div className="text-sm font-semibold mb-2">Field changes</div>
+                {(() => {
+                  const fields = changedFields(open);
+                  if (fields.length === 0)
+                    return (
+                      <div className="text-xs text-muted-foreground">
+                        No user-visible field changes recorded.
+                      </div>
+                    );
+                  return (
+                    <div className="rounded border divide-y">
+                      {fields.map((k) => {
+                        const a = (open.old_value || {})[k];
+                        const b = (open.new_value || {})[k];
+                        return (
+                          <div
+                            key={k}
+                            className="grid grid-cols-12 gap-2 px-3 py-2 text-xs"
+                          >
+                            <div className="col-span-3 font-medium">{labelOf(k)}</div>
+                            <div className="col-span-4 text-destructive line-through break-words">
+                              {truncate(a, 200)}
+                            </div>
+                            <div className="col-span-1 text-center text-muted-foreground">
+                              →
+                            </div>
+                            <div className="col-span-4 text-primary break-words">
+                              {truncate(b, 200)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="mt-3">
+                <div className="text-sm font-semibold mb-2">
+                  Department acknowledgement
+                </div>
+                {open.target_departments.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    No target departments configured.
+                  </div>
+                ) : (
+                  <div className="rounded border divide-y">
+                    {open.target_departments.map((d) => {
+                      const seenBy = (readsByNotif[open.id] || []).filter(
+                        (r) => r.department === d,
+                      );
+                      return (
+                        <div
+                          key={d}
+                          className="grid grid-cols-12 gap-2 px-3 py-2 text-xs items-center"
+                        >
+                          <div className="col-span-3 font-medium">{d}</div>
+                          <div className="col-span-2">
+                            {seenBy.length === 0 ? (
+                              <Badge variant="destructive">Pending</Badge>
+                            ) : (
+                              <Badge>Seen</Badge>
+                            )}
+                          </div>
+                          <div className="col-span-7 text-muted-foreground">
+                            {seenBy.length === 0
+                              ? "Waiting for acknowledgement"
+                              : seenBy
+                                  .map(
+                                    (s) =>
+                                      `${s.user_name || "User"} · ${new Date(
+                                        s.seen_at,
+                                      ).toLocaleString()}`,
+                                  )
+                                  .join(", ")}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {me && !myReadIds.has(open.id) && (
+                <div className="flex justify-end mt-2">
+                  <Button onClick={() => acknowledge(open)}>
+                    <Check className="h-4 w-4 mr-1" /> Acknowledge
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
