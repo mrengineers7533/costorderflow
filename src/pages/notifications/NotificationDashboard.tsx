@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -234,8 +234,8 @@ export default function NotificationDashboard() {
                   const ack = readsByNotif[n.id] || [];
                   const isOpen = !!expanded[n.id];
                   return (
-                    <>
-                      <TableRow key={n.id}>
+                    <Fragment key={n.id}>
+                      <TableRow>
                         <TableCell className="max-w-[360px]">
                           <div className="font-medium">{n.title}</div>
                           {n.summary && <div className="text-xs text-muted-foreground">{n.summary}</div>}
@@ -279,7 +279,7 @@ export default function NotificationDashboard() {
                         </TableCell>
                       </TableRow>
                       {mine && isOpen && (
-                        <TableRow key={`${n.id}-track`}>
+                        <TableRow>
                           <TableCell colSpan={7} className="bg-muted/30">
                             <div className="p-2 space-y-2">
                               <div className="text-xs font-medium">Department acknowledgement</div>
@@ -310,7 +310,7 @@ export default function NotificationDashboard() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
