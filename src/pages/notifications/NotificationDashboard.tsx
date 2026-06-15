@@ -549,135 +549,21 @@ export default function NotificationDashboard() {
         </CardContent>
       </Card>
 
-      {/* Detail dialog */}
-      <Dialog open={!!open} onOpenChange={(o) => !o && setOpenId(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          {open && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{open.title}</DialogTitle>
-                <DialogDescription>
-                  {open.module.toUpperCase()} · {open.record_ref || "—"}
-                  {open.client_name ? ` · ${open.client_name}` : ""}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <div>
-                  <div className="text-muted-foreground">Changed by</div>
-                  <div className="font-medium">{open.actor_user_name || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Department</div>
-                  <div className="font-medium">{open.actor_department || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">When</div>
-                  <div className="font-medium">
-                    {new Date(open.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Event</div>
-                  <div className="font-medium capitalize">{open.event_type}</div>
-                </div>
-              </div>
-
-              <div className="mt-2">
-                <div className="text-sm font-semibold mb-2">Field changes</div>
-                {(() => {
-                  const fields = changedFields(open);
-                  if (fields.length === 0)
-                    return (
-                      <div className="text-xs text-muted-foreground">
-                        No user-visible field changes recorded.
-                      </div>
-                    );
-                  return (
-                    <div className="rounded border divide-y">
-                      {fields.map((k) => {
-                        const a = (open.old_value || {})[k];
-                        const b = (open.new_value || {})[k];
-                        return (
-                          <div
-                            key={k}
-                            className="grid grid-cols-12 gap-2 px-3 py-2 text-xs"
-                          >
-                            <div className="col-span-3 font-medium">{labelOf(k)}</div>
-                            <div className="col-span-4 text-destructive line-through break-words">
-                              {truncate(a, 200)}
-                            </div>
-                            <div className="col-span-1 text-center text-muted-foreground">
-                              →
-                            </div>
-                            <div className="col-span-4 text-primary break-words">
-                              {truncate(b, 200)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div className="mt-3">
-                <div className="text-sm font-semibold mb-2">
-                  Department acknowledgement
-                </div>
-                {open.target_departments.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">
-                    No target departments configured.
-                  </div>
-                ) : (
-                  <div className="rounded border divide-y">
-                    {open.target_departments.map((d) => {
-                      const seenBy = (readsByNotif[open.id] || []).filter(
-                        (r) => r.department === d,
-                      );
-                      return (
-                        <div
-                          key={d}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 text-xs items-center"
-                        >
-                          <div className="col-span-3 font-medium">{d}</div>
-                          <div className="col-span-2">
-                            {seenBy.length === 0 ? (
-                              <Badge variant="destructive">Pending</Badge>
-                            ) : (
-                              <Badge>Seen</Badge>
-                            )}
-                          </div>
-                          <div className="col-span-7 text-muted-foreground">
-                            {seenBy.length === 0
-                              ? "Waiting for acknowledgement"
-                              : seenBy
-                                  .map(
-                                    (s) =>
-                                      `${s.user_name || "User"} · ${new Date(
-                                        s.seen_at,
-                                      ).toLocaleString()}`,
-                                  )
-                                  .join(", ")}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {me && !myReadIds.has(open.id) && (
-                <div className="flex justify-end mt-2">
-                  <Button onClick={() => acknowledge(open)}>
-                    <Check className="h-4 w-4 mr-1" /> Acknowledge
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Shared detail dialog (also reused by module-page banners) */}
+      <NotificationDetailDialog
+        notificationId={openId}
+        onOpenChange={(o) => {
+          if (!o) {
+            setOpenId(null);
+            if (searchParams.get("id")) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("id");
+              setSearchParams(next, { replace: true });
+            }
+          }
+        }}
+        onAcknowledged={() => load()}
+      />
     </div>
   );
 }
