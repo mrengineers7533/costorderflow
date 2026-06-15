@@ -89,10 +89,11 @@ export default function AdminDashboard() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Permanently delete all generated transactional data: uploaded SOT sheets, OAs, BOQs, PIs,
-            PI revisions, linked documents, Purchase Requisitions, Purchase Orders, PR/PO revisions, and
-            their attachments, audit logs and status history. Calculation templates, formulas, app
-            settings, master data (vendors, items, customers, tax), users, roles, permissions, and
-            numbering configuration will not be touched.
+            PI revisions, linked documents, Purchase Requisitions, Purchase Orders, PR/PO revisions,
+            their attachments, audit logs, status history, and all in-app notifications. Calculation
+            templates, formulas, app settings, master data (vendors, items, customers, tax),
+            notification recipients, users, roles, permissions, and numbering configuration will not
+            be touched.
           </p>
           <Button variant="destructive" onClick={() => setResetOpen(true)}>
             Reset Generated Data
@@ -106,9 +107,10 @@ export default function AdminDashboard() {
             <AlertDialogTitle>Reset all generated transactional data?</AlertDialogTitle>
             <AlertDialogDescription>
               This will remove all generated transactional data: SOT sheets, OAs, BOQs, PIs, Purchase
-              Requisitions, Purchase Orders, their revisions, attachments, audit logs and status history.
-              Master data, settings, formulas, templates, users, roles and numbering configuration will
-              not be changed. This action cannot be undone.
+              Requisitions, Purchase Orders, their revisions, attachments, audit logs, status history,
+              and all in-app notifications. Master data, settings, formulas, templates, notification
+              recipients, users, roles and numbering configuration will not be changed. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
