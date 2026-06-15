@@ -33,7 +33,10 @@ function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): 
   const familyOf = new Map<string, string>();
   for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
   const approved = boqs.filter(
-    (b) => (b.verification_status ?? "approved") === "approved",
+    (b) =>
+      (b.verification_status ?? "approved") === "approved" &&
+      ((b as unknown as { design_review_status?: string | null }).design_review_status === "design_approved" ||
+        (b as unknown as { design_review_status?: string | null }).design_review_status === "final_sent"),
   );
   const byFamily = new Map<string, BoqRecord>();
   for (const b of approved) {

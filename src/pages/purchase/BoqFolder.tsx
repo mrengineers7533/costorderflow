@@ -16,7 +16,11 @@ const fmtDate = (s: string | null | undefined) =>
 function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
   const familyOf = new Map<string, string>();
   for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
-  const approved = boqs.filter((b) => (b.verification_status ?? "approved") === "approved");
+  const approved = boqs.filter((b) => {
+    if ((b.verification_status ?? "approved") !== "approved") return false;
+    const drs = (b as unknown as { design_review_status?: string | null }).design_review_status;
+    return drs === "design_approved" || drs === "final_sent";
+  });
   const byFamily = new Map<string, BoqRecord>();
   for (const b of approved) {
     const fam = familyOf.get(b.order_id) || b.order_id;
