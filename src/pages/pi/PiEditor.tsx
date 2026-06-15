@@ -59,6 +59,7 @@ export default function PiEditor() {
   // the PdfColumnVisibility popover; the choice is honored by both the
   // preview and the exported PDF.
   const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>(["make"]);
+  const [piOrderRootId, setPiOrderRootId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -81,6 +82,10 @@ export default function PiEditor() {
         if (rec.reference_oa_id) {
           const { data: oaRow } = await supabase
             .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
+          if (oaRow) {
+            const o = oaRow as { id: string; parent_order_id: string | null };
+            setPiOrderRootId(o.parent_order_id || o.id);
+          }
           if (oaRow) {
             const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
             const oaSaved = oaRow as unknown as { currency_mode?: CurrencyMode };
@@ -316,7 +321,14 @@ export default function PiEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
-        {id && <ModuleNotifications modules="pi" recordId={id} />}
+        {id && (
+          <ModuleNotifications
+            links={{
+              piId: id,
+              orderRootId: piOrderRootId ?? undefined,
+            }}
+          />
+        )}
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
           <div className="flex items-center gap-3 min-w-0">

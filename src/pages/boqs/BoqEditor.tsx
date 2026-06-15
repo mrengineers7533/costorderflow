@@ -430,7 +430,9 @@ export default function BoqEditor() {
       <div className="max-w-7xl mx-auto space-y-5">
         {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
         {!isNew && boqId && (
-          <ModuleNotifications modules="boq" recordId={boqId} />
+          <ModuleNotifications
+            links={{ boqId, orderRootId: orderRootId ?? undefined }}
+          />
         )}
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">

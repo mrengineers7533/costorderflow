@@ -186,11 +186,18 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
+          line_item_changes: Json | null
           module: string
           new_value: Json | null
           old_value: Json | null
           record_id: string | null
           record_ref: string | null
+          related_annexure_id: string | null
+          related_boq_id: string | null
+          related_order_root_id: string | null
+          related_pi_id: string | null
+          related_po_id: string | null
+          related_requisition_id: string | null
           summary: string | null
           target_departments: string[]
           title: string
@@ -203,11 +210,18 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: string
+          line_item_changes?: Json | null
           module: string
           new_value?: Json | null
           old_value?: Json | null
           record_id?: string | null
           record_ref?: string | null
+          related_annexure_id?: string | null
+          related_boq_id?: string | null
+          related_order_root_id?: string | null
+          related_pi_id?: string | null
+          related_po_id?: string | null
+          related_requisition_id?: string | null
           summary?: string | null
           target_departments?: string[]
           title: string
@@ -220,11 +234,18 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: string
+          line_item_changes?: Json | null
           module?: string
           new_value?: Json | null
           old_value?: Json | null
           record_id?: string | null
           record_ref?: string | null
+          related_annexure_id?: string | null
+          related_boq_id?: string | null
+          related_order_root_id?: string | null
+          related_pi_id?: string | null
+          related_po_id?: string | null
+          related_requisition_id?: string | null
           summary?: string | null
           target_departments?: string[]
           title?: string
@@ -2490,6 +2511,7 @@ export type Database = {
       }
     }
     Functions: {
+      _line_items_diff: { Args: { _new: Json; _old: Json }; Returns: Json }
       admin_reset_generated_data: { Args: never; Returns: Json }
       cancel_purchase_order: {
         Args: { _po_id: string; _reason: string }
@@ -2535,13 +2557,20 @@ export type Database = {
       current_user_name: { Args: never; Returns: string }
       emit_notification: {
         Args: {
+          _annex?: string
+          _boq?: string
           _client: string
           _event: string
+          _line_changes?: Json
           _module: string
           _new: Json
           _old: Json
+          _order_root?: string
+          _pi?: string
+          _po?: string
           _record_id: string
           _record_ref: string
+          _req?: string
           _summary: string
           _title: string
         }
@@ -2768,6 +2797,49 @@ export type Database = {
           to: "boqs"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      get_related_notifications: {
+        Args: {
+          p_annex?: string
+          p_boq?: string
+          p_limit?: number
+          p_modules?: string[]
+          p_order_root?: string
+          p_pi?: string
+          p_po?: string
+          p_record_id?: string
+          p_req?: string
+        }
+        Returns: {
+          actor_department: string | null
+          actor_user_id: string | null
+          actor_user_name: string | null
+          client_name: string | null
+          created_at: string
+          event_type: string
+          id: string
+          line_item_changes: Json | null
+          module: string
+          new_value: Json | null
+          old_value: Json | null
+          record_id: string | null
+          record_ref: string | null
+          related_annexure_id: string | null
+          related_boq_id: string | null
+          related_order_root_id: string | null
+          related_pi_id: string | null
+          related_po_id: string | null
+          related_requisition_id: string | null
+          summary: string | null
+          target_departments: string[]
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "app_notifications"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       get_requisition_by_token: {

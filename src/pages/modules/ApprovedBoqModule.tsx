@@ -179,7 +179,11 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
       <EntityActivityBanner orderRootId={orderRootId} />
-      {boqId && <ModuleNotifications modules="boq" recordId={boqId} />}
+      {boqId && (
+        <ModuleNotifications
+          links={{ boqId, orderRootId: orderRootId ?? undefined }}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">

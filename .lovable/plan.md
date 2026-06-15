@@ -1,96 +1,98 @@
-## Goal
+# Cross-Department Notification System (Add-only)
 
-Add two new sidebar entries — **Design** and **Notification Dashboard** — without touching any existing BOQ / OA / PI / Purchase / Manufacturing logic. Access is enforced through the existing `user_module_access` system.
+This builds on the existing `app_notifications` / `app_notification_reads` / `emit_notification()` infrastructure already in place. **No OA / BOQ / PI / PO / Requisition / Manufacturing / Costing / Design business logic, calculations, approvals, or workflows are touched.** Only notification capture, linking, display, detail view, and Seen tracking are extended.
 
-## Sidebar (UI only)
+## 1. Database — link notifications across related records
 
-In `src/components/AppSidebar.tsx`, insert two items right after the BOQs entry, using existing styles (orange active pill, icon + label, collapse behavior). New icons: `PencilRuler` for Design, `Bell` for Notification Dashboard. Bell shows an unread count badge fed by a small `useUnreadNotifications(user.id)` hook.
+Add a single new migration that adds linkage columns + helper RPC + a few missing triggers. Nothing existing is dropped or altered.
 
-## New permission modules
+**`app_notifications` — new optional link columns** (all nullable, indexed):
+- `related_order_root_id uuid` — OA family root (`orders.parent_order_id` or self)
+- `related_boq_id uuid`
+- `related_pi_id uuid`
+- `related_po_id uuid`
+- `related_requisition_id uuid`
+- `related_annexure_id uuid`
+- `line_item_changes jsonb` — array of per-row `{line_no, before:{...}, after:{...}, changed_fields:[...]}` used by the detail view
 
-Add two keys to `src/lib/access/modules.ts`:
+**Update `emit_notification()`** to accept the new optional params and persist them. Existing call sites keep working (defaults `NULL`).
 
-- `design` — "Design (BOQ View & Comments)"
-- `notifications` — "Notification Dashboard"
+**Update existing trigger functions** to populate links (read-only computation, no writes to other tables):
+- `notif_on_orders` → set `related_order_root_id = COALESCE(parent_order_id, id)`; compute `line_item_changes` from `OLD.line_items` vs `NEW.line_items` on UPDATE; on revision INSERT, diff vs `revised_from_id`.
+- `notif_on_boqs` → set `related_boq_id = NEW.id`, `related_order_root_id` via join on `orders`; line-item diff from `NEW.line_items` vs `OLD.line_items`.
+- `notif_on_pi` → set `related_pi_id`, plus `related_order_root_id` / `related_boq_id` via join.
+- `notif_on_po` → set `related_po_id`, plus `related_requisition_id` / `related_boq_id` / `related_order_root_id` via joins through `purchase_order_rows` → `requisition_raw_materials` → `requisitions` → `boqs` → `orders`.
+- `notif_on_req` → set `related_requisition_id`, `related_boq_id`, `related_order_root_id`.
+- `notif_on_design_comment` → set `related_boq_id`, `related_order_root_id`; include `line_item_id`, `column_key`, comment text in payload.
 
-Admins (`AdminAccess` page) can already toggle modules per user — no UI changes needed there, the two new rows show up automatically. No existing module key changes, so Costing / Manufacturing access stays exactly as-is.
+**New triggers added** (currently missing):
+- `notif_on_annexure` on `requisition_annexures` (INSERT / UPDATE) → emits with `related_annexure_id`, `related_requisition_id`, …
+- `notif_on_annexure_rows` on `requisition_annexure_rows` (INSERT / UPDATE / DELETE) → row-level change summary into `line_item_changes`.
+- `notif_on_grn` already exists; extend to link `related_po_id` / `related_requisition_id`.
+- `notif_on_manufacturing_change` on whichever table the Manufacturing module writes change-requests to (will confirm during build by reading `src/pages/manufacturing/*`).
 
-Routes wrap each new page in `<RequireModule module="design">` / `<RequireModule module="notifications">`.
+**New RPC `get_related_notifications(p_module text, p_record_id uuid)`** — `SECURITY DEFINER`, returns notifications where the record matches the row itself **or** any of its linked ids (OA root → all child BOQ/PI/PO/Req/Annexure; BOQ → its OA/PI/PO/Req; etc.). This is what every module banner calls so the same notification appears wherever the record is referenced.
 
-## Page 1 — Design (`/design`)
+Grants: `GRANT EXECUTE ON FUNCTION ... TO authenticated`. No new tables, so no new GRANT-on-table block needed.
 
-Read-only BOQ viewer with item/cell-level comments. **No editing of model, description, qty, unit, motor, rates, costing, or any BOQ field.**
+## 2. Shared frontend pieces
 
-Layout:
+**`src/components/notifications/ModuleNotifications.tsx`** (existing) — replace its query with the new `get_related_notifications` RPC and accept a `record` prop describing the page's record (`{ module, id, orderRootId?, boqId?, piId?, poId?, requisitionId?, annexureId? }`). UI stays the same: collapsible amber banner, short summary, badge, `Seen / Acknowledge` button, `Details` link → opens the dashboard detail dialog (deep link `/notifications?id=<uuid>`).
 
-- Tabs at the top: **MR BOQs** | **GMS BOQs** — driven by the existing `boqs.format` column (`'MR' | 'GMS'`) which already classifies every BOQ (used by `next_oa_number`, etc.). No new field needed.
-- List view: BOQ number, customer/client, project / OA reference, current status, last updated by, last updated at, comment count, "Open" button.
-- Detail view (`/design/:boqId`): renders the BOQ line-item grid in **read-only** mode (re-using the same row renderer logic from `BoqEditor` but with inputs disabled), plus a comment thread under each row and a per-cell comment indicator on Model / Description / Qty / Unit / Motor / Remarks columns (re-uses the existing `column_comments` shape already used by Design Review).
+**`src/components/notifications/NotificationDetailDialog.tsx`** (new, extracted from the existing dashboard dialog) — single source of truth for the detail view. Reused by the dashboard and by an "open details" trigger on each page banner. Shows:
+- Header: title, module, ref no., client, changed by (user + dept), date/time, revision (if any).
+- **Field-level diff** for top-level fields (with `HIDDEN_FIELDS` still applied).
+- **Line-item diff section** rendered from `line_item_changes`: only changed rows, columns Model / Description / Qty / Unit / Motor / Motor Qty / Remarks / etc., shown as Before vs After.
+- **Department-wise Seen/Not Seen grid**: Total / Seen / Not Seen counts, then per department: name, status badge, "Seen by <user> at <time>" or "Not Seen".
+- Acknowledge button (calls existing `app_notification_reads` insert; idempotent via existing unique constraint).
 
-Comments:
+**`src/hooks/useUnreadNotifications.ts`** — unchanged (already polls correctly).
 
-- New table `public.boq_design_comments` (item-wise + optional cell key). Created in a single migration with GRANTs + RLS.
-- Stored with `user_id`, `user_name`, `department` (read from `notification_recipients.department` for the user, falling back to "Design"), `created_at`, `comment`, `boq_id`, `boq_item_id`, optional `column_key`.
-- Read access: anyone with `boqs` OR `design` OR `notifications` module access; write access: users with `design` module access only.
-- Adding a comment triggers a notification (see below) via a small DB trigger so it works regardless of which client added the comment.
+## 3. Module pages — add/refresh banners
 
-Empty / loading / error states for the list and the detail view.
+For each page below, mount `<ModuleNotifications record={...} />` near the top (most already have it; this pass standardizes the `record` prop so cross-linking works):
 
-## Page 2 — Notification Dashboard (`/notifications`)
+| Page | File | Record prop |
+|---|---|---|
+| Order editor | `src/pages/orders/OrderEditor.tsx` | order + orderRootId |
+| BOQ editor | `src/pages/boqs/BoqEditor.tsx` | boqId + orderRootId |
+| Design BOQ view | `src/pages/design/DesignBoqView.tsx` | boqId + orderRootId |
+| PI editor | `src/pages/pi/PiEditor.tsx` | piId + boqId + orderRootId |
+| Purchase detail | `src/pages/purchase/PurchaseDetail.tsx` | poId + requisitionId + boqId + orderRootId |
+| Purchase landing/list | (banner only on detail; list keeps the bell) | — |
+| Requisition detail | `src/pages/requisitions/RequisitionDetail.tsx` | requisitionId + boqId + orderRootId |
+| Annexure folder | `src/pages/requisitions/AnnexureFolder.tsx` | annexureId + requisitionId + … |
+| Manufacturing detail | `src/pages/manufacturing/ManufacturingDetail.tsx` | boqId + orderRootId |
+| GRN list/detail | `src/pages/grn/GrnList.tsx` | poId |
+| Approved BOQ module | `src/pages/modules/ApprovedBoqModule.tsx` | boqId + orderRootId |
 
-Cross-department notification feed and acknowledgement tracker.
+Banner behaviour everywhere: never auto-mark; only the `Seen / Acknowledge` click writes to `app_notification_reads`. Because it's the same row used by the dashboard, status syncs both ways automatically.
 
-New tables (all in one migration, with GRANTs + RLS + `updated_at` triggers):
+## 4. Notification Dashboard
 
-1. `public.app_notifications`
-   - `module` (`'boq' | 'order' | 'pi' | 'purchase' | 'grn' | 'requisition' | 'manufacturing' | 'design_comment'`)
-   - `event_type` (`'created' | 'updated' | 'status_changed' | 'comment_added' | 'revision_created' | ...`)
-   - `record_id`, `record_ref` (BOQ #, OA #, PI #, PO #, REQ #, etc.), `client_name`
-   - `title`, `summary`, `old_value`, `new_value` (jsonb)
-   - `actor_user_id`, `actor_user_name`, `actor_department`
-   - `target_departments text[]` — which departments should see it
-   - `created_at`
+`src/pages/notifications/NotificationDashboard.tsx`:
+- Switch the row → detail open path to the extracted `NotificationDetailDialog`.
+- Support `?id=<uuid>` query param to deep-link from page banners.
+- KPI cards / filters / module badges remain.
+- List view stays short-summary only (title, module, ref, client, changed by, time, changes count, dept Seen/Total badge).
 
-2. `public.app_notification_reads`
-   - `notification_id`, `user_id`, `user_name`, `department`, `seen_at`
-   - unique `(notification_id, user_id)`
+## 5. Safety / non-goals
 
-Generation:
+- No edits to: order/BOQ/PI/PO/requisition/annexure/GRN write paths, calculation files (`src/lib/orders/calc.ts`, `src/lib/pi/calc.ts`, etc.), approval/verification RPCs, RLS on existing tables, permissions/`useUserAccess`, sidebar structure, or Design read-only rules.
+- No new tables; only additive columns + new RPC + new triggers on annexure/manufacturing.
+- Design page stays read-only; only comment-add path emits notifications (already wired).
 
-- One DB trigger per source table (`boqs`, `orders`, `proforma_invoices`, `purchase_orders`, `grn_receipts`, `requisitions`, `boq_design_comments`) that inserts an `app_notifications` row on `INSERT` / `UPDATE` of meaningful fields, capturing the diff into `old_value` / `new_value`. Triggers are additive — they do not modify existing rows or behavior.
-- `actor_department` resolved from `notification_recipients.department` for `auth.uid()` (falls back to `'Other'`).
-- `target_departments` defaults to every distinct `department` in `notification_recipients` minus the actor's department (so a change made by Costing notifies Design, Purchase, Manufacturing, etc.).
+## Files
 
-UI (`/notifications`):
+**New**
+- `supabase/migrations/<ts>_notification_links_and_line_diffs.sql`
+- `src/components/notifications/NotificationDetailDialog.tsx`
 
-- Filters: All / New / Acknowledged / Pending; by department (multi); by module (multi); date range; search by BOQ / OA / PI / PO / client.
-- Sidebar badge = count of notifications visible to this user where there is no row in `app_notification_reads` for `(notification_id, user_id)`.
-- Each row shows: title, module, record reference, actor + actor department, timestamp, old → new diff, status chip.
-- **Seen / Acknowledge** button — only marks read when explicitly clicked (writes a row in `app_notification_reads`). Opening the dashboard does NOT auto-mark.
-- Expandable "Tracking" panel for notifications where `actor_user_id = auth.uid()`: per target department shows received / seen / pending, with seen-by name + timestamp.
+**Edited**
+- `src/components/notifications/ModuleNotifications.tsx`
+- `src/pages/notifications/NotificationDashboard.tsx`
+- Module pages listed in section 3 (banner prop standardization only)
 
-Empty / loading / error states throughout.
+## Open question
 
-## Files added / changed
-
-```text
-src/lib/access/modules.ts                 (+ 'design', 'notifications')
-src/components/AppSidebar.tsx             (+2 items, unread badge)
-src/App.tsx                               (+3 routes)
-src/hooks/useUnreadNotifications.ts       (new)
-src/lib/notifications/api.ts              (new — fetch/ack helpers)
-src/lib/design/comments.ts                (new — list/add comment)
-src/pages/design/DesignBoqList.tsx        (new — MR/GMS tabs)
-src/pages/design/DesignBoqView.tsx        (new — read-only + comments)
-src/pages/notifications/NotificationDashboard.tsx  (new)
-src/components/notifications/AckTrackingPanel.tsx  (new)
-supabase/migrations/<ts>_design_and_notifications.sql  (new)
-```
-
-No existing component, page, table, RLS policy, RPC, or route is modified beyond adding the two sidebar items, two module keys, and three new routes.
-
-## Out of scope
-
-- No changes to existing BOQ editor, OA editor, PI editor, Purchase, Manufacturing, GRN, Requisitions, Annexure Folder, Raw Material Master.
-- No email sending for the new notifications in v1 (in-app only). Existing `order_revision_notifications` email flow is untouched.
-- No new permission for "acknowledge" — anyone with `notifications` module access can acknowledge their own department's notifications.
+The user listed Manufacturing change-requests as a notification source. The current schema doesn't show a dedicated "manufacturing change request" table — I'll wire it to whichever table the Manufacturing module currently writes to (confirmed during build by reading `src/pages/manufacturing/*` and `src/components/manufacturing/*`). If no such table exists yet, that one trigger will be skipped and noted, since adding new business tables is out of scope for this notification-only update.
