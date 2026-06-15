@@ -41,6 +41,7 @@ import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import type { BoqLineItem } from "@/lib/boq/types";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
