@@ -12,6 +12,19 @@ import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
 import { NotificationCharts, deptOf } from "@/components/notifications/NotificationCharts";
 import { normalizeDept } from "@/lib/notifications/dept";
+import { useUserRole } from "@/hooks/useUserRole";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 
 interface NotifRow {
   id: string;
@@ -150,6 +163,41 @@ export default function NotificationDashboard() {
   const [chartDeptFilter, setChartDeptFilter] = useState<string | null>(null);
   const [chartStatusFilter, setChartStatusFilter] = useState<"seen" | "pending" | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isAdmin } = useUserRole(me?.id);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  async function deleteOne(id: string) {
+    const prev = rows;
+    setRows((r) => r.filter((x) => x.id !== id));
+    const { error } = await supabase
+      .from("app_notifications" as never)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      setRows(prev);
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Notification deleted" });
+    }
+  }
+
+  async function deleteAll() {
+    setDeletingAll(true);
+    const { error } = await supabase
+      .from("app_notifications" as never)
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setRows([]);
+    setReads([]);
+    toast({ title: "All notifications deleted" });
+  }
 
   // Deep-link: open detail dialog when ?id=<uuid> is present.
   useEffect(() => {
@@ -345,11 +393,46 @@ export default function NotificationDashboard() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Notification Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Cross-department change feed. Acknowledge items to mark them as seen.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Notification Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Cross-department change feed. Acknowledge items to mark them as seen.
+          </p>
+        </div>
+        {isAdmin && rows.length > 0 && (
+          <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-1" /> Delete All Notifications
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Are you sure you want to delete all notifications?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently removes every notification record. Other data
+                  (OA, BOQ, PI, PO, requisitions) is not affected.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={deletingAll}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    deleteAll();
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deletingAll ? "Deleting…" : "Delete All"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -629,6 +712,40 @@ export default function NotificationDashboard() {
                           >
                             View
                           </Button>
+                        )}
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="ml-1 text-destructive hover:text-destructive"
+                                aria-label="Delete notification"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete this notification?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes the notification record only.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    deleteOne(n.id);
+                                  }}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         )}
                       </TableCell>
                     </TableRow>
