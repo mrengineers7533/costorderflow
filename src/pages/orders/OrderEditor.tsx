@@ -38,6 +38,7 @@ import {
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
 import { convertItems, convertCharges, type CurrencyMode } from "@/lib/currency/convert";
 import { useLatestDesignReview } from "@/components/boqs/DesignCommentsInline";
+import { OaDesignCommentsPanel } from "@/components/orders/OaDesignCommentsPanel";
 import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib/orders/designComments";
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import type { BoqLineItem } from "@/lib/boq/types";
