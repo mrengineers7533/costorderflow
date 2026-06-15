@@ -3,13 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2 } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Bell,
+  ChevronsDown,
+  RefreshCw,
+  FileText,
+  PenSquare,
+  ShoppingCart,
+  Factory,
+  Receipt,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
 import {
@@ -256,266 +263,476 @@ export function NotificationDetailDialog({
 
   return (
     <Dialog open={!!notificationId} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 bg-muted/30">
         {loading || !notif ? (
-          <div className="py-10 text-center text-muted-foreground flex items-center justify-center gap-2">
+          <div className="py-20 text-center text-muted-foreground flex items-center justify-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>{notif.title}</DialogTitle>
-              <DialogDescription>
-                {notif.module.toUpperCase()} · {notif.record_ref || "—"}
-                {notif.client_name ? ` · ${notif.client_name}` : ""}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-              <div>
-                <div className="text-muted-foreground">Changed by</div>
-                <div className="font-medium">{notif.actor_user_name || "—"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Department</div>
-                <div className="font-medium">{notif.actor_department || "—"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">When</div>
-                <div className="font-medium">
-                  {new Date(notif.created_at).toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Event</div>
-                <div className="font-medium capitalize">
-                  {notif.event_type.replace(/_/g, " ")}
-                </div>
-              </div>
-            </div>
-
-            {/* Top-level field diff */}
-            <div className="mt-2">
-              <div className="text-sm font-semibold mb-2">Field changes</div>
-              {(() => {
-                const fields = changedTopFields(notif);
-                if (fields.length === 0)
-                  return (
-                    <div className="text-xs text-muted-foreground">
-                      No top-level field changes.
-                    </div>
-                  );
-                return (
-                  <div className="rounded border divide-y">
-                    {fields.map((k) => {
-                      const a = (notif.old_value || {})[k];
-                      const b = (notif.new_value || {})[k];
-                      return (
-                        <div
-                          key={k}
-                          className="grid grid-cols-12 gap-2 px-3 py-2 text-xs"
-                        >
-                          <div className="col-span-3 font-medium">{labelOf(k)}</div>
-                          <div className="col-span-4 text-destructive line-through break-words">
-                            {truncate(a, 200)}
-                          </div>
-                          <div className="col-span-1 text-center text-muted-foreground">
-                            →
-                          </div>
-                          <div className="col-span-4 text-primary break-words">
-                            {truncate(b, 200)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Line-item diffs */}
-            {lineChanges.length > 0 && (
-              <div className="mt-3">
-                <div className="text-sm font-semibold mb-2">
-                  Line item changes ({lineChanges.length})
-                </div>
-                <div className="space-y-2">
-                  {lineChanges.map((lc, idx) => (
-                    <LineDiffCard key={idx} change={lc} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Department-wise acknowledgement */}
-            <div className="mt-3">
-              <DepartmentAckPanel
-                targets={notif.target_departments}
-                reads={reads}
-              />
-            </div>
-
-            {me && !myRead && (
-              <div className="flex items-center justify-end gap-2 mt-2">
-                {notif.target_departments.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Acknowledge as:</span>
-                    <Select value={ackDept} onValueChange={setAckDept}>
-                      <SelectTrigger className="h-8 w-48">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {notif.target_departments.map((d) => (
-                          <SelectItem key={d} value={d}>
-                            {d}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <Button onClick={acknowledge}>
-                  <Check className="h-4 w-4 mr-1" /> Acknowledge
-                </Button>
-              </div>
-            )}
-          </>
+          <NotificationDetailBody
+            notif={notif}
+            reads={reads}
+            lineChanges={lineChanges}
+            me={me}
+            myRead={myRead}
+            ackDept={ackDept}
+            setAckDept={setAckDept}
+            acknowledge={acknowledge}
+          />
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function LineDiffCard({ change }: { change: LineChange }) {
-  const before = change.before || {};
-  const after = change.after || {};
-  const keys =
-    change.kind === "modified"
-      ? change.changed_fields
-      : Array.from(
-          new Set(
-            [
-              ...Object.keys(before),
-              ...Object.keys(after),
-            ].filter((k) => !HIDDEN_FIELDS.has(k) && !k.endsWith("_id")),
-          ),
-        );
+/* ---------------- New visual layout ---------------- */
 
-  const kindBadge =
-    change.kind === "added" ? (
-      <Badge>Added</Badge>
-    ) : change.kind === "removed" ? (
-      <Badge variant="destructive">Removed</Badge>
-    ) : (
-      <Badge variant="secondary">Modified</Badge>
-    );
+function pickStr(
+  obj: Record<string, unknown> | null | undefined,
+  keys: string[],
+): string | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim()) return v;
+    if (typeof v === "number") return String(v);
+  }
+  return null;
+}
+
+function HeaderCard({ notif }: { notif: NotifFull }) {
+  const nv = notif.new_value || {};
+  const ov = notif.old_value || {};
+  const oaNo = pickStr(nv, ["oa_no"]) || pickStr(ov, ["oa_no"]);
+  const boqNo = pickStr(nv, ["boq_no"]) || pickStr(ov, ["boq_no"]);
+  const piNo = pickStr(nv, ["pi_no"]) || pickStr(ov, ["pi_no"]);
+  const csNo =
+    pickStr(nv, ["cost_sheet_no", "cs_no"]) ||
+    pickStr(ov, ["cost_sheet_no", "cs_no"]);
+  const summary =
+    notif.summary ||
+    (notif.line_item_changes && notif.line_item_changes.length
+      ? `${notif.line_item_changes.length} line item change(s)`
+      : notif.event_type.replace(/_/g, " "));
+
+  const Row = ({ label, value }: { label: string; value: string | null }) =>
+    value ? (
+      <div>
+        <div className="text-[11px] text-muted-foreground">{label}</div>
+        <div className="text-sm font-semibold text-foreground">{value}</div>
+      </div>
+    ) : null;
 
   return (
-    <div className="rounded border">
-      <div className="px-3 py-1.5 bg-muted/40 flex items-center gap-2 text-xs">
-        <span className="font-medium">Line {change.line_no ?? "—"}</span>
-        {kindBadge}
-        {change.kind === "modified" && (
-          <span className="text-muted-foreground">
-            · {change.changed_fields.length} field(s) changed
-          </span>
-        )}
-      </div>
-      <div className="divide-y">
-        {keys.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">No fields.</div>
-        ) : (
-          keys.map((k) => {
-            const a = (before as Record<string, unknown>)[k];
-            const b = (after as Record<string, unknown>)[k];
-            return (
-              <div
-                key={k}
-                className="grid grid-cols-12 gap-2 px-3 py-1.5 text-xs"
-              >
-                <div className="col-span-3 font-medium">{labelOf(k)}</div>
-                <div className="col-span-4 text-destructive line-through break-words">
-                  {truncate(a, 160)}
-                </div>
-                <div className="col-span-1 text-center text-muted-foreground">→</div>
-                <div className="col-span-4 text-primary break-words">
-                  {truncate(b, 160)}
-                </div>
-              </div>
-            );
-          })
-        )}
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-500">
+          <Bell className="h-5 w-5" />
+        </div>
+        <div className="grid flex-1 grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground">Title</div>
+            <div className="text-base font-bold leading-tight">{notif.title}</div>
+          </div>
+          <Row label="Cost Sheet No" value={csNo} />
+          <div>
+            <div className="text-[11px] text-muted-foreground">Changed By</div>
+            <div className="text-sm font-semibold">
+              {(notif.actor_department || "—") +
+                (notif.actor_user_name ? ` / ${notif.actor_user_name}` : "")}
+            </div>
+          </div>
+          <Row label="OA No" value={oaNo} />
+          <Row label="Client" value={notif.client_name} />
+          <div>
+            <div className="text-[11px] text-muted-foreground">When</div>
+            <div className="text-sm font-semibold">
+              {new Date(notif.created_at).toLocaleString()}
+            </div>
+          </div>
+          <Row label="BOQ No" value={boqNo} />
+          <Row label="PI No" value={piNo} />
+          <div>
+            <div className="text-[11px] text-muted-foreground">Short summary</div>
+            <div className="text-sm font-semibold">{summary}</div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function DepartmentAckPanel({
-  targets,
-  reads,
+function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
+  if (!changes.length) return null;
+  const cols = ["Item", "Description", "Make", "Qty", "Unit", "Status"];
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="mb-3 text-sm font-bold">Line Item Details</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              {cols.map((c) => (
+                <th key={c} className="px-3 py-2 font-medium">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {changes.map((c, i) => {
+              const row = (c.after || c.before || {}) as Record<string, unknown>;
+              const statusBadge =
+                c.kind === "added"
+                  ? { cls: "bg-emerald-100 text-emerald-700", label: "Added" }
+                  : c.kind === "removed"
+                    ? { cls: "bg-red-100 text-red-700", label: "Removed" }
+                    : { cls: "bg-orange-100 text-orange-700", label: "Changed" };
+              return (
+                <tr key={i} className="border-t">
+                  <td className="px-3 py-2">{c.line_no ?? i + 1}</td>
+                  <td className="px-3 py-2">
+                    {String(row["description"] ?? row["size_model"] ?? "—")}
+                  </td>
+                  <td className="px-3 py-2">{String(row["make"] ?? "—")}</td>
+                  <td className="px-3 py-2">
+                    {String(row["qty"] ?? row["quantity"] ?? "—")}
+                  </td>
+                  <td className="px-3 py-2">{String(row["unit"] ?? "—")}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusBadge.cls}`}
+                    >
+                      {statusBadge.label}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ChangeDetailsCard({
+  notif,
+  changes,
 }: {
-  targets: string[];
-  reads: ReadRow[];
+  notif: NotifFull;
+  changes: LineChange[];
 }) {
-  // Map normalized-dept-key -> read rows so casing/whitespace/"Team" suffix
-  // don't cause false "Not Seen" reports.
-  const ackByKey = new Map<string, ReadRow[]>();
-  for (const r of reads) {
-    const key = normalizeDept(r.department);
-    if (!key) continue;
-    if (!ackByKey.has(key)) ackByKey.set(key, []);
-    ackByKey.get(key)!.push(r);
+  const topFields = changedTopFields(notif);
+  const firstLineModified = changes.find((c) => c.kind === "modified");
+  const fieldChips: { key: string; before: unknown; after: unknown }[] = [];
+  for (const k of topFields) {
+    fieldChips.push({
+      key: k,
+      before: (notif.old_value || {})[k],
+      after: (notif.new_value || {})[k],
+    });
   }
-  const total = targets.length;
-  const seen = targets.filter((d) => ackByKey.has(normalizeDept(d))).length;
-  const pending = Math.max(0, total - seen);
+  if (firstLineModified) {
+    for (const k of firstLineModified.changed_fields) {
+      const a = (firstLineModified.before || {})[k];
+      const b = (firstLineModified.after || {})[k];
+      fieldChips.push({ key: k, before: a, after: b });
+    }
+  }
+
+  if (fieldChips.length === 0 && changes.length === 0) return null;
+
+  const before = firstLineModified?.before || {};
+  const after = firstLineModified?.after || {};
+  const cols: { key: string; label: string }[] = [
+    { key: "line_no", label: "Item" },
+    { key: "description", label: "Description" },
+    { key: "make", label: "Make" },
+    { key: "qty", label: "Qty" },
+    { key: "unit", label: "Unit" },
+  ];
+  const lineNo = firstLineModified?.line_no ?? 1;
+
+  const isChangedField = (k: string) =>
+    firstLineModified?.changed_fields.includes(k);
 
   return (
-    <div>
-      <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-        Department acknowledgement
-        <Badge variant="outline">{total} total</Badge>
-        <Badge>{seen} seen</Badge>
-        {pending > 0 && <Badge variant="destructive">{pending} pending</Badge>}
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="text-sm font-bold">Change Details</div>
+        {fieldChips.slice(0, 4).map((c, i) => (
+          <span
+            key={i}
+            className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
+          >
+            Changed field: {labelOf(c.key)} ({truncate(c.before, 30)} →{" "}
+            {truncate(c.after, 30)})
+          </span>
+        ))}
       </div>
-      {total === 0 ? (
-        <div className="text-xs text-muted-foreground">
-          No target departments configured.
-        </div>
-      ) : (
-        <div className="rounded border divide-y">
-          {targets.map((d) => {
-            const seenBy = ackByKey.get(normalizeDept(d)) || [];
-            return (
-              <div
-                key={d}
-                className="grid grid-cols-12 gap-2 px-3 py-2 text-xs items-center"
-              >
-                <div className="col-span-3 font-medium">{d}</div>
-                <div className="col-span-2">
-                  {seenBy.length === 0 ? (
-                    <Badge variant="destructive">Not Seen</Badge>
-                  ) : (
-                    <Badge>Seen</Badge>
-                  )}
-                </div>
-                <div className="col-span-7 text-muted-foreground">
-                  {seenBy.length === 0
-                    ? "Waiting for acknowledgement"
-                    : seenBy
-                        .map(
-                          (s) =>
-                            `Seen by ${s.user_name || "User"} on ${new Date(
-                              s.seen_at,
-                            ).toLocaleString()}`,
-                        )
-                        .join(", ")}
-                </div>
+
+      {firstLineModified && (
+        <>
+          <div className="mt-2 text-[11px] font-bold tracking-wide text-red-600">
+            BEFORE CHANGE
+          </div>
+          <DiffTable
+            tone="red"
+            cols={cols}
+            row={before as Record<string, unknown>}
+            lineNo={lineNo}
+            isChanged={isChangedField}
+            tag="Previous value"
+          />
+          <div className="my-2 flex justify-center text-muted-foreground">
+            <ChevronsDown className="h-4 w-4" />
+          </div>
+          <div className="text-[11px] font-bold tracking-wide text-emerald-600">
+            AFTER CHANGE
+          </div>
+          <DiffTable
+            tone="green"
+            cols={cols}
+            row={after as Record<string, unknown>}
+            lineNo={lineNo}
+            isChanged={isChangedField}
+            tag="Updated value"
+          />
+        </>
+      )}
+
+      {!firstLineModified && fieldChips.length > 0 && (
+        <div className="mt-3 grid gap-2">
+          {fieldChips.map((c) => (
+            <div
+              key={c.key}
+              className="grid grid-cols-12 gap-2 rounded border px-3 py-2 text-xs"
+            >
+              <div className="col-span-3 font-medium">{labelOf(c.key)}</div>
+              <div className="col-span-4 break-words text-red-600 line-through">
+                {truncate(c.before, 200)}
               </div>
-            );
-          })}
+              <div className="col-span-1 text-center text-muted-foreground">→</div>
+              <div className="col-span-4 break-words text-emerald-600">
+                {truncate(c.after, 200)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DiffTable({
+  tone,
+  cols,
+  row,
+  lineNo,
+  isChanged,
+  tag,
+}: {
+  tone: "red" | "green";
+  cols: { key: string; label: string }[];
+  row: Record<string, unknown>;
+  lineNo: string | number | null | undefined;
+  isChanged: (k: string) => boolean | undefined;
+  tag: string;
+}) {
+  const headerBg = tone === "red" ? "bg-red-50" : "bg-emerald-50";
+  const headerText = tone === "red" ? "text-red-700" : "text-emerald-700";
+  const cellHi =
+    tone === "red"
+      ? "bg-red-100 text-red-700"
+      : "bg-emerald-100 text-emerald-700";
+  const tagCls =
+    tone === "red"
+      ? "border-red-300 text-red-600"
+      : "border-emerald-300 text-emerald-600";
+
+  return (
+    <div className="mt-1 flex items-stretch gap-2">
+      <div className="flex-1 overflow-hidden rounded-lg border">
+        <table className="w-full text-xs">
+          <thead className={`${headerBg} ${headerText}`}>
+            <tr className="text-left">
+              {cols.map((c) => (
+                <th key={c.key} className="px-3 py-1.5 font-medium">
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {cols.map((c) => {
+                const v =
+                  c.key === "line_no"
+                    ? (lineNo ?? "—")
+                    : (row[c.key] ?? row[c.key === "qty" ? "quantity" : ""] ?? "—");
+                const hi = isChanged(c.key);
+                return (
+                  <td key={c.key} className="px-3 py-2">
+                    {hi ? (
+                      <span
+                        className={`inline-block rounded px-2 py-0.5 ${cellHi}`}
+                      >
+                        {String(v)}
+                      </span>
+                    ) : (
+                      String(v)
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div
+        className={`flex shrink-0 items-center self-center rounded-md border px-3 py-1 text-[11px] font-medium ${tagCls}`}
+      >
+        {tag}
+      </div>
+    </div>
+  );
+}
+
+/** Bottom department-status chips, matching the screenshot. */
+const CHIP_DEFS: {
+  label: string;
+  aliases: string[];
+  Icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  {
+    label: "Order/OA",
+    aliases: ["costing", "order", "orders", "oa", "order/oa"],
+    Icon: RefreshCw,
+  },
+  { label: "BOQ", aliases: ["boq", "boqs"], Icon: FileText },
+  { label: "Design", aliases: ["design"], Icon: PenSquare },
+  { label: "Purchase", aliases: ["purchase", "purchasing"], Icon: ShoppingCart },
+  {
+    label: "Manufacturing",
+    aliases: ["manufacturing", "production", "factory"],
+    Icon: Factory,
+  },
+  { label: "PI", aliases: ["pi", "proforma", "proforma invoice"], Icon: Receipt },
+];
+
+function chipStatus(
+  notif: NotifFull,
+  reads: ReadRow[],
+  aliases: string[],
+): { text: string; cls: string } {
+  const isMatch = (s: string | null | undefined) => {
+    const k = normalizeDept(s);
+    return !!k && aliases.includes(k);
+  };
+  // Actor's own department -> Revised
+  if (isMatch(notif.actor_department)) {
+    return { text: "Revised", cls: "text-blue-600" };
+  }
+  // Any acknowledger from this dept -> Seen
+  if (reads.some((r) => isMatch(r.department))) {
+    return { text: "Seen", cls: "text-emerald-600" };
+  }
+  // Targeted but not yet read
+  const targeted = notif.target_departments.some((t) => isMatch(t));
+  if (targeted) {
+    return { text: "Not Seen", cls: "text-red-600" };
+  }
+  // Otherwise pending / informational
+  return { text: "Pending", cls: "text-orange-600" };
+}
+
+function StatusChipBar({
+  notif,
+  reads,
+}: {
+  notif: NotifFull;
+  reads: ReadRow[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {CHIP_DEFS.map(({ label, aliases, Icon }) => {
+        const s = chipStatus(notif, reads, aliases);
+        return (
+          <div
+            key={label}
+            className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-xs shadow-sm"
+          >
+            <Icon className={`h-3.5 w-3.5 ${s.cls}`} />
+            <span className="text-muted-foreground">{label}:</span>
+            <span className={`font-semibold ${s.cls}`}>{s.text}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function NotificationDetailBody({
+  notif,
+  reads,
+  lineChanges,
+  me,
+  myRead,
+  ackDept,
+  setAckDept,
+  acknowledge,
+}: {
+  notif: NotifFull;
+  reads: ReadRow[];
+  lineChanges: LineChange[];
+  me: { id: string; name: string; department: string } | null;
+  myRead: ReadRow | null | undefined;
+  ackDept: string;
+  setAckDept: (v: string) => void;
+  acknowledge: () => void;
+}) {
+  return (
+    <div className="space-y-4 p-5">
+      <div className="text-base font-bold">
+        Notification – {notif.event_type.replace(/_/g, " ")}
+      </div>
+
+      <HeaderCard notif={notif} />
+      <LineItemDetailsTable changes={lineChanges} />
+      <ChangeDetailsCard notif={notif} changes={lineChanges} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
+        <StatusChipBar notif={notif} reads={reads} />
+        <div className="flex items-center gap-2">
+          {me && !myRead && notif.target_departments.length > 0 && (
+            <Select value={ackDept} onValueChange={setAckDept}>
+              <SelectTrigger className="h-9 w-44 text-xs">
+                <SelectValue placeholder="Acknowledge as" />
+              </SelectTrigger>
+              <SelectContent>
+                {notif.target_departments.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {me && !myRead ? (
+            <Button
+              onClick={acknowledge}
+              className="bg-orange-500 text-white hover:bg-orange-600"
+            >
+              <Check className="mr-1 h-4 w-4" /> Acknowledge
+            </Button>
+          ) : myRead ? (
+            <span className="rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700">
+              <Check className="mr-1 inline h-3.5 w-3.5" /> Acknowledged
+            </span>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
