@@ -32,6 +32,21 @@ interface NotifRow {
   line_item_changes?: unknown[] | null;
 }
 
+/** Drop notifications that carry no actionable change. */
+function hasRealChange(n: NotifRow): boolean {
+  if (n.event_type && n.event_type.endsWith("line_items_changed")) {
+    return Array.isArray(n.line_item_changes) && n.line_item_changes.length > 0;
+  }
+  if (n.event_type === "comment_added" || n.event_type === "comment_updated") {
+    const nv = (n.new_value || {}) as Record<string, unknown>;
+    const ov = (n.old_value || {}) as Record<string, unknown>;
+    const next = String(nv.new_comment ?? "").trim();
+    const prev = String(ov.old_comment ?? "").trim();
+    return next.length > 0 && next !== prev;
+  }
+  return true;
+}
+
 interface ReadRow {
   notification_id: string;
   user_id: string;
