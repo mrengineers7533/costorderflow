@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Check, Search, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
+import { NotificationCharts, deptOf } from "@/components/notifications/NotificationCharts";
 import { normalizeDept } from "@/lib/notifications/dept";
 
 interface NotifRow {
@@ -130,6 +131,8 @@ export default function NotificationDashboard() {
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [chartDeptFilter, setChartDeptFilter] = useState<string | null>(null);
+  const [chartStatusFilter, setChartStatusFilter] = useState<"seen" | "pending" | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Deep-link: open detail dialog when ?id=<uuid> is present.
@@ -251,6 +254,21 @@ export default function NotificationDashboard() {
       if (tab === "pending" && ds.label !== "Pending") return false;
       if (tab === "partial" && ds.label !== "Partially Seen") return false;
       if (tab === "full" && ds.label !== "Fully Seen") return false;
+      if (chartDeptFilter) {
+        const key = normalizeDept(chartDeptFilter);
+        const actorKey = normalizeDept(r.actor_department);
+        const targetKeys = r.target_departments.map(normalizeDept);
+        const payloadDept = deptOf(r);
+        if (
+          actorKey !== key &&
+          !targetKeys.includes(key) &&
+          normalizeDept(payloadDept) !== key
+        ) {
+          return false;
+        }
+      }
+      if (chartStatusFilter === "seen" && !myReadIds.has(r.id)) return false;
+      if (chartStatusFilter === "pending" && myReadIds.has(r.id)) return false;
       if (term) {
         const hay = [r.title, r.summary, r.record_ref, r.client_name, r.actor_user_name]
           .filter(Boolean)
@@ -260,7 +278,7 @@ export default function NotificationDashboard() {
       }
       return true;
     });
-  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif]);
+  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif, chartDeptFilter, chartStatusFilter]);
 
   async function acknowledge(n: NotifRow) {
     if (!me) return;
@@ -351,6 +369,56 @@ export default function NotificationDashboard() {
               {m}: <span className="font-semibold ml-1">{n}</span>
             </Badge>
           ))}
+        </div>
+      )}
+
+      <NotificationCharts
+        rows={rows}
+        myReadIds={myReadIds}
+        activeDept={chartDeptFilter}
+        activeStatus={chartStatusFilter}
+        onDeptClick={(d) => setChartDeptFilter(d)}
+        onStatusClick={(s) => setChartStatusFilter(s)}
+      />
+
+      {(chartDeptFilter || chartStatusFilter) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Active chart filter:</span>
+          {chartDeptFilter && (
+            <Badge variant="secondary" className="gap-1">
+              Dept: {chartDeptFilter}
+              <button
+                onClick={() => setChartDeptFilter(null)}
+                className="ml-1 hover:text-destructive"
+                aria-label="Clear department filter"
+              >
+                ✕
+              </button>
+            </Badge>
+          )}
+          {chartStatusFilter && (
+            <Badge variant="secondary" className="gap-1 capitalize">
+              Status: {chartStatusFilter}
+              <button
+                onClick={() => setChartStatusFilter(null)}
+                className="ml-1 hover:text-destructive"
+                aria-label="Clear status filter"
+              >
+                ✕
+              </button>
+            </Badge>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7"
+            onClick={() => {
+              setChartDeptFilter(null);
+              setChartStatusFilter(null);
+            }}
+          >
+            Clear Filter
+          </Button>
         </div>
       )}
 
