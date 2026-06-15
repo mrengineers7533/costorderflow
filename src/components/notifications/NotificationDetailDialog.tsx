@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface NotifFull {
   id: string;
@@ -161,6 +169,7 @@ export function NotificationDetailDialog({
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(
     null,
   );
+  const [ackDept, setAckDept] = useState<string>("");
 
   const load = useCallback(async () => {
     if (!notificationId) return;
@@ -204,14 +213,29 @@ export function NotificationDetailDialog({
     }
   }, [notificationId, load]);
 
+  // Pick a sensible default for the acknowledgement-department selector:
+  // prefer the user's own department if it matches a target, else first target.
+  useEffect(() => {
+    if (!notif || !me) return;
+    const matched = matchTargetDept(me.department, notif.target_departments);
+    setAckDept(matched || notif.target_departments[0] || me.department);
+  }, [notif, me]);
+
   async function acknowledge() {
     if (!me || !notif) return;
-    const { error } = await supabase.from("app_notification_reads" as never).insert({
-      notification_id: notif.id,
-      user_id: me.id,
-      user_name: me.name,
-      department: me.department,
-    } as never);
+    const dept = ackDept || me.department;
+    const { error } = await supabase
+      .from("app_notification_reads" as never)
+      .upsert(
+        {
+          notification_id: notif.id,
+          user_id: me.id,
+          user_name: me.name,
+          department: dept,
+          seen_at: new Date().toISOString(),
+        } as never,
+        { onConflict: "notification_id,user_id" } as never,
+      );
     if (error) {
       toast({
         title: "Could not acknowledge",
@@ -332,7 +356,24 @@ export function NotificationDetailDialog({
             </div>
 
             {me && !myRead && (
-              <div className="flex justify-end mt-2">
+              <div className="flex items-center justify-end gap-2 mt-2">
+                {notif.target_departments.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Acknowledge as:</span>
+                    <Select value={ackDept} onValueChange={setAckDept}>
+                      <SelectTrigger className="h-8 w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {notif.target_departments.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <Button onClick={acknowledge}>
                   <Check className="h-4 w-4 mr-1" /> Acknowledge
                 </Button>
@@ -416,14 +457,17 @@ function DepartmentAckPanel({
   targets: string[];
   reads: ReadRow[];
 }) {
-  const ackByDept = new Map<string, ReadRow[]>();
+  // Map normalized-dept-key -> read rows so casing/whitespace/"Team" suffix
+  // don't cause false "Not Seen" reports.
+  const ackByKey = new Map<string, ReadRow[]>();
   for (const r of reads) {
-    if (!r.department) continue;
-    if (!ackByDept.has(r.department)) ackByDept.set(r.department, []);
-    ackByDept.get(r.department)!.push(r);
+    const key = normalizeDept(r.department);
+    if (!key) continue;
+    if (!ackByKey.has(key)) ackByKey.set(key, []);
+    ackByKey.get(key)!.push(r);
   }
   const total = targets.length;
-  const seen = targets.filter((d) => ackByDept.has(d)).length;
+  const seen = targets.filter((d) => ackByKey.has(normalizeDept(d))).length;
   const pending = Math.max(0, total - seen);
 
   return (
@@ -441,7 +485,7 @@ function DepartmentAckPanel({
       ) : (
         <div className="rounded border divide-y">
           {targets.map((d) => {
-            const seenBy = ackByDept.get(d) || [];
+            const seenBy = ackByKey.get(normalizeDept(d)) || [];
             return (
               <div
                 key={d}
@@ -461,7 +505,7 @@ function DepartmentAckPanel({
                     : seenBy
                         .map(
                           (s) =>
-                            `${s.user_name || "User"} · ${new Date(
+                            `Seen by ${s.user_name || "User"} on ${new Date(
                               s.seen_at,
                             ).toLocaleString()}`,
                         )
