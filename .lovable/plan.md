@@ -1,78 +1,29 @@
-## Goal
+## Problem
 
-Replace the current "Change Details" card in the Notification Detail dialog so it shows **only line items that actually changed**, and lists field-level changes (old → new) **directly under each changed line item**, grouped by the parent record reference (OA / BOQ / PI).
+`Reset Generated Data` clears OAs/BOQs/PIs/PRs/POs/cost sheets and activity events, but it does NOT clear the in-app notifications tables. After a reset, old notification rows remain visible in the bell/notifications page.
 
-## Scope
+## Fix
 
-- File touched: `src/components/notifications/NotificationDetailDialog.tsx`
-- Remove the old `ChangeDetailsCard` body (the before/after `DiffTable`, the field chips, the fallback grid) and the standalone `LineItemChangeHistory` card. Both are replaced by one new component: `ChangedLineItemsHistory`.
-- Header card, `LineItemDetailsTable`, Status chip bar, acknowledgement flow, real-time logic — all untouched.
-- Reuses existing data: current `notif.line_item_changes` + the already-fetched sibling `history: NotifFull[]` (no new tables, no new queries).
+Extend the existing `public.admin_reset_generated_data()` SECURITY DEFINER function to also truncate the two in-app notification tables. Nothing else changes — same admin gate, same RPC, same edge function, same UI button, same confirmation flow.
 
-## New component: `ChangedLineItemsHistory`
+### Migration
 
-Input: `notif: NotifFull`, `history: NotifFull[]`.
+Replace the function body so its `_tables` list also includes:
 
-### Aggregation
+- `app_notification_reads` (delete first — FK to `app_notifications`)
+- `app_notifications`
 
-1. Build a unified list of edits from every notification in `[notif, ...history]` (dedupe by `id`).
-2. For each notification `h`, walk `h.line_item_changes`:
-   - `modified` → for each `f` in `changed_fields`:
-     - `oldV = before[f]`, `newV = after[f]`
-     - **Skip if `JSON.stringify(oldV) === JSON.stringify(newV)`** (no real change)
-     - Emit `{ line_no, field: f, oldV, newV, by, dept, when, recordRef: h.record_ref }`
-   - `added` → emit `{ field: "Status", oldV: "—", newV: "Added", … }`
-   - `removed` → emit `{ field: "Status", oldV: "Present", newV: "Removed", … }`
-3. Group edits by `line_no`. **Drop any line that has zero edits** after the equality filter.
-4. Within a line, sort edits by `when` ascending.
-5. Sort lines by numeric `line_no`.
+Order: read-tracking tables before their parents, consistent with how `activity_event_reads` is listed before `activity_events`.
 
-### Record reference line
+No schema change, no new tables, no RLS changes, no GRANT changes, no policy changes. Master data, recipients config (`notification_recipients`), formulas, templates, users, roles, numbering config remain untouched.
 
-At the top of the card, render a single reference string built from `notif.new_value`/`old_value` via the existing `pickStr` helper:
+### UI copy (optional, tiny)
 
-```
-OA: OA-001   /   BOQ: BOQ-001   /   PI: PI-001
-```
+Update the Danger Zone description and confirmation dialog in `src/pages/admin/AdminDashboard.tsx` to mention "notifications" alongside audit logs, so admins know notifications are wiped too. Button label and confirm phrase unchanged.
 
-Only show the segments that have a value (skip missing ones).
+### Out of scope
 
-### Per-line rendering
-
-For each changed line item:
-
-```
-Line Item {line_no}                            Edited N time(s)
-  Changed Cell: {labelOf(field)}
-  Old Value: {truncate(oldV, 200)}
-  New Value: {truncate(newV, 200)}
-  Changed By: {by} ({dept})
-  Changed At: {formatted when}
-  ──────────────
-  Changed Cell: {next field}
-  ...
-```
-
-Use a label/value two-column layout per edit block (no big diff table), separated by a thin divider. Old value in red, new value in emerald, consistent with existing tokens.
-
-### Empty state
-
-If after filtering there are zero changed lines AND `changedTopFields(notif)` is also empty → render nothing (card hidden). If there are only top-level field changes (no line items), fall back to a small "Header fields changed" block listing those `old → new` rows (reuses current `fieldChips` idea but only for the top-level non-line-item case).
-
-## Wiring
-
-- In `NotificationDetailBody`, replace:
-  ```
-  <ChangeDetailsCard notif={notif} changes={lineChanges} />
-  <LineItemChangeHistory history={history} />
-  ```
-  with:
-  ```
-  <ChangedLineItemsHistory notif={notif} history={history} />
-  ```
-- Delete `ChangeDetailsCard`, `DiffTable`, and `LineItemChangeHistory` (and the now-unused `ChevronsDown` import if nothing else uses it).
-- Keep `changedTopFields`, `labelOf`, `truncate`, `pickStr`, `HIDDEN_FIELDS`, `FIELD_LABELS` — all reused.
-
-## Out of scope
-
-OA / BOQ / PI / Purchase / Manufacturing / Requisition / Annexure / Costing / Design editors, approval flow, revision logic, notification write path, RLS, schemas, header card, line-item details table, status chips, acknowledgement.
+- Edge function `admin-reset-cof-data` — unchanged.
+- `notification_recipients` (master config) — preserved.
+- `login_activity` — auth log, preserved.
+- Storage buckets — already purged, unchanged.
