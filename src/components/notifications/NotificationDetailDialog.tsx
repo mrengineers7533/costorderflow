@@ -9,7 +9,6 @@ import {
   Check,
   Loader2,
   Bell,
-  ChevronsDown,
   RefreshCw,
   FileText,
   PenSquare,
