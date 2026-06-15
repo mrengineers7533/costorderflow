@@ -614,13 +614,6 @@ export default function BoqEditor() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Terms & Conditions</CardTitle></CardHeader>
-              <CardContent>
-                <Textarea value={terms} readOnly rows={8} />
-              </CardContent>
-            </Card>
-
-            <Card>
               <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
               <CardContent>
                 <Textarea value={notes} readOnly rows={3} />
@@ -1048,14 +1041,6 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
             ))}
           </tbody>
         </table>
-
-        {/* ===== Terms box ===== */}
-        {rec.terms?.trim() && (
-          <div style={{ marginTop: "4mm", border: "0.3mm solid #000", padding: "2mm", fontSize: "8pt", whiteSpace: "pre-wrap" }}>
-            <div style={{ fontWeight: 700, marginBottom: "0.5mm" }}>TERMS & CONDITIONS:</div>
-            {rec.terms}
-          </div>
-        )}
 
         {/* ===== Notes inline ===== */}
         {rec.notes?.trim() && (

@@ -88,9 +88,6 @@ export default function FinalBoq() {
             </table>
           </CardContent>
         </Card>
-        {boq.terms && (
-          <Card><CardHeader><CardTitle className="text-base">Terms & Conditions</CardTitle></CardHeader><CardContent><pre className="whitespace-pre-wrap text-xs font-sans">{boq.terms}</pre></CardContent></Card>
-        )}
         {boq.notes && (
           <Card><CardHeader><CardTitle className="text-base">Notes</CardTitle></CardHeader><CardContent><pre className="whitespace-pre-wrap text-xs font-sans">{boq.notes}</pre></CardContent></Card>
         )}
