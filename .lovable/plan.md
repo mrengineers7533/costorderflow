@@ -1,46 +1,54 @@
-# Sidebar-Driven Access Control
+## Goal
 
-Align permissions 1:1 with the left sidebar so each menu entry has exactly one access toggle. Hide menu when not allowed; block direct URL visit with the existing "Access Denied" screen.
+Add a **Line Item Change History** card to the existing Notification Detail dialog (the page in the screenshot). It lists every field-level edit to line items, showing Item, Field Changed, Old Value, New Value, Edited By, Edited On. Only line items that actually changed appear.
 
-## What changes
+No new tables, no triggers, no edits to Orders/BOQ/PI editors. Pure read-side aggregation over the data already stored in `app_notifications.line_item_changes`.
 
-### 1. Module keys (`src/lib/access/modules.ts`)
-Replace the 3 separate Costing-child keys with a single `costing` parent, and split Annexure out of Requisitions. Final list shown in Admin → Access Control matches the sidebar exactly:
+## Scope
 
-```text
-dashboard, costing, design, notifications, workflow, purchase,
-manufacturing, requisitions, annexures, raw_materials, grn,
-reports, cost_sheets
-```
+- File touched: `src/components/notifications/NotificationDetailDialog.tsx` (one new component + one new query inside `load`).
+- Nothing else changes — header card, Line Item Details table, Change Details, Status chip bar, acknowledgement flow all stay exactly as-is.
 
-(`orders`, `boqs`, `pi` keys are removed from the picker — they are covered by `costing`.)
+## How it works
 
-### 2. Sidebar (`src/components/AppSidebar.tsx`)
-- Costing parent visible only if user has `costing` (or is admin). When open, Orders / BOQ / PI children always show — no per-child permission check.
-- New "Annexure Folder" entry gated by `annexures`.
-- All other sidebar entries keep their current 1:1 module key.
+1. **Fetch sibling history.** Inside the existing `load()`, after fetching the current notification, run one extra query:
+   - If `notif.record_ref` is set → `select id, actor_user_name, actor_department, created_at, line_item_changes from app_notifications where record_ref = notif.record_ref order by created_at asc`.
+   - Else fall back to `record_id = notif.record_id`.
+   - Store in `history` state.
 
-### 3. Route guards (`src/App.tsx`)
-- `/orders`, `/orders/*`, `/boqs`, `/boqs/*`, `/pi`, `/pi/*` → `RequireModule module="costing"`.
-- `/requisitions/annexures` and `/annexures/:annexureId/po/new` → `RequireModule module="annexures"` (keep `purchase` check for PO create page via a combined check: require either — simplest: keep `annexures` for the annexure list, leave PO-create on `purchase`).
-- Everything else unchanged.
+2. **Aggregate per line + field.** Walk every notification's `line_item_changes`:
+   - For each `modified` change → emit one row per entry in `changed_fields` with `{ line_no, field, old: before[field], new: after[field], by, dept, when }`.
+   - For each `added` change → emit one row `{ line_no, field: "Status", old: "—", new: "Added", by, when }`.
+   - For each `removed` change → emit one row `{ line_no, field: "Status", old: "Present", new: "Removed", by, when }`.
+   - Skip lines that produced zero rows. Sort rows by `line_no` then `when`.
 
-Unauthorized direct visits already render `AccessDenied` via `RequireModule` — no new component needed.
+3. **Render a new card** below "Change Details" and above the Status chip bar:
 
-### 4. Admin Access Control page
-Driven by the `MODULES` array, so it updates automatically. No code edit there beyond the new keys.
+   ```
+   Line Item Change History
+   Item 1 — Edited 2 times
+   ┌──────┬────────────────┬───────────────┬───────────────────────┬────────────┬────────────────────┐
+   │ Item │ Field Changed  │ Old Value     │ New Value             │ Edited By  │ Edited On          │
+   ├──────┼────────────────┼───────────────┼───────────────────────┼────────────┼────────────────────┤
+   │ 1    │ Description    │ SD-10         │ SD-10 (F)             │ Ravi (BOQ) │ 15-Jun-2026 11:20  │
+   │ 1    │ Make           │ M.R. Engg     │ M.R.Engg (Fowler …)   │ Ravi (BOQ) │ 15-Jun-2026 11:21  │
+   └──────┴────────────────┴───────────────┴───────────────────────┴────────────┴────────────────────┘
+   Item 13 — Edited 1 time
+   ...
+   ```
 
-### 5. Data backfill (one migration, additive only)
-For every user that currently has any of `orders`, `boqs`, `pi` → insert `costing`.
-For every user that currently has `requisitions` → also insert `annexures` (so today's requisition users keep seeing the Annexure Folder).
-Then delete the now-unused `orders` / `boqs` / `pi` rows from `user_module_access`.
-No table schema change; no RLS change; no business-logic change.
+   - Group header per line_no with edit count.
+   - Hide the entire card when the aggregated list is empty (no item ever changed).
+   - Use the same `FIELD_LABELS` / `labelOf` helper already in the file for pretty field names.
+   - Use existing `truncate` for long values.
 
-## Out of scope (explicitly unchanged)
-OA, BOQ, PI, Purchase, Manufacturing, Requisition, Annexure, GRN, Design, Workflow, Costing — all calculation, approval, revision, notification, and data-saving logic untouched. No new tables, no policy edits, no edge-function changes.
+## Technical details
 
-## Files touched
-- `src/lib/access/modules.ts` (edit list)
-- `src/components/AppSidebar.tsx` (Costing gating + Annexure entry already wired to module key)
-- `src/App.tsx` (swap module names on the 3 Costing route groups + the Annexure route)
-- one new `supabase/migrations/*.sql` (backfill described above)
+- New state: `const [history, setHistory] = useState<NotifFull[]>([])`.
+- Pass `history` into the body component and render `<LineItemChangeHistory history={history} />` after `<ChangeDetailsCard />`.
+- `LineItemChangeHistory` is a small pure component inside the same file (consistent with the existing per-section components).
+- Acknowledgement, real-time, and revision logic are untouched.
+
+## Out of scope (explicitly not changing)
+
+OA / BOQ / PI / Purchase / Manufacturing / Requisition / Annexure / Costing / Design calculation, approval flow, revision logic, notification write path, RLS, schemas, and any module page UI. Only the read-only history card on this one dialog.

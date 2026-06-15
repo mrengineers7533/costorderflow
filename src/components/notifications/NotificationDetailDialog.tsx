@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Factory,
   Receipt,
+  History,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
@@ -173,6 +174,7 @@ export function NotificationDetailDialog({
   const [loading, setLoading] = useState(false);
   const [notif, setNotif] = useState<NotifFull | null>(null);
   const [reads, setReads] = useState<ReadRow[]>([]);
+  const [history, setHistory] = useState<NotifFull[]>([]);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(
     null,
   );
@@ -209,6 +211,25 @@ export function NotificationDetailDialog({
       .select("*")
       .eq("notification_id", notificationId);
     setReads(((r || []) as unknown as ReadRow[]) || []);
+
+    // Pull every prior/sibling notification for the same source record so we
+    // can aggregate a Line Item Change History on this dialog. Group by
+    // record_ref when available, else by record_id.
+    const current = (n as NotifFull | null) ?? null;
+    if (current) {
+      let q = supabase
+        .from("app_notifications" as never)
+        .select(
+          "id,actor_user_name,actor_department,created_at,line_item_changes,record_ref,record_id",
+        );
+      if (current.record_ref) q = q.eq("record_ref", current.record_ref);
+      else if (current.record_id) q = q.eq("record_id", current.record_id);
+      else q = q.eq("id", current.id);
+      const { data: h } = await q.order("created_at", { ascending: true });
+      setHistory(((h || []) as unknown as NotifFull[]) || []);
+    } else {
+      setHistory([]);
+    }
     setLoading(false);
   }, [notificationId]);
 
@@ -217,6 +238,7 @@ export function NotificationDetailDialog({
     else {
       setNotif(null);
       setReads([]);
+      setHistory([]);
     }
   }, [notificationId, load]);
 
@@ -273,6 +295,7 @@ export function NotificationDetailDialog({
             notif={notif}
             reads={reads}
             lineChanges={lineChanges}
+            history={history}
             me={me}
             myRead={myRead}
             ackDept={ackDept}
@@ -673,10 +696,128 @@ function StatusChipBar({
   );
 }
 
+function LineItemChangeHistory({ history }: { history: NotifFull[] }) {
+  type Row = {
+    line_no: string | number;
+    field: string;
+    oldV: unknown;
+    newV: unknown;
+    by: string;
+    dept: string | null;
+    when: string;
+  };
+
+  const rows: Row[] = [];
+  for (const h of history || []) {
+    const changes = Array.isArray(h.line_item_changes)
+      ? (h.line_item_changes as LineChange[])
+      : [];
+    for (let i = 0; i < changes.length; i++) {
+      const c = changes[i];
+      const lineNo = c.line_no ?? i + 1;
+      const base = {
+        line_no: lineNo,
+        by: h.actor_user_name || "—",
+        dept: h.actor_department || null,
+        when: h.created_at,
+      };
+      if (c.kind === "modified") {
+        for (const f of c.changed_fields || []) {
+          rows.push({
+            ...base,
+            field: f,
+            oldV: (c.before || {})[f],
+            newV: (c.after || {})[f],
+          });
+        }
+      } else if (c.kind === "added") {
+        rows.push({ ...base, field: "status", oldV: "—", newV: "Added" });
+      } else if (c.kind === "removed") {
+        rows.push({ ...base, field: "status", oldV: "Present", newV: "Removed" });
+      }
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  rows.sort((a, b) => {
+    const an = Number(a.line_no) || 0;
+    const bn = Number(b.line_no) || 0;
+    if (an !== bn) return an - bn;
+    return a.when.localeCompare(b.when);
+  });
+
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const k = String(r.line_no);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <History className="h-4 w-4 text-muted-foreground" />
+        <div className="text-sm font-bold">Line Item Change History</div>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+          {rows.length} edit{rows.length === 1 ? "" : "s"} across{" "}
+          {groups.size} item{groups.size === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="space-y-4">
+        {Array.from(groups.entries()).map(([lineNo, grp]) => (
+          <div key={lineNo} className="overflow-hidden rounded-lg border">
+            <div className="flex items-center justify-between bg-muted/40 px-3 py-1.5 text-xs">
+              <div className="font-semibold">Item {lineNo}</div>
+              <div className="text-muted-foreground">
+                Edited {grp.length} time{grp.length === 1 ? "" : "s"}
+              </div>
+            </div>
+            <table className="w-full text-xs">
+              <thead className="bg-muted/20 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Field Changed</th>
+                  <th className="px-3 py-2 font-medium">Old Value</th>
+                  <th className="px-3 py-2 font-medium">New Value</th>
+                  <th className="px-3 py-2 font-medium">Edited By</th>
+                  <th className="px-3 py-2 font-medium">Edited On</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grp.map((r, i) => (
+                  <tr key={i} className="border-t align-top">
+                    <td className="px-3 py-2 font-medium">{labelOf(r.field)}</td>
+                    <td className="px-3 py-2 text-red-600 line-through">
+                      {truncate(r.oldV, 80)}
+                    </td>
+                    <td className="px-3 py-2 text-emerald-700">
+                      {truncate(r.newV, 80)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.by}
+                      {r.dept ? (
+                        <span className="text-muted-foreground"> ({r.dept})</span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                      {new Date(r.when).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function NotificationDetailBody({
   notif,
   reads,
   lineChanges,
+  history,
   me,
   myRead,
   ackDept,
@@ -686,6 +827,7 @@ function NotificationDetailBody({
   notif: NotifFull;
   reads: ReadRow[];
   lineChanges: LineChange[];
+  history: NotifFull[];
   me: { id: string; name: string; department: string } | null;
   myRead: ReadRow | null | undefined;
   ackDept: string;
@@ -701,6 +843,8 @@ function NotificationDetailBody({
       <HeaderCard notif={notif} />
       <LineItemDetailsTable changes={lineChanges} />
       <ChangeDetailsCard notif={notif} changes={lineChanges} />
+      <LineItemChangeHistory history={history} />
+      {null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <StatusChipBar notif={notif} reads={reads} />
