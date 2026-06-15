@@ -135,7 +135,7 @@ export function CreateUserDialog({
               {([
                 ["custom", "Custom"], ["purchase", "Purchase only"],
                 ["manufacturing", "Manufacturing only"], ["requisitions", "Requisition only"],
-                ["orders", "Costing only"], ["admin", "Full access (Admin)"],
+                ["costing", "Costing only"], ["admin", "Full access (Admin)"],
               ] as [Preset, string][]).map(([k, lbl]) => (
                 <Button key={k} type="button" size="sm"
                   variant={preset === k ? "default" : "outline"}
