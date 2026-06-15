@@ -717,6 +717,7 @@ function NotificationDetailBody({
   setAckDept: (v: string) => void;
   acknowledge: () => void;
 }) {
+  /* placeholder marker */
   return (
     <div className="space-y-4 p-5">
       <div className="text-base font-bold">
