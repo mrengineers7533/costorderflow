@@ -457,14 +457,17 @@ function DepartmentAckPanel({
   targets: string[];
   reads: ReadRow[];
 }) {
-  const ackByDept = new Map<string, ReadRow[]>();
+  // Map normalized-dept-key -> read rows so casing/whitespace/"Team" suffix
+  // don't cause false "Not Seen" reports.
+  const ackByKey = new Map<string, ReadRow[]>();
   for (const r of reads) {
-    if (!r.department) continue;
-    if (!ackByDept.has(r.department)) ackByDept.set(r.department, []);
-    ackByDept.get(r.department)!.push(r);
+    const key = normalizeDept(r.department);
+    if (!key) continue;
+    if (!ackByKey.has(key)) ackByKey.set(key, []);
+    ackByKey.get(key)!.push(r);
   }
   const total = targets.length;
-  const seen = targets.filter((d) => ackByDept.has(d)).length;
+  const seen = targets.filter((d) => ackByKey.has(normalizeDept(d))).length;
   const pending = Math.max(0, total - seen);
 
   return (
@@ -482,7 +485,7 @@ function DepartmentAckPanel({
       ) : (
         <div className="rounded border divide-y">
           {targets.map((d) => {
-            const seenBy = ackByDept.get(d) || [];
+            const seenBy = ackByKey.get(normalizeDept(d)) || [];
             return (
               <div
                 key={d}
@@ -502,7 +505,7 @@ function DepartmentAckPanel({
                     : seenBy
                         .map(
                           (s) =>
-                            `${s.user_name || "User"} · ${new Date(
+                            `Seen by ${s.user_name || "User"} on ${new Date(
                               s.seen_at,
                             ).toLocaleString()}`,
                         )
