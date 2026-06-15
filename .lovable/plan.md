@@ -1,76 +1,30 @@
-## Goal
+# Per-cell Design Comments
 
-Rework the internal Design BOQ review (`/design/:id`) so comments auto-save, a single Post Submit at the bottom transitions the BOQ to "changes requested", OA creator revises, and Design can only Approve the revised BOQ. Purchase and Manufacturing only see design-approved BOQs.
+Today the Design BOQ review page (`src/pages/design/DesignBoqView.tsx`) renders one comment box per row in a separate "Design Comment" column. We will change it so every cell of every line item has its own comment box directly underneath the cell value, auto-saving against `boq_id + line_item_id + field_name`.
 
-## Flow
+The storage layer already supports this — `boq_design_comments` has `column_key`, and `upsertDesignComment({ boqId, itemId, columnKey, comment })` already keys on (user, boq, item, column). No DB / schema / RLS / submit / approve / OA-flow changes.
 
-```text
-Design opens BOQ
-  → types comment in any cell (1, 2, or N items — not mandatory on all)
-  → auto-save on blur / debounce 600ms (per item+column)
-  → comment count badge updates
-[ Post Submit ]  ← only button, bottom of page
-  → sets boqs.design_review_status = 'changes_requested'
-  → emits notification to OA creator (existing emit_notification path)
-OA Creator updates OA + creates revised BOQ (existing BoqEditor revision flow)
-Design opens revised BOQ
-  → Approve button is enabled ONLY when:
-      boq.revision > revision at which last comment-submit happened
-      AND design_review_status != 'design_approved'
-  → Approve sets design_review_status = 'design_approved'
-Purchase / Manufacturing lists filter: design_review_status = 'design_approved'
-```
+## Changes (single file: `src/pages/design/DesignBoqView.tsx`)
 
-## Changes
-
-### 1. `src/pages/design/DesignBoqView.tsx` — rewrite review UX
-- Replace per-cell "Post comment" button with auto-save:
-  - `Textarea` per cell stays inline; on `onChange` set local draft, on `onBlur` or 600ms debounce call `upsertDesignComment({ boqId, itemId, columnKey, text })`.
-  - New helper `upsertDesignComment` in `src/lib/design/comments.ts`: if a comment by the current user for the same `(boq_id, boq_item_id, column_key)` exists and is not yet submitted, UPDATE it; else INSERT. Empty text → DELETE the draft row.
-  - Show small "Saved • hh:mm" indicator next to the textarea.
-- Remove per-row "Post comment" action. Comments list under each row still renders existing comments.
-- Remove `Approve All / Mark All Pending / Mark Selected Not Approved` bulk bar in this view (status is implicit via comments + Post Submit).
-- Add sticky bottom bar with single primary button: **Post Submit (N comments)**. Disabled when there are zero unsubmitted comments OR `design_review_status === 'changes_requested'` (already submitted, waiting for revision) OR `design_approved`.
-- Add **Approve revised BOQ** button next to Post Submit. Enabled only when:
-  - latest comment submission's `boq_revision` < `boq.revision`, AND
-  - `design_review_status !== 'design_approved'`.
-  - Disabled with tooltip "Waiting for OA Creator to publish revised BOQ" otherwise.
-
-### 2. `src/lib/design/comments.ts`
-- Add `upsertDesignComment(input)` — uses `(boq_id, boq_item_id, coalesce(column_key,'__row__'), user_id)` to dedupe; uses existing table, no schema change.
-- Add `deleteDesignComment(id)` for empty-string blur.
-- Add `submitDesignComments(boqId, boqRevision)`:
-  - Marks the BOQ: `update boqs set design_review_status = 'changes_requested' where id = boqId`.
-  - Records snapshot revision via existing `boq_design_comments.oa_revision_id` is reused — instead, write a row into `boq_design_review_email_log` is overkill. Simpler: track on `app_notifications` payload + read `max(created_at)` of comments vs `boq.updated_at` of revisions. To keep it deterministic, add a tiny client check: store the submit revision in `localStorage` AND rely on `design_review_status` flag for the primary gate. (No new table.)
-- Add `approveRevisedBoq(boqId)`:
-  - `update boqs set design_review_status = 'design_approved', verification_status = 'approved', is_current = true, status = 'finalized' where id = boqId`.
-  - Triggers existing `notif_on_boqs` which notifies Purchase & Manufacturing.
-
-### 3. Gating Purchase / Manufacturing
-- `src/pages/purchase/BoqFolder.tsx`: tighten filter to `(verification_status ?? 'approved') === 'approved' AND design_review_status === 'design_approved'`.
-- `src/pages/manufacturing/ManufacturingList.tsx` and `CreateRequisitionDialog.tsx`: add the same `design_review_status === 'design_approved'` filter when listing/selecting BOQs. (Edit only the list/picker queries; do NOT touch calculations.)
-
-### 4. `src/pages/design/DesignBoqList.tsx`
-- Existing `design_review_status` column shown. Add badge mapping:
-  - `draft` → "Open for review"
-  - `changes_requested` → "Awaiting OA revision"
-  - `design_approved` → "Approved"
-- No behavior change beyond labels.
-
-### 5. Notification
-- "Post Submit" already triggers `notif_on_boqs` via `design_review_status` change → emits to OA creator audience. No new code needed.
+1. **Remove the trailing "Design Comment" column** from the table header and body.
+2. **Render each value cell** as:
+   - Top: existing read-only value (`Model`, `Qty`, `Make/Unit`, `Motor`, `Motor Qty`, `Remarks`, …) — unchanged display.
+   - Below: a compact `Textarea` (rows=1, small font) bound to `drafts[keyOf(itemId, c.key)]`.
+   - `onChange` → `scheduleSave(itemId, c.key, value)` (600 ms debounce, already implemented).
+   - `onBlur` → `saveNow(itemId, c.key, value)` (immediate flush).
+   - Saving / "Saved · HH:MM" indicator under the textarea (existing pattern, shrunk).
+   - Other reviewers' comments for the same cell rendered underneath (existing `otherCommentsByCell` map, already keyed by `itemId + column_key`).
+   - Disabled when `alreadySubmitted || designApproved` (existing rule).
+3. **Drop the legacy row-level box** (`column_key = "__row__"`). Hydration on load will simply ignore row-level rows, but we will still display them under each cell? No — to keep semantics clean we render row-level comments (if any pre-existing) as a small "General" strip above the row. (Optional, low risk.)
+4. **Draft count + Post Submit** logic unchanged — `myDraftCount` already counts non-empty drafts across all keys, so per-cell drafts feed in naturally. The Post Submit flush loop already splits the key into `itemId` / `col` and writes `columnKey` correctly.
+5. **Column set** stays the existing `COLS` list (`model_number`, `description`, `quantity`, `unit`, `motor`, `motor_quantity`, `remarks`) — these are the canonical field names used across the BOQ format and match how the cost sheet maps to line items (e.g. `description`/`model_number` cover "Machine Name", `quantity` covers "Qty", `remarks`/`model_number` cover "Make"). The `field_name` stored in `column_key` is exactly the BOQ field key.
 
 ## Out of scope
 
-- No DB migration (reuses existing `boq_design_comments` + `boqs.design_review_status`).
-- No changes to BOQ/OA calculation logic, PDF, currency, or `verify_boq_*` RPC paths.
-- No changes to the external token-based reviewer flow (`src/pages/boqs/DesignReview.tsx`, `boq_design_reviews`).
-- No new tables, no schema changes, no edge function changes.
+- No changes to `boq_design_comments` schema, RLS, or `upsertDesignComment` logic.
+- No changes to OA Creator flow, revised-BOQ generation, approval gating, Purchase/Manufacturing visibility, or notifications.
+- No changes to BOQ/OA calculations or PDF/Excel exports.
 
-## Key files touched
+## UX note
 
-- `src/pages/design/DesignBoqView.tsx` (rewrite review UI + sticky action bar)
-- `src/lib/design/comments.ts` (add upsert/delete/submit/approve helpers)
-- `src/pages/purchase/BoqFolder.tsx` (add design-approved filter)
-- `src/pages/manufacturing/ManufacturingList.tsx` + `src/components/manufacturing/CreateRequisitionDialog.tsx` (add design-approved filter on BOQ pickers/lists)
-- `src/pages/design/DesignBoqList.tsx` (status badge labels only)
+Each cell becomes taller because of the inline textarea. The table is already horizontally scrollable (`overflow-x-auto`) so column widths stay readable; we'll set `min-w-[160px]` per cell and use `rows={1}` with auto-growing text for compactness.

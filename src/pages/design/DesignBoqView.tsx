@@ -255,68 +255,86 @@ export default function DesignBoqView() {
               <TableRow>
                 <TableHead className="w-12">#</TableHead>
                 {COLS.map((c) => (
-                  <TableHead key={c.key}>{c.label}</TableHead>
+                  <TableHead key={c.key} className="min-w-[180px]">{c.label}</TableHead>
                 ))}
-                <TableHead className="min-w-[260px]">Design Comment</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={COLS.length + 2} className="text-center text-muted-foreground py-6">
+                  <TableCell colSpan={COLS.length + 1} className="text-center text-muted-foreground py-6">
                     No line items.
                   </TableCell>
                 </TableRow>
               )}
               {items.map((it) => {
-                const k = keyOf(it.id, "__row__");
-                const others = otherCommentsByCell[k] || [];
-                const value = drafts[k] || "";
-                const saving = savingKey[k];
-                const ts = savedAt[k];
                 const disabled = alreadySubmitted || designApproved;
+                const rowKey = keyOf(it.id, "__row__");
+                const rowOthers = otherCommentsByCell[rowKey] || [];
                 return (
                   <Fragment key={it.id}>
                     <TableRow className="align-top">
                       <TableCell>{it.item_no}</TableCell>
                       {COLS.map((c) => {
                         const val = (it as unknown as Record<string, unknown>)[c.key];
+                        const k = keyOf(it.id, c.key);
+                        const value = drafts[k] || "";
+                        const saving = savingKey[k];
+                        const ts = savedAt[k];
+                        const others = otherCommentsByCell[k] || [];
                         return (
-                          <TableCell key={c.key} className="align-top">
-                            <span className="whitespace-pre-wrap">
+                          <TableCell key={c.key} className="align-top min-w-[180px]">
+                            <div className="whitespace-pre-wrap text-sm mb-1">
                               {val == null || val === "" ? "—" : String(val)}
-                            </span>
+                            </div>
+                            <Textarea
+                              rows={1}
+                              className="text-xs min-h-[32px]"
+                              value={value}
+                              disabled={disabled}
+                              placeholder={disabled ? "Locked" : `Comment on ${c.label.toLowerCase()}…`}
+                              onChange={(e) => scheduleSave(it.id, c.key, e.target.value)}
+                              onBlur={(e) => void saveNow(it.id, c.key, e.target.value)}
+                            />
+                            <div className="mt-0.5 text-[10px] text-muted-foreground h-3">
+                              {saving ? "Saving…" : ts ? `Saved · ${new Date(ts).toLocaleTimeString()}` : ""}
+                            </div>
+                            {others.length > 0 && (
+                              <div className="mt-1 space-y-1">
+                                {others.map((cm) => (
+                                  <div key={cm.id} className="text-[10px] border-l-2 border-primary/40 pl-1.5">
+                                    <div className="text-muted-foreground">
+                                      <span className="font-medium text-foreground">{cm.user_name || "User"}</span>
+                                      {cm.department && <span> · {cm.department}</span>}
+                                    </div>
+                                    <div className="whitespace-pre-wrap">{cm.comment}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                         );
                       })}
-                      <TableCell className="align-top">
-                        <Textarea
-                          rows={2}
-                          value={value}
-                          disabled={disabled}
-                          placeholder={disabled ? "Comments locked" : "Add a comment for this line…"}
-                          onChange={(e) => scheduleSave(it.id, "row", e.target.value)}
-                          onBlur={(e) => void saveNow(it.id, "row", e.target.value)}
-                        />
-                        <div className="mt-1 text-[10px] text-muted-foreground h-4">
-                          {saving ? "Saving…" : ts ? `Saved · ${new Date(ts).toLocaleTimeString()}` : ""}
-                        </div>
-                        {others.length > 0 && (
-                          <div className="mt-1 space-y-1">
-                            {others.map((c) => (
-                              <div key={c.id} className="text-[11px] border-l-2 border-primary/40 pl-2">
+                    </TableRow>
+                    {rowOthers.length > 0 && (
+                      <TableRow>
+                        <TableCell />
+                        <TableCell colSpan={COLS.length} className="pt-0">
+                          <div className="text-[10px] text-muted-foreground mb-1">General comments</div>
+                          <div className="space-y-1">
+                            {rowOthers.map((cm) => (
+                              <div key={cm.id} className="text-[11px] border-l-2 border-primary/40 pl-2">
                                 <div className="text-muted-foreground">
-                                  <span className="font-medium text-foreground">{c.user_name || "User"}</span>
-                                  {c.department && <span> · {c.department}</span>}
-                                  <span> · {new Date(c.created_at).toLocaleString()}</span>
+                                  <span className="font-medium text-foreground">{cm.user_name || "User"}</span>
+                                  {cm.department && <span> · {cm.department}</span>}
                                 </div>
-                                <div className="whitespace-pre-wrap">{c.comment}</div>
+                                <div className="whitespace-pre-wrap">{cm.comment}</div>
                               </div>
                             ))}
                           </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </Fragment>
                 );
               })}
