@@ -1,60 +1,76 @@
 ## Goal
 
-Add two clickable donut charts to `/notifications` that filter the existing list. No schema changes, no write-logic changes.
+Rework the internal Design BOQ review (`/design/:id`) so comments auto-save, a single Post Submit at the bottom transitions the BOQ to "changes requested", OA creator revises, and Design can only Approve the revised BOQ. Purchase and Manufacturing only see design-approved BOQs.
 
-## Layout (above existing list, below summary cards/filters)
+## Flow
 
 ```text
-+----------------------------------+  +----------------------------------+
-| Notifications by Department      |  | Pending vs Seen Notifications    |
-| (donut, clickable slices)        |  | (donut, clickable slices)        |
-+----------------------------------+  +----------------------------------+
-[ Active: Dept = Design | Status = Pending ]  [ Clear Filter ]
-[ existing notification table ]
+Design opens BOQ
+  → types comment in any cell (1, 2, or N items — not mandatory on all)
+  → auto-save on blur / debounce 600ms (per item+column)
+  → comment count badge updates
+[ Post Submit ]  ← only button, bottom of page
+  → sets boqs.design_review_status = 'changes_requested'
+  → emits notification to OA creator (existing emit_notification path)
+OA Creator updates OA + creates revised BOQ (existing BoqEditor revision flow)
+Design opens revised BOQ
+  → Approve button is enabled ONLY when:
+      boq.revision > revision at which last comment-submit happened
+      AND design_review_status != 'design_approved'
+  → Approve sets design_review_status = 'design_approved'
+Purchase / Manufacturing lists filter: design_review_status = 'design_approved'
 ```
 
-Empty state for either chart when `rows.length === 0`: `No notification data available`.
+## Changes
 
-## Chart 1 — Notifications by Department
+### 1. `src/pages/design/DesignBoqView.tsx` — rewrite review UX
+- Replace per-cell "Post comment" button with auto-save:
+  - `Textarea` per cell stays inline; on `onChange` set local draft, on `onBlur` or 600ms debounce call `upsertDesignComment({ boqId, itemId, columnKey, text })`.
+  - New helper `upsertDesignComment` in `src/lib/design/comments.ts`: if a comment by the current user for the same `(boq_id, boq_item_id, column_key)` exists and is not yet submitted, UPDATE it; else INSERT. Empty text → DELETE the draft row.
+  - Show small "Saved • hh:mm" indicator next to the textarea.
+- Remove per-row "Post comment" action. Comments list under each row still renders existing comments.
+- Remove `Approve All / Mark All Pending / Mark Selected Not Approved` bulk bar in this view (status is implicit via comments + Post Submit).
+- Add sticky bottom bar with single primary button: **Post Submit (N comments)**. Disabled when there are zero unsubmitted comments OR `design_review_status === 'changes_requested'` (already submitted, waiting for revision) OR `design_approved`.
+- Add **Approve revised BOQ** button next to Post Submit. Enabled only when:
+  - latest comment submission's `boq_revision` < `boq.revision`, AND
+  - `design_review_status !== 'design_approved'`.
+  - Disabled with tooltip "Waiting for OA Creator to publish revised BOQ" otherwise.
 
-- Source: existing `rows` from `app_notifications`.
-- Department per notification = first value found in this order:
-  1. `actor_department`
-  2. `target_departments[0]`
-  3. payload department: `new_value.department` or `old_value.department`
-  4. fallback `"Unknown Department"`
-- Group + count, sort desc.
-- Click slice → set `chartDeptFilter = <dept>`; applied as an extra filter in the existing `visible` memo (matches `actor_department` OR includes in `target_departments`, case-insensitive via existing `normalizeDept`).
+### 2. `src/lib/design/comments.ts`
+- Add `upsertDesignComment(input)` — uses `(boq_id, boq_item_id, coalesce(column_key,'__row__'), user_id)` to dedupe; uses existing table, no schema change.
+- Add `deleteDesignComment(id)` for empty-string blur.
+- Add `submitDesignComments(boqId, boqRevision)`:
+  - Marks the BOQ: `update boqs set design_review_status = 'changes_requested' where id = boqId`.
+  - Records snapshot revision via existing `boq_design_comments.oa_revision_id` is reused — instead, write a row into `boq_design_review_email_log` is overkill. Simpler: track on `app_notifications` payload + read `max(created_at)` of comments vs `boq.updated_at` of revisions. To keep it deterministic, add a tiny client check: store the submit revision in `localStorage` AND rely on `design_review_status` flag for the primary gate. (No new table.)
+- Add `approveRevisedBoq(boqId)`:
+  - `update boqs set design_review_status = 'design_approved', verification_status = 'approved', is_current = true, status = 'finalized' where id = boqId`.
+  - Triggers existing `notif_on_boqs` which notifies Purchase & Manufacturing.
 
-## Chart 2 — Pending vs Seen
+### 3. Gating Purchase / Manufacturing
+- `src/pages/purchase/BoqFolder.tsx`: tighten filter to `(verification_status ?? 'approved') === 'approved' AND design_review_status === 'design_approved'`.
+- `src/pages/manufacturing/ManufacturingList.tsx` and `CreateRequisitionDialog.tsx`: add the same `design_review_status === 'design_approved'` filter when listing/selecting BOQs. (Edit only the list/picker queries; do NOT touch calculations.)
 
-- For current user `me`:
-  - Seen = `myReadIds.has(n.id)` (reuses existing `app_notification_reads` logic).
-  - Pending = the rest.
-- Click slice → set `chartStatusFilter = "seen" | "pending"`; applied in `visible` memo alongside existing tab filter (does not replace tabs; both AND together).
+### 4. `src/pages/design/DesignBoqList.tsx`
+- Existing `design_review_status` column shown. Add badge mapping:
+  - `draft` → "Open for review"
+  - `changes_requested` → "Awaiting OA revision"
+  - `design_approved` → "Approved"
+- No behavior change beyond labels.
 
-## Filter chip row
-
-- Shows active chart filters as small badges: `Dept: Design ✕`, `Status: Pending ✕` (individual clear).
-- `Clear Filter` button resets both chart filters. Hidden when neither is active.
-- Does NOT touch existing tab / module / dept / date / search filters.
-
-## Click → detail dialog
-
-Already works: row click sets `openId` which opens `NotificationDetailDialog` (the recently fixed per-line-item change details). No change needed.
-
-## Implementation
-
-- New file: `src/components/notifications/NotificationCharts.tsx`
-  - Props: `rows`, `myReadIds`, `activeDept`, `activeStatus`, `onDeptClick(dept|null)`, `onStatusClick("seen"|"pending"|null)`.
-  - Uses `recharts` `PieChart` + `Pie` (donut: `innerRadius`, `outerRadius`) + `Cell` + `Legend` + `Tooltip`. `recharts` is already a project dep (used by `components/ui/chart.tsx`).
-  - Colors via existing semantic tokens (`hsl(var(--primary))`, `--chart-1..5` if present, else a small token-based palette in the component).
-- Edit `src/pages/notifications/NotificationDashboard.tsx`:
-  - Add `chartDeptFilter`, `chartStatusFilter` state.
-  - Extend `visible` memo to AND these filters in.
-  - Render `<NotificationCharts ... />` in a 2-col grid (`md:grid-cols-2`) directly above the existing `<Card>` containing the table.
-  - Render active-filter chip row + `Clear Filter` button between charts and table.
+### 5. Notification
+- "Post Submit" already triggers `notif_on_boqs` via `design_review_status` change → emits to OA creator audience. No new code needed.
 
 ## Out of scope
 
-No DB migration, no edge function, no changes to notification write/ack logic, no changes to `NotificationDetailDialog`, no changes to OA/BOQ/PI/approval flow, no new tables.
+- No DB migration (reuses existing `boq_design_comments` + `boqs.design_review_status`).
+- No changes to BOQ/OA calculation logic, PDF, currency, or `verify_boq_*` RPC paths.
+- No changes to the external token-based reviewer flow (`src/pages/boqs/DesignReview.tsx`, `boq_design_reviews`).
+- No new tables, no schema changes, no edge function changes.
+
+## Key files touched
+
+- `src/pages/design/DesignBoqView.tsx` (rewrite review UI + sticky action bar)
+- `src/lib/design/comments.ts` (add upsert/delete/submit/approve helpers)
+- `src/pages/purchase/BoqFolder.tsx` (add design-approved filter)
+- `src/pages/manufacturing/ManufacturingList.tsx` + `src/components/manufacturing/CreateRequisitionDialog.tsx` (add design-approved filter on BOQ pickers/lists)
+- `src/pages/design/DesignBoqList.tsx` (status badge labels only)
