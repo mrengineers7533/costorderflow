@@ -17,6 +17,7 @@ import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
