@@ -47,16 +47,65 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const { pathname } = useLocation();
   const { isAdmin, canAccess } = useUserAccess(user?.id);
   const unread = useUnreadNotifications(user?.id);
-  const visibleItems = items.filter((it) =>
+
+  const visibleTop = topItems.filter((it) =>
     it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
   );
+  const visibleCosting = costingItems.filter((it) =>
+    isAdmin || canAccess(it.module),
+  );
+  const visibleBottom = bottomItems.filter((it) =>
+    isAdmin || canAccess(it.module),
+  );
+
+  const isCostingActive = visibleCosting.some(
+    (it) => pathname === it.url || pathname.startsWith(it.url + "/"),
+  );
+  const [costingOpen, setCostingOpen] = useState(isCostingActive);
+
+  const MenuItem = ({
+    item,
+    indent = false,
+  }: {
+    item: (typeof topItems)[number];
+    indent?: boolean;
+  }) => {
+    const active =
+      item.url === "/"
+        ? pathname === "/"
+        : pathname === item.url || pathname.startsWith(item.url + "/");
+    return (
+      <SidebarMenuItem key={item.title}>
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          className={`h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${indent ? "pl-8" : ""}`}
+        >
+          <NavLink
+            to={item.url}
+            end={item.url === "/"}
+            className={
+              active
+                ? "font-semibold"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            }
+          >
+            <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
+            {!collapsed && <span className="text-sm">{item.title}</span>}
+            {item.module === "notifications" && unread > 0 && (
+              <span className={`ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold ${collapsed ? "absolute top-1 right-1" : ""}`}>
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
-      {/* Card-like sidebar inspired by reference: white surface, soft shadow,
-          hamburger + brand header, big rounded pill for active item. */}
       <SidebarContent className="bg-sidebar gap-0">
-        {/* Brand header — aligned with top app header */}
         <div className={`flex items-center gap-3 h-14 border-b border-sidebar-border/60 ${collapsed ? "justify-center px-3" : "px-5"}`}>
           <button
             onClick={toggleSidebar}
@@ -72,51 +121,58 @@ export function AppSidebar({ user }: { user?: User | null }) {
           )}
         </div>
 
-        {/* Main nav */}
         <SidebarGroup className="px-3 pt-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
-              {visibleItems.map((item) => {
-                const active =
-                  item.url === "/"
-                    ? pathname === "/"
-                    : pathname === item.url || pathname.startsWith(item.url + "/");
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      className="h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground"
+              {visibleTop.map((item) => (
+                <MenuItem key={item.title} item={item} />
+              ))}
+
+              {visibleCosting.length > 0 && (
+                <>
+                  <SidebarMenuItem>
+                    <button
+                      onClick={() => setCostingOpen((o) => !o)}
+                      className={`peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 rounded-full px-4 ${collapsed ? "" : "justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
-                      <NavLink
-                        to={item.url}
-                        end={item.url === "/"}
-                        className={
-                          active
-                            ? "font-semibold"
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                        }
-                      >
-                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
-                        {!collapsed && <span className="text-sm">{item.title}</span>}
-                        {item.module === "notifications" && unread > 0 && (
-                          <span className={`ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold ${collapsed ? "absolute top-1 right-1" : ""}`}>
-                            {unread > 99 ? "99+" : unread}
-                          </span>
-                        )}
-                      </NavLink>
-                    </SidebarMenuButton>
+                      <span className="flex items-center gap-2">
+                        <span className="flex items-center justify-center w-[18px]">
+                          <span className="text-[10px] font-bold">₹</span>
+                        </span>
+                        {!collapsed && <span className="text-sm">Costing</span>}
+                      </span>
+                      {!collapsed && (
+                        <span>
+                          {costingOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </span>
+                      )}
+                    </button>
                   </SidebarMenuItem>
-                );
-              })}
+
+                  {(costingOpen || collapsed) &&
+                    visibleCosting.map((item) => (
+                      <MenuItem
+                        key={item.title}
+                        item={item}
+                        indent={!collapsed}
+                      />
+                    ))}
+                </>
+              )}
+
+              {visibleBottom.map((item) => (
+                <MenuItem key={item.title} item={item} />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer group, separated by a thin divider — matches reference */}
       <SidebarFooter className="bg-sidebar p-3 pt-2 border-t border-sidebar-border/60">
-        {/* Collapse / expand toggle at the very bottom */}
         <SidebarMenu className="gap-1.5">
           <SidebarMenuItem>
             <SidebarMenuButton
