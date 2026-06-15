@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Loader2, CheckCircle2, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -18,6 +19,12 @@ import {
   upsertDesignComment,
   type DesignComment,
 } from "@/lib/design/comments";
+import {
+  bulkSetItemApprovals,
+  fetchItemApprovals,
+  setItemApproval,
+  type ItemApproval,
+} from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 
@@ -45,6 +52,9 @@ export default function DesignBoqView() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
+  const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const keyOf = (itemId: string, col: string) => `${itemId}::${col}`;
 
@@ -59,6 +69,16 @@ export default function DesignBoqView() {
     const boqRow = (b || null) as unknown as BoqWithReview | null;
     setBoq(boqRow);
     setComments(list);
+    if (boqRow) {
+      try {
+        const map = await fetchItemApprovals(boqRow.id, boqRow.revision ?? 0);
+        setApprovals(map);
+      } catch {
+        setApprovals({});
+      }
+    } else {
+      setApprovals({});
+    }
     const uid = auth.user?.id || null;
     setMyUserId(uid);
     // Hydrate drafts from the current user's existing comments so editing
@@ -148,6 +168,68 @@ export default function DesignBoqView() {
     (boq.revision ?? 0) > 0 &&
     reviewStatus !== "changes_requested";
 
+  const approvedCount = useMemo(
+    () => items.filter((it) => approvals[it.id]?.status === "approved").length,
+    [items, approvals],
+  );
+  const allApproved = items.length > 0 && approvedCount === items.length;
+  const someApproved = approvedCount > 0 && !allApproved;
+  const approvalsDisabled = alreadySubmitted || designApproved;
+
+  async function toggleItemApproval(itemId: string, next: boolean) {
+    if (!boq) return;
+    const revision = boq.revision ?? 0;
+    const prev = approvals[itemId];
+    setApprovals((p) => ({
+      ...p,
+      [itemId]: {
+        status: next ? "approved" : "pending",
+        decided_by_name: prev?.decided_by_name ?? null,
+        decided_by_department: prev?.decided_by_department ?? null,
+        decided_at: prev?.decided_at ?? null,
+      },
+    }));
+    setSavingApprovalId(itemId);
+    try {
+      await setItemApproval(boq.id, itemId, revision, next ? "approved" : "pending");
+      const map = await fetchItemApprovals(boq.id, revision);
+      setApprovals(map);
+    } catch (e) {
+      setApprovals((p) => ({ ...p, [itemId]: prev || { status: "pending", decided_by_name: null, decided_by_department: null, decided_at: null } }));
+      toast({
+        title: "Could not update approval",
+        description: e instanceof Error ? e.message : "Permission denied.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingApprovalId(null);
+    }
+  }
+
+  async function toggleSelectAll() {
+    if (!boq) return;
+    const revision = boq.revision ?? 0;
+    const next = !allApproved;
+    const targetIds = items
+      .filter((it) => (approvals[it.id]?.status === "approved") !== next)
+      .map((it) => it.id);
+    if (targetIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await bulkSetItemApprovals(boq.id, targetIds, revision, next ? "approved" : "pending");
+      const map = await fetchItemApprovals(boq.id, revision);
+      setApprovals(map);
+    } catch (e) {
+      toast({
+        title: "Could not update approvals",
+        description: e instanceof Error ? e.message : "Permission denied.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function handlePostSubmit() {
     if (!id) return;
     // Flush any pending debounced saves first.
@@ -191,6 +273,16 @@ export default function DesignBoqView() {
     if (!id) return;
     setApproving(true);
     try {
+      // Ensure every line item is marked approved for this revision before finalizing.
+      if (boq) {
+        const revision = boq.revision ?? 0;
+        const missing = items
+          .filter((it) => approvals[it.id]?.status !== "approved")
+          .map((it) => it.id);
+        if (missing.length > 0) {
+          await bulkSetItemApprovals(boq.id, missing, revision, "approved");
+        }
+      }
       await approveRevisedBoq(id);
       toast({ title: "BOQ approved", description: "Released to Purchase & Manufacturing." });
       await refresh();
@@ -253,6 +345,17 @@ export default function DesignBoqView() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-28">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={allApproved ? true : someApproved ? "indeterminate" : false}
+                      disabled={approvalsDisabled || bulkBusy || items.length === 0}
+                      onCheckedChange={() => void toggleSelectAll()}
+                      aria-label="Select all items"
+                    />
+                    <span className="text-xs">Approve</span>
+                  </div>
+                </TableHead>
                 <TableHead className="w-12">#</TableHead>
                 {COLS.map((c) => (
                   <TableHead key={c.key} className="min-w-[180px]">{c.label}</TableHead>
@@ -262,7 +365,7 @@ export default function DesignBoqView() {
             <TableBody>
               {items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={COLS.length + 1} className="text-center text-muted-foreground py-6">
+                  <TableCell colSpan={COLS.length + 2} className="text-center text-muted-foreground py-6">
                     No line items.
                   </TableCell>
                 </TableRow>
@@ -271,9 +374,40 @@ export default function DesignBoqView() {
                 const disabled = alreadySubmitted || designApproved;
                 const rowKey = keyOf(it.id, "__row__");
                 const rowOthers = otherCommentsByCell[rowKey] || [];
+                const ap = approvals[it.id];
+                const isApproved = ap?.status === "approved";
                 return (
                   <Fragment key={it.id}>
                     <TableRow className="align-top">
+                      <TableCell className="align-top">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={isApproved}
+                              disabled={approvalsDisabled || savingApprovalId === it.id || bulkBusy}
+                              onCheckedChange={(v) => void toggleItemApproval(it.id, !!v)}
+                              aria-label={`Approve item ${it.item_no}`}
+                            />
+                            {isApproved ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className="bg-emerald-600 hover:bg-emerald-600 h-5 px-1.5 text-[10px]">Approved</Badge>
+                                  </TooltipTrigger>
+                                  {(ap?.decided_by_name || ap?.decided_at) && (
+                                    <TooltipContent>
+                                      {ap?.decided_by_name || "User"}
+                                      {ap?.decided_at ? ` · ${new Date(ap.decided_at).toLocaleString()}` : ""}
+                                    </TooltipContent>
+                                  )}
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Pending</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell>{it.item_no}</TableCell>
                       {COLS.map((c) => {
                         const val = (it as unknown as Record<string, unknown>)[c.key];
@@ -319,6 +453,7 @@ export default function DesignBoqView() {
                     {rowOthers.length > 0 && (
                       <TableRow>
                         <TableCell />
+                        <TableCell />
                         <TableCell colSpan={COLS.length} className="pt-0">
                           <div className="text-[10px] text-muted-foreground mb-1">General comments</div>
                           <div className="space-y-1">
@@ -352,6 +487,9 @@ export default function DesignBoqView() {
               : alreadySubmitted
                 ? "Comments submitted. Awaiting OA Creator to publish a revised BOQ."
                 : `${myDraftCount} comment${myDraftCount === 1 ? "" : "s"} ready to submit.`}
+            {!designApproved && items.length > 0 && (
+              <span className="ml-2">· {approvedCount} of {items.length} items approved</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
