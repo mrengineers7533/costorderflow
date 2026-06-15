@@ -1085,14 +1085,6 @@ export default function OrderEditor() {
           </Card>
         </div>
 
-        <OaDesignCommentsPanel
-          currentBoq={currentBoq}
-          oaNumber={oaNumber}
-          items={items}
-          setItems={setItems}
-          orderId={orderId}
-        />
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2"><CardTitle>Line Items</CardTitle>
             <div className="flex items-center gap-2">
