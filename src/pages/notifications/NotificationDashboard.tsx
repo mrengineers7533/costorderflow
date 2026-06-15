@@ -393,11 +393,46 @@ export default function NotificationDashboard() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Notification Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Cross-department change feed. Acknowledge items to mark them as seen.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Notification Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Cross-department change feed. Acknowledge items to mark them as seen.
+          </p>
+        </div>
+        {isAdmin && rows.length > 0 && (
+          <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-1" /> Delete All Notifications
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Are you sure you want to delete all notifications?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently removes every notification record. Other data
+                  (OA, BOQ, PI, PO, requisitions) is not affected.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={deletingAll}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    deleteAll();
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deletingAll ? "Deleting…" : "Delete All"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* Summary cards */}
