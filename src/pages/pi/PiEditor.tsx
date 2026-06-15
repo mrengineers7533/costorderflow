@@ -59,6 +59,7 @@ export default function PiEditor() {
   // the PdfColumnVisibility popover; the choice is honored by both the
   // preview and the exported PDF.
   const [hiddenPdfColumns, setHiddenPdfColumns] = useState<PdfColumnKey[]>(["make"]);
+  const [piOrderRootId, setPiOrderRootId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -81,6 +82,10 @@ export default function PiEditor() {
         if (rec.reference_oa_id) {
           const { data: oaRow } = await supabase
             .from("orders").select("*").eq("id", rec.reference_oa_id).maybeSingle();
+          if (oaRow) {
+            const o = oaRow as { id: string; parent_order_id: string | null };
+            setPiOrderRootId(o.parent_order_id || o.id);
+          }
           if (oaRow) {
             const oa = oaRow as never as import("@/lib/orders/types").OrderRecord;
             const oaSaved = oaRow as unknown as { currency_mode?: CurrencyMode };
