@@ -14,6 +14,7 @@ import { sortByItemNo } from "@/lib/boq/types";
 import { addDesignComment, fetchDesignComments, type DesignComment } from "@/lib/design/comments";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { DesignStatusCell, type DesignStatus } from "@/components/design/DesignStatusCell";
+import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
@@ -173,6 +174,8 @@ export default function DesignBoqView() {
         </div>
         <Badge variant="secondary">Read-only · Design view</Badge>
       </div>
+
+      <BoqRevisionHistory currentBoqId={boq.id} orderId={boq.order_id} linkBase="/design" />
 
       <Card>
         <CardHeader>
