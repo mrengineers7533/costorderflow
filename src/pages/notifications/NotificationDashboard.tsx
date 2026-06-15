@@ -163,6 +163,41 @@ export default function NotificationDashboard() {
   const [chartDeptFilter, setChartDeptFilter] = useState<string | null>(null);
   const [chartStatusFilter, setChartStatusFilter] = useState<"seen" | "pending" | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isAdmin } = useUserRole(me?.id);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  async function deleteOne(id: string) {
+    const prev = rows;
+    setRows((r) => r.filter((x) => x.id !== id));
+    const { error } = await supabase
+      .from("app_notifications" as never)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      setRows(prev);
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Notification deleted" });
+    }
+  }
+
+  async function deleteAll() {
+    setDeletingAll(true);
+    const { error } = await supabase
+      .from("app_notifications" as never)
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setRows([]);
+    setReads([]);
+    toast({ title: "All notifications deleted" });
+  }
 
   // Deep-link: open detail dialog when ?id=<uuid> is present.
   useEffect(() => {
