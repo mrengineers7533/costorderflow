@@ -6,12 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, MessageSquarePlus, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { sortByItemNo } from "@/lib/boq/types";
 import { addDesignComment, fetchDesignComments, type DesignComment } from "@/lib/design/comments";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { DesignStatusCell, statusBadge, type DesignStatus } from "@/components/design/DesignStatusCell";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
@@ -32,6 +34,8 @@ export default function DesignBoqView() {
   const [activeRow, setActiveRow] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ itemId: string; column: ColKey | "row"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [statusMap, setStatusMap] = useState<Record<string, { status: DesignStatus; reason?: string | null }>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   async function refresh() {
     if (!id) return;
@@ -40,8 +44,21 @@ export default function DesignBoqView() {
       supabase.from("boqs").select("*").eq("id", id).maybeSingle(),
       fetchDesignComments(id),
     ]);
-    setBoq((b || null) as unknown as BoqRecord | null);
+    const boqRow = (b || null) as unknown as BoqRecord | null;
+    setBoq(boqRow);
     setComments(list);
+    if (boqRow) {
+      const { data: st } = await supabase
+        .from("boq_item_design_status" as never)
+        .select("boq_item_id,status,reason")
+        .eq("boq_id", boqRow.id)
+        .eq("boq_revision", boqRow.revision ?? 0);
+      const m: Record<string, { status: DesignStatus; reason?: string | null }> = {};
+      for (const r of ((st || []) as unknown as Array<{ boq_item_id: string; status: DesignStatus; reason: string | null }>)) {
+        m[r.boq_item_id] = { status: r.status, reason: r.reason };
+      }
+      setStatusMap(m);
+    }
     setLoading(false);
   }
 
@@ -70,6 +87,39 @@ export default function DesignBoqView() {
     }
     return m;
   }, [comments]);
+
+  async function setStatus(itemId: string, status: DesignStatus, reason?: string) {
+    if (!boq) return;
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth.user;
+    const name = (user?.user_metadata as { full_name?: string } | undefined)?.full_name || user?.email || "User";
+    const { error } = await supabase.from("boq_item_design_status" as never).upsert({
+      boq_id: boq.id,
+      boq_revision: boq.revision ?? 0,
+      boq_item_id: itemId,
+      status,
+      reason: reason || null,
+      decided_by: user?.id || null,
+      decided_by_name: name,
+      decided_by_department: "Design",
+      decided_at: new Date().toISOString(),
+    } as never, { onConflict: "boq_id,boq_revision,boq_item_id" } as never);
+    if (error) { toast({ title: "Could not save status", description: error.message, variant: "destructive" }); return; }
+    setStatusMap((prev) => ({ ...prev, [itemId]: { status, reason } }));
+    toast({ title: `Marked ${status.replace("_", " ")}` });
+  }
+
+  async function bulkSet(ids: string[], status: DesignStatus) {
+    for (const id of ids) await setStatus(id, status);
+  }
+
+  function toggleSelect(itemId: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(itemId)) n.delete(itemId); else n.add(itemId);
+      return n;
+    });
+  }
 
   async function submitDraft() {
     if (!draft || !id || !draft.text.trim()) return;
@@ -126,23 +176,39 @@ export default function DesignBoqView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Line items</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">Line items</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => bulkSet(items.map((i) => i.id), "approved")}>
+                Approve All
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => bulkSet(items.map((i) => i.id), "pending")}>
+                Mark All Pending
+              </Button>
+              <Button size="sm" variant="destructive" disabled={selected.size === 0}
+                      onClick={() => bulkSet(Array.from(selected), "not_approved")}>
+                Mark Selected Not Approved ({selected.size})
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead className="w-12">#</TableHead>
                 {COLS.map((c) => (
                   <TableHead key={c.key}>{c.label}</TableHead>
                 ))}
                 <TableHead className="text-right">Comments</TableHead>
+                <TableHead className="w-44">Design Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={COLS.length + 2} className="text-center text-muted-foreground py-6">
+                  <TableCell colSpan={COLS.length + 4} className="text-center text-muted-foreground py-6">
                     No line items.
                   </TableCell>
                 </TableRow>
@@ -150,9 +216,13 @@ export default function DesignBoqView() {
               {items.map((it) => {
                 const rowComments = commentsByItem[it.id] || [];
                 const open = activeRow === it.id;
+                const st = statusMap[it.id]?.status ?? "pending";
                 return (
                   <Fragment key={it.id}>
                     <TableRow>
+                      <TableCell>
+                        <Checkbox checked={selected.has(it.id)} onCheckedChange={() => toggleSelect(it.id)} />
+                      </TableCell>
                       <TableCell>{it.item_no}</TableCell>
                       {COLS.map((c) => {
                         const cellKey = `${it.id}::${c.key}`;
@@ -199,10 +269,20 @@ export default function DesignBoqView() {
                           {rowComments.length || "Add"}
                         </Button>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <DesignStatusCell value={st} onChange={(s, r) => setStatus(it.id, s, r)} />
+                          {st === "not_approved" && statusMap[it.id]?.reason && (
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[200px]" title={statusMap[it.id]?.reason || ""}>
+                              {statusMap[it.id]?.reason}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                     {open && (
                       <TableRow>
-                        <TableCell colSpan={COLS.length + 2} className="bg-muted/30">
+                        <TableCell colSpan={COLS.length + 4} className="bg-muted/30">
                           <div className="space-y-3 p-2">
                             {rowComments.length === 0 && (
                               <div className="text-xs text-muted-foreground">No comments yet.</div>
