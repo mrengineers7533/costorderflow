@@ -125,14 +125,27 @@ export function ModuleNotifications({
       return;
     }
     const list = (data || []) as NotifFull[];
-    setRows(list);
+    const filtered = list.filter((n) => {
+      if (n.event_type && n.event_type.endsWith("line_items_changed")) {
+        return Array.isArray(n.line_item_changes) && n.line_item_changes.length > 0;
+      }
+      if (n.event_type === "comment_added" || n.event_type === "comment_updated") {
+        const nv = (n.new_value || {}) as Record<string, unknown>;
+        const ov = (n.old_value || {}) as Record<string, unknown>;
+        const next = String(nv.new_comment ?? "").trim();
+        const prev = String(ov.old_comment ?? "").trim();
+        return next.length > 0 && next !== prev;
+      }
+      return true;
+    });
+    setRows(filtered);
 
-    if (uid && list.length) {
+    if (uid && filtered.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
         .select("notification_id")
         .eq("user_id", uid)
-        .in("notification_id", list.map((n) => n.id));
+        .in("notification_id", filtered.map((n) => n.id));
       setSeenIds(
         new Set(
           ((r || []) as { notification_id: string }[]).map((x) => x.notification_id),
