@@ -1,30 +1,39 @@
-# Per-cell Design Comments
+# Per-item Approve on Design BOQ page
 
-Today the Design BOQ review page (`src/pages/design/DesignBoqView.tsx`) renders one comment box per row in a separate "Design Comment" column. We will change it so every cell of every line item has its own comment box directly underneath the cell value, auto-saving against `boq_id + line_item_id + field_name`.
+Today the Design page only has one **Approve Revised BOQ** button that approves the whole BOQ at once. We will add per-line-item approval so the user can tick exactly the items they want to approve, or use a **Select All** checkbox to approve every item in one click.
 
-The storage layer already supports this — `boq_design_comments` has `column_key`, and `upsertDesignComment({ boqId, itemId, columnKey, comment })` already keys on (user, boq, item, column). No DB / schema / RLS / submit / approve / OA-flow changes.
+The existing table `boq_item_design_status` already supports per-item decisions (`status`, `decided_by`, `decided_at`, `boq_revision`, `reason`), so no schema changes are needed.
 
-## Changes (single file: `src/pages/design/DesignBoqView.tsx`)
+## What changes for the user (on `/design/:id`)
 
-1. **Remove the trailing "Design Comment" column** from the table header and body.
-2. **Render each value cell** as:
-   - Top: existing read-only value (`Model`, `Qty`, `Make/Unit`, `Motor`, `Motor Qty`, `Remarks`, …) — unchanged display.
-   - Below: a compact `Textarea` (rows=1, small font) bound to `drafts[keyOf(itemId, c.key)]`.
-   - `onChange` → `scheduleSave(itemId, c.key, value)` (600 ms debounce, already implemented).
-   - `onBlur` → `saveNow(itemId, c.key, value)` (immediate flush).
-   - Saving / "Saved · HH:MM" indicator under the textarea (existing pattern, shrunk).
-   - Other reviewers' comments for the same cell rendered underneath (existing `otherCommentsByCell` map, already keyed by `itemId + column_key`).
-   - Disabled when `alreadySubmitted || designApproved` (existing rule).
-3. **Drop the legacy row-level box** (`column_key = "__row__"`). Hydration on load will simply ignore row-level rows, but we will still display them under each cell? No — to keep semantics clean we render row-level comments (if any pre-existing) as a small "General" strip above the row. (Optional, low risk.)
-4. **Draft count + Post Submit** logic unchanged — `myDraftCount` already counts non-empty drafts across all keys, so per-cell drafts feed in naturally. The Post Submit flush loop already splits the key into `itemId` / `col` and writes `columnKey` correctly.
-5. **Column set** stays the existing `COLS` list (`model_number`, `description`, `quantity`, `unit`, `motor`, `motor_quantity`, `remarks`) — these are the canonical field names used across the BOQ format and match how the cost sheet maps to line items (e.g. `description`/`model_number` cover "Machine Name", `quantity` covers "Qty", `remarks`/`model_number` cover "Make"). The `field_name` stored in `column_key` is exactly the BOQ field key.
+1. A new first column **Approve** appears in the line-items table.
+   - Header cell shows a **Select All** checkbox (tri-state: unchecked / indeterminate / all-checked).
+   - Each row gets its own checkbox.
+2. Ticking a row immediately saves an `approved` decision for that item against the current BOQ revision. Un-ticking reverts it to `pending`.
+3. A small status pill next to each checkbox shows the current state for that row (`Pending` / `Approved` / approver name + time on hover).
+4. The bottom action bar gets a new summary: `X of Y items approved`.
+5. The existing **Approve Revised BOQ** button is renamed **Finalize Approval** and is enabled only when every item is approved (or kept as a shortcut that approves all remaining items first, then finalizes). It still performs the same final BOQ status flip that releases to Purchase & Manufacturing — unchanged logic.
+6. Checkboxes are disabled when the BOQ is already `design_approved`/`final_sent`, or while it is in `changes_requested` (awaiting OA revision), matching the existing gating rules.
+
+Comments, auto-save, Post Submit, revision history, and all BOQ/OA calculations remain exactly as they are.
+
+## Technical details
+
+**New file: `src/lib/design/itemApprovals.ts`**
+- `fetchItemApprovals(boqId, revision)` → reads `boq_item_design_status` rows for this BOQ+revision, returns `Record<itemId, { status, decided_by_name, decided_at }>`.
+- `setItemApproval(boqId, itemId, revision, status: 'approved' | 'pending')` → upserts a row keyed by `(boq_id, boq_item_id, boq_revision)`. For `pending` it can delete the row or update status; we'll update so we keep history. Captures `decided_by`, `decided_by_name`, `decided_by_department` (reuse the lookup pattern from `addDesignComment`), and `decided_at = now()`.
+- `bulkSetItemApprovals(boqId, itemIds, revision, status)` → loops the same upsert; used by Select All.
+
+**Edits in `src/pages/design/DesignBoqView.tsx`**
+- Load approvals in `refresh()` alongside comments; store in `approvals` state keyed by `item.id`.
+- Add a new `<TableHead>` with the Select All `Checkbox` and a new leading `<TableCell>` per row with the row `Checkbox` + a small badge.
+- Select All handler: derives target status (approve all if not all approved, else clear all) and calls `bulkSetItemApprovals`, then refreshes.
+- Row handler: optimistic update + `setItemApproval`; on error revert and toast.
+- Bottom bar: show `approvedCount / items.length items approved`. Update the Approve button's `disabled` to also require `approvedCount === items.length` (or change its onClick to first bulk-approve any remaining items, then call existing `approveRevisedBoq`).
+- All existing gating (`alreadySubmitted`, `designApproved`, `canApprove`) is reused unchanged for disabling the new checkboxes.
+
+**No changes** to: `boqs` schema, `submitDesignComments`, `approveRevisedBoq` body, OA flow, revised-BOQ generation, Purchase/Manufacturing visibility filters, notifications, calculations, PDF/Excel exports.
 
 ## Out of scope
-
-- No changes to `boq_design_comments` schema, RLS, or `upsertDesignComment` logic.
-- No changes to OA Creator flow, revised-BOQ generation, approval gating, Purchase/Manufacturing visibility, or notifications.
-- No changes to BOQ/OA calculations or PDF/Excel exports.
-
-## UX note
-
-Each cell becomes taller because of the inline textarea. The table is already horizontally scrollable (`overflow-x-auto`) so column widths stay readable; we'll set `min-w-[160px]` per cell and use `rows={1}` with auto-growing text for compactness.
+- Partial release to Purchase based on per-item approval (still gated by whole-BOQ `design_approved`).
+- Reviewer-level RLS changes; existing policies on `boq_item_design_status` are assumed to permit the Design reviewer to write.
