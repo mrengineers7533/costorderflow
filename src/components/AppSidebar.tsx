@@ -63,6 +63,10 @@ export function AppSidebar({ user }: { user?: User | null }) {
   );
   const [costingOpen, setCostingOpen] = useState(isCostingActive);
 
+  useEffect(() => {
+    if (isCostingActive) setCostingOpen(true);
+  }, [isCostingActive]);
+
   const MenuItem = ({
     item,
     indent = false,
