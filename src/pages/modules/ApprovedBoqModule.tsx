@@ -13,6 +13,7 @@ import type { RequisitionRecord } from "@/lib/requisition/types";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -178,6 +179,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
       <EntityActivityBanner orderRootId={orderRootId} />
+      {boqId && <ModuleNotifications modules="boq" recordId={boqId} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">

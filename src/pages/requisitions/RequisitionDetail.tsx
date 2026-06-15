@@ -17,6 +17,7 @@ import { generateRequisitionPDF } from "@/lib/requisition/pdf";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -285,6 +286,7 @@ export default function RequisitionDetail() {
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
       <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
+      {id && <ModuleNotifications modules="requisition" recordId={id} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">

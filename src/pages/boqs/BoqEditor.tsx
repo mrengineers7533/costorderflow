@@ -11,6 +11,7 @@ import { ArrowLeft, ArrowUp, Download, Eye, FileText, History, Link2, Printer, S
 import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
@@ -428,6 +429,9 @@ export default function BoqEditor() {
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
         {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
+        {!isNew && boqId && (
+          <ModuleNotifications modules="boq" recordId={boqId} />
+        )}
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
             Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.

@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { sortByItemNo } from "@/lib/boq/types";
 import { addDesignComment, fetchDesignComments, type DesignComment } from "@/lib/design/comments";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
@@ -107,6 +108,7 @@ export default function DesignBoqView() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
+      {id && <ModuleNotifications modules={["boq","design_comment","order"]} recordId={id} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
