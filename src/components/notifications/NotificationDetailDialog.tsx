@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface NotifFull {
   id: string;
@@ -161,6 +169,7 @@ export function NotificationDetailDialog({
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(
     null,
   );
+  const [ackDept, setAckDept] = useState<string>("");
 
   const load = useCallback(async () => {
     if (!notificationId) return;
@@ -204,14 +213,29 @@ export function NotificationDetailDialog({
     }
   }, [notificationId, load]);
 
+  // Pick a sensible default for the acknowledgement-department selector:
+  // prefer the user's own department if it matches a target, else first target.
+  useEffect(() => {
+    if (!notif || !me) return;
+    const matched = matchTargetDept(me.department, notif.target_departments);
+    setAckDept(matched || notif.target_departments[0] || me.department);
+  }, [notif, me]);
+
   async function acknowledge() {
     if (!me || !notif) return;
-    const { error } = await supabase.from("app_notification_reads" as never).insert({
-      notification_id: notif.id,
-      user_id: me.id,
-      user_name: me.name,
-      department: me.department,
-    } as never);
+    const dept = ackDept || me.department;
+    const { error } = await supabase
+      .from("app_notification_reads" as never)
+      .upsert(
+        {
+          notification_id: notif.id,
+          user_id: me.id,
+          user_name: me.name,
+          department: dept,
+          seen_at: new Date().toISOString(),
+        } as never,
+        { onConflict: "notification_id,user_id" } as never,
+      );
     if (error) {
       toast({
         title: "Could not acknowledge",
@@ -332,7 +356,24 @@ export function NotificationDetailDialog({
             </div>
 
             {me && !myRead && (
-              <div className="flex justify-end mt-2">
+              <div className="flex items-center justify-end gap-2 mt-2">
+                {notif.target_departments.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Acknowledge as:</span>
+                    <Select value={ackDept} onValueChange={setAckDept}>
+                      <SelectTrigger className="h-8 w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {notif.target_departments.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <Button onClick={acknowledge}>
                   <Check className="h-4 w-4 mr-1" /> Acknowledge
                 </Button>
