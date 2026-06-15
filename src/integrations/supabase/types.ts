@@ -142,6 +142,95 @@ export type Database = {
         }
         Relationships: []
       }
+      app_notification_reads: {
+        Row: {
+          department: string | null
+          id: string
+          notification_id: string
+          seen_at: string
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          department?: string | null
+          id?: string
+          notification_id: string
+          seen_at?: string
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          department?: string | null
+          id?: string
+          notification_id?: string
+          seen_at?: string
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_notification_reads_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "app_notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_notifications: {
+        Row: {
+          actor_department: string | null
+          actor_user_id: string | null
+          actor_user_name: string | null
+          client_name: string | null
+          created_at: string
+          event_type: string
+          id: string
+          module: string
+          new_value: Json | null
+          old_value: Json | null
+          record_id: string | null
+          record_ref: string | null
+          summary: string | null
+          target_departments: string[]
+          title: string
+        }
+        Insert: {
+          actor_department?: string | null
+          actor_user_id?: string | null
+          actor_user_name?: string | null
+          client_name?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          module: string
+          new_value?: Json | null
+          old_value?: Json | null
+          record_id?: string | null
+          record_ref?: string | null
+          summary?: string | null
+          target_departments?: string[]
+          title: string
+        }
+        Update: {
+          actor_department?: string | null
+          actor_user_id?: string | null
+          actor_user_name?: string | null
+          client_name?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          module?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          record_id?: string | null
+          record_ref?: string | null
+          summary?: string | null
+          target_departments?: string[]
+          title?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string
@@ -162,6 +251,63 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      boq_design_comments: {
+        Row: {
+          boq_id: string
+          boq_item_id: string
+          column_key: string | null
+          comment: string
+          created_at: string
+          department: string | null
+          id: string
+          updated_at: string
+          user_email: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          boq_id: string
+          boq_item_id: string
+          column_key?: string | null
+          comment: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          boq_id?: string
+          boq_item_id?: string
+          column_key?: string | null
+          comment?: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          updated_at?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_design_comments_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_design_comments_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
+        ]
       }
       boq_design_review_documents: {
         Row: {
@@ -2384,6 +2530,22 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      current_user_department: { Args: never; Returns: string }
+      current_user_name: { Args: never; Returns: string }
+      emit_notification: {
+        Args: {
+          _client: string
+          _event: string
+          _module: string
+          _new: Json
+          _old: Json
+          _record_id: string
+          _record_ref: string
+          _summary: string
+          _title: string
+        }
+        Returns: undefined
       }
       get_boq_by_verification_token: {
         Args: { _token: string }
