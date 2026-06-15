@@ -300,8 +300,6 @@ export default function NotificationDashboard() {
     return { total, newC, ack, pendingNotif, deptTotal, deptSeen, deptPending, byModule };
   }, [rows, myReadIds, readsByNotif]);
 
-  const open = rows.find((r) => r.id === openId) || null;
-
   return (
     <div className="space-y-4 p-4 md:p-6">
       <div>
