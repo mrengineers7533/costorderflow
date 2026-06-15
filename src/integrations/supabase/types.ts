@@ -275,6 +275,9 @@ export type Database = {
       }
       boq_design_comments: {
         Row: {
+          applied_to_oa_at: string | null
+          applied_to_oa_by: string | null
+          applied_value: string | null
           boq_id: string
           boq_item_id: string
           column_key: string | null
@@ -282,12 +285,16 @@ export type Database = {
           created_at: string
           department: string | null
           id: string
+          oa_revision_id: string | null
           updated_at: string
           user_email: string | null
           user_id: string | null
           user_name: string | null
         }
         Insert: {
+          applied_to_oa_at?: string | null
+          applied_to_oa_by?: string | null
+          applied_value?: string | null
           boq_id: string
           boq_item_id: string
           column_key?: string | null
@@ -295,12 +302,16 @@ export type Database = {
           created_at?: string
           department?: string | null
           id?: string
+          oa_revision_id?: string | null
           updated_at?: string
           user_email?: string | null
           user_id?: string | null
           user_name?: string | null
         }
         Update: {
+          applied_to_oa_at?: string | null
+          applied_to_oa_by?: string | null
+          applied_value?: string | null
           boq_id?: string
           boq_item_id?: string
           column_key?: string | null
@@ -308,6 +319,7 @@ export type Database = {
           created_at?: string
           department?: string | null
           id?: string
+          oa_revision_id?: string | null
           updated_at?: string
           user_email?: string | null
           user_id?: string | null
@@ -674,6 +686,66 @@ export type Database = {
           },
           {
             foreignKeyName: "boq_item_attachments_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
+        ]
+      }
+      boq_item_design_status: {
+        Row: {
+          boq_id: string
+          boq_item_id: string
+          boq_revision: number
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_department: string | null
+          decided_by_name: string | null
+          id: string
+          reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          boq_id: string
+          boq_item_id: string
+          boq_revision?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_department?: string | null
+          decided_by_name?: string | null
+          id?: string
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          boq_id?: string
+          boq_item_id?: string
+          boq_revision?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_department?: string | null
+          decided_by_name?: string | null
+          id?: string
+          reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_item_design_status_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_item_design_status_boq_id_fkey"
             columns: ["boq_id"]
             isOneToOne: false
             referencedRelation: "v_entity_pending_state"
@@ -2513,6 +2585,32 @@ export type Database = {
     Functions: {
       _line_items_diff: { Args: { _new: Json; _old: Json }; Returns: Json }
       admin_reset_generated_data: { Args: never; Returns: Json }
+      apply_design_comment_to_oa: {
+        Args: { _applied_value: string; _comment_id: string; _oa_id: string }
+        Returns: {
+          applied_to_oa_at: string | null
+          applied_to_oa_by: string | null
+          applied_value: string | null
+          boq_id: string
+          boq_item_id: string
+          column_key: string | null
+          comment: string
+          created_at: string
+          department: string | null
+          id: string
+          oa_revision_id: string | null
+          updated_at: string
+          user_email: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "boq_design_comments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_purchase_order: {
         Args: { _po_id: string; _reason: string }
         Returns: {
