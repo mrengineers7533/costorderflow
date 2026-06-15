@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Check, Search, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
+import { normalizeDept } from "@/lib/notifications/dept";
 
 interface NotifRow {
   id: string;
@@ -214,12 +215,13 @@ export default function NotificationDashboard() {
     label: "Pending" | "Partially Seen" | "Fully Seen" | "—";
   } {
     const total = n.target_departments.length;
-    const ackDepts = new Set(
+    const targetKeys = new Set(n.target_departments.map(normalizeDept));
+    const ackKeys = new Set(
       (readsByNotif[n.id] || [])
-        .map((r) => r.department)
-        .filter((d): d is string => !!d && n.target_departments.includes(d)),
+        .map((r) => normalizeDept(r.department))
+        .filter((k) => k && targetKeys.has(k)),
     );
-    const seen = ackDepts.size;
+    const seen = ackKeys.size;
     const pending = Math.max(0, total - seen);
     const label =
       total === 0
@@ -262,12 +264,18 @@ export default function NotificationDashboard() {
 
   async function acknowledge(n: NotifRow) {
     if (!me) return;
-    const { error } = await supabase.from("app_notification_reads" as never).insert({
-      notification_id: n.id,
-      user_id: me.id,
-      user_name: me.name,
-      department: me.department,
-    } as never);
+    const { error } = await supabase
+      .from("app_notification_reads" as never)
+      .upsert(
+        {
+          notification_id: n.id,
+          user_id: me.id,
+          user_name: me.name,
+          department: me.department,
+          seen_at: new Date().toISOString(),
+        } as never,
+        { onConflict: "notification_id,user_id" } as never,
+      );
     if (error) {
       toast({ title: "Could not acknowledge", description: error.message, variant: "destructive" });
       return;
