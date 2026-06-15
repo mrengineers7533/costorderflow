@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Factory,
   Receipt,
+  History,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
@@ -173,6 +174,7 @@ export function NotificationDetailDialog({
   const [loading, setLoading] = useState(false);
   const [notif, setNotif] = useState<NotifFull | null>(null);
   const [reads, setReads] = useState<ReadRow[]>([]);
+  const [history, setHistory] = useState<NotifFull[]>([]);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(
     null,
   );
@@ -209,6 +211,25 @@ export function NotificationDetailDialog({
       .select("*")
       .eq("notification_id", notificationId);
     setReads(((r || []) as unknown as ReadRow[]) || []);
+
+    // Pull every prior/sibling notification for the same source record so we
+    // can aggregate a Line Item Change History on this dialog. Group by
+    // record_ref when available, else by record_id.
+    const current = (n as NotifFull | null) ?? null;
+    if (current) {
+      let q = supabase
+        .from("app_notifications" as never)
+        .select(
+          "id,actor_user_name,actor_department,created_at,line_item_changes,record_ref,record_id",
+        );
+      if (current.record_ref) q = q.eq("record_ref", current.record_ref);
+      else if (current.record_id) q = q.eq("record_id", current.record_id);
+      else q = q.eq("id", current.id);
+      const { data: h } = await q.order("created_at", { ascending: true });
+      setHistory(((h || []) as unknown as NotifFull[]) || []);
+    } else {
+      setHistory([]);
+    }
     setLoading(false);
   }, [notificationId]);
 
@@ -217,6 +238,7 @@ export function NotificationDetailDialog({
     else {
       setNotif(null);
       setReads([]);
+      setHistory([]);
     }
   }, [notificationId, load]);
 
@@ -273,6 +295,7 @@ export function NotificationDetailDialog({
             notif={notif}
             reads={reads}
             lineChanges={lineChanges}
+            history={history}
             me={me}
             myRead={myRead}
             ackDept={ackDept}
