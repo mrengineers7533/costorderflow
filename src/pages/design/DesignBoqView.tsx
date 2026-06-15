@@ -108,7 +108,7 @@ export default function DesignBoqView() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      {id && <ModuleNotifications modules={["boq","design_comment","order"]} recordId={id} />}
+      {id && <ModuleNotifications links={{ boqId: id }} />}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
