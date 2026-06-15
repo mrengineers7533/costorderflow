@@ -3,13 +3,21 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2 } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Bell,
+  ChevronsDown,
+  RefreshCw,
+  FileText,
+  PenSquare,
+  ShoppingCart,
+  Factory,
+  Receipt,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
 import {
