@@ -107,7 +107,7 @@ export function OaDesignCommentsPanel({
     const value: unknown = (oaField === "quantity" || oaField === "motor_quantity")
       ? Number(row.comment.replace(/[^\d.-]/g, "")) || 0
       : row.comment;
-    (next[idx] as Record<string, unknown>)[oaField as string] = value;
+    (next[idx] as unknown as Record<string, unknown>)[oaField as string] = value;
     setItems(next);
     try {
       await supabase.rpc("apply_design_comment_to_oa" as never, {
@@ -159,7 +159,7 @@ export function OaDesignCommentsPanel({
               const oaField = c.column_key ? COL_MAP[c.column_key] : undefined;
               const oaIdx = ref ? findOaIndex(items, ref.it, ref.idx) : -1;
               const cur = oaIdx >= 0 && oaField
-                ? (items[oaIdx] as Record<string, unknown>)[oaField as string]
+                ? (items[oaIdx] as unknown as Record<string, unknown>)[oaField as string]
                 : undefined;
               return (
                 <TableRow key={c.id}>
