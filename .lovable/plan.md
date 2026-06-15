@@ -1,54 +1,78 @@
 ## Goal
 
-Add a **Line Item Change History** card to the existing Notification Detail dialog (the page in the screenshot). It lists every field-level edit to line items, showing Item, Field Changed, Old Value, New Value, Edited By, Edited On. Only line items that actually changed appear.
-
-No new tables, no triggers, no edits to Orders/BOQ/PI editors. Pure read-side aggregation over the data already stored in `app_notifications.line_item_changes`.
+Replace the current "Change Details" card in the Notification Detail dialog so it shows **only line items that actually changed**, and lists field-level changes (old → new) **directly under each changed line item**, grouped by the parent record reference (OA / BOQ / PI).
 
 ## Scope
 
-- File touched: `src/components/notifications/NotificationDetailDialog.tsx` (one new component + one new query inside `load`).
-- Nothing else changes — header card, Line Item Details table, Change Details, Status chip bar, acknowledgement flow all stay exactly as-is.
+- File touched: `src/components/notifications/NotificationDetailDialog.tsx`
+- Remove the old `ChangeDetailsCard` body (the before/after `DiffTable`, the field chips, the fallback grid) and the standalone `LineItemChangeHistory` card. Both are replaced by one new component: `ChangedLineItemsHistory`.
+- Header card, `LineItemDetailsTable`, Status chip bar, acknowledgement flow, real-time logic — all untouched.
+- Reuses existing data: current `notif.line_item_changes` + the already-fetched sibling `history: NotifFull[]` (no new tables, no new queries).
 
-## How it works
+## New component: `ChangedLineItemsHistory`
 
-1. **Fetch sibling history.** Inside the existing `load()`, after fetching the current notification, run one extra query:
-   - If `notif.record_ref` is set → `select id, actor_user_name, actor_department, created_at, line_item_changes from app_notifications where record_ref = notif.record_ref order by created_at asc`.
-   - Else fall back to `record_id = notif.record_id`.
-   - Store in `history` state.
+Input: `notif: NotifFull`, `history: NotifFull[]`.
 
-2. **Aggregate per line + field.** Walk every notification's `line_item_changes`:
-   - For each `modified` change → emit one row per entry in `changed_fields` with `{ line_no, field, old: before[field], new: after[field], by, dept, when }`.
-   - For each `added` change → emit one row `{ line_no, field: "Status", old: "—", new: "Added", by, when }`.
-   - For each `removed` change → emit one row `{ line_no, field: "Status", old: "Present", new: "Removed", by, when }`.
-   - Skip lines that produced zero rows. Sort rows by `line_no` then `when`.
+### Aggregation
 
-3. **Render a new card** below "Change Details" and above the Status chip bar:
+1. Build a unified list of edits from every notification in `[notif, ...history]` (dedupe by `id`).
+2. For each notification `h`, walk `h.line_item_changes`:
+   - `modified` → for each `f` in `changed_fields`:
+     - `oldV = before[f]`, `newV = after[f]`
+     - **Skip if `JSON.stringify(oldV) === JSON.stringify(newV)`** (no real change)
+     - Emit `{ line_no, field: f, oldV, newV, by, dept, when, recordRef: h.record_ref }`
+   - `added` → emit `{ field: "Status", oldV: "—", newV: "Added", … }`
+   - `removed` → emit `{ field: "Status", oldV: "Present", newV: "Removed", … }`
+3. Group edits by `line_no`. **Drop any line that has zero edits** after the equality filter.
+4. Within a line, sort edits by `when` ascending.
+5. Sort lines by numeric `line_no`.
 
-   ```
-   Line Item Change History
-   Item 1 — Edited 2 times
-   ┌──────┬────────────────┬───────────────┬───────────────────────┬────────────┬────────────────────┐
-   │ Item │ Field Changed  │ Old Value     │ New Value             │ Edited By  │ Edited On          │
-   ├──────┼────────────────┼───────────────┼───────────────────────┼────────────┼────────────────────┤
-   │ 1    │ Description    │ SD-10         │ SD-10 (F)             │ Ravi (BOQ) │ 15-Jun-2026 11:20  │
-   │ 1    │ Make           │ M.R. Engg     │ M.R.Engg (Fowler …)   │ Ravi (BOQ) │ 15-Jun-2026 11:21  │
-   └──────┴────────────────┴───────────────┴───────────────────────┴────────────┴────────────────────┘
-   Item 13 — Edited 1 time
-   ...
-   ```
+### Record reference line
 
-   - Group header per line_no with edit count.
-   - Hide the entire card when the aggregated list is empty (no item ever changed).
-   - Use the same `FIELD_LABELS` / `labelOf` helper already in the file for pretty field names.
-   - Use existing `truncate` for long values.
+At the top of the card, render a single reference string built from `notif.new_value`/`old_value` via the existing `pickStr` helper:
 
-## Technical details
+```
+OA: OA-001   /   BOQ: BOQ-001   /   PI: PI-001
+```
 
-- New state: `const [history, setHistory] = useState<NotifFull[]>([])`.
-- Pass `history` into the body component and render `<LineItemChangeHistory history={history} />` after `<ChangeDetailsCard />`.
-- `LineItemChangeHistory` is a small pure component inside the same file (consistent with the existing per-section components).
-- Acknowledgement, real-time, and revision logic are untouched.
+Only show the segments that have a value (skip missing ones).
 
-## Out of scope (explicitly not changing)
+### Per-line rendering
 
-OA / BOQ / PI / Purchase / Manufacturing / Requisition / Annexure / Costing / Design calculation, approval flow, revision logic, notification write path, RLS, schemas, and any module page UI. Only the read-only history card on this one dialog.
+For each changed line item:
+
+```
+Line Item {line_no}                            Edited N time(s)
+  Changed Cell: {labelOf(field)}
+  Old Value: {truncate(oldV, 200)}
+  New Value: {truncate(newV, 200)}
+  Changed By: {by} ({dept})
+  Changed At: {formatted when}
+  ──────────────
+  Changed Cell: {next field}
+  ...
+```
+
+Use a label/value two-column layout per edit block (no big diff table), separated by a thin divider. Old value in red, new value in emerald, consistent with existing tokens.
+
+### Empty state
+
+If after filtering there are zero changed lines AND `changedTopFields(notif)` is also empty → render nothing (card hidden). If there are only top-level field changes (no line items), fall back to a small "Header fields changed" block listing those `old → new` rows (reuses current `fieldChips` idea but only for the top-level non-line-item case).
+
+## Wiring
+
+- In `NotificationDetailBody`, replace:
+  ```
+  <ChangeDetailsCard notif={notif} changes={lineChanges} />
+  <LineItemChangeHistory history={history} />
+  ```
+  with:
+  ```
+  <ChangedLineItemsHistory notif={notif} history={history} />
+  ```
+- Delete `ChangeDetailsCard`, `DiffTable`, and `LineItemChangeHistory` (and the now-unused `ChevronsDown` import if nothing else uses it).
+- Keep `changedTopFields`, `labelOf`, `truncate`, `pickStr`, `HIDDEN_FIELDS`, `FIELD_LABELS` — all reused.
+
+## Out of scope
+
+OA / BOQ / PI / Purchase / Manufacturing / Requisition / Annexure / Costing / Design editors, approval flow, revision logic, notification write path, RLS, schemas, header card, line-item details table, status chips, acknowledgement.
