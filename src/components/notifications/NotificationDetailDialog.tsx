@@ -700,6 +700,7 @@ function NotificationDetailBody({
   notif,
   reads,
   lineChanges,
+  history,
   me,
   myRead,
   ackDept,
@@ -709,6 +710,7 @@ function NotificationDetailBody({
   notif: NotifFull;
   reads: ReadRow[];
   lineChanges: LineChange[];
+  history: NotifFull[];
   me: { id: string; name: string; department: string } | null;
   myRead: ReadRow | null | undefined;
   ackDept: string;
@@ -724,6 +726,7 @@ function NotificationDetailBody({
       <HeaderCard notif={notif} />
       <LineItemDetailsTable changes={lineChanges} />
       <ChangeDetailsCard notif={notif} changes={lineChanges} />
+      <LineItemChangeHistory history={history} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <StatusChipBar notif={notif} reads={reads} />
