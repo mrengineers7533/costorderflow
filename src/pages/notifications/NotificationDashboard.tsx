@@ -12,6 +12,19 @@ import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
 import { NotificationCharts, deptOf } from "@/components/notifications/NotificationCharts";
 import { normalizeDept } from "@/lib/notifications/dept";
+import { useUserRole } from "@/hooks/useUserRole";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 
 interface NotifRow {
   id: string;
