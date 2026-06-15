@@ -12,13 +12,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { MODULES, type ModuleKey } from "@/lib/access/modules";
 
-type Preset = "custom" | "purchase" | "manufacturing" | "requisitions" | "orders" | "admin";
+type Preset = "custom" | "purchase" | "manufacturing" | "requisitions" | "costing" | "admin";
 
 const PRESETS: Record<Exclude<Preset, "custom" | "admin">, ModuleKey[]> = {
   purchase: ["purchase"],
   manufacturing: ["manufacturing"],
-  requisitions: ["requisitions"],
-  orders: ["orders"],
+  requisitions: ["requisitions", "annexures"],
+  costing: ["costing"],
 };
 
 export function CreateUserDialog({
