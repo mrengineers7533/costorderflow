@@ -22,9 +22,9 @@ const topItems: { title: string; url: string; icon: typeof LayoutGrid; module: M
 ];
 
 const costingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Orders",            url: "/orders", icon: FileText,       module: "orders" },
-  { title: "BOQs",              url: "/boqs",   icon: ClipboardList,  module: "boqs" },
-  { title: "Proforma Invoices", url: "/pi",     icon: Receipt,        module: "pi" },
+  { title: "Orders",            url: "/orders", icon: FileText,       module: "costing" },
+  { title: "BOQs",              url: "/boqs",   icon: ClipboardList,  module: "costing" },
+  { title: "Proforma Invoices", url: "/pi",     icon: Receipt,        module: "costing" },
 ];
 
 const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
@@ -34,7 +34,7 @@ const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module
   { title: "Purchase",        url: "/purchase",           icon: ShoppingCart,   module: "purchase" },
   { title: "Manufacturing",   url: "/manufacturing",      icon: Factory,        module: "manufacturing" },
   { title: "Requisitions",    url: "/requisitions",       icon: ClipboardCheck, module: "requisitions" },
-  { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "requisitions" },
+  { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "annexures" },
   { title: "Raw Material Master", url: "/raw-materials", icon: Boxes,          module: "raw_materials" },
   { title: "GRN",             url: "/grn",                icon: PackageCheck,     module: "grn" },
   { title: "Flow Report",     url: "/reports",            icon: BarChart3,        module: "reports" },

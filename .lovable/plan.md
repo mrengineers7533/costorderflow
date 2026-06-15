@@ -1,55 +1,46 @@
-# Fix Notification Department Acknowledgement
+# Sidebar-Driven Access Control
 
-## Root cause (verified from DB)
+Align permissions 1:1 with the left sidebar so each menu entry has exactly one access toggle. Hide menu when not allowed; block direct URL visit with the existing "Access Denied" screen.
 
-The acting user `it@mrengineers.com` has **no row in `notification_recipients`**, so `NotificationDetailDialog.load()` and `NotificationDashboard.load()` both fall back to `department = "Other"`. Their acknowledgement row is inserted with `department = "Other"`, which is not in any notification's `target_departments` (e.g. `["Costing","CRM Team","design","DME Team","HR","manufacturing","Project","purchase","Reception"]`).
+## What changes
 
-Result: every department shows "Not Seen" even after Acknowledge, the "seen" count stays 0, and the same is true on the dashboard.
+### 1. Module keys (`src/lib/access/modules.ts`)
+Replace the 3 separate Costing-child keys with a single `costing` parent, and split Annexure out of Requisitions. Final list shown in Admin → Access Control matches the sidebar exactly:
 
-There is also a secondary risk: department comparison is strict string equality (`ackByDept.has(d)`), so any future casing/whitespace drift ("Design" vs "design") would silently break matching. And there is no unique constraint on `(notification_id, user_id)`, so a user can insert duplicate read rows.
+```text
+dashboard, costing, design, notifications, workflow, purchase,
+manufacturing, requisitions, annexures, raw_materials, grn,
+reports, cost_sheets
+```
 
-## Fix (scope: notifications only — no changes to OA/BOQ/PI/Purchase/Mfg/Requisition/Annexure/Costing/Design logic)
+(`orders`, `boqs`, `pi` keys are removed from the picker — they are covered by `costing`.)
 
-### 1. Resolve the acknowledging user's department reliably
+### 2. Sidebar (`src/components/AppSidebar.tsx`)
+- Costing parent visible only if user has `costing` (or is admin). When open, Orders / BOQ / PI children always show — no per-child permission check.
+- New "Annexure Folder" entry gated by `annexures`.
+- All other sidebar entries keep their current 1:1 module key.
 
-In `NotificationDetailDialog.tsx` and `NotificationDashboard.tsx`:
+### 3. Route guards (`src/App.tsx`)
+- `/orders`, `/orders/*`, `/boqs`, `/boqs/*`, `/pi`, `/pi/*` → `RequireModule module="costing"`.
+- `/requisitions/annexures` and `/annexures/:annexureId/po/new` → `RequireModule module="annexures"` (keep `purchase` check for PO create page via a combined check: require either — simplest: keep `annexures` for the annexure list, leave PO-create on `purchase`).
+- Everything else unchanged.
 
-- Keep the current `notification_recipients` lookup as the first source.
-- If no recipient row exists, look up `user_module_access` for that user and map module → department using the existing module-to-department mapping already used elsewhere in the app (re-use, don't redefine). Fall back to `"Other"` only if nothing matches.
-- When the resolved department is **not in `target_departments`** for the current notification, render a small department picker next to the Acknowledge button, pre-populated from `target_departments`, so an admin or cross-functional user can record the acknowledgement on behalf of a specific department. The selected value is what gets stored on `app_notification_reads.department`.
+Unauthorized direct visits already render `AccessDenied` via `RequireModule` — no new component needed.
 
-### 2. Normalize department comparison
+### 4. Admin Access Control page
+Driven by the `MODULES` array, so it updates automatically. No code edit there beyond the new keys.
 
-Add one shared helper `normalizeDept(s: string)` (lowercase, trim, collapse spaces, strip trailing " team"). Use it in:
+### 5. Data backfill (one migration, additive only)
+For every user that currently has any of `orders`, `boqs`, `pi` → insert `costing`.
+For every user that currently has `requisitions` → also insert `annexures` (so today's requisition users keep seeing the Annexure Folder).
+Then delete the now-unused `orders` / `boqs` / `pi` rows from `user_module_access`.
+No table schema change; no RLS change; no business-logic change.
 
-- `DepartmentAckPanel` in `NotificationDetailDialog.tsx` when building `ackByDept` and checking `ackByDept.has(d)`.
-- `deptStatus()` in `NotificationDashboard.tsx` when computing `seen` / `pending` and column "Dept Status".
-
-This makes `design`, `Design`, `Design Team` collapse to the same key for display matching only — stored values are unchanged.
-
-### 3. Single source of truth per (notification, user)
-
-Migration: add `UNIQUE (notification_id, user_id)` to `app_notification_reads` and switch the inserts in `NotificationDetailDialog.acknowledge()` and `NotificationDashboard.acknowledge()` to upsert on that key. This prevents duplicate read rows when the same user clicks Acknowledge from both the dashboard and a module page.
-
-### 4. UI updates in `DepartmentAckPanel`
-
-Per the user's spec:
-
-- Show `Department — Seen by <user_name> on <date/time>` when at least one read row's normalized department matches the target.
-- Show `Department — Not Seen — Waiting for acknowledgement` otherwise.
-- Top counters (`X total / Y seen / Z pending`) are recomputed from the same normalized match.
-
-### 5. Dashboard counters
-
-`NotificationDashboard.deptStatus()` already drives the "Depts Notified / Pending / Acknowledged" stat cards and per-row "Dept Status" badges; fixing it via the shared normalizer + correct department on read rows automatically corrects every count card and per-row label. No layout changes.
+## Out of scope (explicitly unchanged)
+OA, BOQ, PI, Purchase, Manufacturing, Requisition, Annexure, GRN, Design, Workflow, Costing — all calculation, approval, revision, notification, and data-saving logic untouched. No new tables, no policy edits, no edge-function changes.
 
 ## Files touched
-
-- `src/components/notifications/NotificationDetailDialog.tsx` — dept resolution, dept picker on Acknowledge, normalized matching, upsert call, new "Seen by … on …" row format.
-- `src/pages/notifications/NotificationDashboard.tsx` — same dept resolution + normalized `deptStatus`.
-- `src/lib/notifications/dept.ts` *(new, small)* — `normalizeDept()` and `resolveUserDepartment(userId)` helpers shared by the two files.
-- One Supabase migration — `ALTER TABLE public.app_notification_reads ADD CONSTRAINT app_notification_reads_notif_user_uniq UNIQUE (notification_id, user_id);` (drops duplicates first if any exist).
-
-## Explicitly out of scope
-
-No edits to OA, BOQ, PI, Purchase, Manufacturing, Requisition, Annexure, Costing, or Design workflows, calculations, revisions, or approval logic. No changes to how notifications are *created* or to `target_departments`. No changes to recipient management.
+- `src/lib/access/modules.ts` (edit list)
+- `src/components/AppSidebar.tsx` (Costing gating + Annexure entry already wired to module key)
+- `src/App.tsx` (swap module names on the 3 Costing route groups + the Annexure route)
+- one new `supabase/migrations/*.sql` (backfill described above)
