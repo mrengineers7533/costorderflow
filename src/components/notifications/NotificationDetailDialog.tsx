@@ -727,6 +727,7 @@ function NotificationDetailBody({
       <LineItemDetailsTable changes={lineChanges} />
       <ChangeDetailsCard notif={notif} changes={lineChanges} />
       <LineItemChangeHistory history={history} />
+      {null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <StatusChipBar notif={notif} reads={reads} />
