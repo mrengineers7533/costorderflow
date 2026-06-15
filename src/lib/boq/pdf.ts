@@ -272,22 +272,6 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   // @ts-expect-error lastAutoTable runtime
   y = doc.lastAutoTable.finalY + 6;
 
-  // Terms & Conditions
-  if (boq.terms && boq.terms.trim()) {
-    autoTable(doc, {
-      startY: y,
-      body: [[{
-        content: `TERMS & CONDITIONS:\n${boq.terms}`,
-        styles: { fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
-      }]],
-      theme: "plain",
-      margin: { left: M, right: M },
-      tableWidth: W - M * 2,
-    });
-    // @ts-expect-error lastAutoTable runtime
-    y = doc.lastAutoTable.finalY + 4;
-  }
-
   if (boq.notes && boq.notes.trim()) {
     doc.setFont("helvetica", "bold").setFontSize(8);
     doc.text("Notes:", M, y);
