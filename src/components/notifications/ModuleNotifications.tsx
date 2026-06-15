@@ -38,7 +38,7 @@ interface Props {
  * stays in sync with the Notification Dashboard.
  */
 export function ModuleNotifications({ modules, recordId, limit = 5, className }: Props) {
-  const mods = Array.isArray(modules) ? modules : [modules];
+  const modsKey = Array.isArray(modules) ? modules.slice().sort().join(",") : modules;
   const [rows, setRows] = useState<Notif[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
@@ -63,10 +63,11 @@ export function ModuleNotifications({ modules, recordId, limit = 5, className }:
     }
     setMe(uid ? { id: uid, name: myName, department: myDept } : null);
 
+    const modsArr = modsKey.split(",");
     let q = supabase
       .from("app_notifications" as never)
       .select("*")
-      .in("module", mods as never)
+      .in("module", modsArr as never)
       .order("created_at", { ascending: false })
       .limit(limit);
     if (recordId) q = q.eq("record_id", recordId);
@@ -85,7 +86,7 @@ export function ModuleNotifications({ modules, recordId, limit = 5, className }:
       setSeenIds(new Set());
     }
     setLoading(false);
-  }, [mods.join(","), recordId, limit]);
+  }, [modsKey, recordId, limit]);
 
   useEffect(() => { load(); }, [load]);
 
