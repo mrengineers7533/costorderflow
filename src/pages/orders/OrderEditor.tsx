@@ -1145,11 +1145,20 @@ export default function OrderEditor() {
               </div>
               {editorItems.map((it, idx) => (
                 <div key={it.id} className="space-y-1.5">
-                <div className="grid gap-2 items-center" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
-                  <Input className="col-span-4" value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
+                <div className="grid gap-2 items-start" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
+                  <div className="col-span-4">
+                    <Input value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
+                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
+                  </div>
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
-                  <Input className="col-span-1" type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
-                  <Input className="col-span-1" value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
+                  <div className="col-span-1">
+                    <Input type="number" step="any" value={it.quantity} onChange={(e) => updateItemById(it.id, { quantity: +e.target.value })} />
+                    <OaCellDesignComment comment={cellComment(it.id, "quantity")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "quantity", v, cellComment(it.id, "quantity")!.id)} />
+                  </div>
+                  <div className="col-span-1">
+                    <Input value={it.unit || "Nos"} onChange={(e) => updateItemById(it.id, { unit: e.target.value })} placeholder="Nos" />
+                    <OaCellDesignComment comment={cellComment(it.id, "unit")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "unit", v, cellComment(it.id, "unit")!.id)} />
+                  </div>
                   <Input className="col-span-2" type="number" step="any" value={it.unit_rate} onChange={(e) => updateItemById(it.id, { unit_rate: +e.target.value })} />
                   <Select value={it.make || "MR"} onValueChange={(v) => updateItemById(it.id, { make: v as "MR" | "GMS" | "OTHER" })}>
                     <SelectTrigger className="col-span-1 h-9 px-2"><SelectValue /></SelectTrigger>
@@ -1161,30 +1170,28 @@ export default function OrderEditor() {
                   </Select>
                   <div className="col-span-2 text-right font-medium">{it.amount.toFixed(2)}</div>
                   {showItemExtras && (
-                    <Input
-                      className="col-span-2"
-                      value={it.model || ""}
-                      onChange={(e) => updateItemById(it.id, { model: e.target.value })}
-                      placeholder="Model"
-                    />
+                    <div className="col-span-2">
+                      <Input value={it.model || ""} onChange={(e) => updateItemById(it.id, { model: e.target.value })} placeholder="Model" />
+                      <OaCellDesignComment comment={cellComment(it.id, "model_number")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "model", v, cellComment(it.id, "model_number")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-3"
-                      value={it.motor || ""}
-                      onChange={(e) => updateItemById(it.id, { motor: e.target.value })}
-                      placeholder="Motor"
-                    />
+                    <div className="col-span-3">
+                      <Input value={it.motor || ""} onChange={(e) => updateItemById(it.id, { motor: e.target.value })} placeholder="Motor" />
+                      <OaCellDesignComment comment={cellComment(it.id, "motor")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "motor", v, cellComment(it.id, "motor")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-1"
-                      type="number"
-                      step="any"
-                      value={it.motor_quantity ?? ""}
-                      onChange={(e) => updateItemById(it.id, { motor_quantity: e.target.value === "" ? undefined : +e.target.value })}
-                      placeholder="Qty"
-                    />
+                    <div className="col-span-1">
+                      <Input
+                        type="number"
+                        step="any"
+                        value={it.motor_quantity ?? ""}
+                        onChange={(e) => updateItemById(it.id, { motor_quantity: e.target.value === "" ? undefined : +e.target.value })}
+                        placeholder="Qty"
+                      />
+                      <OaCellDesignComment comment={cellComment(it.id, "motor_quantity")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "motor_quantity", v, cellComment(it.id, "motor_quantity")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (
                     <Input
@@ -1197,12 +1204,10 @@ export default function OrderEditor() {
                     />
                   )}
                   {showItemExtras && (
-                    <Input
-                      className="col-span-2"
-                      value={it.remarks || ""}
-                      onChange={(e) => updateItemById(it.id, { remarks: e.target.value })}
-                      placeholder="Remarks"
-                    />
+                    <div className="col-span-2">
+                      <Input value={it.remarks || ""} onChange={(e) => updateItemById(it.id, { remarks: e.target.value })} placeholder="Remarks" />
+                      <OaCellDesignComment comment={cellComment(it.id, "remarks")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "remarks", v, cellComment(it.id, "remarks")!.id)} />
+                    </div>
                   )}
                   {showItemExtras && (() => {
                     const s = approvalByOaItem.get(it.id) || "pending";
