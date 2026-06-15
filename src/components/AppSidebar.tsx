@@ -1,6 +1,7 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet, PencilRuler, Bell } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet, PencilRuler, Bell, ChevronDown, ChevronRight } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
+import { useState } from "react";
 import { useUserAccess } from "@/hooks/useUserAccess";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 import type { ModuleKey } from "@/lib/access/modules";
@@ -16,22 +17,28 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const items: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+const topItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Dashboard", url: "/", icon: LayoutGrid, module: "dashboard" },
-  { title: "Orders",    url: "/orders",     icon: FileText, module: "orders" },
-  { title: "BOQs",      url: "/boqs",       icon: ClipboardList, module: "boqs" },
-  { title: "Design",    url: "/design",     icon: PencilRuler,   module: "design" },
-  { title: "Notifications", url: "/notifications", icon: Bell,   module: "notifications" },
-  { title: "Proforma Invoices", url: "/pi", icon: Receipt, module: "pi" },
-  { title: "Workflow",  url: "/workflow",   icon: Workflow, module: "workflow" },
-  { title: "Purchase",  url: "/purchase",   icon: ShoppingCart, module: "purchase" },
-  { title: "Manufacturing", url: "/manufacturing", icon: Factory, module: "manufacturing" },
-  { title: "Requisitions", url: "/requisitions", icon: ClipboardCheck, module: "requisitions" },
+];
+
+const costingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Orders",            url: "/orders", icon: FileText,       module: "orders" },
+  { title: "BOQs",              url: "/boqs",   icon: ClipboardList,  module: "boqs" },
+  { title: "Proforma Invoices", url: "/pi",     icon: Receipt,        module: "pi" },
+];
+
+const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Design",          url: "/design",             icon: PencilRuler,    module: "design" },
+  { title: "Notifications",   url: "/notifications",      icon: Bell,           module: "notifications" },
+  { title: "Workflow",        url: "/workflow",           icon: Workflow,       module: "workflow" },
+  { title: "Purchase",        url: "/purchase",           icon: ShoppingCart,   module: "purchase" },
+  { title: "Manufacturing",   url: "/manufacturing",      icon: Factory,        module: "manufacturing" },
+  { title: "Requisitions",    url: "/requisitions",       icon: ClipboardCheck, module: "requisitions" },
   { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "requisitions" },
-  { title: "Raw Material Master", url: "/raw-materials", icon: Boxes, module: "raw_materials" },
-  { title: "GRN", url: "/grn", icon: PackageCheck, module: "grn" },
-  { title: "Flow Report", url: "/reports", icon: BarChart3, module: "reports" },
-  { title: "Cost Sheets", url: "/cost-sheets", icon: FileSpreadsheet, module: "cost_sheets" },
+  { title: "Raw Material Master", url: "/raw-materials", icon: Boxes,          module: "raw_materials" },
+  { title: "GRN",             url: "/grn",                icon: PackageCheck,     module: "grn" },
+  { title: "Flow Report",     url: "/reports",            icon: BarChart3,        module: "reports" },
+  { title: "Cost Sheets",     url: "/cost-sheets",        icon: FileSpreadsheet,  module: "cost_sheets" },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {
