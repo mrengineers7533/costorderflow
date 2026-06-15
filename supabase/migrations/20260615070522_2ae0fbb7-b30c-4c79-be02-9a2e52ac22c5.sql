@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.get_related_notifications(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text[],integer) FROM PUBLIC, anon;
