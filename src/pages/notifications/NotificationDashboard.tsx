@@ -29,6 +29,7 @@ interface NotifRow {
   actor_department: string | null;
   target_departments: string[];
   created_at: string;
+  line_item_changes?: unknown[] | null;
 }
 
 interface ReadRow {
@@ -164,7 +165,8 @@ export default function NotificationDashboard() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
-    setRows(((n || []) as unknown as NotifRow[]));
+    const fetched = ((n || []) as unknown as NotifRow[]).filter(hasRealChange);
+    setRows(fetched);
 
     const ids = ((n || []) as unknown as { id: string }[]).map((r) => r.id);
     if (ids.length) {
