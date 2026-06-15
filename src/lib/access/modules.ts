@@ -10,7 +10,9 @@ export type ModuleKey =
   | "raw_materials"
   | "grn"
   | "reports"
-  | "cost_sheets";
+  | "cost_sheets"
+  | "design"
+  | "notifications";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
@@ -25,4 +27,6 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "grn", label: "GRN" },
   { key: "reports", label: "Flow Report" },
   { key: "cost_sheets", label: "Cost Sheets" },
+  { key: "design", label: "Design (BOQ View & Comments)" },
+  { key: "notifications", label: "Notification Dashboard" },
 ];
