@@ -34,6 +34,7 @@ import {
   type GMSTerms,
 } from "@/lib/orders/defaults";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import {
   convertItems,
   convertCharges,
