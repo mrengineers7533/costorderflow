@@ -714,7 +714,6 @@ function NotificationDetailBody({
       </div>
 
       <HeaderCard notif={notif} />
-      <LineItemDetailsTable changes={lineChanges} />
       <ChangedLineItemsHistory notif={notif} history={history} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
