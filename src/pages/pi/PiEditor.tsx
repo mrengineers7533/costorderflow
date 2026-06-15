@@ -315,6 +315,7 @@ export default function PiEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
+        {id && <ModuleNotifications modules="pi" recordId={id} />}
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
           <div className="flex items-center gap-3 min-w-0">
