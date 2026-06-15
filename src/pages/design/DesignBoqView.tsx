@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -149,8 +149,8 @@ export default function DesignBoqView() {
                 const rowComments = commentsByItem[it.id] || [];
                 const open = activeRow === it.id;
                 return (
-                  <>
-                    <TableRow key={it.id}>
+                  <Fragment key={it.id}>
+                    <TableRow>
                       <TableCell>{it.item_no}</TableCell>
                       {COLS.map((c) => {
                         const cellKey = `${it.id}::${c.key}`;
@@ -192,7 +192,7 @@ export default function DesignBoqView() {
                       </TableCell>
                     </TableRow>
                     {open && (
-                      <TableRow key={`${it.id}-thread`}>
+                      <TableRow>
                         <TableCell colSpan={COLS.length + 2} className="bg-muted/30">
                           <div className="space-y-3 p-2">
                             {rowComments.length === 0 && (
@@ -237,7 +237,7 @@ export default function DesignBoqView() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
