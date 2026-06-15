@@ -76,15 +76,15 @@ const App = () => (
                   <AppLayout user={user}>
                     <Routes>
                       <Route path="/" element={<Index />} />
-                      <Route path="/orders" element={<RequireModule user={user} module="orders"><OrdersList /></RequireModule>} />
-                      <Route path="/orders/new" element={<RequireModule user={user} module="orders"><NewOrderChooser /></RequireModule>} />
-                      <Route path="/orders/new/edit" element={<RequireModule user={user} module="orders"><OrderEditor /></RequireModule>} />
-                      <Route path="/orders/:id" element={<RequireModule user={user} module="orders"><OrderEditor /></RequireModule>} />
-                      <Route path="/boqs" element={<RequireModule user={user} module="boqs"><BoqList /></RequireModule>} />
-                      <Route path="/boqs/new" element={<RequireModule user={user} module="boqs"><BoqEditor /></RequireModule>} />
-                      <Route path="/boqs/:id" element={<RequireModule user={user} module="boqs"><BoqEditor /></RequireModule>} />
-                      <Route path="/pi" element={<RequireModule user={user} module="pi"><PiList /></RequireModule>} />
-                      <Route path="/pi/:id" element={<RequireModule user={user} module="pi"><PiEditor /></RequireModule>} />
+                      <Route path="/orders" element={<RequireModule user={user} module="costing"><OrdersList /></RequireModule>} />
+                      <Route path="/orders/new" element={<RequireModule user={user} module="costing"><NewOrderChooser /></RequireModule>} />
+                      <Route path="/orders/new/edit" element={<RequireModule user={user} module="costing"><OrderEditor /></RequireModule>} />
+                      <Route path="/orders/:id" element={<RequireModule user={user} module="costing"><OrderEditor /></RequireModule>} />
+                      <Route path="/boqs" element={<RequireModule user={user} module="costing"><BoqList /></RequireModule>} />
+                      <Route path="/boqs/new" element={<RequireModule user={user} module="costing"><BoqEditor /></RequireModule>} />
+                      <Route path="/boqs/:id" element={<RequireModule user={user} module="costing"><BoqEditor /></RequireModule>} />
+                      <Route path="/pi" element={<RequireModule user={user} module="costing"><PiList /></RequireModule>} />
+                      <Route path="/pi/:id" element={<RequireModule user={user} module="costing"><PiEditor /></RequireModule>} />
                       <Route path="/reports" element={<RequireModule user={user} module="reports"><FlowReport /></RequireModule>} />
                       <Route path="/workflow" element={<RequireModule user={user} module="workflow"><WorkflowPage /></RequireModule>} />
                       <Route path="/purchase" element={<RequireModule user={user} module="purchase"><PurchaseLanding /></RequireModule>} />
@@ -98,7 +98,7 @@ const App = () => (
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
                       <Route path="/requisitions" element={<RequireModule user={user} module="requisitions"><RequisitionsList /></RequireModule>} />
                       <Route path="/requisitions/plan" element={<RequireModule user={user} module="requisitions"><RequisitionPlan /></RequireModule>} />
-                      <Route path="/requisitions/annexures" element={<RequireModule user={user} module="requisitions"><AnnexureFolder /></RequireModule>} />
+                      <Route path="/requisitions/annexures" element={<RequireModule user={user} module="annexures"><AnnexureFolder /></RequireModule>} />
                       <Route path="/requisitions/consistency" element={<RequireModule user={user} module="requisitions"><ConsistencyCheck /></RequireModule>} />
                       <Route path="/requisitions/:id" element={<RequireModule user={user} module="requisitions"><RequisitionDetail /></RequireModule>} />
                       <Route path="/raw-materials" element={<RequireModule user={user} module="raw_materials"><RawMaterialMaster /></RequireModule>} />
