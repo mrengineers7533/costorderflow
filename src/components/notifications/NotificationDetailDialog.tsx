@@ -477,9 +477,12 @@ function ChangedLineItemsHistory({
   history: NotifFull[];
 }) {
   type Edit = {
+    lineNo: string;
+    itemName: string;
     field: string;
     oldV: unknown;
     newV: unknown;
+    kind: "modified" | "added" | "removed";
     by: string;
     dept: string | null;
     when: string;
@@ -495,7 +498,7 @@ function ChangedLineItemsHistory({
   }
   all.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
 
-  const byLine = new Map<string, Edit[]>();
+  const edits: Edit[] = [];
   for (const h of all) {
     const changes = Array.isArray(h.line_item_changes)
       ? (h.line_item_changes as LineChange[])
@@ -503,47 +506,56 @@ function ChangedLineItemsHistory({
     for (let i = 0; i < changes.length; i++) {
       const c = changes[i];
       const lineNo = String(c.line_no ?? i + 1);
+      const before = (c.before || {}) as Record<string, unknown>;
+      const after = (c.after || {}) as Record<string, unknown>;
+      const itemName = String(
+        after["description"] ??
+          before["description"] ??
+          after["size_model"] ??
+          before["size_model"] ??
+          "",
+      );
       const base = {
+        lineNo,
+        itemName,
         by: h.actor_user_name || "—",
         dept: h.actor_department || null,
         when: h.created_at,
       };
-      const pushEdit = (e: Edit) => {
-        if (!byLine.has(lineNo)) byLine.set(lineNo, []);
-        byLine.get(lineNo)!.push(e);
-      };
       if (c.kind === "modified") {
-        for (const f of c.changed_fields || []) {
-          const oldV = (c.before || {})[f];
-          const newV = (c.after || {})[f];
+        const fields = (c.changed_fields || []).filter(
+          (f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"),
+        );
+        for (const f of fields) {
+          const oldV = before[f];
+          const newV = after[f];
           if (JSON.stringify(oldV ?? null) === JSON.stringify(newV ?? null)) continue;
-          pushEdit({ ...base, field: f, oldV, newV });
+          edits.push({ ...base, field: f, oldV, newV, kind: "modified" });
         }
       } else if (c.kind === "added") {
-        pushEdit({ ...base, field: "status", oldV: "—", newV: "Added" });
+        edits.push({ ...base, field: "—", oldV: "—", newV: "Added", kind: "added" });
       } else if (c.kind === "removed") {
-        pushEdit({ ...base, field: "status", oldV: "Present", newV: "Removed" });
+        edits.push({ ...base, field: "—", oldV: "Present", newV: "Removed", kind: "removed" });
       }
     }
   }
 
-  // Drop empty lines, sort edits within line, sort lines numerically.
-  const lines = Array.from(byLine.entries())
-    .filter(([, edits]) => edits.length > 0)
-    .map(([lineNo, edits]) => {
-      edits.sort((a, b) => (a.when || "").localeCompare(b.when || ""));
-      return [lineNo, edits] as const;
-    })
-    .sort((a, b) => (Number(a[0]) || 0) - (Number(b[0]) || 0));
+  // Sort: by line number asc, then chronological.
+  edits.sort((a, b) => {
+    const an = Number(a.lineNo) || 0;
+    const bn = Number(b.lineNo) || 0;
+    if (an !== bn) return an - bn;
+    return (a.when || "").localeCompare(b.when || "");
+  });
 
-  // Top-level (non line-item) changed fields as a fallback when no line edits.
+  // Top-level (non line-item) changed fields — always shown when present.
   const topFields = changedTopFields(notif);
+  const ov = notif.old_value || {};
+  const nv = notif.new_value || {};
 
-  if (lines.length === 0 && topFields.length === 0) return null;
+  if (edits.length === 0 && topFields.length === 0) return null;
 
   // Build the record reference line (OA / BOQ / PI).
-  const nv = notif.new_value || {};
-  const ov = notif.old_value || {};
   const refs: string[] = [];
   const oa = pickStr(nv, ["oa_no"]) || pickStr(ov, ["oa_no"]);
   const boq = pickStr(nv, ["boq_no"]) || pickStr(ov, ["boq_no"]);
@@ -564,81 +576,102 @@ function ChangedLineItemsHistory({
         )}
       </div>
 
-      {lines.length > 0 ? (
-        <div className="space-y-4">
-          {lines.map(([lineNo, edits]) => (
-            <div key={lineNo} className="overflow-hidden rounded-lg border">
-              <div className="flex items-center justify-between bg-muted/40 px-3 py-2 text-xs">
-                <div className="font-semibold">Line Item {lineNo}</div>
-                <div className="text-muted-foreground">
-                  Edited {edits.length} time{edits.length === 1 ? "" : "s"}
-                </div>
-              </div>
-              <div className="divide-y">
-                {edits.map((e, i) => (
-                  <div
-                    key={i}
-                    className="grid grid-cols-1 gap-x-6 gap-y-1 px-3 py-2 text-xs sm:grid-cols-2"
-                  >
-                    <div>
-                      <span className="text-muted-foreground">Changed Cell: </span>
-                      <span className="font-medium">{labelOf(e.field)}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Changed By: </span>
-                      <span className="font-medium">
-                        {e.by}
-                        {e.dept ? (
-                          <span className="text-muted-foreground"> ({e.dept})</span>
-                        ) : null}
-                      </span>
-                    </div>
-                    <div className="break-words">
-                      <span className="text-muted-foreground">Old Value: </span>
-                      <span className="text-red-600 line-through">
-                        {truncate(e.oldV, 200)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Changed At: </span>
-                      <span className="whitespace-nowrap">
-                        {new Date(e.when).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="break-words sm:col-span-2">
-                      <span className="text-muted-foreground">New Value: </span>
-                      <span className="text-emerald-700">
-                        {truncate(e.newV, 200)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      <div className="space-y-5">
+        {edits.length > 0 && (
+          <div>
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Line Item Changes
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-2">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Header fields changed
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/40 text-left">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Line Item</th>
+                    <th className="px-3 py-2 font-semibold">Item Name</th>
+                    <th className="px-3 py-2 font-semibold">Field / Option Edited</th>
+                    <th className="px-3 py-2 font-semibold">Old Value</th>
+                    <th className="px-3 py-2 font-semibold">Current Value</th>
+                    <th className="px-3 py-2 font-semibold">Edited By</th>
+                    <th className="px-3 py-2 font-semibold">Edited On</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {edits.map((e, i) => {
+                    const fieldLabel =
+                      e.kind === "added"
+                        ? "Line item added"
+                        : e.kind === "removed"
+                          ? "Line item removed"
+                          : labelOf(e.field);
+                    return (
+                      <tr key={i} className="border-t align-top">
+                        <td className="whitespace-nowrap px-3 py-2 font-semibold">
+                          Item {e.lineNo}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="max-w-[220px] truncate" title={e.itemName}>
+                            {e.itemName || "—"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-medium">{fieldLabel}</td>
+                        <td className="break-words px-3 py-2 text-red-600 line-through">
+                          {truncate(e.oldV, 200)}
+                        </td>
+                        <td className="break-words px-3 py-2 font-medium text-emerald-700">
+                          {truncate(e.newV, 200)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2">
+                          {e.by}
+                          {e.dept ? (
+                            <span className="text-muted-foreground"> ({e.dept})</span>
+                          ) : null}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                          {new Date(e.when).toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-          {topFields.map((k) => (
-            <div
-              key={k}
-              className="grid grid-cols-12 gap-2 rounded border px-3 py-2 text-xs"
-            >
-              <div className="col-span-3 font-medium">{labelOf(k)}</div>
-              <div className="col-span-4 break-words text-red-600 line-through">
-                {truncate((ov as Record<string, unknown>)[k], 200)}
-              </div>
-              <div className="col-span-1 text-center text-muted-foreground">→</div>
-              <div className="col-span-4 break-words text-emerald-700">
-                {truncate((nv as Record<string, unknown>)[k], 200)}
-              </div>
+        )}
+
+        {topFields.length > 0 && (
+          <div>
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Header Fields Changed
             </div>
-          ))}
-        </div>
-      )}
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/40 text-left">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Field Edited</th>
+                    <th className="px-3 py-2 font-semibold">Old Value</th>
+                    <th className="px-3 py-2 font-semibold">Current Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topFields.map((k) => (
+                    <tr key={k} className="border-t align-top">
+                      <td className="whitespace-nowrap px-3 py-2 font-medium">
+                        {labelOf(k)}
+                      </td>
+                      <td className="break-words px-3 py-2 text-red-600 line-through">
+                        {truncate((ov as Record<string, unknown>)[k], 200)}
+                      </td>
+                      <td className="break-words px-3 py-2 font-medium text-emerald-700">
+                        {truncate((nv as Record<string, unknown>)[k], 200)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
