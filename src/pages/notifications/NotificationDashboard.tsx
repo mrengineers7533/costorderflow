@@ -640,6 +640,7 @@ export default function NotificationDashboard() {
         activeStatus={chartStatusFilter}
         onDeptClick={(d) => setChartDeptFilter(d)}
         onStatusClick={(s) => setChartStatusFilter(s)}
+        allowedDeptKeys={ALLOWED_DEPT_KEYS}
       />
 
       {(chartDeptFilter || chartStatusFilter) && (
