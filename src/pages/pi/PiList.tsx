@@ -24,6 +24,7 @@ import { generatePiPDF } from "@/lib/pi/pdf";
 import { buildPiXlsx } from "@/lib/pi/excel";
 import type { OrderRecord } from "@/lib/orders/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_date: string; pi_count: number };
 
@@ -260,6 +261,7 @@ export default function PiList() {
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                       <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Net Payable</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Not Seen Notifications</TableHead>
                       <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -285,6 +287,9 @@ export default function PiList() {
                             <span className={`h-1.5 w-1.5 rounded-full ${p.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
                             {p.status}
                           </span>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <NotSeenNotifBadge variant="cell" piId={p.id} />
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex items-center gap-1">
