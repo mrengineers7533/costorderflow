@@ -94,17 +94,24 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Optional auth — app currently runs without sign-in, so allow anonymous calls.
+    // Require authentication — this endpoint triggers paid AI calls.
     const auth = req.headers.get("Authorization") || "";
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
-    let userId: string | null = null;
-    if (auth && auth !== `Bearer ${ANON_KEY}`) {
-      const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-        global: { headers: { Authorization: auth } },
+    if (!auth.startsWith("Bearer ") || auth === `Bearer ${ANON_KEY}`) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      const { data: userData } = await userClient.auth.getUser();
-      userId = userData.user?.id ?? null;
     }
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: auth } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId: string = userData.user.id;
 
     const body = await req.json().catch(() => ({}));
     const costSheetId = body.cost_sheet_id;
