@@ -324,7 +324,7 @@ export default function PiEditor() {
       <div className="max-w-7xl mx-auto space-y-5">
         {id && (
           <div className="flex">
-            <NotSeenNotifBadge piId={id} orderRootId={piOrderRootId ?? undefined} />
+            <NotSeenNotifBadge piId={id} />
           </div>
         )}
         {id && (
