@@ -14,6 +14,21 @@ import { NotificationCharts, deptOf } from "@/components/notifications/Notificat
 import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
 import { normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
+
+// Only these departments/categories are surfaced in the dashboard's
+// department section, filter dropdown, and pie chart.
+const ALLOWED_DEPTS = [
+  "Design",
+  "Costing",
+  "OA",
+  "BOQ",
+  "PI",
+  "Purchase",
+  "Manufacturing",
+  "Requisition",
+  "Project",
+];
+const ALLOWED_DEPT_KEYS = new Set(ALLOWED_DEPTS.map((d) => normalizeDept(d)));
 import {
   AlertDialog,
   AlertDialogAction,
@@ -291,7 +306,11 @@ export default function NotificationDashboard() {
 
   const allDepts = useMemo(() => {
     const s = new Set<string>();
-    rows.forEach((r) => r.target_departments.forEach((d) => s.add(d)));
+    rows.forEach((r) =>
+      r.target_departments.forEach((d) => {
+        if (ALLOWED_DEPT_KEYS.has(normalizeDept(d))) s.add(d);
+      }),
+    );
     return ["all", ...Array.from(s).sort()];
   }, [rows]);
 
@@ -539,6 +558,7 @@ export default function NotificationDashboard() {
           r.target_departments.forEach((d) => {
             const key = normalizeDept(d);
             if (!key) return;
+            if (!ALLOWED_DEPT_KEYS.has(key)) return;
             const cur = map.get(key) || { display: d, total: 0, seen: 0 };
             cur.total += 1;
             const isSeen = (readsByNotif[r.id] || []).some(
@@ -548,9 +568,11 @@ export default function NotificationDashboard() {
             map.set(key, cur);
           });
         });
-        const entries = Array.from(map.values()).sort((a, b) =>
-          a.display.localeCompare(b.display),
-        );
+        // Always render in the canonical ALLOWED_DEPTS order, even when count is 0.
+        const entries = ALLOWED_DEPTS.map((name) => {
+          const cur = map.get(normalizeDept(name));
+          return { display: name, total: cur?.total || 0, seen: cur?.seen || 0 };
+        });
         return (
           <Card>
             <CardHeader className="pb-2">
