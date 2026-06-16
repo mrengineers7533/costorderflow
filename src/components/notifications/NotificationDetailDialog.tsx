@@ -386,7 +386,7 @@ function HeaderCard({ notif }: { notif: NotifFull }) {
 
 function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
   if (!changes.length) return null;
-  const cols = ["Item", "Description", "Make", "Qty", "Unit", "Status"];
+  const cols = ["Item", "Field / Cell", "Old Value", "New Value", "Status"];
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="mb-3 text-sm font-bold">Line Item Details</div>
@@ -402,34 +402,65 @@ function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
             </tr>
           </thead>
           <tbody>
-            {changes.map((c, i) => {
-              const row = (c.after || c.before || {}) as Record<string, unknown>;
+            {changes.flatMap((c, i) => {
+              const lineNo = c.line_no ?? i + 1;
+              const before = (c.before || {}) as Record<string, unknown>;
+              const after = (c.after || {}) as Record<string, unknown>;
+              const refName =
+                String(after["description"] ?? before["description"] ?? after["size_model"] ?? before["size_model"] ?? "") || "";
+              const itemCell = (
+                <>
+                  <div className="font-semibold">Item {lineNo}</div>
+                  {refName && <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{refName}</div>}
+                </>
+              );
               const statusBadge =
                 c.kind === "added"
                   ? { cls: "bg-emerald-100 text-emerald-700", label: "Added" }
                   : c.kind === "removed"
                     ? { cls: "bg-red-100 text-red-700", label: "Removed" }
                     : { cls: "bg-orange-100 text-orange-700", label: "Changed" };
-              return (
-                <tr key={i} className="border-t">
-                  <td className="px-3 py-2">{c.line_no ?? i + 1}</td>
-                  <td className="px-3 py-2">
-                    {String(row["description"] ?? row["size_model"] ?? "—")}
-                  </td>
-                  <td className="px-3 py-2">{String(row["make"] ?? "—")}</td>
-                  <td className="px-3 py-2">
-                    {String(row["qty"] ?? row["quantity"] ?? "—")}
-                  </td>
-                  <td className="px-3 py-2">{String(row["unit"] ?? "—")}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusBadge.cls}`}
-                    >
-                      {statusBadge.label}
-                    </span>
-                  </td>
-                </tr>
+              const badge = (
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusBadge.cls}`}>
+                  {statusBadge.label}
+                </span>
               );
+              if (c.kind !== "modified") {
+                return [
+                  <tr key={`${i}`} className="border-t align-top">
+                    <td className="px-3 py-2">{itemCell}</td>
+                    <td className="px-3 py-2 text-muted-foreground">—</td>
+                    <td className="px-3 py-2 text-muted-foreground">{c.kind === "added" ? "—" : truncate(before)}</td>
+                    <td className="px-3 py-2">{c.kind === "removed" ? "—" : truncate(after)}</td>
+                    <td className="px-3 py-2">{badge}</td>
+                  </tr>,
+                ];
+              }
+              const fields = (c.changed_fields || []).filter((f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"));
+              if (!fields.length) {
+                return [
+                  <tr key={`${i}`} className="border-t align-top">
+                    <td className="px-3 py-2">{itemCell}</td>
+                    <td className="px-3 py-2 text-muted-foreground">—</td>
+                    <td className="px-3 py-2 text-muted-foreground">—</td>
+                    <td className="px-3 py-2 text-muted-foreground">—</td>
+                    <td className="px-3 py-2">{badge}</td>
+                  </tr>,
+                ];
+              }
+              return fields.map((f, j) => (
+                <tr key={`${i}-${f}`} className="border-t align-top">
+                  {j === 0 ? (
+                    <td className="px-3 py-2" rowSpan={fields.length}>{itemCell}</td>
+                  ) : null}
+                  <td className="px-3 py-2 font-medium">{labelOf(f)}</td>
+                  <td className="px-3 py-2 text-muted-foreground line-through">{truncate(before[f])}</td>
+                  <td className="px-3 py-2 text-foreground font-medium">{truncate(after[f])}</td>
+                  {j === 0 ? (
+                    <td className="px-3 py-2" rowSpan={fields.length}>{badge}</td>
+                  ) : null}
+                </tr>
+              ));
             })}
           </tbody>
         </table>
