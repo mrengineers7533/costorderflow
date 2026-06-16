@@ -20,9 +20,9 @@ import {
   type DesignComment,
 } from "@/lib/design/comments";
 import {
-  bulkSetItemApprovals,
   fetchItemApprovals,
   setItemApproval,
+  bulkSetItemApprovals,
   type ItemApproval,
 } from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
@@ -54,7 +54,6 @@ export default function DesignBoqView() {
   const [approving, setApproving] = useState(false);
   const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
-  const [bulkBusy, setBulkBusy] = useState(false);
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const keyOf = (itemId: string, col: string) => `${itemId}::${col}`;
 
@@ -172,8 +171,6 @@ export default function DesignBoqView() {
     () => items.filter((it) => approvals[it.id]?.status === "approved").length,
     [items, approvals],
   );
-  const allApproved = items.length > 0 && approvedCount === items.length;
-  const someApproved = approvedCount > 0 && !allApproved;
   const approvalsDisabled = alreadySubmitted || designApproved;
 
   async function toggleItemApproval(itemId: string, next: boolean) {
@@ -203,30 +200,6 @@ export default function DesignBoqView() {
       });
     } finally {
       setSavingApprovalId(null);
-    }
-  }
-
-  async function toggleSelectAll() {
-    if (!boq) return;
-    const revision = boq.revision ?? 0;
-    const next = !allApproved;
-    const targetIds = items
-      .filter((it) => (approvals[it.id]?.status === "approved") !== next)
-      .map((it) => it.id);
-    if (targetIds.length === 0) return;
-    setBulkBusy(true);
-    try {
-      await bulkSetItemApprovals(boq.id, targetIds, revision, next ? "approved" : "pending");
-      const map = await fetchItemApprovals(boq.id, revision);
-      setApprovals(map);
-    } catch (e) {
-      toast({
-        title: "Could not update approvals",
-        description: e instanceof Error ? e.message : "Permission denied.",
-        variant: "destructive",
-      });
-    } finally {
-      setBulkBusy(false);
     }
   }
 
@@ -346,15 +319,7 @@ export default function DesignBoqView() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-28">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={allApproved ? true : someApproved ? "indeterminate" : false}
-                      disabled={approvalsDisabled || bulkBusy || items.length === 0}
-                      onCheckedChange={() => void toggleSelectAll()}
-                      aria-label="Select all items"
-                    />
-                    <span className="text-xs">Approve</span>
-                  </div>
+                  <span className="text-xs">Approve</span>
                 </TableHead>
                 <TableHead className="w-12">#</TableHead>
                 {COLS.map((c) => (
@@ -384,7 +349,7 @@ export default function DesignBoqView() {
                           <div className="flex items-center gap-2">
                             <Checkbox
                               checked={isApproved}
-                              disabled={approvalsDisabled || savingApprovalId === it.id || bulkBusy}
+                              disabled={approvalsDisabled || savingApprovalId === it.id}
                               onCheckedChange={(v) => void toggleItemApproval(it.id, !!v)}
                               aria-label={`Approve item ${it.item_no}`}
                             />
