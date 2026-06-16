@@ -403,7 +403,7 @@ export default function BoqList() {
                       </TableRow>
                        {openFamily[b.id] && (
                          <TableRow className="bg-muted/20 hover:bg-muted/20">
-                           <TableCell colSpan={8} className="p-0">
+                           <TableCell colSpan={9} className="p-0">
                              <div className="px-4 py-3">
                                <div className="flex items-center gap-2 mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
                                  <History className="h-3.5 w-3.5" />
