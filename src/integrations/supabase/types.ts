@@ -3031,6 +3031,15 @@ export type Database = {
       is_design_review_owner: { Args: { _review_id: string }; Returns: boolean }
       is_domain_allowed: { Args: { _domain: string }; Returns: boolean }
       is_open_design_review: { Args: { _review_id: string }; Returns: boolean }
+      log_login_attempt: {
+        Args: {
+          _email: string
+          _status: string
+          _user_agent?: string
+          _user_id?: string
+        }
+        Returns: undefined
+      }
       next_general_requisition_number: {
         Args: { _fy: string }
         Returns: string
