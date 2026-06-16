@@ -469,6 +469,33 @@ export default function NotificationDashboard() {
       </div>
 
       {/* Summary cards */}
+      {(() => {
+        const fBoq = searchParams.get("boq");
+        const fOa = searchParams.get("oa");
+        const fPi = searchParams.get("pi");
+        const fUnseen = searchParams.get("unseen") === "1";
+        if (!fBoq && !fOa && !fPi && !fUnseen) return null;
+        const parts: string[] = [];
+        if (fBoq) parts.push("BOQ");
+        if (fOa) parts.push("OA");
+        if (fPi) parts.push("PI");
+        if (fUnseen) parts.push("Unseen only");
+        return (
+          <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+            <span className="font-medium">Filtered by:</span>
+            <span className="text-muted-foreground">{parts.join(" · ")}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7"
+              onClick={() => setSearchParams({})}
+            >
+              Clear
+            </Button>
+          </div>
+        );
+      })()}
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
         {[
           { label: "Total", value: counts.total },
