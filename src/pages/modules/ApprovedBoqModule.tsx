@@ -14,6 +14,7 @@ import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -70,6 +71,11 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   }, []);
 
   const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  const familyOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
+    return m;
+  }, [orders]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -113,6 +119,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
         <div className="grid gap-3">
           {filtered.map((b) => {
             const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
+            const rootId = familyOf.get(b.order_id) || b.order_id;
             return (
               <Card key={b.id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="py-4 flex flex-wrap items-center gap-4">
@@ -121,6 +128,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
                       <span className="font-semibold text-sm">{b.boq_number}</span>
                       <Badge variant="secondary">R{b.revision ?? 0}</Badge>
                       <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 truncate">
                       {b.client_name || "—"} · OA {b.reference_oa_number || "—"}
@@ -193,6 +201,9 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
             <h1 className="text-xl font-semibold tracking-tight">{config.title} · {boq.boq_number}</h1>
             {approved && <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>}
             <Badge variant="secondary">R{boq.revision ?? 0}</Badge>
+            {boqId && (
+              <NotSeenNotifBadge boqId={boqId} orderRootId={orderRootId ?? undefined} />
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {boq.client_name || "—"} · OA {boq.reference_oa_number || "—"} · BOQ date {fmtDate(boq.boq_date)}
