@@ -44,6 +44,9 @@ interface NotifRow {
   target_departments: string[];
   created_at: string;
   line_item_changes?: unknown[] | null;
+  related_boq_id?: string | null;
+  related_order_root_id?: string | null;
+  related_pi_id?: string | null;
 }
 
 /** Drop notifications that carry no actionable change. */
