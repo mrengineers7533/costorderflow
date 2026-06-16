@@ -1,50 +1,37 @@
-# Improve Notification Detail – Change Details section
+## Problem
 
-Rework the **Change Details** block in `src/components/notifications/NotificationDetailDialog.tsx` so reviewers can immediately see *which line item* and *which field* changed, in two clearly separated tables. Existing design, header card, status chips, acknowledge flow, and all data sources stay exactly as today.
+The "Not Seen Notifications" badge and the in-page Notifications banner use two different data sources, so their counts diverge:
 
-## What changes
+- **Banner** (`ModuleNotifications.tsx`) — calls RPC `get_related_notifications` (returns every notification linked to the record, regardless of `target_departments`) and counts rows that have no entry in `app_notification_reads` for the current user.
+- **Badge** (`useUnseenNotifCount` in `src/hooks/useUnseenNotifCount.ts`) — queries `app_notifications` directly and additionally filters by `target_departments` matching the current user's department. When a notification has targets that don't include the viewer's department (e.g. BOQ status change targeted at Design only, viewed by an Other/Sales user), the badge drops it to 0 while the banner still shows it as "New".
 
-Only the `ChangedLineItemsHistory` component (and its render inside `NotificationDetailBody`) is updated. No backend, no other screens, no notification creation logic.
+The badge on OA list rows (`useUnseenNotifCountsMap`) and on BOQ/PI list rows uses the same hook, so it has the same mismatch.
 
-### 1. Line Item Changes (table)
+## Fix (presentation/data layer only — no business logic changes)
 
-Render when at least one line-item edit exists across the merged history. Columns:
+Rewrite `src/hooks/useUnseenNotifCount.ts` so both the single-record hook and the bulk map hook source notifications from the **same** RPC the banner uses (`get_related_notifications`), then subtract acknowledged ids from `app_notification_reads`. This guarantees badge = banner unread count, by construction.
 
-| Line Item | Item Name | Field / Option Edited | Old Value | Current Value | Edited By | Edited On |
-|---|---|---|---|---|---|---|
+### Changes
 
-- One row **per changed field** (multiple rows can share the same Line Item No., as in the user's example).
-- `Line Item` = `Item {line_no}` (falls back to positional index, same logic as today).
-- `Item Name` = `description` from `after` then `before`, falling back to `size_model` (reuses existing `pickStr`-style lookup already in the file).
-- `Field / Option Edited` = `labelOf(field)` (uses existing `FIELD_LABELS` map; new keys like `rate`, `discount`, `tax`, `delivery_date`, `comment` rendered via title-case fallback).
-- `Old Value` shown with strikethrough red, `Current Value` shown in emerald — matches current visual language.
-- `Edited By` = `{actor_user_name} ({actor_department})`; `Edited On` = localized `created_at`.
-- `added` / `removed` line items render as a single row with status pill in Field column (Added / Removed) and `—` for the missing side, preserving today's behavior.
+1. **`useUnseenNotifCount({ boqId, orderRootId, piId })`**
+   - Replace the direct `app_notifications` query + `target_departments` filtering with a call to `supabase.rpc("get_related_notifications", { p_order_root, p_boq, p_pi, p_po: null, p_req: null, p_annex: null, p_record_id: null, p_modules: null, p_limit: 500 })`.
+   - Apply the same content filter the banner uses (drop empty `*_line_items_changed` and empty `comment_added/comment_updated` rows) so counts match exactly.
+   - Subtract ids present in `app_notification_reads` for the current user.
+   - Keep the existing realtime subscription on `app_notifications` + `app_notification_reads` so Acknowledge updates both UIs immediately.
 
-### 2. Header Fields Changed (table)
+2. **`useUnseenNotifCountsMap(kind, ids)`** (used by OA/BOQ/PI list "Not Seen Notifications" column)
+   - For each id, call the same RPC (batched via `Promise.all`) and apply the same filter + reads subtraction.
+   - Keep the shared realtime channel.
+   - Cap concurrency (e.g. 8 at a time) to avoid request storms on long lists.
 
-Render whenever `changedTopFields(notif)` returns any keys — **always**, even if line item changes also exist (today it only renders as a fallback). Columns:
+3. **No other files change.** `ModuleNotifications`, `NotSeenNotifBadge`, dashboard, list pages, RPC, RLS, and acknowledge flow are untouched. Department targeting, OA/BOQ/PI/Purchase/etc. business logic, and existing calculations are not modified — the badge simply now mirrors the banner's data source.
 
-| Field Edited | Old Value | Current Value |
-|---|---|---|
+### Coverage
 
-Same value formatting as today (`truncate`, red strike / emerald). Uses the existing `HIDDEN_FIELDS` filter and `_id` suppression so noise fields stay hidden.
+Because every page (OA, BOQ, PI, Design, Purchase, Manufacturing, Requisition, and future Project) renders `NotSeenNotifBadge` via this single hook, fixing the hook fixes all pages at once. Future Project pages get the same behavior for free.
 
-### 3. Section header & record reference
+### Out of scope
 
-Keep the existing `History` icon + "Change Details" title and the `OA / BOQ / PI` reference line so the user still sees which record was changed. Add sub-headings `Line Item Changes` and `Header Fields Changed` above each table.
-
-### 4. Empty state
-
-If neither table has rows (rare — e.g. only `_id` churn), render the existing fallback message area. The dialog stays view-only — no buttons, no inline edits.
-
-## Out of scope
-
-- No DB schema, no migrations, no RLS changes.
-- No changes to how `app_notifications.line_item_changes`, `old_value`, or `new_value` are populated.
-- No changes to `HeaderCard`, `StatusChipBar`, acknowledge UI, dashboard, list pages, or any other component.
-- No changes to existing features anywhere else.
-
-## Files touched
-
-- `src/components/notifications/NotificationDetailDialog.tsx` (presentation only)
+- No DB migrations, RPC changes, RLS changes.
+- No changes to acknowledge logic, banner UI, dashboard filters, or any module's domain logic.
+- No change to the sidebar bell (`useUnreadNotifications`).
