@@ -34,11 +34,11 @@ async function isDomainAllowed(email: string): Promise<boolean> {
 
 async function logLoginAttempt(email: string, status: "success" | "failed", userId?: string | null) {
   try {
-    await supabase.from("login_activity").insert({
-      email: email.trim().toLowerCase(),
-      status,
-      user_agent: navigator.userAgent.slice(0, 300),
-      user_id: userId ?? null,
+    await supabase.rpc("log_login_attempt", {
+      _email: email.trim().toLowerCase(),
+      _status: status,
+      _user_agent: navigator.userAgent.slice(0, 300),
+      _user_id: userId ?? null,
     });
   } catch {
     /* non-blocking */
