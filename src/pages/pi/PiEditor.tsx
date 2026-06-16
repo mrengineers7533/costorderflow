@@ -35,6 +35,7 @@ import {
 } from "@/lib/orders/defaults";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import {
   convertItems,
   convertCharges,
