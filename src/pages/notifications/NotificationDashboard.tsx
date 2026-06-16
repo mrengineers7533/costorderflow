@@ -179,6 +179,165 @@ function changedFields(n: NotifRow): string[] {
   return out;
 }
 
+// ---- Group / module helpers for the redesigned dashboard ----
+
+/** Map a raw module code to one of the 6 dashboard groups (or null). */
+function groupOf(module: string | null | undefined): string | null {
+  const m = (module || "").toLowerCase();
+  if (!m) return null;
+  if (m.startsWith("design")) return "Design";
+  if (m === "oa" || m === "order" || m.startsWith("order")) return "Costing";
+  if (m === "boq" || m.startsWith("boq")) return "Costing";
+  if (m === "pi" || m.startsWith("pi") || m.startsWith("proforma")) return "Costing";
+  if (m.startsWith("purchase") || m === "po") return "Purchase";
+  if (m.startsWith("manufactur") || m === "mfg") return "Manufacturing";
+  if (m.startsWith("requisition") || m === "req" || m === "pr") return "Requisition";
+  if (m.startsWith("project")) return "Project";
+  return null;
+}
+
+/** Sub-group inside Costing: OA / BOQ / PI. */
+function costingSub(module: string | null | undefined): "OA" | "BOQ" | "PI" | null {
+  const m = (module || "").toLowerCase();
+  if (m === "oa" || m === "order" || m.startsWith("order")) return "OA";
+  if (m === "boq" || m.startsWith("boq")) return "BOQ";
+  if (m === "pi" || m.startsWith("pi") || m.startsWith("proforma")) return "PI";
+  return null;
+}
+
+/** Short pretty module badge label. */
+function moduleBadge(module: string): string {
+  const m = (module || "").toLowerCase();
+  if (m === "oa" || m.startsWith("order")) return "OA";
+  if (m.startsWith("boq")) return "BOQ";
+  if (m.startsWith("pi") || m.startsWith("proforma")) return "PI";
+  if (m.startsWith("purchase") || m === "po") return "Purchase";
+  if (m.startsWith("manufactur") || m === "mfg") return "Manufacturing";
+  if (m.startsWith("requisition") || m === "req") return "Requisition";
+  if (m.startsWith("design")) return "Design";
+  if (m.startsWith("project")) return "Project";
+  return module.toUpperCase();
+}
+
+/** Best-effort revision string ("R0", "R1", …) from the notification payload. */
+function revOf(n: NotifRow): string {
+  const v = (n.new_value || {}) as Record<string, unknown>;
+  const cand =
+    (v.revision_no as unknown) ??
+    (v.revision as unknown) ??
+    (v.rev as unknown) ??
+    (v.version as unknown);
+  if (cand === null || cand === undefined || cand === "") return "R0";
+  const s = String(cand);
+  return /^r\d+/i.test(s) ? s.toUpperCase() : `R${s}`;
+}
+
+/** Pretty value renderer for old/new cells. */
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+interface LineLike {
+  line_no?: string | number | null;
+  kind?: "added" | "removed" | "modified";
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  changed_fields?: string[];
+}
+
+/**
+ * Pick the most representative single change for the table row:
+ * - prefer the first line-item change
+ * - else fall back to the first changed top-level field
+ */
+function rowChange(n: NotifRow): {
+  lineNo: string;
+  field: string;
+  oldVal: string;
+  newVal: string;
+} {
+  const lic = Array.isArray(n.line_item_changes)
+    ? (n.line_item_changes as LineLike[])
+    : [];
+  if (lic.length > 0) {
+    const lc = lic[0];
+    const lineNo =
+      lc.line_no === null || lc.line_no === undefined || lc.line_no === ""
+        ? "—"
+        : String(lc.line_no);
+    const cf = (lc.changed_fields || []).filter((k) => !HIDDEN_FIELDS.has(k));
+    if (lc.kind === "added") {
+      return { lineNo, field: "Item Added", oldVal: "—", newVal: "Added" };
+    }
+    if (lc.kind === "removed") {
+      return { lineNo, field: "Item Removed", oldVal: "Removed", newVal: "—" };
+    }
+    const k = cf[0];
+    if (k) {
+      const before = (lc.before || {}) as Record<string, unknown>;
+      const after = (lc.after || {}) as Record<string, unknown>;
+      return {
+        lineNo,
+        field: labelOf(k),
+        oldVal: fmtVal(before[k]),
+        newVal: fmtVal(after[k]),
+      };
+    }
+    return { lineNo, field: "Line Item Changed", oldVal: "—", newVal: "—" };
+  }
+
+  // Header-level change
+  if (n.event_type === "comment_added" || n.event_type === "comment_updated") {
+    const nv = (n.new_value || {}) as Record<string, unknown>;
+    const ov = (n.old_value || {}) as Record<string, unknown>;
+    return {
+      lineNo: "Header",
+      field: "Comment",
+      oldVal: fmtVal(ov.old_comment),
+      newVal: fmtVal(nv.new_comment),
+    };
+  }
+  const fields = changedFields(n);
+  const k = fields[0];
+  if (k) {
+    const o = (n.old_value || {}) as Record<string, unknown>;
+    const v = (n.new_value || {}) as Record<string, unknown>;
+    return {
+      lineNo: "Header",
+      field: labelOf(k),
+      oldVal: fmtVal(o[k]),
+      newVal: fmtVal(v[k]),
+    };
+  }
+  return { lineNo: "Header", field: "—", oldVal: "—", newVal: "—" };
+}
+
+/** Notification type pill shown in the right column. */
+function notifTypeLabel(n: NotifRow): string {
+  const e = n.event_type || "";
+  if (e === "comment_added" || e === "comment_updated") return "Design Comment";
+  if ((n.module || "").toLowerCase().startsWith("design")) return "Design Update";
+  return "Data Change";
+}
+
+/** Group definitions used for the top cards row. */
+const GROUPS: Array<{ key: string; label: string; icon: typeof PenSquare }> = [
+  { key: "Design", label: "Design", icon: PenSquare },
+  { key: "Costing", label: "Costing (Total)", icon: Calculator },
+  { key: "Purchase", label: "Purchase", icon: ShoppingCart },
+  { key: "Manufacturing", label: "Manufacturing", icon: Factory },
+  { key: "Requisition", label: "Requisition", icon: ClipboardList },
+  { key: "Project", label: "Project", icon: FolderKanban },
+];
+
+const COSTING_SUBS: Array<{ key: "OA" | "BOQ" | "PI"; label: string }> = [
+  { key: "OA", label: "OA" },
+  { key: "BOQ", label: "BOQ" },
+  { key: "PI", label: "PI" },
+];
+
 export default function NotificationDashboard() {
   const [rows, setRows] = useState<NotifRow[]>([]);
   const [reads, setReads] = useState<ReadRow[]>([]);
