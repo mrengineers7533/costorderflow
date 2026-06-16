@@ -1,53 +1,69 @@
-# Department-wise Notification Summary (View-Only)
+# Not Seen Notifications for BOQ, OA, PI
 
-## Goal
-Add a new summary box on the Notification Dashboard that lists every target department with two clickable counts — Total and Seen — and opens a read-only notification list when clicked. No acknowledge / edit / delete controls inside this box or its drill-down list.
+## 1. Shared hook: `useUnseenNotifCount`
+New file `src/hooks/useUnseenNotifCount.ts`.
 
-## Where it goes
-`src/pages/notifications/NotificationDashboard.tsx`, inserted between the existing top KPI cards (Total / New / Pending Ack …) and the `NotificationCharts` section. Existing KPI cards, charts, filters, main table, admin delete buttons, acknowledge flow — all unchanged.
+- Inputs: `{ orderRootId?, boqId?, piId? }` (extensible to po/req).
+- Resolves current user id + department.
+- Loads notifications via existing `get_related_notifications` RPC (limit 200), then loads matching rows from `app_notification_reads` for the current user, and returns `unseen` = notifications targeting the user's department (via `matchTargetDept` against `target_departments`) that have no read row for this user.
+- Subscribes to realtime `postgres_changes` on `app_notifications` and `app_notification_reads` and refetches (channel cleaned up on unmount). Reuses the realtime publication already enabled in the prior migration — no DB changes.
+- Returns `{ count, loading, refresh }`.
 
-## Box layout
-A `Card` titled "Department-wise Notifications" containing a compact table:
+## 2. Reusable UI: `NotSeenNotifBadge`
+New file `src/components/notifications/NotSeenNotifBadge.tsx`.
 
-```text
-Department        Total Notifications        Seen Notifications
-Sales                    120                        85
-Accounts                  75                        60
-Production               200                       150
-HR                        40                        35
-```
+- Props: `{ orderRootId?, boqId?, piId?, variant?: "inline" | "cell" }`.
+- Uses the hook. Renders a clickable pill: `Not Seen Notifications: N` (inline) or just `N` (cell).
+- `onClick` navigates with `useNavigate` to:
+  `/notifications?unseen=1&boq=<id>` (or `oa=<rootId>`, `pi=<id>`).
+- View-only: no acknowledge/edit action. Hidden when count is 0 in `cell` mode, dimmed `0` shown in detail header for clarity.
 
-- Both number columns are rendered as link-styled buttons (`variant="link"`, primary color, underline on hover). Department label is plain text.
-- Empty state: "No notifications yet."
-- No icons, no badges, no Acknowledge / Mark-as-seen / Delete controls inside this box.
+## 3. Detail pages (top-left badge)
+Insert `<NotSeenNotifBadge variant="inline" … />` near the existing header/breadcrumb area in:
 
-## Counting rules
-For each department `D` (every value that appears in any notification's `target_departments`):
-- **Total** = number of notifications where `D` ∈ `target_departments` (case/whitespace normalized via existing `normalizeDept`).
-- **Seen** = number of those notifications that have at least one row in `app_notification_reads` whose `department` normalizes to `D`.
+- `src/pages/orders/OrderEditor.tsx` — pass `orderRootId = parent_order_id ?? id`.
+- `src/pages/boqs/BoqEditor.tsx` — pass `boqId`.
+- `src/pages/pi/PiEditor.tsx` — pass `piId`.
 
-Reuses the already-loaded `rows` and `readsByNotif` — no extra queries.
+Placed above the existing `ModuleNotifications` banner; the banner is unchanged.
 
-## Click behavior — read-only drill-down
-Clicking either number opens a new dialog `DeptNotificationsDialog` (new file `src/components/notifications/DeptNotificationsDialog.tsx`).
+## 4. List pages (new column)
+Add a "Not Seen Notifications" column to:
 
-Props: `department: string`, `mode: "all" | "seen"`, `rows: NotifRow[]`, `readsByNotif: Record<string, ReadRow[]>`, `open`, `onOpenChange`.
+- `src/pages/boqs/BoqList.tsx`
+- `src/pages/orders/OrdersList.tsx`
+- `src/pages/pi/PiList.tsx`
 
-Contents:
-- Header: `Sales — Total Notifications` or `Sales — Seen Notifications`.
-- Toolbar with two `Select`s:
-  - Sort: **Latest first** (default) / Oldest first.
-  - Status: **All** (default for Total mode) / Seen / Unseen. In `seen` mode the status filter is locked to Seen.
-- Table columns: Module · Title · Actor · Date · Status (Seen / Unseen badge). Row click opens existing `NotificationDetailDialog` in view mode.
-- No Acknowledge button, no Delete button, no inline edits anywhere in this dialog.
+Each row renders `<NotSeenNotifBadge variant="cell" boqId={row.id} />` (or `orderRootId`/`piId`). Click navigates to the filtered notifications view. Existing columns/actions untouched.
 
-"Seen" inside the dialog uses the same per-department rule (any read row from department `D`).
+To avoid N hook subscriptions per row, the cell hook will reuse a single shared realtime channel keyed per list page (small ref-counted manager inside the hook module). Acceptable for current list sizes; no DB change needed.
 
-## Out of scope (do not touch)
-- Acknowledge flow on the main table or `ModuleNotifications` banner — only the owning user/department still marks notifications as seen there.
-- Notification creation triggers, charts, existing summary KPI cards, admin delete buttons.
-- Database schema, RLS, RPCs — purely a UI addition reading existing data.
+## 5. Notification Dashboard: filtered drill-in
+Update `src/pages/notifications/NotificationDashboard.tsx` to read new query params and apply filters on top of the existing fetched `rows`:
 
-## Files
-- Edit: `src/pages/notifications/NotificationDashboard.tsx` (insert summary box + dialog state).
-- New: `src/components/notifications/DeptNotificationsDialog.tsx` (read-only drill-down).
+- `?boq=<uuid>` → keep rows where `related_boq_id` matches.
+- `?oa=<uuid>` → keep rows where `related_order_root_id` matches.
+- `?pi=<uuid>` → keep rows where `related_pi_id` matches.
+- `?unseen=1` → keep rows the current user has NOT acknowledged (no row in `reads` for `me.id`).
+- Default sort already `created_at DESC` (latest first).
+- Show a small "Filtered by <BOQ/OA/PI> · Unseen only" chip with a Clear button that calls `setSearchParams({})`.
+
+No change to delete/acknowledge logic.
+
+## 6. Notification detail content
+`src/components/notifications/NotificationDetailDialog.tsx` already renders Title, Record No (BOQ/OA/PI), Client, Changed By (department/user), When, Line Item table, and a Line-Item History grouped by line/field/old/new/by/when. To match the requested format exactly:
+
+- In `LineItemDetailsTable`, add a "Field / Cell" column rendered per `changed_fields` (one row per field for modified items) showing field label, Old, New. For added/removed keep current single status row.
+- In `HeaderCard` ensure the document number (BOQ/OA/PI) and the actor "Edited By" + "Edited On" are always visible (currently conditional on values existing — keep that, just relabel "Changed By" → "Edited By" and "When" → "Edited On").
+
+No changes to triggers / DB / RLS — `_line_items_diff` already captures `changed_fields`, `before`, `after`.
+
+## Out of scope
+- No schema changes, no new RPC, no policy changes.
+- No edits to existing approval/OA/BOQ/PI/notification creation logic.
+- Acknowledge flow remains only inside the user's own notification area / detail dialog.
+
+## Technical notes
+- Filtering uses existing `app_notifications` columns already in `<NotifFull>` — `related_boq_id`, `related_order_root_id`, `related_pi_id`.
+- "Seen" semantics match the rest of the app: a notification is seen for the current user once `app_notification_reads` contains `(notification_id, user_id)`. Count drops automatically via the realtime subscription.
+- Department gating: count only includes notifications whose `target_departments` matches the user's department (via `matchTargetDept`), matching the dashboard's own behavior, so users don't see counts for notifications not aimed at them.
