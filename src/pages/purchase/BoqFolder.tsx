@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
@@ -55,6 +56,11 @@ export default function BoqFolder() {
   const orderFormatById = useMemo(() => {
     const m = new Map<string, "MR" | "GMS">();
     for (const o of orders) m.set(o.id, o.format);
+    return m;
+  }, [orders]);
+  const familyOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
     return m;
   }, [orders]);
 
@@ -112,6 +118,7 @@ export default function BoqFolder() {
             <div className="grid gap-3">
               {filtered.map((b) => {
                 const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
+                const rootId = familyOf.get(b.order_id) || b.order_id;
                 return (
                   <Card key={b.id} className="hover:shadow-sm transition-shadow">
                     <CardContent className="py-4 flex flex-wrap items-center gap-4">
@@ -120,6 +127,7 @@ export default function BoqFolder() {
                           <span className="font-semibold text-sm">{b.boq_number}</span>
                           <Badge variant="secondary">R{b.revision ?? 0}</Badge>
                           <Badge className="bg-emerald-600 hover:bg-emerald-600">{tab}</Badge>
+                          <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                         </div>
                         <div className="text-xs text-muted-foreground mt-1 truncate">
                           {b.client_name || "—"} · OA {b.reference_oa_number || "—"}
