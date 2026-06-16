@@ -150,11 +150,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } },
     );
-    const { data: claims } = await supabase.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (!claims?.claims) {
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    const userId = claims.claims.sub as string;
+    const userId = userData.user.id;
 
     const body = await req.json();
     const { po_id, to, cc, message } = body as { po_id: string; to: string; cc?: string | null; message?: string | null };
@@ -168,6 +168,13 @@ Deno.serve(async (req) => {
     );
     const { data: po, error: poErr } = await service.from('purchase_orders').select('*').eq('id', po_id).maybeSingle();
     if (poErr || !po) throw new Error(poErr?.message || 'PO not found');
+    // Ownership check: only PO creator or admin can send it.
+    const { data: adminRow } = await service
+      .from('user_roles').select('role').eq('user_id', userId).eq('role', 'admin').maybeSingle();
+    const isAdmin = !!adminRow;
+    if (!isAdmin && po.created_by && po.created_by !== userId) {
+      return new Response(JSON.stringify({ ok: false, error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const { data: rows } = await service.from('purchase_order_rows').select('*').eq('po_id', po_id);
     let vendor: Record<string, unknown> | null = null;
     if (po.vendor_id) {
