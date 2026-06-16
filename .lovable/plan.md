@@ -1,37 +1,64 @@
-## Problem
+## Goal
 
-The "Not Seen Notifications" badge and the in-page Notifications banner use two different data sources, so their counts diverge:
+Stop the acting module from ever receiving its own notification. Fix it at the recipient / query layer so every surface (top bell, Not‑Seen badge, banner, folder columns, detail panel, advanced dashboard's per‑user counts) sees the same numbers. No UI redesign, no change to existing acknowledge / old‑value / new‑value / line‑item / real‑time logic.
 
-- **Banner** (`ModuleNotifications.tsx`) — calls RPC `get_related_notifications` (returns every notification linked to the record, regardless of `target_departments`) and counts rows that have no entry in `app_notification_reads` for the current user.
-- **Badge** (`useUnseenNotifCount` in `src/hooks/useUnseenNotifCount.ts`) — queries `app_notifications` directly and additionally filters by `target_departments` matching the current user's department. When a notification has targets that don't include the viewer's department (e.g. BOQ status change targeted at Design only, viewed by an Other/Sales user), the badge drops it to 0 while the banner still shows it as "New".
+## Model change
 
-The badge on OA list rows (`useUnseenNotifCountsMap`) and on BOQ/PI list rows uses the same hook, so it has the same mismatch.
+`notification_recipients` is currently department‑only. We add a module dimension so OA, BOQ and PI can be addressed independently even though they share the "Costing" group.
 
-## Fix (presentation/data layer only — no business logic changes)
+New enum `notif_module` with values:
+`oa, boq, pi, design, purchase, manufacturing, requisition, project`
 
-Rewrite `src/hooks/useUnseenNotifCount.ts` so both the single-record hook and the bulk map hook source notifications from the **same** RPC the banner uses (`get_related_notifications`), then subtract acknowledged ids from `app_notification_reads`. This guarantees badge = banner unread count, by construction.
+`notification_recipients` gets a nullable `module notif_module` column.
+- One user may have multiple rows (one per module they own).
+- Legacy rows where `module IS NULL` keep behaving like today (department‑level match).
+- Project rows can be added now; no triggers will fire until the Project module ships.
 
-### Changes
+`app_notifications` already stores `module` (the source module: `order`, `boq`, `pi`, `purchase`, `requisition`, `design_comment`, `grn`, `annexure`, …). We map those raw modules to the recipient enum via a small SQL helper `notif_source_module(module text, event_type text) → notif_module` (e.g. `order → oa`, `boq → boq`, `pi → pi`, `purchase|grn → purchase`, `requisition|annexure → requisition`, `design_comment → design`, `boq + design_item_status_changed → design`).
 
-1. **`useUnseenNotifCount({ boqId, orderRootId, piId })`**
-   - Replace the direct `app_notifications` query + `target_departments` filtering with a call to `supabase.rpc("get_related_notifications", { p_order_root, p_boq, p_pi, p_po: null, p_req: null, p_annex: null, p_record_id: null, p_modules: null, p_limit: 500 })`.
-   - Apply the same content filter the banner uses (drop empty `*_line_items_changed` and empty `comment_added/comment_updated` rows) so counts match exactly.
-   - Subtract ids present in `app_notification_reads` for the current user.
-   - Keep the existing realtime subscription on `app_notifications` + `app_notification_reads` so Acknowledge updates both UIs immediately.
+## Where exclusion happens
 
-2. **`useUnseenNotifCountsMap(kind, ids)`** (used by OA/BOQ/PI list "Not Seen Notifications" column)
-   - For each id, call the same RPC (batched via `Promise.all`) and apply the same filter + reads subtraction.
-   - Keep the shared realtime channel.
-   - Cap concurrency (e.g. 8 at a time) to avoid request storms on long lists.
+`emit_notification` (DB function) is updated so `target_departments` is built by:
+1. Pulling all active `notification_recipients`.
+2. Excluding any recipient whose `module` equals `notif_source_module(_module, _event)` **OR** (when `module IS NULL`) whose `department` equals the actor's department — back‑compat for un‑migrated rows.
+3. If the resulting target list is empty, skip the insert entirely (no orphaned self‑only rows).
 
-3. **No other files change.** `ModuleNotifications`, `NotSeenNotifBadge`, dashboard, list pages, RPC, RLS, and acknowledge flow are untouched. Department targeting, OA/BOQ/PI/Purchase/etc. business logic, and existing calculations are not modified — the badge simply now mirrors the banner's data source.
+So a Costing user editing an OA produces a notification with OA‑module recipients removed but BOQ‑module and PI‑module Costing users still included.
 
-### Coverage
+## Per‑viewer query filter (shared by every count surface)
 
-Because every page (OA, BOQ, PI, Design, Purchase, Manufacturing, Requisition, and future Project) renders `NotSeenNotifBadge` via this single hook, fixing the hook fixes all pages at once. Future Project pages get the same behavior for free.
+New `current_user_modules()` SQL function returns the set of `notif_module` values configured for `auth.uid()` in `notification_recipients` (active rows only). Falls back to the user's department mapping if no module rows exist.
 
-### Out of scope
+`get_related_notifications` RPC is updated to additionally require:
+`notif_source_module(n.module, n.event_type) <> ALL(current_user_modules())`
+i.e. never return a notification whose source module is one the viewer owns. This is the single chokepoint — every UI consumer that uses this RPC gets correct filtering automatically.
 
-- No DB migrations, RPC changes, RLS changes.
-- No changes to acknowledge logic, banner UI, dashboard filters, or any module's domain logic.
-- No change to the sidebar bell (`useUnreadNotifications`).
+The sidebar bell (`useUnreadNotifications`) currently queries `app_notifications` directly. We replace that query with a new `count_unread_notifications()` RPC that applies the same source‑module filter and joins `app_notification_reads`, returning one integer. Same chokepoint, no client‑side filtering logic to drift.
+
+The Advanced Notification Dashboard already shows the full system‑wide stream by design — it stays unfiltered (admin / audit view). Its counts remain accurate because we don't create empty/self‑only rows.
+
+## Admin UI
+
+`notification_recipients` admin screen gets a "Module" dropdown next to Department. A single user can be added multiple times, one row per module they own. Existing rows show "All (department‑level)" until edited. No other admin changes.
+
+## Files touched
+
+- New migration: enum `notif_module`, add `module` column to `notification_recipients`, helper `notif_source_module`, `current_user_modules`, updated `emit_notification`, updated `get_related_notifications`, new `count_unread_notifications`.
+- `src/hooks/useUnreadNotifications.ts` — switch to `count_unread_notifications` RPC.
+- `src/hooks/useUnseenNotifCount.ts` — unchanged logic; relies on updated RPC.
+- `src/components/notifications/ModuleNotifications.tsx` — unchanged; relies on updated RPC.
+- Admin recipients page (the file that edits `notification_recipients` rows) — add Module dropdown.
+- No other UI, no design changes, no change to acknowledge / read‑tracking / diff / real‑time.
+
+## Out of scope (explicitly preserved)
+
+Acknowledge flow, NotificationDetailDialog, NotificationDashboard layout, old/new value rendering, line‑item diff, folder column design, badge design, sidebar bell design, all module domain logic (OA/BOQ/PI/Purchase/Requisition/Design create/edit/revise paths).
+
+## Acceptance check (will be verified after build)
+
+1. Costing user revises OA → no row appears for that user under OA detail's "Not Seen Notifications", banner, bell, folder column. BOQ‑module and PI‑module users still see it.
+2. Costing user edits a BOQ → same exclusion, but for BOQ only.
+3. Design user comments → Design users excluded; OA / BOQ / PI / Purchase / Manufacturing / Requisition users see it.
+4. Purchase / Manufacturing / Requisition edits exclude only their own module.
+5. Top bell, badge, banner, folder column, and detail panel show identical unseen counts for the same viewer.
+6. Acknowledge still decrements all surfaces in lockstep.
