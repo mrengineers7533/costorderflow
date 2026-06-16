@@ -441,6 +441,7 @@ export default function NotificationDashboard() {
       setReads([]);
     }
     setLoading(false);
+    setLastUpdated(new Date());
   }
 
   useEffect(() => {
@@ -539,6 +540,13 @@ export default function NotificationDashboard() {
       if (filterPi && r.related_pi_id !== filterPi) return false;
       if (unseenOnly && me && myReadIds.has(r.id)) return false;
       if (moduleFilter !== "all" && r.module !== moduleFilter) return false;
+      if (docTypeFilter !== "all") {
+        const mb = moduleBadge(r.module).toLowerCase();
+        if (mb !== docTypeFilter.toLowerCase()) return false;
+      }
+      if (notifTypeFilter !== "all" && notifTypeLabel(r) !== notifTypeFilter) {
+        return false;
+      }
       if (deptFilter !== "all" && !r.target_departments.includes(deptFilter)) return false;
       if (actorDeptFilter !== "all" && r.actor_department !== actorDeptFilter) return false;
       const ts = new Date(r.created_at).getTime();
