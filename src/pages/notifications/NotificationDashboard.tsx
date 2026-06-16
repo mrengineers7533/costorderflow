@@ -331,7 +331,15 @@ export default function NotificationDashboard() {
     const term = q.trim().toLowerCase();
     const fromTs = fromDate ? new Date(fromDate).getTime() : null;
     const toTs = toDate ? new Date(toDate).getTime() + 86_400_000 : null;
+    const filterBoq = searchParams.get("boq");
+    const filterOa = searchParams.get("oa");
+    const filterPi = searchParams.get("pi");
+    const unseenOnly = searchParams.get("unseen") === "1";
     return rows.filter((r) => {
+      if (filterBoq && r.related_boq_id !== filterBoq) return false;
+      if (filterOa && r.related_order_root_id !== filterOa) return false;
+      if (filterPi && r.related_pi_id !== filterPi) return false;
+      if (unseenOnly && me && myReadIds.has(r.id)) return false;
       if (moduleFilter !== "all" && r.module !== moduleFilter) return false;
       if (deptFilter !== "all" && !r.target_departments.includes(deptFilter)) return false;
       if (actorDeptFilter !== "all" && r.actor_department !== actorDeptFilter) return false;
