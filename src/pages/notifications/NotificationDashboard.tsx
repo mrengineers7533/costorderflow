@@ -632,49 +632,63 @@ export default function NotificationDashboard() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notification Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Advanced Notification Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Cross-department change feed. Acknowledge items to mark them as seen.
+            Complete overview of all notifications across key modules.
           </p>
         </div>
-        {isAdmin && rows.length > 0 && (
-          <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="h-4 w-4 mr-1" /> Delete All Notifications
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Are you sure you want to delete all notifications?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  This permanently removes every notification record. Other data
-                  (OA, BOQ, PI, PO, requisitions) is not affected.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={deletingAll}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    deleteAll();
-                  }}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {deletingAll ? "Deleting…" : "Delete All"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-muted-foreground hidden md:block">
+            Last updated:{" "}
+            {lastUpdated.toLocaleString(undefined, {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => load()}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+          </Button>
+          {isAdmin && rows.length > 0 && (
+            <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all notifications?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently removes every notification record. Other data
+                    (OA, BOQ, PI, PO, requisitions) is not affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={deletingAll}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      deleteAll();
+                    }}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deletingAll ? "Deleting…" : "Delete All"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
-      {/* Summary cards */}
+      {/* Deep-link filter banner */}
       {(() => {
         const fBoq = searchParams.get("boq");
         const fOa = searchParams.get("oa");
@@ -702,113 +716,515 @@ export default function NotificationDashboard() {
         );
       })()}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-        {[
-          { label: "Total", value: counts.total },
-          { label: "New", value: counts.newC, tone: "destructive" },
-          { label: "Pending Ack", value: counts.pendingNotif },
-          { label: "Acknowledged", value: counts.ack },
-          { label: "Depts Notified", value: counts.deptTotal },
-          { label: "Depts Pending", value: counts.deptPending, tone: "destructive" },
-          { label: "Depts Acknowledged", value: counts.deptSeen },
-        ].map((c) => (
-          <Card key={c.label}>
-            <CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">{c.label}</div>
-              <div
-                className={`text-xl font-bold ${
-                  c.tone === "destructive" ? "text-destructive" : ""
-                }`}
-              >
-                {c.value}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Module-wise counts */}
-      {Object.keys(counts.byModule).length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(counts.byModule).map(([m, n]) => (
-            <Badge key={m} variant="outline" className="text-xs">
-              {m}: <span className="font-semibold ml-1">{n}</span>
-            </Badge>
-          ))}
-        </div>
-      )}
-
-      {/* Department-wise summary (view-only) */}
+      {/* Top group cards */}
       {(() => {
-        const map = new Map<string, { display: string; total: number; seen: number }>();
-        rows.forEach((r) => {
-          r.target_departments.forEach((d) => {
-            const key = normalizeDept(d);
-            if (!key) return;
-            if (!ALLOWED_DEPT_KEYS.has(key)) return;
-            const cur = map.get(key) || { display: d, total: 0, seen: 0 };
-            cur.total += 1;
-            const isSeen = (readsByNotif[r.id] || []).some(
-              (x) => normalizeDept(x.department) === key,
-            );
-            if (isSeen) cur.seen += 1;
-            map.set(key, cur);
-          });
-        });
-        // Always render in the canonical ALLOWED_DEPTS order, even when count is 0.
-        const entries = ALLOWED_DEPTS.map((name) => {
-          const cur = map.get(normalizeDept(name));
-          return { display: name, total: cur?.total || 0, seen: cur?.seen || 0 };
-        });
+        // Compute totals per group from rows + reads.
+        type GS = { total: number; seen: number };
+        const groupStats: Record<string, GS> = {};
+        const costingSubStats: Record<"OA" | "BOQ" | "PI", GS> = {
+          OA: { total: 0, seen: 0 },
+          BOQ: { total: 0, seen: 0 },
+          PI: { total: 0, seen: 0 },
+        };
+        for (const g of GROUPS) groupStats[g.key] = { total: 0, seen: 0 };
+        for (const r of rows) {
+          const g = groupOf(r.module);
+          if (!g) continue;
+          const seen = myReadIds.has(r.id);
+          groupStats[g].total += 1;
+          if (seen) groupStats[g].seen += 1;
+          if (g === "Costing") {
+            const sub = costingSub(r.module);
+            if (sub) {
+              costingSubStats[sub].total += 1;
+              if (seen) costingSubStats[sub].seen += 1;
+            }
+          }
+        }
+
+        function applyGroupFilter(key: string, mode: "all" | "seen" | "notseen") {
+          // Map group → module set via docTypeFilter / moduleFilter combos.
+          if (key === "Costing") {
+            setDocTypeFilter("all");
+            setModuleFilter("all");
+            // Costing combines OA/BOQ/PI — leave broader filters and use tab.
+          } else if (key === "Design") {
+            setDocTypeFilter("Design");
+            setModuleFilter("all");
+          } else if (key === "Purchase") {
+            setDocTypeFilter("Purchase");
+            setModuleFilter("all");
+          } else if (key === "Manufacturing") {
+            setDocTypeFilter("Manufacturing");
+            setModuleFilter("all");
+          } else if (key === "Requisition") {
+            setDocTypeFilter("Requisition");
+            setModuleFilter("all");
+          } else if (key === "Project") {
+            setDocTypeFilter("Project");
+            setModuleFilter("all");
+          }
+          setTab(mode === "seen" ? "ack" : mode === "notseen" ? "new" : "all");
+        }
+
+        function applyCostingSub(sub: "OA" | "BOQ" | "PI", mode: "all" | "seen" | "notseen") {
+          setDocTypeFilter(sub);
+          setModuleFilter("all");
+          setTab(mode === "seen" ? "ack" : mode === "notseen" ? "new" : "all");
+        }
+
         return (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Department-wise Notifications</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {entries.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">No notifications yet.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Total Notifications</TableHead>
-                      <TableHead>Seen Notifications</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {entries.map((e) => (
-                      <TableRow key={e.display}>
-                        <TableCell className="font-medium">{e.display}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="link"
-                            className="h-auto p-0 font-semibold"
-                            onClick={() => setDeptDrill({ dept: e.display, mode: "all" })}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {GROUPS.map(({ key, label, icon: Icon }) => {
+                const s = groupStats[key];
+                const notSeen = Math.max(0, s.total - s.seen);
+                const isCosting = key === "Costing";
+                const active = isCosting && expandCosting;
+                return (
+                  <Card
+                    key={key}
+                    className={`relative overflow-hidden border ${
+                      active ? "border-primary/40 bg-primary/5" : "hover:border-primary/30"
+                    } transition-colors`}
+                  >
+                    <CardContent className="p-3 space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-md bg-muted p-1.5">
+                            <Icon className="h-4 w-4 text-foreground/70" />
+                          </div>
+                          <div className="text-sm font-semibold">{label}</div>
+                        </div>
+                        {isCosting ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandCosting((v) => !v)}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Toggle costing breakdown"
                           >
-                            {e.total}
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="link"
-                            className="h-auto p-0 font-semibold"
-                            onClick={() => setDeptDrill({ dept: e.display, mode: "seen" })}
+                            {expandCosting ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => applyGroupFilter(key, "all")}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={`Filter by ${label}`}
                           >
-                            {e.seen}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => applyGroupFilter(key, "all")}
+                        className="block text-left"
+                      >
+                        <div className="text-3xl font-bold leading-none">{s.total}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Total</div>
+                      </button>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t">
+                        <button
+                          type="button"
+                          onClick={() => applyGroupFilter(key, "seen")}
+                          className="text-left"
+                        >
+                          <div className="text-lg font-semibold text-emerald-600">
+                            {s.seen}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">Seen</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyGroupFilter(key, "notseen")}
+                          className="text-left"
+                        >
+                          <div className="text-lg font-semibold text-destructive">
+                            {notSeen}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">Not Seen</div>
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Costing breakdown: OA / BOQ / PI */}
+            {expandCosting && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:max-w-2xl md:ml-[16.6%]">
+                {COSTING_SUBS.map(({ key, label }) => {
+                  const s = costingSubStats[key];
+                  const notSeen = Math.max(0, s.total - s.seen);
+                  return (
+                    <Card key={key} className="border-dashed">
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-semibold">{label}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => applyCostingSub(key, "all")}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => applyCostingSub(key, "all")}
+                            className="rounded-md p-1 hover:bg-muted"
+                          >
+                            <div className="text-base font-bold">{s.total}</div>
+                            <div className="text-[10px] text-muted-foreground">Total</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyCostingSub(key, "seen")}
+                            className="rounded-md p-1 hover:bg-muted"
+                          >
+                            <div className="text-base font-bold text-emerald-600">{s.seen}</div>
+                            <div className="text-[10px] text-muted-foreground">Seen</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyCostingSub(key, "notseen")}
+                            className="rounded-md p-1 hover:bg-muted"
+                          >
+                            <div className="text-base font-bold text-destructive">{notSeen}</div>
+                            <div className="text-[10px] text-muted-foreground">Not Seen</div>
+                          </button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+              Click on any count to view details
+            </div>
+          </div>
         );
       })()}
 
+      {/* Filter bar */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Module / Group</label>
+              <select
+                value={moduleFilter}
+                onChange={(e) => setModuleFilter(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                {modules.map((m) => (
+                  <option key={m} value={m}>
+                    {m === "all" ? "All" : moduleBadge(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Document Type</label>
+              <select
+                value={docTypeFilter}
+                onChange={(e) => setDocTypeFilter(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="OA">OA</option>
+                <option value="BOQ">BOQ</option>
+                <option value="PI">PI</option>
+                <option value="Purchase">Purchase</option>
+                <option value="Manufacturing">Manufacturing</option>
+                <option value="Requisition">Requisition</option>
+                <option value="Design">Design</option>
+                <option value="Project">Project</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Seen / Not Seen</label>
+              <select
+                value={tab === "ack" ? "seen" : tab === "new" ? "notseen" : "all"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setTab(v === "seen" ? "ack" : v === "notseen" ? "new" : "all");
+                }}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="seen">Seen</option>
+                <option value="notseen">Not Seen</option>
+              </select>
+            </div>
+            <div className="space-y-1 lg:col-span-2">
+              <label className="text-xs text-muted-foreground">Date Range</label>
+              <div className="flex items-center gap-1">
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="h-9"
+                />
+                <span className="text-muted-foreground text-xs">—</span>
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Edited By</label>
+              <select
+                value={actorDeptFilter}
+                onChange={(e) => setActorDeptFilter(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                {actorDepts.map((d) => (
+                  <option key={d} value={d}>
+                    {d === "all" ? "All" : d}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Document No.</label>
+              <div className="relative">
+                <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search document no."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="pl-8 h-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Notification Type</label>
+              <select
+                value={notifTypeFilter}
+                onChange={(e) => setNotifTypeFilter(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="Data Change">Data Change</option>
+                <option value="Design Comment">Design Comment</option>
+                <option value="Design Update">Design Update</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2 md:col-span-2 lg:col-span-1 lg:justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setModuleFilter("all");
+                  setDocTypeFilter("all");
+                  setNotifTypeFilter("all");
+                  setActorDeptFilter("all");
+                  setDeptFilter("all");
+                  setFromDate("");
+                  setToDate("");
+                  setQ("");
+                  setTab("all");
+                  setChartDeptFilter(null);
+                  setChartStatusFilter(null);
+                  setSearchParams({});
+                }}
+              >
+                Clear
+              </Button>
+              <Button size="sm" className="gap-1">
+                <FilterIcon className="h-3.5 w-3.5" /> Apply Filters
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recent Notifications table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">
+              Recent Notifications{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({tab === "new" ? "Not Seen" : tab === "ack" ? "Seen" : "All"})
+              </span>{" "}
+              <Badge variant="secondary" className="ml-1">
+                {visible.length}
+              </Badge>
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="py-10 text-center text-muted-foreground flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground">
+              No notifications match the current filters.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Module</TableHead>
+                    <TableHead>Document No.</TableHead>
+                    <TableHead>Rev</TableHead>
+                    <TableHead>Line Item</TableHead>
+                    <TableHead>Field / Option Edited</TableHead>
+                    <TableHead>Old Value</TableHead>
+                    <TableHead>New Value</TableHead>
+                    <TableHead>Edited By</TableHead>
+                    <TableHead>Edited On</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visible.map((n) => {
+                    const seen = myReadIds.has(n.id);
+                    const change = rowChange(n);
+                    const type = notifTypeLabel(n);
+                    const mb = moduleBadge(n.module);
+                    return (
+                      <TableRow
+                        key={n.id}
+                        className="cursor-pointer hover:bg-muted/40"
+                        onClick={() => setOpenId(n.id)}
+                      >
+                        <TableCell>
+                          <Badge variant="outline" className="font-medium">
+                            {mb}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium whitespace-nowrap">
+                          {n.record_ref || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">{revOf(n)}</TableCell>
+                        <TableCell className="text-xs">{change.lineNo}</TableCell>
+                        <TableCell className="text-xs max-w-[180px] truncate">
+                          {change.field}
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[140px] truncate text-destructive/90">
+                          {change.oldVal}
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[140px] truncate text-emerald-700">
+                          {change.newVal}
+                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {n.actor_user_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(n.created_at).toLocaleString(undefined, {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              type === "Design Comment"
+                                ? "border-amber-300 bg-amber-50 text-amber-700"
+                                : type === "Design Update"
+                                  ? "border-violet-300 bg-violet-50 text-violet-700"
+                                  : "border-sky-300 bg-sky-50 text-sky-700"
+                            }
+                          >
+                            {type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {seen ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600">Seen</Badge>
+                          ) : (
+                            <Badge variant="destructive">Not Seen</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => setOpenId(n.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> View
+                            </Button>
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-destructive hover:text-destructive"
+                                    aria-label="Delete notification"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete this notification?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This removes the notification record only.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        deleteOne(n.id);
+                                      }}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Drill-through dialogs */}
       <DeptNotificationsDialog
         department={deptDrill?.dept || null}
         mode={deptDrill?.mode || "all"}
@@ -820,293 +1236,6 @@ export default function NotificationDashboard() {
         }}
       />
 
-      <NotificationCharts
-        rows={rows}
-        myReadIds={myReadIds}
-        activeDept={chartDeptFilter}
-        activeStatus={chartStatusFilter}
-        onDeptClick={(d) => setChartDeptFilter(d)}
-        onStatusClick={(s) => setChartStatusFilter(s)}
-        allowedDeptKeys={ALLOWED_DEPT_KEYS}
-      />
-
-      {(chartDeptFilter || chartStatusFilter) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Active chart filter:</span>
-          {chartDeptFilter && (
-            <Badge variant="secondary" className="gap-1">
-              Dept: {chartDeptFilter}
-              <button
-                onClick={() => setChartDeptFilter(null)}
-                className="ml-1 hover:text-destructive"
-                aria-label="Clear department filter"
-              >
-                ✕
-              </button>
-            </Badge>
-          )}
-          {chartStatusFilter && (
-            <Badge variant="secondary" className="gap-1 capitalize">
-              Status: {chartStatusFilter}
-              <button
-                onClick={() => setChartStatusFilter(null)}
-                className="ml-1 hover:text-destructive"
-                aria-label="Clear status filter"
-              >
-                ✕
-              </button>
-            </Badge>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7"
-            onClick={() => {
-              setChartDeptFilter(null);
-              setChartStatusFilter(null);
-            }}
-          >
-            Clear Filter
-          </Button>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-end gap-3">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="new">New</TabsTrigger>
-            <TabsTrigger value="pending">Pending</TabsTrigger>
-            <TabsTrigger value="ack">Acknowledged</TabsTrigger>
-            <TabsTrigger value="partial">Partially Seen</TabsTrigger>
-            <TabsTrigger value="full">Fully Seen</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="flex flex-wrap gap-1">
-          {modules.map((m) => (
-            <Button
-              key={m}
-              size="sm"
-              variant={moduleFilter === m ? "default" : "outline"}
-              onClick={() => setModuleFilter(m)}
-              className="h-7"
-            >
-              {m}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1 text-xs">
-          <span className="text-muted-foreground">Target dept:</span>
-          <select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            className="h-8 rounded-md border bg-background px-2"
-          >
-            {allDepts.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-1 text-xs">
-          <span className="text-muted-foreground">Changed by:</span>
-          <select
-            value={actorDeptFilter}
-            onChange={(e) => setActorDeptFilter(e.target.value)}
-            className="h-8 rounded-md border bg-background px-2"
-          >
-            {actorDepts.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-1 text-xs">
-          <span className="text-muted-foreground">From:</span>
-          <Input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="h-8 w-36"
-          />
-          <span className="text-muted-foreground">To:</span>
-          <Input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="h-8 w-36"
-          />
-        </div>
-
-        <div className="relative ml-auto">
-          <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-          <Input
-            placeholder="Search BOQ / OA / PO / client"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="pl-8 w-72"
-          />
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Notifications ({visible.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="py-10 text-center text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-            </div>
-          ) : visible.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground">No notifications.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Change</TableHead>
-                  <TableHead>Module</TableHead>
-                  <TableHead>Ref</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>By</TableHead>
-                  <TableHead>When</TableHead>
-                  <TableHead>Changes</TableHead>
-                  <TableHead>Dept Status</TableHead>
-                  <TableHead>My Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((n) => {
-                  const seen = myReadIds.has(n.id);
-                  const ds = deptStatus(n);
-                  const fields = changedFields(n);
-                  return (
-                    <TableRow
-                      key={n.id}
-                      className="cursor-pointer hover:bg-muted/40"
-                      onClick={() => setOpenId(n.id)}
-                    >
-                      <TableCell className="max-w-[280px]">
-                        <div className="font-medium truncate">{n.title}</div>
-                        {n.summary && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            {n.summary}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="uppercase">
-                          {n.module}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-medium">
-                        {n.record_ref || "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">{n.client_name || "—"}</TableCell>
-                      <TableCell className="text-xs">
-                        {n.actor_user_name || "—"}
-                        {n.actor_department && (
-                          <div className="text-muted-foreground">{n.actor_department}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(n.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <Badge variant="secondary">{fields.length} field(s)</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <Badge
-                          variant={
-                            ds.label === "Fully Seen"
-                              ? "default"
-                              : ds.label === "Pending"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                        >
-                          {ds.label}
-                        </Badge>
-                        <div className="text-muted-foreground mt-0.5">
-                          {ds.seen}/{ds.total} seen · {ds.pending} pending
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {seen ? (
-                          <Badge>Seen</Badge>
-                        ) : (
-                          <Badge variant="destructive">New</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell
-                        className="text-right"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {!seen ? (
-                          <Button size="sm" onClick={() => acknowledge(n)}>
-                            <Check className="h-4 w-4 mr-1" /> Acknowledge
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setOpenId(n.id)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        {isAdmin && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="ml-1 text-destructive hover:text-destructive"
-                                aria-label="Delete notification"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete this notification?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This removes the notification record only.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    deleteOne(n.id);
-                                  }}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Shared detail dialog (also reused by module-page banners) */}
       <NotificationDetailDialog
         notificationId={openId}
         onOpenChange={(o) => {
