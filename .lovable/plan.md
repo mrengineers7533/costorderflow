@@ -1,69 +1,89 @@
-## Issue 1 — Header checkbox auto-approves every row
+# Notification System Fix — Plan
 
-In `src/pages/design/DesignBoqView.tsx` the table-header `<Checkbox>` is wired to `toggleSelectAll()`, which calls `bulkSetItemApprovals` on every line item the moment it is clicked. The session replay confirms a single click cascades "isChecked: true" to every row. The user expects approvals to be strictly per-row.
+## Diagnosis (current behaviour, from DB + code)
 
-**Fix:** Remove the bulk auto-approve from the header.
+The notification "service" already exists and is shared: one writer (`public.emit_notification`), one reader RPC for pages (`get_related_notifications`), one count RPC (`count_unread_notifications`), one badge component (`NotSeenNotifBadge`) + one banner (`ModuleNotifications`), one hook (`useUnseenNotifCount`). The bugs are not because of duplicated logic; they are configuration + a few gaps:
 
-- Drop the `Checkbox` in the "Approve" `<TableHead>` and keep just the label `Approve`.
-- Remove `toggleSelectAll`, `allApproved`, `someApproved`, and `bulkBusy` (and the `bulkSetItemApprovals` import) — no longer referenced.
-- Keep the per-row `<Checkbox>` exactly as it is today (`toggleItemApproval` already updates only the clicked item via `setItemApproval`). Each row stays independently approvable.
-- Keep the existing footer text "X of Y items approved" (only `allApproved` is removed from there; replace with `approvedCount === items.length`).
-- The "approve every remaining item before finalize" call inside `handlePostSubmit` (line ~283) is unrelated to the UI bulk toggle — leave it intact so Post Submit still works.
+1. **Module column is empty in `notification_recipients`.** Every active row has `module = NULL` today. The exclusion in `emit_notification` is `module = src_module OR (module IS NULL AND department = actor_dept)`, so today it collapses to *department-only* exclusion. That breaks the Costing → OA/BOQ/PI rule: a Costing recipient is excluded for any OA/BOQ/PI edit, instead of only the sub-module that performed it.
+2. **`current_user_modules()` returns empty array** for everyone (same root cause), so the receiver-side filter in `count_unread_notifications` and `get_related_notifications` is short-circuited by `cardinality(mods) = 0`. Net effect: actor can sometimes see their own notification if they belong to a department that wasn't matched.
+3. **Manufacturing & Purchase pages have no badge/banner mounted.** `ManufacturingList`, `ManufacturingDetail`, `PurchaseList`, `PurchaseDetail`, `PurchaseLanding`, `PoFolder`, `PurchaseMaterial` do not import `NotSeenNotifBadge` or `ModuleNotifications`. Counts therefore appear missing on those pages.
+4. **Manufacturing is not a recognised source module** in `notif_source_module`. When a mfg user edits a requisition/PO row, the source is mapped to `requisition`/`purchase` and mfg recipients are not excluded.
+5. **Design item-wise edits are bundled.** When Design edits 3 fields on one line (Remarks, Approve, Qty), `_format_boq_item_changes` already lists per-field Old/Current — but it produces one notification per OA/BOQ update. User wants each changed field clearly shown; this is detail-level, not a new notification, so we only need to confirm the formatter emits one block per (line × field).
+6. **Approval bug** was fixed last turn (per-row only). No further code change here; just a regression test.
 
-No changes to the DB, to `setItemApproval`, or to any other page.
+## What to build
 
-## Issue 2 — Item-wise notification details
+### A. Backfill + use module-level recipient mapping (single shared service)
 
-Two notification sources need richer payloads. Self-exclusion already lives in `emit_notification` from the prior migration and stays unchanged.
+1. **Admin Recipients UI already supports `module`** (verified in `AdminNotificationRecipients.tsx`). Add a one-shot data migration that fills `module` for the existing rows from their `department`:
+   - `design` dept → module `design`
+   - `purchase` dept → module `purchase`
+   - `manufacturing` dept → module `manufacturing`
+   - `Costing` dept → split: keep the row as `department='Costing', module='oa'`, and clone two rows for `module='boq'` and `module='pi'` (so the same user is reachable for all 3 sub-modules but excluded only from the sub-module they acted on).
+   - Other departments (CRM/DME/HR/Project/Reception): leave `module = NULL` (department-wide; they receive everything, never act as a source).
+2. **Document the rule in the admin page header** (no UI redesign): "Pick the specific sub-module under Costing (OA/BOQ/PI) so self-exclusion works correctly."
 
-### 2a. Design approve / unapprove (`notif_on_design_item_status`)
+### B. Tighten `emit_notification` exclusion (single function, no page changes)
 
-New migration that rewrites this trigger function so each notification carries:
+Rewrite the exclusion so it is purely module-driven when `module` is set, with department only as fallback:
 
-- `oa_number` (joined from `orders` via `boqs.order_id` → `parent_order_id`)
-- `boq_number`, `boq_revision`
-- `line_item_no`, `model`, `description` (looked up inside `boqs.line_items` JSON by `boq_item_id`)
-- `field_changed` = `'Approve'`
-- `old_value` = previous status (`'blank'` when none / first time) — read from `OLD.status` on UPDATE, otherwise look up the prior row in `boq_item_design_status` for the same `(boq_id, boq_item_id)` ordered by `decided_at desc`
-- `new_value` = `NEW.status` mapped to display text (`Approved`, `Not Approved`, `Pending`)
-- `edited_by_name`, `edited_by_email`, `edited_at` (from `NEW.decided_by_name`, joined profile email, `NEW.decided_at`)
-- `source_module` = `'design'`
-
-Title format:
-`Design item updated`
-Summary lines packed into the existing `summary` text so the current Notification UI/dialog renders them without changes:
 ```
-OA No.: <oa_number>
-Line Item: <line_item_no>
-Model: <model>
-Description: <description>
-Field / Option Changed: Approve
-Old Value: <old>
-Current Value: <new>
+exclude row WHERE
+  user_id = actor                           -- never notify the actor
+  OR (module IS NOT NULL AND module = src_module)
+  OR (module IS NULL AND src_module IS NOT NULL
+       AND department = actor_dept)         -- legacy rows w/o module
 ```
-Full structured copy of the same fields also goes into the `after` JSON for the detail dialog. `source_module := 'design'` is passed so the existing self-exclusion in `emit_notification` already skips Design recipients.
 
-### 2b. BOQ line-item edits (`notif_on_boqs`, `line_items_changed` branch)
+Add `manufacturing` to `notif_source_module` for the events that originate from a mfg page (PO row edits made from `ManufacturingDetail`, requisition edits made from mfg). Because we cannot tell from the trigger which UI fired the change, route by **actor's module**: if the actor has `module='manufacturing'` in `notification_recipients`, treat `src_module = 'manufacturing'` for `purchase`/`requisition`/`grn` events. Implement this by changing `notif_source_module` into a helper that also accepts the actor's modules, or by computing `src_module` inside `emit_notification` from `auth.uid()`'s recipient row when the event is a generic purchase/requisition one.
 
-Extend `_line_items_diff` consumers so each `line_items_changed` event additionally records, per changed field, one human-readable change block. Implementation:
+### C. Surface Manufacturing + Purchase pages with the existing components
 
-- Add a small SQL helper `public._format_boq_item_changes(_diff jsonb, _oa text) returns text` that walks the diff and, for each `modified` entry, emits the same Old/Current block per field — restricted to the tracked fields: `model_number`/`model`, `description`, `quantity`, `unit`, `motor`, `motor_quantity`, `remarks`, `approval_status` (label "Approve"). `added`/`removed` items render as `Old Value: blank` / `Current Value: blank` respectively.
-- In `notif_on_boqs` (the existing `line_items_changed` PERFORM call), pass that formatted text as the `summary` and stash the structured per-field diff in `after` so the detail dialog can also display it.
-- Same treatment in `notif_on_orders` `line_items_changed` (OA edits) so notifications for OA line edits show identical detail.
-- `source_module` already flows through the existing module routing (`order`/`boq`) — self-exclusion handled by the prior migration.
+No new component, no new hook. Mount the shared ones:
 
-### What stays exactly the same
+- **`ManufacturingList.tsx`** — add a "Not Seen" column per row using `<NotSeenNotifBadge variant="cell" orderRootId={…}/>` (same pattern as `OrdersList`).
+- **`ManufacturingDetail.tsx`** — add the top-right badge `<NotSeenNotifBadge orderRootId={…}/>` and `<ModuleNotifications links={{ orderRootId, boqId }}/>` panel under the header.
+- **`PurchaseList.tsx`, `PoFolder.tsx`, `PurchaseLanding.tsx`** — add the `variant="cell"` badge in the row.
+- **`PurchaseDetail.tsx`, `PurchaseMaterial.tsx`** — add header badge + banner.
 
-- Notification UI components (`ModuleNotifications`, `NotificationDetailDialog`, `NotSeenNotifBadge`, dashboard, top bell, banner).
-- `useUnseenNotifCount`, `useUnreadNotifications`, `get_related_notifications`, `count_unread_notifications`.
-- Acknowledge flow, real-time refresh, Not-Seen columns on folder/list pages.
-- `notification_recipients` module routing introduced previously.
+These reuse the existing `useUnseenNotifCount` hook, so counts stay consistent with bell + dashboard automatically.
 
-### Files touched
+### D. Per-field Design change detail (formatter only)
 
-- `src/pages/design/DesignBoqView.tsx` — remove header bulk checkbox + related state/handlers.
-- New `supabase/migrations/<ts>_item_notif_details.sql`:
-  - replace `public.notif_on_design_item_status()`
-  - add `public._format_boq_item_changes(jsonb, text)`
-  - replace `public.notif_on_boqs()` `line_items_changed` branch
-  - replace `public.notif_on_orders()` `line_items_changed` branch
+Update `public._format_boq_item_changes` so a modified line produces one detail block **per changed field** in the order requested: `Approve, Model, Description, Quantity, Unit, Motor, Motor Quantity, Remarks`, followed by any other field. Output stays inside the existing `summary` and structured per-field array inside `new_value->'detail'` (already consumed by `NotificationDetailDialog`). No client change needed.
+
+### E. Receiver-side filter
+
+Once recipients have `module` populated, `current_user_modules()` returns the right set automatically and `count_unread_notifications` / `get_related_notifications` start excluding self-source notifications for the user. This unifies bell, dashboard, page badge, and folder column counts using the **same query path** they already share.
+
+### F. Regression tests
+
+Add `src/test/notifications.test.ts` with pure-logic tests for:
+- OA create → targets include design/boq/purchase/manufacturing, excludes oa.
+- Design item status change → excludes design, includes oa/purchase/manufacturing.
+- OA revision/edit → excludes oa, includes others.
+- Purchase edit → excludes purchase.
+- Manufacturing edit → excludes manufacturing.
+- Single-row Design approval updates only that row id (already-fixed logic).
+
+The tests mock `emit_notification`'s exclusion rule in TS to lock the contract; full SQL behaviour is verified manually post-migration.
+
+## Out of scope (do not touch)
+
+- Notification dashboard layout, Acknowledge button design, sort/filter, real-time subscriptions.
+- OA/BOQ/PI/Cost-Sheet calculation/formulas.
+- Existing badge/banner UI design — only **mount** them on Manufacturing/Purchase pages.
+
+## Technical change list
+
+- **Migration** (one file):
+  - Backfill `notification_recipients.module` from department; split Costing into oa/boq/pi rows.
+  - Replace `emit_notification` body with the module-first exclusion above.
+  - Extend `notif_source_module` (or compute inside `emit_notification`) to recognise `manufacturing` via actor's recipient module.
+  - Rewrite `_format_boq_item_changes` to emit one block per changed field per line, in the required field order.
+- **Frontend (mount only)**:
+  - `src/pages/manufacturing/ManufacturingList.tsx`, `ManufacturingDetail.tsx`
+  - `src/pages/purchase/PurchaseList.tsx`, `PurchaseDetail.tsx`, `PurchaseLanding.tsx`, `PoFolder.tsx`, `PurchaseMaterial.tsx`
+- **Tests**: `src/test/notifications.test.ts`.
+
+No new hooks, no per-page count logic, no UI redesign.
