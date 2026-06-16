@@ -376,7 +376,7 @@ export default function NotificationDashboard() {
       }
       return true;
     });
-  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif, chartDeptFilter, chartStatusFilter]);
+  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif, chartDeptFilter, chartStatusFilter, searchParams, me]);
 
   async function acknowledge(n: NotifRow) {
     if (!me) return;
