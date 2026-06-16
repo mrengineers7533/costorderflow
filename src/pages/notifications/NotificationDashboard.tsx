@@ -14,6 +14,18 @@ import { NotificationCharts, deptOf } from "@/components/notifications/Notificat
 import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
 import { normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 
 // Only these departments/categories are surfaced in the dashboard's
 // department section, filter dropdown, and pie chart.
@@ -29,18 +41,6 @@ const ALLOWED_DEPTS = [
   "Project",
 ];
 const ALLOWED_DEPT_KEYS = new Set(ALLOWED_DEPTS.map((d) => normalizeDept(d)));
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Trash2 } from "lucide-react";
 
 interface NotifRow {
   id: string;
