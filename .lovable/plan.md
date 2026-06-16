@@ -1,47 +1,50 @@
-## Problem
+# Improve Notification Detail – Change Details section
 
-For OA `2026-27/GMS/0001/R1`:
-- List column and top-of-page badge show **Not Seen Notifications: 0**
-- In-page Notifications panel shows **3 / 3 new**
+Rework the **Change Details** block in `src/components/notifications/NotificationDetailDialog.tsx` so reviewers can immediately see *which line item* and *which field* changed, in two clearly separated tables. Existing design, header card, status chips, acknowledge flow, and all data sources stay exactly as today.
 
-Root cause: two different code paths compute "unseen" with different rules.
+## What changes
 
-- Badge + list column → `src/hooks/useUnseenNotifCount.ts` (`useUnseenNotifCount` / `useUnseenNotifCountsMap`): reads `app_notifications` directly, **filters by current user's department** via `matchTargetDept(myDept, target_departments)` (broadcast = empty list), then subtracts rows in `app_notification_reads` for the current user.
-- In-page panel → `src/components/notifications/ModuleNotifications.tsx`: calls RPC `get_related_notifications`, applies **no department filter**, then subtracts `app_notification_reads`. Every linked notification is counted regardless of whether it targets the viewer's department.
+Only the `ChangedLineItemsHistory` component (and its render inside `NotificationDetailBody`) is updated. No backend, no other screens, no notification creation logic.
 
-So a user in a department that isn't targeted (e.g. "Other") sees 0 in the badge but 3 in the panel.
+### 1. Line Item Changes (table)
 
-## Fix (presentation only, no schema / RLS changes)
+Render when at least one line-item edit exists across the merged history. Columns:
 
-Make the in-page panel use the same department visibility rule as the badge, so a single notion of "visible to me" drives both counts.
+| Line Item | Item Name | Field / Option Edited | Old Value | Current Value | Edited By | Edited On |
+|---|---|---|---|---|---|---|
 
-### File: `src/components/notifications/ModuleNotifications.tsx`
+- One row **per changed field** (multiple rows can share the same Line Item No., as in the user's example).
+- `Line Item` = `Item {line_no}` (falls back to positional index, same logic as today).
+- `Item Name` = `description` from `after` then `before`, falling back to `size_model` (reuses existing `pickStr`-style lookup already in the file).
+- `Field / Option Edited` = `labelOf(field)` (uses existing `FIELD_LABELS` map; new keys like `rate`, `discount`, `tax`, `delivery_date`, `comment` rendered via title-case fallback).
+- `Old Value` shown with strikethrough red, `Current Value` shown in emerald — matches current visual language.
+- `Edited By` = `{actor_user_name} ({actor_department})`; `Edited On` = localized `created_at`.
+- `added` / `removed` line items render as a single row with status pill in Field column (Added / Removed) and `—` for the missing side, preserving today's behavior.
 
-1. Import `matchTargetDept` from `@/lib/notifications/dept`.
-2. After the RPC returns and after the existing `event_type` content filter, additionally filter:
-   ```ts
-   const visible = filtered.filter((n) => {
-     const targets = (n.target_departments || []) as string[];
-     if (!targets.length) return true; // broadcast
-     return !!matchTargetDept(myDept, targets);
-   });
-   ```
-   Use `visible` for `setRows`, for the subsequent `app_notification_reads` lookup, and for rendering.
-3. No other behavior changes: same RPC, same acknowledge flow, same dialog, same realtime-less load (panel already reloads on mount/links change).
+### 2. Header Fields Changed (table)
 
-### Type touch-up
+Render whenever `changedTopFields(notif)` returns any keys — **always**, even if line item changes also exist (today it only renders as a fallback). Columns:
 
-`NotifFull` (in `NotificationDetailDialog.tsx`) is already used by the panel; if `target_departments` is not on it, widen the local read to `(n as unknown as { target_departments?: string[] | null }).target_departments` to avoid a type change. Prefer a small local interface in `ModuleNotifications.tsx` rather than editing the shared type.
+| Field Edited | Old Value | Current Value |
+|---|---|---|
 
-### Out of scope
+Same value formatting as today (`truncate`, red strike / emerald). Uses the existing `HIDDEN_FIELDS` filter and `_id` suppression so noise fields stay hidden.
 
-- No changes to `useUnseenNotifCount.ts`, list pages, dashboard, RPC, RLS, tables, migrations, or `NotificationDetailDialog`.
-- "Broadcast = visible to all" rule is preserved (matches badge behavior).
-- Acknowledge / Details / realtime behavior unchanged.
+### 3. Section header & record reference
 
-## Verification
+Keep the existing `History` icon + "Change Details" title and the `OA / BOQ / PI` reference line so the user still sees which record was changed. Add sub-headings `Line Item Changes` and `Header Fields Changed` above each table.
 
-After the change, open `/orders/<id>` for `2026-27/GMS/0001/R1` as the same user:
-- If the 3 notifications target departments the viewer isn't in, the panel collapses to 0 visible rows (panel hides itself — matches badge `0`).
-- If any do target the viewer, both badge and panel show the same unread count.
-- Repeat sanity check on a BOQ and PI detail page using the same logic.
+### 4. Empty state
+
+If neither table has rows (rare — e.g. only `_id` churn), render the existing fallback message area. The dialog stays view-only — no buttons, no inline edits.
+
+## Out of scope
+
+- No DB schema, no migrations, no RLS changes.
+- No changes to how `app_notifications.line_item_changes`, `old_value`, or `new_value` are populated.
+- No changes to `HeaderCard`, `StatusChipBar`, acknowledge UI, dashboard, list pages, or any other component.
+- No changes to existing features anywhere else.
+
+## Files touched
+
+- `src/components/notifications/NotificationDetailDialog.tsx` (presentation only)

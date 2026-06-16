@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Bell, Check, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog, type NotifFull } from "./NotificationDetailDialog";
-import { matchTargetDept } from "@/lib/notifications/dept";
 
 /** Set of related-record ids for the page the banner is mounted on. */
 export interface NotifLinks {
@@ -139,23 +138,14 @@ export function ModuleNotifications({
       }
       return true;
     });
-    // Match badge/list visibility: only show notifications targeted at this
-    // user's department (empty target list = broadcast = visible to all).
-    const visible = filtered.filter((n) => {
-      const targets =
-        ((n as unknown as { target_departments?: string[] | null }).target_departments ||
-          []) as string[];
-      if (!targets.length) return true;
-      return !!matchTargetDept(myDept, targets);
-    });
-    setRows(visible);
+    setRows(filtered);
 
-    if (uid && visible.length) {
+    if (uid && filtered.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
         .select("notification_id")
         .eq("user_id", uid)
-        .in("notification_id", visible.map((n) => n.id));
+        .in("notification_id", filtered.map((n) => n.id));
       setSeenIds(
         new Set(
           ((r || []) as { notification_id: string }[]).map((x) => x.notification_id),
