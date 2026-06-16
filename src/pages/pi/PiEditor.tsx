@@ -35,6 +35,7 @@ import {
 } from "@/lib/orders/defaults";
 import { CurrencyToolbar } from "@/components/common/CurrencyToolbar";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import {
   convertItems,
   convertCharges,
@@ -321,6 +322,11 @@ export default function PiEditor() {
   return (
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
+        {id && (
+          <div className="flex">
+            <NotSeenNotifBadge piId={id} />
+          </div>
+        )}
         {id && (
           <ModuleNotifications
             links={{

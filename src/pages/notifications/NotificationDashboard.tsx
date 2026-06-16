@@ -44,6 +44,9 @@ interface NotifRow {
   target_departments: string[];
   created_at: string;
   line_item_changes?: unknown[] | null;
+  related_boq_id?: string | null;
+  related_order_root_id?: string | null;
+  related_pi_id?: string | null;
 }
 
 /** Drop notifications that carry no actionable change. */
@@ -328,7 +331,15 @@ export default function NotificationDashboard() {
     const term = q.trim().toLowerCase();
     const fromTs = fromDate ? new Date(fromDate).getTime() : null;
     const toTs = toDate ? new Date(toDate).getTime() + 86_400_000 : null;
+    const filterBoq = searchParams.get("boq");
+    const filterOa = searchParams.get("oa");
+    const filterPi = searchParams.get("pi");
+    const unseenOnly = searchParams.get("unseen") === "1";
     return rows.filter((r) => {
+      if (filterBoq && r.related_boq_id !== filterBoq) return false;
+      if (filterOa && r.related_order_root_id !== filterOa) return false;
+      if (filterPi && r.related_pi_id !== filterPi) return false;
+      if (unseenOnly && me && myReadIds.has(r.id)) return false;
       if (moduleFilter !== "all" && r.module !== moduleFilter) return false;
       if (deptFilter !== "all" && !r.target_departments.includes(deptFilter)) return false;
       if (actorDeptFilter !== "all" && r.actor_department !== actorDeptFilter) return false;
@@ -365,7 +376,7 @@ export default function NotificationDashboard() {
       }
       return true;
     });
-  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif, chartDeptFilter, chartStatusFilter]);
+  }, [rows, moduleFilter, deptFilter, actorDeptFilter, fromDate, toDate, tab, myReadIds, q, readsByNotif, chartDeptFilter, chartStatusFilter, searchParams, me]);
 
   async function acknowledge(n: NotifRow) {
     if (!me) return;
@@ -458,6 +469,33 @@ export default function NotificationDashboard() {
       </div>
 
       {/* Summary cards */}
+      {(() => {
+        const fBoq = searchParams.get("boq");
+        const fOa = searchParams.get("oa");
+        const fPi = searchParams.get("pi");
+        const fUnseen = searchParams.get("unseen") === "1";
+        if (!fBoq && !fOa && !fPi && !fUnseen) return null;
+        const parts: string[] = [];
+        if (fBoq) parts.push("BOQ");
+        if (fOa) parts.push("OA");
+        if (fPi) parts.push("PI");
+        if (fUnseen) parts.push("Unseen only");
+        return (
+          <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+            <span className="font-medium">Filtered by:</span>
+            <span className="text-muted-foreground">{parts.join(" · ")}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7"
+              onClick={() => setSearchParams({})}
+            >
+              Clear
+            </Button>
+          </div>
+        );
+      })()}
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
         {[
           { label: "Total", value: counts.total },

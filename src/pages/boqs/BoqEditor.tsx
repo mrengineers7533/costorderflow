@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
@@ -429,6 +430,11 @@ export default function BoqEditor() {
     <div className="min-h-screen p-6 lg:p-8 print:p-0">
       <div className="max-w-7xl mx-auto space-y-5">
         {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
+        {!isNew && boqId && (
+          <div className="flex print:hidden">
+            <NotSeenNotifBadge boqId={boqId} />
+          </div>
+        )}
         {!isNew && boqId && (
           <ModuleNotifications
             links={{ boqId, orderRootId: orderRootId ?? undefined }}

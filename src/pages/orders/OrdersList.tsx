@@ -17,6 +17,7 @@ import {
 import type { OrderRecord } from "@/lib/orders/types";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { buildOrderXlsx } from "@/lib/orders/excel";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -219,6 +220,7 @@ export default function OrdersList() {
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">BOQ</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">PI</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Not Seen Notifications</TableHead>
                     <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -257,6 +259,9 @@ export default function OrdersList() {
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <PiBadge count={piCounts[o.id] || 0} />
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <NotSeenNotifBadge variant="cell" orderRootId={o.parent_order_id ?? o.id} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">

@@ -27,6 +27,7 @@ import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 type OaOption = {
   id: string;
@@ -328,6 +329,7 @@ export default function BoqList() {
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Reference OA</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Not Seen Notifications</TableHead>
                       <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -370,6 +372,9 @@ export default function BoqList() {
                             {b.status}
                           </span>
                         </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <NotSeenNotifBadge variant="cell" boqId={b.id} />
+                        </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex items-center gap-1">
                             <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => nav(`/boqs/${b.id}`)}>
@@ -398,7 +403,7 @@ export default function BoqList() {
                       </TableRow>
                        {openFamily[b.id] && (
                          <TableRow className="bg-muted/20 hover:bg-muted/20">
-                           <TableCell colSpan={8} className="p-0">
+                           <TableCell colSpan={9} className="p-0">
                              <div className="px-4 py-3">
                                <div className="flex items-center gap-2 mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
                                  <History className="h-3.5 w-3.5" />
