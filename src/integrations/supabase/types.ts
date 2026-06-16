@@ -2586,6 +2586,10 @@ export type Database = {
       }
     }
     Functions: {
+      _format_boq_item_changes: {
+        Args: { _diff: Json; _oa: string }
+        Returns: string
+      }
       _line_items_diff: { Args: { _new: Json; _old: Json }; Returns: Json }
       admin_reset_generated_data: { Args: never; Returns: Json }
       apply_design_comment_to_oa: {
