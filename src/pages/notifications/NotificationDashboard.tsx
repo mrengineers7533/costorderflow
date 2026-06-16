@@ -11,6 +11,7 @@ import { Check, Search, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
 import { NotificationCharts, deptOf } from "@/components/notifications/NotificationCharts";
+import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
 import { normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
 import {
@@ -166,6 +167,7 @@ export default function NotificationDashboard() {
   const { isAdmin } = useUserRole(me?.id);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [deptDrill, setDeptDrill] = useState<{ dept: string; mode: "all" | "seen" } | null>(null);
 
   async function deleteOne(id: string) {
     const prev = rows;
@@ -471,6 +473,85 @@ export default function NotificationDashboard() {
           ))}
         </div>
       )}
+
+      {/* Department-wise summary (view-only) */}
+      {(() => {
+        const map = new Map<string, { display: string; total: number; seen: number }>();
+        rows.forEach((r) => {
+          r.target_departments.forEach((d) => {
+            const key = normalizeDept(d);
+            if (!key) return;
+            const cur = map.get(key) || { display: d, total: 0, seen: 0 };
+            cur.total += 1;
+            const isSeen = (readsByNotif[r.id] || []).some(
+              (x) => normalizeDept(x.department) === key,
+            );
+            if (isSeen) cur.seen += 1;
+            map.set(key, cur);
+          });
+        });
+        const entries = Array.from(map.values()).sort((a, b) =>
+          a.display.localeCompare(b.display),
+        );
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Department-wise Notifications</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {entries.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">No notifications yet.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Total Notifications</TableHead>
+                      <TableHead>Seen Notifications</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entries.map((e) => (
+                      <TableRow key={e.display}>
+                        <TableCell className="font-medium">{e.display}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 font-semibold"
+                            onClick={() => setDeptDrill({ dept: e.display, mode: "all" })}
+                          >
+                            {e.total}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 font-semibold"
+                            onClick={() => setDeptDrill({ dept: e.display, mode: "seen" })}
+                          >
+                            {e.seen}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      <DeptNotificationsDialog
+        department={deptDrill?.dept || null}
+        mode={deptDrill?.mode || "all"}
+        rows={rows}
+        readsByNotif={readsByNotif}
+        open={!!deptDrill}
+        onOpenChange={(o) => {
+          if (!o) setDeptDrill(null);
+        }}
+      />
 
       <NotificationCharts
         rows={rows}
