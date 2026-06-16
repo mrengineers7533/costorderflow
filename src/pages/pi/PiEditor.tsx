@@ -323,6 +323,11 @@ export default function PiEditor() {
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
         {id && (
+          <div className="flex">
+            <NotSeenNotifBadge piId={id} orderRootId={piOrderRootId ?? undefined} />
+          </div>
+        )}
+        {id && (
           <ModuleNotifications
             links={{
               piId: id,
