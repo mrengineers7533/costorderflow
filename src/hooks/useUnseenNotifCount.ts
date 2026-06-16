@@ -4,39 +4,76 @@ import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
 
 export type UnseenKind = "boq" | "oa" | "pi";
 
-interface NotifRow {
+/**
+ * Shape of rows returned by the get_related_notifications RPC — kept loose so
+ * we can apply the same content filter the in-page banner uses.
+ */
+interface RelatedNotif {
   id: string;
-  target_departments: string[] | null;
-  related_boq_id: string | null;
-  related_order_root_id: string | null;
-  related_pi_id: string | null;
+  event_type?: string | null;
+  line_item_changes?: unknown;
+  old_value?: Record<string, unknown> | null;
+  new_value?: Record<string, unknown> | null;
 }
 
-async function resolveMe(): Promise<{ id: string; department: string } | null> {
+/** Same content filter as ModuleNotifications banner, so badge == banner. */
+function isMeaningful(n: RelatedNotif): boolean {
+  if (n.event_type && n.event_type.endsWith("line_items_changed")) {
+    return Array.isArray(n.line_item_changes) && n.line_item_changes.length > 0;
+  }
+  if (n.event_type === "comment_added" || n.event_type === "comment_updated") {
+    const nv = (n.new_value || {}) as Record<string, unknown>;
+    const ov = (n.old_value || {}) as Record<string, unknown>;
+    const next = String(nv.new_comment ?? "").trim();
+    const prev = String(ov.old_comment ?? "").trim();
+    return next.length > 0 && next !== prev;
+  }
+  return true;
+}
+
+async function fetchRelated(opts: {
+  boqId?: string | null;
+  orderRootId?: string | null;
+  piId?: string | null;
+}): Promise<RelatedNotif[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("get_related_notifications", {
+    p_order_root: opts.orderRootId ?? null,
+    p_boq: opts.boqId ?? null,
+    p_pi: opts.piId ?? null,
+    p_po: null,
+    p_req: null,
+    p_annex: null,
+    p_record_id: null,
+    p_modules: null,
+    p_limit: 500,
+  });
+  if (error) return [];
+  return ((data || []) as RelatedNotif[]).filter(isMeaningful);
+}
+
+async function currentUserId(): Promise<string | null> {
   const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) return null;
-  const { data } = await supabase
-    .from("notification_recipients")
-    .select("department")
-    .eq("user_id", uid)
-    .limit(1)
-    .maybeSingle();
-  const dept = (data as { department?: string } | null)?.department || "Other";
-  return { id: uid, department: dept };
+  return auth.user?.id ?? null;
 }
 
-function notifTargetsMe(n: NotifRow, myDept: string): boolean {
-  const list = (n.target_departments || []) as string[];
-  // If no targets specified, treat as broadcast (visible to all depts).
-  if (!list.length) return true;
-  return !!matchTargetDept(myDept, list);
+async function readIdsFor(uid: string, notifIds: string[]): Promise<Set<string>> {
+  if (!notifIds.length) return new Set();
+  const { data } = await supabase
+    .from("app_notification_reads" as never)
+    .select("notification_id")
+    .eq("user_id", uid)
+    .in("notification_id", notifIds);
+  return new Set(
+    ((data || []) as { notification_id: string }[]).map((x) => x.notification_id),
+  );
 }
 
 /**
  * Returns the number of notifications linked to the given BOQ/OA root/PI that
- * are targeted at the current user's department and have NOT been
- * acknowledged by the current user. Live-updates via realtime.
+ * are NOT acknowledged by the current user. Uses the same RPC as the in-page
+ * Notifications banner so the badge always matches the banner. Live-updates
+ * via realtime.
  */
 export function useUnseenNotifCount(opts: {
   boqId?: string | null;
@@ -55,41 +92,20 @@ export function useUnseenNotifCount(opts: {
       setLoading(false);
       return;
     }
-    const me = await resolveMe();
-    if (!me) {
+    const uid = await currentUserId();
+    if (!uid) {
       setCount(0);
       setLoading(false);
       return;
     }
-    const filters: string[] = [];
-    if (boqId) filters.push(`related_boq_id.eq.${boqId}`);
-    if (orderRootId) filters.push(`related_order_root_id.eq.${orderRootId}`);
-    if (piId) filters.push(`related_pi_id.eq.${piId}`);
-    const { data, error } = await supabase
-      .from("app_notifications" as never)
-      .select("id,target_departments,related_boq_id,related_order_root_id,related_pi_id")
-      .or(filters.join(","))
-      .limit(500);
-    if (error) {
+    const notifs = await fetchRelated({ boqId, orderRootId, piId });
+    if (!notifs.length) {
       setCount(0);
       setLoading(false);
       return;
     }
-    const notifs = ((data || []) as unknown) as NotifRow[];
-    const targeted = notifs.filter((n) => notifTargetsMe(n, me.department));
-    if (!targeted.length) {
-      setCount(0);
-      setLoading(false);
-      return;
-    }
-    const ids = targeted.map((n) => n.id);
-    const { data: r } = await supabase
-      .from("app_notification_reads" as never)
-      .select("notification_id")
-      .eq("user_id", me.id)
-      .in("notification_id", ids);
-    const seen = new Set(((r || []) as { notification_id: string }[]).map((x) => x.notification_id));
-    setCount(targeted.filter((n) => !seen.has(n.id)).length);
+    const seen = await readIdsFor(uid, notifs.map((n) => n.id));
+    setCount(notifs.filter((n) => !seen.has(n.id)).length);
     setLoading(false);
   }, [boqId, orderRootId, piId, hasAny]);
 
@@ -123,7 +139,8 @@ export function useUnseenNotifCount(opts: {
 
 /**
  * Bulk version: returns a Map<recordId, unseenCount> for a list of record ids
- * of a single kind. Uses one query per refresh and one shared realtime channel.
+ * of a single kind. Calls the same RPC per id (capped concurrency) so counts
+ * match the in-page banner exactly.
  */
 export function useUnseenNotifCountsMap(
   kind: UnseenKind,
@@ -140,42 +157,40 @@ export function useUnseenNotifCountsMap(
       setLoading(false);
       return;
     }
-    const me = await resolveMe();
-    if (!me) {
+    const uid = await currentUserId();
+    if (!uid) {
       setCounts({});
       setLoading(false);
       return;
     }
-    const col =
-      kind === "boq"
-        ? "related_boq_id"
-        : kind === "oa"
-          ? "related_order_root_id"
-          : "related_pi_id";
-    const { data } = await supabase
-      .from("app_notifications" as never)
-      .select("id,target_departments,related_boq_id,related_order_root_id,related_pi_id")
-      .in(col, ids)
-      .limit(2000);
-    const notifs = ((data || []) as unknown) as NotifRow[];
-    const targeted = notifs.filter((n) => notifTargetsMe(n, me.department));
-    if (!targeted.length) {
-      setCounts({});
-      setLoading(false);
-      return;
+    // Fetch per-id with capped concurrency to avoid request storms.
+    const CONCURRENCY = 8;
+    const perId: Record<string, RelatedNotif[]> = {};
+    let cursor = 0;
+    async function worker() {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        const opts =
+          kind === "boq"
+            ? { boqId: id }
+            : kind === "oa"
+              ? { orderRootId: id }
+              : { piId: id };
+        perId[id] = await fetchRelated(opts);
+      }
     }
-    const { data: r } = await supabase
-      .from("app_notification_reads" as never)
-      .select("notification_id")
-      .eq("user_id", me.id)
-      .in("notification_id", targeted.map((n) => n.id));
-    const seen = new Set(((r || []) as { notification_id: string }[]).map((x) => x.notification_id));
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, () => worker()),
+    );
+    const allNotifIds = Array.from(
+      new Set(Object.values(perId).flat().map((n) => n.id)),
+    );
+    const seen = await readIdsFor(uid, allNotifIds);
     const map: Record<string, number> = {};
-    for (const n of targeted) {
-      if (seen.has(n.id)) continue;
-      const k = (n as unknown as Record<string, string | null>)[col];
-      if (!k) continue;
-      map[k] = (map[k] || 0) + 1;
+    for (const id of ids) {
+      const unread = (perId[id] || []).filter((n) => !seen.has(n.id)).length;
+      if (unread > 0) map[id] = unread;
     }
     setCounts(map);
     setLoading(false);
@@ -211,3 +226,5 @@ export function useUnseenNotifCountsMap(
 
 // Helper to silence unused-import warnings in some bundles
 export const _normalizeDept = normalizeDept;
+// Re-export to keep prior named-import compatibility if any callers reference it.
+export const _matchTargetDept = matchTargetDept;
