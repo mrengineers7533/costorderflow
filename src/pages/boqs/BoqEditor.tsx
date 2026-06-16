@@ -431,6 +431,11 @@ export default function BoqEditor() {
       <div className="max-w-7xl mx-auto space-y-5">
         {!isNew && <EntityActivityBanner orderRootId={orderRootId} />}
         {!isNew && boqId && (
+          <div className="flex print:hidden">
+            <NotSeenNotifBadge boqId={boqId} />
+          </div>
+        )}
+        {!isNew && boqId && (
           <ModuleNotifications
             links={{ boqId, orderRootId: orderRootId ?? undefined }}
           />
