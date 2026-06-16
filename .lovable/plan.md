@@ -1,38 +1,53 @@
-# Admin-only delete for notifications
+# Department-wise Notification Summary (View-Only)
 
-Add per-row delete and "Delete all" on the Notification Dashboard. Admin-only. No other module touched.
+## Goal
+Add a new summary box on the Notification Dashboard that lists every target department with two clickable counts — Total and Seen — and opens a read-only notification list when clicked. No acknowledge / edit / delete controls inside this box or its drill-down list.
 
-## 1. Database
+## Where it goes
+`src/pages/notifications/NotificationDashboard.tsx`, inserted between the existing top KPI cards (Total / New / Pending Ack …) and the `NotificationCharts` section. Existing KPI cards, charts, filters, main table, admin delete buttons, acknowledge flow — all unchanged.
 
-New migration adding admin-only delete policies (no schema changes, no data changes):
+## Box layout
+A `Card` titled "Department-wise Notifications" containing a compact table:
 
-```sql
-CREATE POLICY "admins can delete notifications"
-  ON public.app_notifications FOR DELETE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
-
-CREATE POLICY "admins can delete notification reads"
-  ON public.app_notification_reads FOR DELETE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+```text
+Department        Total Notifications        Seen Notifications
+Sales                    120                        85
+Accounts                  75                        60
+Production               200                       150
+HR                        40                        35
 ```
 
-`app_notification_reads.notification_id` already cascades from `app_notifications` (verify in the migration; if not, the second policy lets us clean it up explicitly). No other tables are touched — OA / BOQ / PI / requisitions / POs are unaffected.
+- Both number columns are rendered as link-styled buttons (`variant="link"`, primary color, underline on hover). Department label is plain text.
+- Empty state: "No notifications yet."
+- No icons, no badges, no Acknowledge / Mark-as-seen / Delete controls inside this box.
 
-## 2. UI — `src/pages/notifications/NotificationDashboard.tsx`
+## Counting rules
+For each department `D` (every value that appears in any notification's `target_departments`):
+- **Total** = number of notifications where `D` ∈ `target_departments` (case/whitespace normalized via existing `normalizeDept`).
+- **Seen** = number of those notifications that have at least one row in `app_notification_reads` whose `department` normalizes to `D`.
 
-- Read admin flag via existing `useUserRole` hook (`isAdmin`).
-- When `isAdmin`:
-  - Add a small trash-icon button in each notification row's action area. On click, confirm via `AlertDialog` ("Delete this notification?"), then `supabase.from('app_notifications').delete().eq('id', n.id)`, remove from local `rows` state, toast result.
-  - Add a "Delete All Notifications" button in the page header (red, destructive variant). On click, open `AlertDialog` with the exact message **"Are you sure you want to delete all notifications?"** and Confirm / Cancel. On confirm, `supabase.from('app_notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000')`, clear `rows`, toast count.
-- Non-admin users: buttons not rendered. Existing read/acknowledge flow unchanged.
+Reuses the already-loaded `rows` and `readsByNotif` — no extra queries.
 
-## 3. Out of scope
+## Click behavior — read-only drill-down
+Clicking either number opens a new dialog `DeptNotificationsDialog` (new file `src/components/notifications/DeptNotificationsDialog.tsx`).
 
-- `ModuleNotifications` banner on module pages — not part of the dashboard, no delete UI.
-- Notification creation triggers, acknowledgement flow, charts, filters — unchanged.
-- Any business data (orders, BOQ, PI, PO, requisitions, comments) — untouched.
+Props: `department: string`, `mode: "all" | "seen"`, `rows: NotifRow[]`, `readsByNotif: Record<string, ReadRow[]>`, `open`, `onOpenChange`.
+
+Contents:
+- Header: `Sales — Total Notifications` or `Sales — Seen Notifications`.
+- Toolbar with two `Select`s:
+  - Sort: **Latest first** (default) / Oldest first.
+  - Status: **All** (default for Total mode) / Seen / Unseen. In `seen` mode the status filter is locked to Seen.
+- Table columns: Module · Title · Actor · Date · Status (Seen / Unseen badge). Row click opens existing `NotificationDetailDialog` in view mode.
+- No Acknowledge button, no Delete button, no inline edits anywhere in this dialog.
+
+"Seen" inside the dialog uses the same per-department rule (any read row from department `D`).
+
+## Out of scope (do not touch)
+- Acknowledge flow on the main table or `ModuleNotifications` banner — only the owning user/department still marks notifications as seen there.
+- Notification creation triggers, charts, existing summary KPI cards, admin delete buttons.
+- Database schema, RLS, RPCs — purely a UI addition reading existing data.
 
 ## Files
-
-- New: `supabase/migrations/<ts>_admin_delete_notifications.sql`
-- Edited: `src/pages/notifications/NotificationDashboard.tsx`
+- Edit: `src/pages/notifications/NotificationDashboard.tsx` (insert summary box + dialog state).
+- New: `src/components/notifications/DeptNotificationsDialog.tsx` (read-only drill-down).
