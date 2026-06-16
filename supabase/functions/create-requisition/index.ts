@@ -72,12 +72,21 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: boq, error: bErr } = await admin
       .from("boqs")
-      .select("id, order_id, revision, verification_status, line_items, reference_oa_number, client_name, boq_number")
+      .select("id, order_id, revision, verification_status, line_items, reference_oa_number, client_name, boq_number, user_id")
       .eq("id", body.boq_id)
       .maybeSingle();
     if (bErr || !boq) {
       return new Response(JSON.stringify({ error: "BOQ not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Ownership / admin check
+    const { data: roleRow } = await admin
+      .from("user_roles").select("role").eq("user_id", userData.user.id).eq("role", "admin").maybeSingle();
+    const isAdmin = !!roleRow;
+    if (!isAdmin && boq.user_id && boq.user_id !== userData.user.id) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (boq.verification_status !== "approved") {
