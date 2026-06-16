@@ -155,9 +155,18 @@ export default function DesignReview() {
     setUploading(boqItemId);
     try {
       const ext = file.name.split(".").pop() || "bin";
-      const path = `${meta.id}/${boqItemId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("design-review-docs").upload(path, file, { upsert: false });
+      const { data: signed, error: signErr } = await supabase.functions.invoke(
+        "design-review-upload-url",
+        { body: { token, boq_item_id: boqItemId, ext } },
+      );
+      if (signErr) throw signErr;
+      const sg = signed as { bucket: string; path: string; token: string };
+      if (!sg?.path || !sg?.token) throw new Error("Could not obtain upload URL");
+      const { error } = await supabase.storage
+        .from(sg.bucket)
+        .uploadToSignedUrl(sg.path, sg.token, file);
       if (error) throw error;
+      const path = sg.path;
       setDocs((s) => [...s, { boq_item_id: boqItemId, file_name: file.name, file_path: path }]);
       toast({ title: "File attached", description: file.name });
     } catch (e) {
