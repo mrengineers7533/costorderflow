@@ -13,23 +13,14 @@ export function useUnreadNotifications(userId: string | undefined | null) {
     let cancelled = false;
 
     async function load() {
-      const { data: notifs } = await supabase
-        .from("app_notifications" as never)
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      const ids = ((notifs || []) as { id: string }[]).map((n) => n.id);
-      if (!ids.length) {
-        if (!cancelled) setCount(0);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("count_unread_notifications");
+      if (cancelled) return;
+      if (error) {
+        setCount(0);
         return;
       }
-      const { data: reads } = await supabase
-        .from("app_notification_reads" as never)
-        .select("notification_id")
-        .eq("user_id", userId)
-        .in("notification_id", ids);
-      const seen = new Set(((reads || []) as { notification_id: string }[]).map((r) => r.notification_id));
-      if (!cancelled) setCount(ids.filter((i) => !seen.has(i)).length);
+      setCount(typeof data === "number" ? data : 0);
     }
 
     load();
