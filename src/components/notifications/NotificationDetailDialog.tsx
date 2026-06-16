@@ -358,7 +358,7 @@ function HeaderCard({ notif }: { notif: NotifFull }) {
           </div>
           <Row label="Cost Sheet No" value={csNo} />
           <div>
-            <div className="text-[11px] text-muted-foreground">Changed By</div>
+            <div className="text-[11px] text-muted-foreground">Edited By</div>
             <div className="text-sm font-semibold">
               {(notif.actor_department || "—") +
                 (notif.actor_user_name ? ` / ${notif.actor_user_name}` : "")}
@@ -367,7 +367,7 @@ function HeaderCard({ notif }: { notif: NotifFull }) {
           <Row label="OA No" value={oaNo} />
           <Row label="Client" value={notif.client_name} />
           <div>
-            <div className="text-[11px] text-muted-foreground">When</div>
+            <div className="text-[11px] text-muted-foreground">Edited On</div>
             <div className="text-sm font-semibold">
               {new Date(notif.created_at).toLocaleString()}
             </div>
