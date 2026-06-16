@@ -173,7 +173,7 @@ export function useUnseenNotifCountsMap(
     const map: Record<string, number> = {};
     for (const n of targeted) {
       if (seen.has(n.id)) continue;
-      const k = (n as Record<string, string | null>)[col];
+      const k = (n as unknown as Record<string, string | null>)[col];
       if (!k) continue;
       map[k] = (map[k] || 0) + 1;
     }
