@@ -27,6 +27,7 @@ import type { BoqRecord } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 type OaOption = {
   id: string;
@@ -328,6 +329,7 @@ export default function BoqList() {
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Reference OA</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Date</TableHead>
                       <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Not Seen Notifications</TableHead>
                       <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -369,6 +371,9 @@ export default function BoqList() {
                             <span className={`h-1.5 w-1.5 rounded-full ${b.status === "finalized" ? "bg-primary" : "bg-muted-foreground/60"}`} />
                             {b.status}
                           </span>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <NotSeenNotifBadge variant="cell" boqId={b.id} />
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex items-center gap-1">
