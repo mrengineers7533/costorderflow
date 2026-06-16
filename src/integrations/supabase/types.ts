@@ -1246,6 +1246,7 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean
+          module: Database["public"]["Enums"]["notif_module"] | null
           name: string | null
           updated_at: string
           user_id: string | null
@@ -1257,6 +1258,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
+          module?: Database["public"]["Enums"]["notif_module"] | null
           name?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1268,6 +1270,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
+          module?: Database["public"]["Enums"]["notif_module"] | null
           name?: string | null
           updated_at?: string
           user_id?: string | null
@@ -2651,7 +2654,12 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      count_unread_notifications: { Args: never; Returns: number }
       current_user_department: { Args: never; Returns: string }
+      current_user_modules: {
+        Args: never
+        Returns: Database["public"]["Enums"]["notif_module"][]
+      }
       current_user_name: { Args: never; Returns: string }
       emit_notification: {
         Args: {
@@ -3063,6 +3071,10 @@ export type Database = {
         Args: { _oa_number: string; _revision: number; _root: string }
         Returns: string
       }
+      notif_source_module: {
+        Args: { _event: string; _module: string }
+        Returns: Database["public"]["Enums"]["notif_module"]
+      }
       peek_next_po_number: { Args: { _fy: string }; Returns: string }
       sign_boq_item_doc_by_token: {
         Args: { _path: string; _token: string }
@@ -3245,6 +3257,15 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      notif_module:
+        | "oa"
+        | "boq"
+        | "pi"
+        | "design"
+        | "purchase"
+        | "manufacturing"
+        | "requisition"
+        | "project"
       order_format: "MR" | "GMS"
       order_status: "draft" | "finalized"
     }
@@ -3375,6 +3396,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      notif_module: [
+        "oa",
+        "boq",
+        "pi",
+        "design",
+        "purchase",
+        "manufacturing",
+        "requisition",
+        "project",
+      ],
       order_format: ["MR", "GMS"],
       order_status: ["draft", "finalized"],
     },

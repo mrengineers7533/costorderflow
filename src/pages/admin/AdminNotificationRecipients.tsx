@@ -19,6 +19,8 @@ import {
   updateNotificationRecipient,
   type NotificationDepartment,
   type NotificationRecipientConfig,
+  type RecipientModule,
+  RECIPIENT_MODULES,
 } from "@/lib/notifications/orderRevision";
 
 const PRESET_DEPTS: NotificationDepartment[] = [
@@ -32,12 +34,14 @@ const PRESET_DEPTS: NotificationDepartment[] = [
   "Production",
 ];
 const CUSTOM_SENTINEL = "__custom__";
+const MODULE_NONE = "__none__";
 
 export default function AdminNotificationRecipients() {
   const [rows, setRows] = useState<NotificationRecipientConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [dept, setDept] = useState<NotificationDepartment>("design");
   const [customDept, setCustomDept] = useState("");
+  const [moduleSel, setModuleSel] = useState<string>(MODULE_NONE);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,8 +68,13 @@ export default function AdminNotificationRecipients() {
     }
     setBusy(true);
     try {
-      await addNotificationRecipient({ department: finalDept, email: em, name: name.trim() || null });
-      setEmail(""); setName(""); setCustomDept("");
+      await addNotificationRecipient({
+        department: finalDept,
+        module: moduleSel === MODULE_NONE ? null : (moduleSel as RecipientModule),
+        email: em,
+        name: name.trim() || null,
+      });
+      setEmail(""); setName(""); setCustomDept(""); setModuleSel(MODULE_NONE);
       toast.success("Recipient added");
       refresh();
     } catch (e) { toast.error((e as Error).message); }
@@ -117,6 +126,18 @@ export default function AdminNotificationRecipients() {
               />
             </div>
           )}
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Module</div>
+            <Select value={moduleSel} onValueChange={setModuleSel}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={MODULE_NONE}>All (department-level)</SelectItem>
+                {RECIPIENT_MODULES.map((m) => (
+                  <SelectItem key={m} value={m} className="uppercase">{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1 flex-1 min-w-[200px]">
             <div className="text-xs text-muted-foreground">Email</div>
             <Input placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -134,6 +155,7 @@ export default function AdminNotificationRecipients() {
           <TableHeader>
             <TableRow>
               <TableHead>Department</TableHead>
+              <TableHead>Module</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Channels</TableHead>
@@ -143,12 +165,15 @@ export default function AdminNotificationRecipients() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No recipients configured</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No recipients configured</TableCell></TableRow>
             ) : rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="capitalize font-medium">{r.department}</TableCell>
+                <TableCell className="uppercase text-xs">
+                  {r.module ?? <span className="text-muted-foreground normal-case">All</span>}
+                </TableCell>
                 <TableCell>{r.email || "—"}</TableCell>
                 <TableCell>{r.name || "—"}</TableCell>
                 <TableCell className="text-xs">
