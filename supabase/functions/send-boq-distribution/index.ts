@@ -80,6 +80,13 @@ Deno.serve(async (req) => {
     // 7-day signed URL for the distribution PDF so recipients can download it.
     let signedPdfUrl: string | null = null;
     if (body.pdf_path) {
+      // Only allow signing paths that live under the caller's own folder.
+      const userPrefix = `${userData.user.id}/`;
+      if (!body.pdf_path.startsWith(userPrefix) || body.pdf_path.includes("..")) {
+        return new Response(JSON.stringify({ error: "forbidden pdf_path" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { data: signed } = await admin
         .storage.from("boq-documents")
         .createSignedUrl(body.pdf_path, 60 * 60 * 24 * 7);
