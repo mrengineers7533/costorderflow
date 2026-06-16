@@ -17,6 +17,7 @@ interface Props {
   activeStatus: "seen" | "pending" | null;
   onDeptClick: (d: string | null) => void;
   onStatusClick: (s: "seen" | "pending" | null) => void;
+  allowedDeptKeys?: Set<string>;
 }
 
 const PALETTE = [
@@ -46,17 +47,22 @@ export function NotificationCharts({
   activeStatus,
   onDeptClick,
   onStatusClick,
+  allowedDeptKeys,
 }: Props) {
   const deptData = useMemo(() => {
     const m = new Map<string, number>();
     rows.forEach((r) => {
       const d = deptOf(r);
+      if (allowedDeptKeys) {
+        const key = d.trim().toLowerCase().replace(/\s+/g, " ").replace(/\s+team$/, "");
+        if (!allowedDeptKeys.has(key)) return;
+      }
       m.set(d, (m.get(d) || 0) + 1);
     });
     return Array.from(m.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [rows]);
+  }, [rows, allowedDeptKeys]);
 
   const statusData = useMemo(() => {
     let seen = 0;
