@@ -22,6 +22,7 @@ import {
 import {
   fetchItemApprovals,
   setItemApproval,
+  bulkSetItemApprovals,
   type ItemApproval,
 } from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
