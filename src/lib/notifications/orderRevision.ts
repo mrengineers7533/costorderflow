@@ -75,9 +75,18 @@ export async function markNotificationFailed(id: string, errMsg: string): Promis
 }
 
 // Notification recipients config
+export type RecipientModule =
+  | "oa" | "boq" | "pi" | "design" | "purchase"
+  | "manufacturing" | "requisition" | "project";
+
+export const RECIPIENT_MODULES: RecipientModule[] = [
+  "oa","boq","pi","design","purchase","manufacturing","requisition","project",
+];
+
 export interface NotificationRecipientConfig {
   id: string;
   department: NotificationDepartment;
+  module: RecipientModule | null;
   user_id: string | null;
   email: string | null;
   name: string | null;
@@ -97,6 +106,7 @@ export async function listNotificationRecipients(): Promise<NotificationRecipien
 
 export async function addNotificationRecipient(input: {
   department: NotificationDepartment;
+  module?: RecipientModule | null;
   email?: string | null;
   name?: string | null;
   user_id?: string | null;
@@ -104,6 +114,7 @@ export async function addNotificationRecipient(input: {
 }): Promise<void> {
   const { error } = await cfg().insert({
     department: input.department,
+    module: input.module ?? null,
     email: input.email || null,
     name: input.name || null,
     user_id: input.user_id || null,
@@ -115,7 +126,7 @@ export async function addNotificationRecipient(input: {
 
 export async function updateNotificationRecipient(
   id: string,
-  patch: Partial<Pick<NotificationRecipientConfig, "is_active" | "channels" | "email" | "name" | "department">>,
+  patch: Partial<Pick<NotificationRecipientConfig, "is_active" | "channels" | "email" | "name" | "department" | "module">>,
 ): Promise<void> {
   const { error } = await cfg().update(patch).eq("id", id);
   if (error) throw error;
