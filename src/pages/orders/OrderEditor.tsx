@@ -901,6 +901,11 @@ export default function OrderEditor() {
     <div className="min-h-screen p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-5">
         {orderId && (
+          <div className="flex">
+            <NotSeenNotifBadge orderRootId={parentOrderId ?? orderId} />
+          </div>
+        )}
+        {orderId && (
           <ModuleNotifications
             links={{ orderRootId: parentOrderId ?? orderId, recordId: orderId }}
           />
