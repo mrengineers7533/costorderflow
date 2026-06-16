@@ -250,6 +250,26 @@ export default function NotificationDashboard() {
     load();
   }, []);
 
+  // Realtime: refresh when notifications or acknowledgements change anywhere.
+  useEffect(() => {
+    const channel = supabase
+      .channel("notif-dashboard")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "app_notification_reads" },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "app_notifications" },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const myReadIds = useMemo(() => {
     if (!me) return new Set<string>();
     return new Set(reads.filter((r) => r.user_id === me.id).map((r) => r.notification_id));
