@@ -3,14 +3,29 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Search, Loader2 } from "lucide-react";
+import {
+  Search,
+  Loader2,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  ArrowRight,
+  PenSquare,
+  Calculator,
+  ShoppingCart,
+  Factory,
+  ClipboardList,
+  FolderKanban,
+  FileText,
+  Eye,
+  Filter as FilterIcon,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
-import { NotificationCharts, deptOf } from "@/components/notifications/NotificationCharts";
+import { deptOf } from "@/components/notifications/NotificationCharts";
 import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
 import { normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
