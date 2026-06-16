@@ -360,6 +360,11 @@ export default function NotificationDashboard() {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [deptDrill, setDeptDrill] = useState<{ dept: string; mode: "all" | "seen" } | null>(null);
+  // Extra filters for the redesigned dashboard.
+  const [expandCosting, setExpandCosting] = useState(true);
+  const [docTypeFilter, setDocTypeFilter] = useState<string>("all");
+  const [notifTypeFilter, setNotifTypeFilter] = useState<string>("all");
+  const [lastUpdated, setLastUpdated] = useState<Date>(() => new Date());
 
   async function deleteOne(id: string) {
     const prev = rows;
