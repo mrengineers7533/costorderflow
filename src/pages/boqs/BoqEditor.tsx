@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
