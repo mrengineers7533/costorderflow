@@ -21,24 +21,27 @@ const topItems: { title: string; url: string; icon: typeof LayoutGrid; module: M
   { title: "Dashboard", url: "/", icon: LayoutGrid, module: "dashboard" },
 ];
 
+const midItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Notification Dashboard", url: "/notifications", icon: Bell,           module: "notifications" },
+  { title: "Flow Report",            url: "/reports",       icon: BarChart3,       module: "reports" },
+  { title: "Work Flow",              url: "/workflow",      icon: Workflow,        module: "workflow" },
+  { title: "Cost Sheet",             url: "/cost-sheets",   icon: FileSpreadsheet, module: "cost_sheets" },
+];
+
 const costingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Orders",            url: "/orders", icon: FileText,       module: "costing" },
-  { title: "BOQs",              url: "/boqs",   icon: ClipboardList,  module: "costing" },
+  { title: "BOQ",               url: "/boqs",   icon: ClipboardList,  module: "costing" },
   { title: "Proforma Invoices", url: "/pi",     icon: Receipt,        module: "costing" },
 ];
 
 const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Design",          url: "/design",             icon: PencilRuler,    module: "design" },
-  { title: "Notifications",   url: "/notifications",      icon: Bell,           module: "notifications" },
-  { title: "Workflow",        url: "/workflow",           icon: Workflow,       module: "workflow" },
-  { title: "Purchase",        url: "/purchase",           icon: ShoppingCart,   module: "purchase" },
-  { title: "Manufacturing",   url: "/manufacturing",      icon: Factory,        module: "manufacturing" },
-  { title: "Requisitions",    url: "/requisitions",       icon: ClipboardCheck, module: "requisitions" },
-  { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText, module: "annexures" },
-  { title: "Raw Material Master", url: "/raw-materials", icon: Boxes,          module: "raw_materials" },
-  { title: "GRN",             url: "/grn",                icon: PackageCheck,     module: "grn" },
-  { title: "Flow Report",     url: "/reports",            icon: BarChart3,        module: "reports" },
-  { title: "Cost Sheets",     url: "/cost-sheets",        icon: FileSpreadsheet,  module: "cost_sheets" },
+  { title: "Design",              url: "/design",                 icon: PencilRuler,    module: "design" },
+  { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
+  { title: "Purchase",            url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
+  { title: "Requisition",         url: "/requisitions",           icon: ClipboardCheck, module: "requisitions" },
+  { title: "Annexure Folder",     url: "/requisitions/annexures", icon: FileText,       module: "annexures" },
+  { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
+  { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
 ];
 
 export function AppSidebar({ user }: { user?: User | null }) {
@@ -50,6 +53,9 @@ export function AppSidebar({ user }: { user?: User | null }) {
 
   const visibleTop = topItems.filter((it) =>
     it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
+  );
+  const visibleMid = midItems.filter((it) =>
+    isAdmin || canAccess(it.module),
   );
   const visibleCosting = costingItems.filter((it) =>
     isAdmin || canAccess(it.module),
@@ -129,6 +135,10 @@ export function AppSidebar({ user }: { user?: User | null }) {
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
               {visibleTop.map((item) => (
+                <MenuItem key={item.title} item={item} />
+              ))}
+
+              {visibleMid.map((item) => (
                 <MenuItem key={item.title} item={item} />
               ))}
 
