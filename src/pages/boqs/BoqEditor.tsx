@@ -995,15 +995,17 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
               {(() => {
                 const heads: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
                 if (showMake) heads.push("MAKE");
+                heads.push("QTY");
                 if (hasMotor) heads.push("MOTOR", "MOTOR QTY");
-                heads.push("QTY", "UNIT", "Remarks");
+                heads.push("UNIT", "Remarks");
                 if (showApproval) heads.push("Approved by Design");
                 return heads;
               })().map((h, i) => {
-                const lastIdx = 2 + (showMake ? 1 : 0) + (hasMotor ? 2 : 0) + 3 + (showApproval ? 1 : 0) - 1;
-                const qtyIdx = 2 + (showMake ? 1 : 0) + (hasMotor ? 2 : 0) + 1;
-                const unitIdx = qtyIdx + 1;
-                const motorQtyIdx = hasMotor ? 2 + (showMake ? 1 : 0) + 2 : -1;
+                // New order: ITEM, MODEL, DESCRIPTION, [MAKE], QTY, [MOTOR], [MOTOR QTY], UNIT, Remarks, [Approved]
+                const lastIdx = 2 + (showMake ? 1 : 0) + 1 + (hasMotor ? 2 : 0) + 2 + (showApproval ? 1 : 0) - 1;
+                const qtyIdx = 2 + (showMake ? 1 : 0) + 1; // position of QTY
+                const motorQtyIdx = hasMotor ? qtyIdx + 2 : -1;
+                const unitIdx = qtyIdx + (hasMotor ? 3 : 1);
                 const center = i === 0 || i === qtyIdx || i === unitIdx || (hasMotor && i === motorQtyIdx) || (showApproval && i === lastIdx);
                 return (
                   <th key={h} style={{ border: "0.2mm solid #000", padding: "1.5mm", fontWeight: 700, textAlign: center ? "center" : "left" }}>{h}</th>
@@ -1020,13 +1022,13 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{it.model_number}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.description}</td>
                 {showMake && <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.make || "")}</td>}
+                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 {hasMotor && (
                   <td style={{ border: "0.2mm solid #000", padding: "1.5mm" }}>{(it.motor || "").trim()}</td>
                 )}
                 {hasMotor && (
                   <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</td>
                 )}
-                <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.quantity || ""}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", textAlign: "center" }}>{it.unit}</td>
                 <td style={{ border: "0.2mm solid #000", padding: "1.5mm", whiteSpace: "pre-wrap" }}>{it.remarks}</td>
                 {showApproval && (() => {
