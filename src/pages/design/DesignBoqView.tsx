@@ -150,6 +150,27 @@ export default function DesignBoqView() {
       const previous = savedValuesRef.current[k] ?? "";
       const changed = previous !== value;
       savedValuesRef.current[k] = value;
+      // Auto-clear per-item approval when its comment is added/edited.
+      if (changed && boq && approvals[itemId]?.status === "approved") {
+        try {
+          await setItemApproval(boq.id, itemId, boq.revision ?? 0, "pending");
+          setApprovals((p) => ({
+            ...p,
+            [itemId]: {
+              status: "pending",
+              decided_by_name: null,
+              decided_by_department: null,
+              decided_at: null,
+            },
+          }));
+        } catch (e) {
+          toast({
+            title: "Could not clear item approval",
+            description: e instanceof Error ? e.message : "Try again.",
+            variant: "destructive",
+          });
+        }
+      }
       if (changed && designApproved && !autoUnapprovingRef.current) {
         autoUnapprovingRef.current = true;
         try {
