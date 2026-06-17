@@ -115,6 +115,10 @@ const FIELD_LABELS: Record<string, string> = {
   pi_date: "PI Date",
   po_date: "PO Date",
   item_no: "Item No",
+  hsn: "HSN",
+  hsn_code: "HSN",
+  hsn_sac: "HSN",
+  qty: "Quantity",
 };
 
 function labelOf(k: string) {
