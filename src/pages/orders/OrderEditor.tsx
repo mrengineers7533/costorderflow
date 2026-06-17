@@ -1168,6 +1168,21 @@ export default function OrderEditor() {
                   <div className="col-span-4">
                     <Input value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
                     <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
+                    {!showItemExtras && (
+                      <>
+                        {(["model_number","motor","motor_quantity","remarks"] as const).map((ck) => {
+                          const cm = cellComment(it.id, ck);
+                          if (!cm) return null;
+                          const label = ck === "model_number" ? "Model" : ck === "motor" ? "Motor" : ck === "motor_quantity" ? "Motor Qty" : "Remarks";
+                          return (
+                            <div key={ck} className="mt-1">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+                              <OaCellDesignComment comment={cm} canApply={false} onApply={() => { /* show extras to apply */ }} />
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                   <Input className="col-span-2" value={it.make_label || ""} onChange={(e) => updateItemById(it.id, { make_label: e.target.value })} placeholder={displayMake(it) || "Make"} />
                   <div className="col-span-1">
