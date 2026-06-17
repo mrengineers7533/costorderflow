@@ -23,10 +23,12 @@ const SURFACES: { label: string; path: string }[] = [
 
 const FIELDS = ["motor", "motor_quantity", "remarks"] as const;
 
-// Matches `.motor`, `.motor_quantity`, `.remarks` as a real property access
-// (allowing optional chaining) but not as part of a longer identifier such
-// as `motor_price` or `motorQty`.
-const fieldRegex = (f: string) => new RegExp(`\\??\\.${f}(?![A-Za-z0-9_])`);
+// Accepts either a direct property access (`.motor`, `?.motor_quantity`)
+// or a quoted string key (`"motor"`, `'remarks'`) — DesignBoqView reads
+// these fields through a dynamic column-key lookup rather than dotted
+// access, but the underlying property name must still match.
+const fieldRegex = (f: string) =>
+  new RegExp(`(?:\\??\\.${f}(?![A-Za-z0-9_])|["']${f}["'])`);
 
 describe("Motor / Motor Qty / Remarks field consistency", () => {
   for (const { label, path } of SURFACES) {
