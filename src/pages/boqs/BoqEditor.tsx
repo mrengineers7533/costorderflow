@@ -988,20 +988,8 @@ function BoqDocPreview({ rec, showMake = false, showApproval = false, showMotor 
           <div><b>Project / Cost Sheet No.:</b> {rec.project_number || "-"}</div>
         </div>
 
-        {/* ===== Items table ===== */}
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "16mm" }} />
-            <col style={{ width: "32mm" }} />
-            <col />
-            {showMake && <col style={{ width: "22mm" }} />}
-            {hasMotor && <col style={{ width: "26mm" }} />}
-            {hasMotor && <col style={{ width: "14mm" }} />}
-            <col style={{ width: "14mm" }} />
-            <col style={{ width: "14mm" }} />
-            <col style={{ width: "38mm" }} />
-            {showApproval && <col style={{ width: "24mm" }} />}
-          </colgroup>
+        {/* ===== Items table — auto-fit columns ===== */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "auto" }}>
           <thead>
             <tr style={{ background: isMR ? "rgb(234,88,12)" : "rgb(120,120,120)", color: "white" }}>
               {(() => {
