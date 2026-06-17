@@ -188,6 +188,7 @@ export type Database = {
           event_type: string
           id: string
           line_item_changes: Json | null
+          merge_meta: Json | null
           module: string
           new_value: Json | null
           old_value: Json | null
@@ -213,6 +214,7 @@ export type Database = {
           event_type: string
           id?: string
           line_item_changes?: Json | null
+          merge_meta?: Json | null
           module: string
           new_value?: Json | null
           old_value?: Json | null
@@ -238,6 +240,7 @@ export type Database = {
           event_type?: string
           id?: string
           line_item_changes?: Json | null
+          merge_meta?: Json | null
           module?: string
           new_value?: Json | null
           old_value?: Json | null
@@ -2934,6 +2937,7 @@ export type Database = {
           event_type: string
           id: string
           line_item_changes: Json | null
+          merge_meta: Json | null
           module: string
           new_value: Json | null
           old_value: Json | null
