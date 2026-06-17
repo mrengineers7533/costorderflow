@@ -724,6 +724,27 @@ function ChangedLineItemsHistory({
     const changes = Array.isArray(h.line_item_changes)
       ? (h.line_item_changes as LineChange[])
       : [];
+    // Fallback for create-style events that ship full line_items on new_value
+    // but no diff payload — synthesize "added" entries so the user can see
+    // the items in the same row-style table.
+    if (!changes.length) {
+      const nv = (h.new_value || {}) as Record<string, unknown>;
+      const items = Array.isArray(nv.line_items) ? (nv.line_items as Record<string, unknown>[]) : [];
+      for (let i = 0; i < items.length; i++) {
+        const after = items[i] || {};
+        edits.push({
+          lineNo: String((after as { line_no?: number | string }).line_no ?? i + 1),
+          kind: "added",
+          before: {},
+          after,
+          changedKeys: new Set<string>(),
+          by: h.actor_user_name || "—",
+          dept: h.actor_department || null,
+          when: h.created_at,
+        });
+      }
+      continue;
+    }
     for (let i = 0; i < changes.length; i++) {
       const c = changes[i];
       const lineNo = String(c.line_no ?? i + 1);
