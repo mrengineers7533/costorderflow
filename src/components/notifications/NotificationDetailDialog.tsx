@@ -480,9 +480,7 @@ function ChangedLineItemsHistory({
   notif: NotifFull;
   history: NotifFull[];
 }) {
-  // ItemEdit type defined inline below
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  type _ItemEdit = {
+  type ItemEdit = {
     lineNo: string;
     kind: "modified" | "added" | "removed";
     before: Record<string, unknown>;
@@ -492,8 +490,6 @@ function ChangedLineItemsHistory({
     dept: string | null;
     when: string;
   };
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  type ItemEdit = _ItemEdit;
 
   // Merge current notification with history, dedupe by id, sort by created_at.
   const seen = new Set<string>();
