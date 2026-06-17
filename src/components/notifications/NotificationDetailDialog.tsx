@@ -817,11 +817,11 @@ function ChangedLineItemsHistory({
                       <td className="whitespace-nowrap px-3 py-2 font-medium">
                         {labelOf(k)}
                       </td>
-                      <td className="break-words px-3 py-2 text-red-600 line-through">
-                        {truncate((ov as Record<string, unknown>)[k], 200)}
+                      <td className="break-words px-3 py-2 text-red-600">
+                        <HeaderFieldValue value={(ov as Record<string, unknown>)[k]} />
                       </td>
                       <td className="break-words px-3 py-2 font-medium text-emerald-700">
-                        {truncate((nv as Record<string, unknown>)[k], 200)}
+                        <HeaderFieldValue value={(nv as Record<string, unknown>)[k]} />
                       </td>
                     </tr>
                   ))}
