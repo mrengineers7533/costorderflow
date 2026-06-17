@@ -266,11 +266,13 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                 <th className="text-right py-2 pr-3">Qty</th>
                 <th className="text-left py-2 pr-3">Unit</th>
                 <th className="text-left py-2 pr-3">Remarks</th>
+                <th className="text-left py-2 pr-3">Motor</th>
+                <th className="text-right py-2 pr-3">Motor Qty</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
+                <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={it.id || idx} className="border-b last:border-0">
                   <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
@@ -280,6 +282,8 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                   <td className="py-2 pr-3 text-right">{it.quantity}</td>
                   <td className="py-2 pr-3">{it.unit}</td>
                   <td className="py-2 pr-3 text-muted-foreground">{it.remarks}</td>
+                  <td className="py-2 pr-3">{it.motor || "—"}</td>
+                  <td className="py-2 pr-3 text-right">{it.motor_quantity ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
