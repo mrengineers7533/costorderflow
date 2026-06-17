@@ -1,22 +1,37 @@
-## Goal
-On both the Manufacturing and Purchase landing pages (the approved-BOQ list), separate documents into **MR** and **GMS** sections so users can switch between them, similar to the Design BOQs list.
+## BOQ Print Page Column Auto-Fit
 
-## Scope
-- Only `src/pages/modules/ApprovedBoqModule.tsx` → `ApprovedBoqListPage`.
-- No changes to detail page, workflow, calculations, notifications, acknowledgement, save/PDF/auto-BOQ logic, or data.
+### Goal
+Make BOQ print / PDF columns auto-fit to their content instead of using fixed widths.
 
-## Changes
-1. Add a `Tabs` control (shadcn `Tabs`) with two triggers: **MR BOQs (n)** and **GMS BOQs (n)**, defaulting to MR. Counts derived from `boq.format` on the already-filtered approved+latest-per-family `rows`.
-2. Filter the displayed cards by the active tab (`b.format === tab`) before applying the existing search filter. Card rendering, badges, "Open" button, NotSeenNotifBadge — all unchanged.
-3. Empty-state message adapts to the active tab ("No approved MR BOQs…" / "No approved GMS BOQs…").
-4. Search box behavior unchanged; it now filters within the active tab.
+### Files to change
 
-## Out of scope (untouched)
-- `ApprovedBoqDetailPage` (BOQ details view incl. Motor / Motor Qty / Remarks columns).
-- Routing, sidebar entries, requisition flow, PDF, notifications.
-- Any backend / migration work.
+1. **`src/lib/boq/pdf.ts`** (PDF generation via jspdf-autotable)
+2. **`src/pages/boqs/BoqEditor.tsx`** — `BoqDocPreview` HTML print preview component
 
-## Tech notes
-- Reuse existing `Tabs`, `TabsList`, `TabsTrigger` from `@/components/ui/tabs` (already used in `DesignBoqList`).
-- Tab state via `useState<"MR" | "GMS">("MR")`.
-- Counts via `useMemo` over `rows`.
+### Changes
+
+#### 1. PDF — `src/lib/boq/pdf.ts`
+In the `autoTable` call, replace all hardcoded `cellWidth` values in `columnStyles` with `"auto"`.
+Keep `halign` and `fontStyle` as-is.
+
+```diff
+- columnStyles[ci++] = { cellWidth: showMake ? 14 : 16, halign: "center" };
++ columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
+```
+
+Repeat for every `columnStyles[ci++]` assignment (MODEL NUMBER, DESCRIPTION, MAKE, MOTOR, MOTOR QTY, QTY, UNIT, Remarks, Approved by Design).
+
+#### 2. HTML print preview — `BoqDocPreview` in `BoqEditor.tsx`
+- Remove the `<colgroup>` block entirely.
+- Change `tableLayout: "fixed"` to `tableLayout: "auto"`.
+- Let the browser auto-size each column based on header + cell content.
+
+```diff
+- <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "fixed" }}>
+-   <colgroup>…fixed mm widths…</colgroup>
++ <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "auto" }}>
+```
+
+### Out of scope
+- No changes to approval status display logic, calculations, workflows, notifications, or any other print/PDF behavior.
+- No changes to OA, PI, Requisition, or other document PDFs.

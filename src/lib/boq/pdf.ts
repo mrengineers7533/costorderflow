@@ -228,33 +228,35 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   type ColStyle = Partial<{ cellWidth: number | "auto"; halign: "center" | "left" | "right"; fontStyle: "bold" | "normal" | "italic" | "bolditalic" }>;
   const columnStyles: Record<number, ColStyle> = {};
   let ci = 0;
+  // Auto-fit: all columns size to content. Alignment/fontStyle preserved.
   // ITEM No.
-  columnStyles[ci++] = { cellWidth: showMake ? 14 : 16, halign: "center" };
+  columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   // MODEL NUMBER
-  columnStyles[ci++] = { cellWidth: showMake ? 26 : 28 };
+  columnStyles[ci++] = { cellWidth: "auto" };
   // DESCRIPTION
   columnStyles[ci++] = { cellWidth: "auto" };
   // MAKE (optional)
-  if (showMake) columnStyles[ci++] = { cellWidth: 20 };
+  if (showMake) columnStyles[ci++] = { cellWidth: "auto" };
   // Motor / Motor Qty (optional) — between MAKE and QTY
   if (hasMotor) {
-    columnStyles[ci++] = { cellWidth: 26 };
-    columnStyles[ci++] = { cellWidth: 14, halign: "center" };
+    columnStyles[ci++] = { cellWidth: "auto" };
+    columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   }
   // QTY
-  columnStyles[ci++] = { cellWidth: 12, halign: "center" };
+  columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   // UNIT
-  columnStyles[ci++] = { cellWidth: 12, halign: "center" };
-  // Remarks — wider when approval column is hidden so layout matches existing look.
-  columnStyles[ci++] = { cellWidth: showApproval ? (showMake ? 32 : 38) : (showMake ? 54 : 62) };
+  columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
+  // Remarks
+  columnStyles[ci++] = { cellWidth: "auto" };
   // Approved by Design (optional)
-  if (showApproval) columnStyles[ci++] = { cellWidth: showMake ? 22 : 24, halign: "center", fontStyle: "bold" };
+  if (showApproval) columnStyles[ci++] = { cellWidth: "auto", halign: "center", fontStyle: "bold" };
 
   autoTable(doc, {
     startY: y,
     head: [headRow],
     body: rows.length ? rows : [emptyRow],
     theme: "grid",
+    tableWidth: "auto",
     styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles,
