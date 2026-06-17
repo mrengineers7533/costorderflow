@@ -52,6 +52,7 @@ export default function DesignBoqView() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [unapproving, setUnapproving] = useState(false);
   const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -171,7 +172,7 @@ export default function DesignBoqView() {
     () => items.filter((it) => approvals[it.id]?.status === "approved").length,
     [items, approvals],
   );
-  const approvalsDisabled = alreadySubmitted || designApproved;
+  const approvalsDisabled = alreadySubmitted;
 
   async function toggleItemApproval(itemId: string, next: boolean) {
     if (!boq) return;
@@ -270,6 +271,33 @@ export default function DesignBoqView() {
     }
   }
 
+  async function handleUnapprove() {
+    if (!id) return;
+    if (!window.confirm("Unapprove this BOQ so Design can add more comments?")) return;
+    setUnapproving(true);
+    try {
+      const { error } = await supabase
+        .from("boqs")
+        .update({
+          design_review_status: "draft",
+          verification_status: "pending",
+          verified_at: null,
+        } as never)
+        .eq("id", id);
+      if (error) throw error;
+      toast({ title: "BOQ unapproved", description: "You can add comments and Post Submit again." });
+      await refresh();
+    } catch (e) {
+      toast({
+        title: "Could not unapprove",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUnapproving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 text-muted-foreground flex items-center gap-2">
@@ -336,7 +364,7 @@ export default function DesignBoqView() {
                 </TableRow>
               )}
               {items.map((it) => {
-                const disabled = alreadySubmitted || designApproved;
+                const disabled = alreadySubmitted;
                 const rowKey = keyOf(it.id, "__row__");
                 const rowOthers = otherCommentsByCell[rowKey] || [];
                 const ap = approvals[it.id];
@@ -448,7 +476,7 @@ export default function DesignBoqView() {
         <div className="container mx-auto px-4 lg:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-muted-foreground">
             {designApproved
-              ? "This BOQ is design-approved and released to Purchase & Manufacturing."
+              ? "Design-approved. You can still add comments or Unapprove to request another revision."
               : alreadySubmitted
                 ? "Comments submitted. Awaiting OA Creator to publish a revised BOQ."
                 : `${myDraftCount} comment${myDraftCount === 1 ? "" : "s"} ready to submit.`}
@@ -464,6 +492,15 @@ export default function DesignBoqView() {
               <Send className="h-4 w-4 mr-1" />
               {submitting ? "Submitting…" : `Post Submit${myDraftCount ? ` (${myDraftCount})` : ""}`}
             </Button>
+            {designApproved && (
+              <Button
+                variant="outline"
+                onClick={handleUnapprove}
+                disabled={unapproving}
+              >
+                {unapproving ? "Unapproving…" : "Unapprove"}
+              </Button>
+            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -493,6 +530,7 @@ export default function DesignBoqView() {
 }
 
 function disabledSubmit(count: number, submitted: boolean, approved: boolean) {
-  if (approved || submitted) return true;
+  void approved;
+  if (submitted) return true;
   return count === 0;
 }
