@@ -1,41 +1,57 @@
-## Goal
-Add one toggle button on the Design BOQ page (`/design/:id`) that lets the user approve every line item in a single click, or remove approval from every line item in a single click.
+## Goals
+1. Make the new bulk button able to "Remove All Approvals" even after the BOQ is already Design-approved.
+2. Guarantee that Design comments on Motor, Motor Qty, Remarks (and Model) always show on the OA editor — never hidden behind the "Show Model, Motor, Remarks & Approval" toggle.
 
-## Placement
-Inside the existing "Line items" `Card`, in the `CardHeader`, on the right side opposite the existing title/subtext. The table, sticky bottom bar (Post Submit / Approve Revised BOQ / Unapprove), and per-row Approve checkboxes stay exactly as they are.
+## Issue 1 — Cannot Remove All Approvals after design-approved
 
-## Button behavior (single toggle)
-The label flips based on current state:
+Current logic in `src/pages/design/DesignBoqView.tsx`:
 
-- If every item already has `approvals[id].status === "approved"` and there is at least one item → label is **"Remove All Approvals"**, clicking sets every item to `pending`.
-- Otherwise → label is **"Approve All"**, clicking sets every item to `approved`.
+```
+disabled={items.length === 0 || bulking || approvalsDisabled || designApproved}
+```
 
-Important data-model note: the existing per-row Design approval state for this page only supports `approved` / `pending` (see `ItemApprovalStatus` in `src/lib/design/itemApprovals.ts` and the per-row Checkbox in `DesignBoqView.tsx`). "Remove All Approvals" therefore resets each item back to `pending` — the same state a freshly opened, untouched item has, and the same state the per-row checkbox produces when unchecked. This matches the existing meaning of "unapproved" on this page; no schema or status enum changes.
+`approvalsDisabled` (= `alreadySubmitted`) and `designApproved` block the button entirely — so once the BOQ has been Design-approved or comments have been submitted, the user has no way to clear per-item approvals in one click.
 
-## Disabled / hidden rules
-- Disabled when `items.length === 0`.
-- Disabled while the action is in flight (local `bulking` state).
-- Disabled when `approvalsDisabled` is true (i.e. `alreadySubmitted` — same rule the per-row checkbox already uses) so we don't fight the "Changes Requested — awaiting OA revision" lock.
-- Disabled while `designApproved` is true (the BOQ has already been Design-approved as a whole). Unapproving in that state must keep going through the existing "Unapprove" button so the BOQ-level `design_review_status` is reset properly — we do not duplicate that flow here.
+### Fix
+Split the disabled rule by direction:
 
-## Click handler
-New `async function bulkToggleAllApprovals()` inside `DesignBoqView`:
+- When the button label is **"Approve All"** (i.e. `!allApproved`) → keep `disabled` as today: `items.length === 0 || bulking || approvalsDisabled || designApproved`. We don't want bulk-approving while the BOQ is locked / already approved at the BOQ level.
+- When the button label is **"Remove All Approvals"** (i.e. `allApproved`) → only `disabled` on `items.length === 0 || bulking`. Per-item approvals are write-able regardless of the BOQ-level `design_review_status`, so removing them is always safe.
 
-1. Guard on `!boq || items.length === 0`.
-2. Compute `next: "approved" | "pending"` from the current "all approved?" check.
-3. Confirm with `window.confirm(...)` — "Approve all N items?" or "Remove approval from all N items?".
-4. `setBulking(true)`.
-5. Optimistically update local `approvals` for every item id to `next` (preserving existing `decided_by_name` / `decided_at` for display).
-6. `await bulkSetItemApprovals(boq.id, items.map(i => i.id), boq.revision ?? 0, next)` — already exists.
-7. `await syncApprovalToBoqSnapshot(boq.id, items.map(i => i.id), next)` — already exists, keeps the OA "Approved by Design" column in sync (consistent with the per-row toggle and `handleApprove`).
-8. Re-fetch with `fetchItemApprovals(boq.id, boq.revision ?? 0)` and `setApprovals(map)` so server-truth (decider name, timestamp) replaces the optimistic values.
-9. On error: revert to the previous `approvals` snapshot and `toast` an error.
-10. `setBulking(false)`.
+No change to the BOQ-level `design_review_status`. We do not call `Unapprove` — that flow stays exactly as-is on its own button. Only per-row `boq_item_design_status` + the `boqs.line_items[].approval_status` mirror are toggled to `pending`, identical to the existing per-row checkbox path.
+
+## Issue 2 — Motor / Motor Qty / Remarks Design comments not visible on OA
+
+In `src/pages/orders/OrderEditor.tsx`, the inputs for Model, Motor, Motor Qty, Remarks (and their `<OaCellDesignComment>` children) render only when `showItemExtras === true`. There is a one-shot auto-reveal:
+
+```
+useEffect(() => {
+  if (showItemExtras) return;                // ← bug: latches off after user toggle
+  if (hasExtrasComment) setShowItemExtras(true);
+}, [designCellComments, showItemExtras]);
+```
+
+Problem: once the user manually clicks "Hide Model, Motor, Remarks & Approval", `showItemExtras` becomes `false` but the effect's early `return` prevents it from re-opening — so the Motor / Motor Qty / Remarks comments disappear from the editable cells. The DB query, mapping, and `column_key` values are all correct (verified — Motor comments exist with `column_key='motor'` for the current BOQ), so the visibility toggle is the only thing in the way.
+
+### Fix
+Force-open the extras section whenever any extras-field Design comment exists, regardless of past user toggling. Two small edits inside `OrderEditor.tsx`:
+
+1. Remove the `if (showItemExtras) return;` early return in the auto-reveal effect. Always evaluate `hasExtrasComment` and call `setShowItemExtras(true)` when true. (If already true, the set is a no-op.)
+2. Disable the manual Hide button (the toggle around lines 1112-1116) while extras-comments exist, with a tooltip-style title attribute "Hidden while Design has comments on Motor, Motor Qty, Remarks, or Model". Allow toggling off only when no extras comments are present. Keep the Show side fully clickable.
+
+These two together ensure:
+- Comments on Motor, Motor Qty, Remarks, Model are always rendered next to their actual editable input on OA.
+- The existing Apply button on each `<OaCellDesignComment>` continues to work (already wired for all 7 columns).
+- The red-bold cell highlight on changed/commented cells continues to work (already wired).
+
+No change to the existing fallback block under the Description column (lines 1171-1185) — it remains as a safety net and never causes harm when extras is open (it's gated by `!showItemExtras`).
 
 ## Strictly out of scope
-- No change to per-row checkbox, badges, comment textareas, red/bold highlight, "auto-clear approval on comment edit" behavior, auto-unapprove-on-edit of a Design-approved BOQ, Post Submit, Approve Revised BOQ, Unapprove, comments fetch/save, BOQ revision history, OA editor, OA snapshot read path, Manufacturing/Purchase, notifications, PDFs, Excel exports, RLS, or any other department screen.
-- No DB migration. No edit to `itemApprovals.ts` (the existing `bulkSetItemApprovals` and `syncApprovalToBoqSnapshot` already do exactly what we need).
-- No change to `DesignStatusCell` (separate component, not used in this page's row UI).
+- No change to the Design page comment write path, per-row checkbox, badges, comment auto-save, auto-clear-approval-on-edit, auto-unapprove-on-edit, Post Submit, Approve Revised BOQ, the existing BOQ-level Unapprove button, or `bulkSetItemApprovals` / `syncApprovalToBoqSnapshot` internals.
+- No DB migration, no RLS change, no `boq_design_comments` schema change, no edit to `OaCellDesignComment`, no edit to `itemApprovals.ts`, no edit to `comments.ts`.
+- No change to OA totals, charges, saved payload, PDF/print/Excel, notifications, acknowledgement, revised logic, auto-BOQ, Manufacturing, Purchase, Cost Sheet, or any other department screen.
+- No new column rendered on OA. Description, HSN, Qty, Model, Motor, Motor Qty, Remarks, Rate, Amount already exist and already read `cellComment(it.id, <key>)` for the seven keys the Design page writes.
 
 ## Files
-- `src/pages/design/DesignBoqView.tsx` — add `bulking` state, the `bulkToggleAllApprovals` handler, and render the button in the `Line items` `CardHeader`.
+- `src/pages/design/DesignBoqView.tsx` — split the bulk-toggle button's `disabled` rule by direction.
+- `src/pages/orders/OrderEditor.tsx` — drop the early return in the extras auto-reveal effect; disable the Hide toggle while extras-comments exist.

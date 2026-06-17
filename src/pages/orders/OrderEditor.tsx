@@ -436,13 +436,15 @@ export default function OrderEditor() {
   // are not hidden behind the "Show Model, Motor, Remarks & Approval" toggle.
   // Only flips false→true; never auto-hides if the user opened it manually.
   const extrasCommentKeys = useRef(new Set(["model_number", "motor", "motor_quantity", "remarks"]));
-  useEffect(() => {
-    if (showItemExtras) return;
-    const hasExtrasComment = designCellComments.some(
+  const hasExtrasComment = useMemo(
+    () => designCellComments.some(
       (c) => c.column_key && extrasCommentKeys.current.has(c.column_key),
-    );
-    if (hasExtrasComment) setShowItemExtras(true);
-  }, [designCellComments, showItemExtras]);
+    ),
+    [designCellComments],
+  );
+  useEffect(() => {
+    if (hasExtrasComment && !showItemExtras) setShowItemExtras(true);
+  }, [hasExtrasComment, showItemExtras]);
 
   /** Map an OA item id → matching BOQ item id (id → norm description → positional). */
   const oaToBoqItemId = useMemo(() => {
@@ -1110,8 +1112,15 @@ export default function OrderEditor() {
               <Button
                 size="sm"
                 variant={showItemExtras ? "secondary" : "outline"}
-                onClick={() => setShowItemExtras((v) => !v)}
-                title="Show/hide Model, Remarks & Approval columns"
+                onClick={() => {
+                  if (showItemExtras && hasExtrasComment) return;
+                  setShowItemExtras((v) => !v);
+                }}
+                title={
+                  showItemExtras && hasExtrasComment
+                    ? "Locked open — Design has comments on Motor, Motor Qty, Remarks, or Model"
+                    : "Show/hide Model, Remarks & Approval columns"
+                }
               >
                 {showItemExtras ? "Hide" : "Show"} Model, Motor, Remarks & Approval
               </Button>
