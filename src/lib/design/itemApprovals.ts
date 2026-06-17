@@ -117,3 +117,46 @@ export async function bulkSetItemApprovals(
     await setItemApproval(boqId, id, revision, status);
   }
 }
+
+/**
+ * Mirror per-item Design approval into `boqs.line_items[].approval_status`
+ * so the OA editor's read-only "Approved by Design" column reflects the
+ * latest Design decision. Best-effort: failures are logged, not thrown.
+ */
+export async function syncApprovalToBoqSnapshot(
+  boqId: string,
+  itemIds: string[],
+  status: ItemApprovalStatus,
+): Promise<void> {
+  if (!boqId || !itemIds?.length) return;
+  try {
+    const { data, error } = await supabase
+      .from("boqs")
+      .select("line_items")
+      .eq("id", boqId)
+      .maybeSingle();
+    if (error) throw error;
+    const items = ((data as { line_items?: unknown } | null)?.line_items as
+      | Array<Record<string, unknown>>
+      | undefined) || [];
+    if (!items.length) return;
+    const ids = new Set(itemIds);
+    let changed = false;
+    const next = items.map((it) => {
+      const id = (it as { id?: string }).id;
+      if (id && ids.has(id) && (it as { approval_status?: string }).approval_status !== status) {
+        changed = true;
+        return { ...it, approval_status: status };
+      }
+      return it;
+    });
+    if (!changed) return;
+    const { error: upErr } = await supabase
+      .from("boqs")
+      .update({ line_items: next } as never)
+      .eq("id", boqId);
+    if (upErr) throw upErr;
+  } catch (e) {
+    console.warn("[itemApprovals] syncApprovalToBoqSnapshot failed", e);
+  }
+}
