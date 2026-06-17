@@ -457,7 +457,9 @@ export default function DesignBoqView() {
               variant={allApproved ? "outline" : "default"}
               onClick={() => void bulkToggleAllApprovals()}
               disabled={
-                items.length === 0 || bulking || approvalsDisabled || designApproved
+                items.length === 0 ||
+                bulking ||
+                (!allApproved && (approvalsDisabled || designApproved))
               }
             >
               {bulking
