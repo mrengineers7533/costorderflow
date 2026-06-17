@@ -50,6 +50,11 @@ export interface NotifFull {
   related_requisition_id?: string | null;
   related_annexure_id?: string | null;
   line_item_changes?: LineChange[] | null;
+  merge_meta?: {
+    merge_count?: number;
+    first_created_at?: string;
+    last_merged_at?: string;
+  } | null;
 }
 
 export interface LineChange {
