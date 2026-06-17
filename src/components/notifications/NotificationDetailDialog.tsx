@@ -388,6 +388,7 @@ function HeaderCard({ notif }: { notif: NotifFull }) {
 }
 
 function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
+  // (legacy table — no longer rendered; kept for potential reuse)
   if (!changes.length) return null;
   const cols = ["Item", "Field / Cell", "Old Value", "New Value", "Status"];
   return (
