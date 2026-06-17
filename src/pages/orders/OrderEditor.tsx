@@ -1112,8 +1112,15 @@ export default function OrderEditor() {
               <Button
                 size="sm"
                 variant={showItemExtras ? "secondary" : "outline"}
-                onClick={() => setShowItemExtras((v) => !v)}
-                title="Show/hide Model, Remarks & Approval columns"
+                onClick={() => {
+                  if (showItemExtras && hasExtrasComment) return;
+                  setShowItemExtras((v) => !v);
+                }}
+                title={
+                  showItemExtras && hasExtrasComment
+                    ? "Locked open — Design has comments on Motor, Motor Qty, Remarks, or Model"
+                    : "Show/hide Model, Remarks & Approval columns"
+                }
               >
                 {showItemExtras ? "Hide" : "Show"} Model, Motor, Remarks & Approval
               </Button>
