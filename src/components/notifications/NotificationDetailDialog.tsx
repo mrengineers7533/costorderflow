@@ -479,13 +479,12 @@ function ChangedLineItemsHistory({
   notif: NotifFull;
   history: NotifFull[];
 }) {
-  type Edit = {
+  type ItemEdit = {
     lineNo: string;
-    itemName: string;
-    field: string;
-    oldV: unknown;
-    newV: unknown;
     kind: "modified" | "added" | "removed";
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+    changedKeys: Set<string>;
     by: string;
     dept: string | null;
     when: string;
@@ -501,7 +500,7 @@ function ChangedLineItemsHistory({
   }
   all.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
 
-  const edits: Edit[] = [];
+  const edits: ItemEdit[] = [];
   for (const h of all) {
     const changes = Array.isArray(h.line_item_changes)
       ? (h.line_item_changes as LineChange[])
@@ -511,35 +510,21 @@ function ChangedLineItemsHistory({
       const lineNo = String(c.line_no ?? i + 1);
       const before = (c.before || {}) as Record<string, unknown>;
       const after = (c.after || {}) as Record<string, unknown>;
-      const itemName = String(
-        after["description"] ??
-          before["description"] ??
-          after["size_model"] ??
-          before["size_model"] ??
-          "",
+      const changedKeys = new Set<string>(
+        (c.changed_fields || []).filter(
+          (f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"),
+        ),
       );
-      const base = {
+      edits.push({
         lineNo,
-        itemName,
+        kind: c.kind,
+        before,
+        after,
+        changedKeys,
         by: h.actor_user_name || "—",
         dept: h.actor_department || null,
         when: h.created_at,
-      };
-      if (c.kind === "modified") {
-        const fields = (c.changed_fields || []).filter(
-          (f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"),
-        );
-        for (const f of fields) {
-          const oldV = before[f];
-          const newV = after[f];
-          if (JSON.stringify(oldV ?? null) === JSON.stringify(newV ?? null)) continue;
-          edits.push({ ...base, field: f, oldV, newV, kind: "modified" });
-        }
-      } else if (c.kind === "added") {
-        edits.push({ ...base, field: "—", oldV: "—", newV: "Added", kind: "added" });
-      } else if (c.kind === "removed") {
-        edits.push({ ...base, field: "—", oldV: "Present", newV: "Removed", kind: "removed" });
-      }
+      });
     }
   }
 
@@ -585,58 +570,10 @@ function ChangedLineItemsHistory({
             <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Line Item Changes
             </div>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/40 text-left">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Line Item</th>
-                    <th className="px-3 py-2 font-semibold">Item Name</th>
-                    <th className="px-3 py-2 font-semibold">Field / Option Edited</th>
-                    <th className="px-3 py-2 font-semibold">Old Value</th>
-                    <th className="px-3 py-2 font-semibold">Current Value</th>
-                    <th className="px-3 py-2 font-semibold">Edited By</th>
-                    <th className="px-3 py-2 font-semibold">Edited On</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {edits.map((e, i) => {
-                    const fieldLabel =
-                      e.kind === "added"
-                        ? "Line item added"
-                        : e.kind === "removed"
-                          ? "Line item removed"
-                          : labelOf(e.field);
-                    return (
-                      <tr key={i} className="border-t align-top">
-                        <td className="whitespace-nowrap px-3 py-2 font-semibold">
-                          Item {e.lineNo}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="max-w-[220px] truncate" title={e.itemName}>
-                            {e.itemName || "—"}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 font-medium">{fieldLabel}</td>
-                        <td className="break-words px-3 py-2 text-red-600 line-through">
-                          {truncate(e.oldV, 200)}
-                        </td>
-                        <td className="break-words px-3 py-2 font-medium text-emerald-700">
-                          {truncate(e.newV, 200)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2">
-                          {e.by}
-                          {e.dept ? (
-                            <span className="text-muted-foreground"> ({e.dept})</span>
-                          ) : null}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                          {new Date(e.when).toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              {edits.map((e, i) => (
+                <BeforeAfterItemTable key={i} edit={e} />
+              ))}
             </div>
           </div>
         )}
