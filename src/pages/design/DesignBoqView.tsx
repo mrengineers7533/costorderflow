@@ -56,6 +56,8 @@ export default function DesignBoqView() {
   const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const savedValuesRef = useRef<Record<string, string>>({});
+  const autoUnapprovingRef = useRef(false);
   const keyOf = (itemId: string, col: string) => `${itemId}::${col}`;
 
   async function refresh() {
@@ -90,6 +92,7 @@ export default function DesignBoqView() {
         d[keyOf(c.boq_item_id, c.column_key || "__row__")] = c.comment || "";
       }
       setDrafts(d);
+      savedValuesRef.current = { ...d };
     }
     setLoading(false);
   }
@@ -144,6 +147,36 @@ export default function DesignBoqView() {
         comment: value,
       });
       setSavedAt((p) => ({ ...p, [k]: Date.now() }));
+      const previous = savedValuesRef.current[k] ?? "";
+      const changed = previous !== value;
+      savedValuesRef.current[k] = value;
+      if (changed && designApproved && !autoUnapprovingRef.current) {
+        autoUnapprovingRef.current = true;
+        try {
+          const { error } = await supabase
+            .from("boqs")
+            .update({
+              design_review_status: "draft",
+              verification_status: "pending",
+              verified_at: null,
+            } as never)
+            .eq("id", id);
+          if (error) throw error;
+          toast({
+            title: "BOQ unapproved",
+            description: "Comment added. Review and Approve again when ready.",
+          });
+          await refresh();
+        } catch (e) {
+          toast({
+            title: "Could not auto-unapprove BOQ",
+            description: e instanceof Error ? e.message : "Try again.",
+            variant: "destructive",
+          });
+        } finally {
+          autoUnapprovingRef.current = false;
+        }
+      }
     } catch (e) {
       toast({
         title: "Could not auto-save comment",
