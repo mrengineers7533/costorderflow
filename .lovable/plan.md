@@ -1,26 +1,22 @@
 ## Goal
-On the Manufacturing and Purchase BOQ details page only, add Motor and Motor Qty columns to the "Approved BOQ items (read-only)" table — placed after the existing Remarks column.
+On both the Manufacturing and Purchase landing pages (the approved-BOQ list), separate documents into **MR** and **GMS** sections so users can switch between them, similar to the Design BOQs list.
 
 ## Scope
-Single file: `src/pages/modules/ApprovedBoqModule.tsx` (shared by `ManufacturingDetail` and `PurchaseDetail`).
-
-No other surface changes: list page, PDFs, Excel, OA/BOQ/Design pages, save/revised/auto-BOQ logic, notifications, acknowledgements, calculations — all untouched.
+- Only `src/pages/modules/ApprovedBoqModule.tsx` → `ApprovedBoqListPage`.
+- No changes to detail page, workflow, calculations, notifications, acknowledgement, save/PDF/auto-BOQ logic, or data.
 
 ## Changes
-In `ApprovedBoqDetailPage`'s items table:
+1. Add a `Tabs` control (shadcn `Tabs`) with two triggers: **MR BOQs (n)** and **GMS BOQs (n)**, defaulting to MR. Counts derived from `boq.format` on the already-filtered approved+latest-per-family `rows`.
+2. Filter the displayed cards by the active tab (`b.format === tab`) before applying the existing search filter. Card rendering, badges, "Open" button, NotSeenNotifBadge — all unchanged.
+3. Empty-state message adapts to the active tab ("No approved MR BOQs…" / "No approved GMS BOQs…").
+4. Search box behavior unchanged; it now filters within the active tab.
 
-1. Add two `<th>` headers after the existing Remarks header:
-   - `Motor`
-   - `Motor Qty` (right-aligned)
+## Out of scope (untouched)
+- `ApprovedBoqDetailPage` (BOQ details view incl. Motor / Motor Qty / Remarks columns).
+- Routing, sidebar entries, requisition flow, PDF, notifications.
+- Any backend / migration work.
 
-2. Add two `<td>` cells per row after the Remarks cell, reading from existing `BoqLineItem` fields:
-   - `it.motor || "—"`
-   - `it.motor_quantity ?? "—"` (right-aligned)
-
-3. Update the empty-state `colSpan` to account for the two new columns (currently `showMake ? 7 : 6` → `showMake ? 9 : 8`).
-
-## Final column order
-`# | Description | Model | [Make?] | Qty | Unit | Remarks | Motor | Motor Qty`
-
-## Data source
-Already present on `BoqLineItem` (`motor`, `motor_quantity` in `src/lib/boq/types.ts`) — same fields used by Design/BOQ/OA pages. No schema, query, or types changes needed.
+## Tech notes
+- Reuse existing `Tabs`, `TabsList`, `TabsTrigger` from `@/components/ui/tabs` (already used in `DesignBoqList`).
+- Tab state via `useState<"MR" | "GMS">("MR")`.
+- Counts via `useMemo` over `rows`.
