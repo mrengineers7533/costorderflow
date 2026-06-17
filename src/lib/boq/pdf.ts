@@ -189,11 +189,12 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   y += leftRows.length * 5 + 4;
 
   // Items table — Make / Approved-by-Design columns inserted only when requested.
-  // Column order: ITEM, MODEL, DESCRIPTION, [MAKE], [MOTOR], [MOTOR QTY], QTY, UNIT, Remarks, [Approved]
+  // Column order: ITEM, MODEL, DESCRIPTION, [MAKE], QTY, [MOTOR], [MOTOR QTY], UNIT, Remarks, [Approved]
   const headRow: string[] = ["ITEM No.", "MODEL NUMBER", "DESCRIPTION"];
   if (showMake) headRow.push("MAKE");
+  headRow.push("QTY");
   if (hasMotor) headRow.push("MOTOR", "MOTOR QTY");
-  headRow.push("QTY", "UNIT", "Remarks");
+  headRow.push("UNIT", "Remarks");
   if (showApproval) headRow.push("Approved by Design");
   const approvalIdx = showApproval ? headRow.length - 1 : -1;
   const rows = sortByItemNo(boq.line_items).map((it, i) => {
@@ -209,6 +210,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       it.description || "",
     ];
     if (showMake) base.push((it.make || "").trim());
+    base.push(it.quantity ? String(it.quantity) : "");
     if (hasMotor) {
       const x = it as { motor?: string; motor_quantity?: number };
       base.push(
@@ -217,7 +219,6 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       );
     }
     base.push(
-      it.quantity ? String(it.quantity) : "",
       it.unit || "",
       it.remarks || "",
     );
@@ -237,13 +238,13 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   columnStyles[ci++] = { cellWidth: "auto" };
   // MAKE (optional)
   if (showMake) columnStyles[ci++] = { cellWidth: "auto" };
-  // Motor / Motor Qty (optional) — between MAKE and QTY
+  // QTY
+  columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
+  // Motor / Motor Qty (optional) — after QTY
   if (hasMotor) {
     columnStyles[ci++] = { cellWidth: "auto" };
     columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   }
-  // QTY
-  columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   // UNIT
   columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
   // Remarks

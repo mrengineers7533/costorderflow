@@ -1,37 +1,36 @@
-## BOQ Print Page Column Auto-Fit
+## BOQ Column Reorder — On-Screen Table & PDF Only
 
-### Goal
-Make BOQ print / PDF columns auto-fit to their content instead of using fixed widths.
+### New column order
+```
+Item | Model | Description | Qty | Motor | Motor Qty | Unit | Remarks | Approval
+```
+
+(Optional "Make" column, when toggled on, stays in its current spot between Description and Qty — it was not listed by the user so it remains an optional addition controlled by the existing toggle.)
+
+### What changes vs. today
+Current order: `Item | Model | Description | [Make] | [Motor] | [Motor Qty] | Qty | Unit | Remarks | [Approval]`
+New order:     `Item | Model | Description | [Make] | Qty | Motor | Motor Qty | Unit | Remarks | Approval`
+
+Differences:
+- **Qty** moves to immediately after Description/Make (before Motor).
+- **Motor** and **Motor Qty** move to after Qty (before Unit).
+- Unit, Remarks, Approval order unchanged at the tail.
 
 ### Files to change
 
-1. **`src/lib/boq/pdf.ts`** (PDF generation via jspdf-autotable)
-2. **`src/pages/boqs/BoqEditor.tsx`** — `BoqDocPreview` HTML print preview component
+1. **`src/lib/boq/pdf.ts`** (`generateBoqPDF`)
+   - Reorder `headRow` array push order.
+   - Reorder the per-row `base[]` push order to match.
+   - Reorder `columnStyles` index assignments (keep `cellWidth: "auto"` everywhere — auto-fit stays).
+   - Recompute `approvalIdx` based on the new position.
 
-### Changes
+2. **`src/pages/boqs/BoqEditor.tsx`** — `BoqDocPreview` (HTML print preview that drives the Print button & live preview)
+   - Reorder `<thead>` header cells to new order.
+   - Reorder `<tbody>` row cells to match.
+   - Update the index math used to decide which header cells are centered.
 
-#### 1. PDF — `src/lib/boq/pdf.ts`
-In the `autoTable` call, replace all hardcoded `cellWidth` values in `columnStyles` with `"auto"`.
-Keep `halign` and `fontStyle` as-is.
-
-```diff
-- columnStyles[ci++] = { cellWidth: showMake ? 14 : 16, halign: "center" };
-+ columnStyles[ci++] = { cellWidth: "auto", halign: "center" };
-```
-
-Repeat for every `columnStyles[ci++]` assignment (MODEL NUMBER, DESCRIPTION, MAKE, MOTOR, MOTOR QTY, QTY, UNIT, Remarks, Approved by Design).
-
-#### 2. HTML print preview — `BoqDocPreview` in `BoqEditor.tsx`
-- Remove the `<colgroup>` block entirely.
-- Change `tableLayout: "fixed"` to `tableLayout: "auto"`.
-- Let the browser auto-size each column based on header + cell content.
-
-```diff
-- <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "fixed" }}>
--   <colgroup>…fixed mm widths…</colgroup>
-+ <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4mm", fontSize: "8.5pt", tableLayout: "auto" }}>
-```
-
-### Out of scope
-- No changes to approval status display logic, calculations, workflows, notifications, or any other print/PDF behavior.
-- No changes to OA, PI, Requisition, or other document PDFs.
+### Explicitly NOT changed
+- On-screen editor table (`BoqItemsList` and `buildBoqGridColumns`) — user said "apply only BOQ backend data & PDF". The editor UI stays in its current column order.
+- No edits to OA, PI, PO, Requisition, distribution link, approver page, Excel export, notifications, calculations, save/revision/approval logic, or the `boqs` schema.
+- No new fields. No rename of Model → HSN. No Rate/Amount added.
+- "Backend data" in BOQ items JSON has no column order (it's keyed by field name) — nothing to change there. Reorder applies only to how the PDF and HTML print preview render columns.
