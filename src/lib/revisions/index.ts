@@ -7,6 +7,27 @@ import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { PiRecord } from "@/lib/pi/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
+/** Toggle the per-connection "suppress cascaded notifications" flag.
+ *  Used so that BOQ/PI rows auto-created or auto-synced as a side effect of
+ *  an OA save / revise do not emit their own duplicate notifications. */
+async function setNotifSuppress(on: boolean): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.rpc as any)("set_notif_suppress", { p_on: on });
+  } catch (e) {
+    console.warn(`set_notif_suppress(${on}) failed`, e);
+  }
+}
+
+async function withNotifSuppress<T>(fn: () => Promise<T>): Promise<T> {
+  await setNotifSuppress(true);
+  try {
+    return await fn();
+  } finally {
+    await setNotifSuppress(false);
+  }
+}
+
 /** Snapshot the given BOQ as a PDF in the `boq-documents` bucket under a
  *  history/ prefix so it is never overwritten by future revisions. Best
  *  effort — failures are logged but never break the revision flow. */
