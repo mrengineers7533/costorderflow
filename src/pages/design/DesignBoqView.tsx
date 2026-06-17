@@ -23,6 +23,7 @@ import {
   fetchItemApprovals,
   setItemApproval,
   bulkSetItemApprovals,
+  syncApprovalToBoqSnapshot,
   type ItemApproval,
 } from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
@@ -154,6 +155,7 @@ export default function DesignBoqView() {
       if (changed && boq && approvals[itemId]?.status === "approved") {
         try {
           await setItemApproval(boq.id, itemId, boq.revision ?? 0, "pending");
+          await syncApprovalToBoqSnapshot(boq.id, [itemId], "pending");
           setApprovals((p) => ({
             ...p,
             [itemId]: {
@@ -244,6 +246,7 @@ export default function DesignBoqView() {
     setSavingApprovalId(itemId);
     try {
       await setItemApproval(boq.id, itemId, revision, next ? "approved" : "pending");
+      await syncApprovalToBoqSnapshot(boq.id, [itemId], next ? "approved" : "pending");
       const map = await fetchItemApprovals(boq.id, revision);
       setApprovals(map);
     } catch (e) {
@@ -310,6 +313,11 @@ export default function DesignBoqView() {
         if (missing.length > 0) {
           await bulkSetItemApprovals(boq.id, missing, revision, "approved");
         }
+        await syncApprovalToBoqSnapshot(
+          boq.id,
+          items.map((it) => it.id),
+          "approved",
+        );
       }
       await approveRevisedBoq(id);
       toast({ title: "BOQ approved", description: "Released to Purchase & Manufacturing." });
