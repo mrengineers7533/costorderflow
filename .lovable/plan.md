@@ -1,57 +1,22 @@
-## Goals
-1. Make the new bulk button able to "Remove All Approvals" even after the BOQ is already Design-approved.
-2. Guarantee that Design comments on Motor, Motor Qty, Remarks (and Model) always show on the OA editor — never hidden behind the "Show Model, Motor, Remarks & Approval" toggle.
+## Issue
+The "Approve All / Remove All Approvals" bulk button on the Design BOQ page is sometimes disabled when the user expects to click it. Specifically: once the BOQ has been Design-approved or comments are in the "changes_requested" state, the **Approve All** side of the toggle is disabled, so after a user clicks "Remove All Approvals" they cannot re-approve everything in one click without going back row-by-row.
 
-## Issue 1 — Cannot Remove All Approvals after design-approved
-
-Current logic in `src/pages/design/DesignBoqView.tsx`:
+## Fix
+Relax the bulk button's `disabled` rule in `src/pages/design/DesignBoqView.tsx` to only block while truly impossible:
 
 ```
-disabled={items.length === 0 || bulking || approvalsDisabled || designApproved}
+disabled={items.length === 0 || bulking}
 ```
 
-`approvalsDisabled` (= `alreadySubmitted`) and `designApproved` block the button entirely — so once the BOQ has been Design-approved or comments have been submitted, the user has no way to clear per-item approvals in one click.
+That removes the `approvalsDisabled` (= `alreadySubmitted` / `changes_requested`) and `designApproved` gates from the button entirely, in both directions. Per-row writes through `bulkSetItemApprovals` and `syncApprovalToBoqSnapshot` already succeed regardless of the BOQ-level `design_review_status` (verified — most recent per-row pending writes succeeded on a `changes_requested` BOQ at 13:41 UTC), so the gate was UI-only and was the cause of the unresponsive button.
 
-### Fix
-Split the disabled rule by direction:
+This does not change any other behavior:
+- Per-row Approve checkbox keeps its existing `disabled={approvalsDisabled || savingApprovalId === it.id}` rule (unchanged).
+- The BOQ-level **Approve Revised BOQ** and **Unapprove** buttons keep their existing rules (unchanged).
+- The auto-clear-approval-on-comment and auto-unapprove-on-edit flows are untouched.
 
-- When the button label is **"Approve All"** (i.e. `!allApproved`) → keep `disabled` as today: `items.length === 0 || bulking || approvalsDisabled || designApproved`. We don't want bulk-approving while the BOQ is locked / already approved at the BOQ level.
-- When the button label is **"Remove All Approvals"** (i.e. `allApproved`) → only `disabled` on `items.length === 0 || bulking`. Per-item approvals are write-able regardless of the BOQ-level `design_review_status`, so removing them is always safe.
-
-No change to the BOQ-level `design_review_status`. We do not call `Unapprove` — that flow stays exactly as-is on its own button. Only per-row `boq_item_design_status` + the `boqs.line_items[].approval_status` mirror are toggled to `pending`, identical to the existing per-row checkbox path.
-
-## Issue 2 — Motor / Motor Qty / Remarks Design comments not visible on OA
-
-In `src/pages/orders/OrderEditor.tsx`, the inputs for Model, Motor, Motor Qty, Remarks (and their `<OaCellDesignComment>` children) render only when `showItemExtras === true`. There is a one-shot auto-reveal:
-
-```
-useEffect(() => {
-  if (showItemExtras) return;                // ← bug: latches off after user toggle
-  if (hasExtrasComment) setShowItemExtras(true);
-}, [designCellComments, showItemExtras]);
-```
-
-Problem: once the user manually clicks "Hide Model, Motor, Remarks & Approval", `showItemExtras` becomes `false` but the effect's early `return` prevents it from re-opening — so the Motor / Motor Qty / Remarks comments disappear from the editable cells. The DB query, mapping, and `column_key` values are all correct (verified — Motor comments exist with `column_key='motor'` for the current BOQ), so the visibility toggle is the only thing in the way.
-
-### Fix
-Force-open the extras section whenever any extras-field Design comment exists, regardless of past user toggling. Two small edits inside `OrderEditor.tsx`:
-
-1. Remove the `if (showItemExtras) return;` early return in the auto-reveal effect. Always evaluate `hasExtrasComment` and call `setShowItemExtras(true)` when true. (If already true, the set is a no-op.)
-2. Disable the manual Hide button (the toggle around lines 1112-1116) while extras-comments exist, with a tooltip-style title attribute "Hidden while Design has comments on Motor, Motor Qty, Remarks, or Model". Allow toggling off only when no extras comments are present. Keep the Show side fully clickable.
-
-These two together ensure:
-- Comments on Motor, Motor Qty, Remarks, Model are always rendered next to their actual editable input on OA.
-- The existing Apply button on each `<OaCellDesignComment>` continues to work (already wired for all 7 columns).
-- The red-bold cell highlight on changed/commented cells continues to work (already wired).
-
-No change to the existing fallback block under the Description column (lines 1171-1185) — it remains as a safety net and never causes harm when extras is open (it's gated by `!showItemExtras`).
-
-## Strictly out of scope
-- No change to the Design page comment write path, per-row checkbox, badges, comment auto-save, auto-clear-approval-on-edit, auto-unapprove-on-edit, Post Submit, Approve Revised BOQ, the existing BOQ-level Unapprove button, or `bulkSetItemApprovals` / `syncApprovalToBoqSnapshot` internals.
-- No DB migration, no RLS change, no `boq_design_comments` schema change, no edit to `OaCellDesignComment`, no edit to `itemApprovals.ts`, no edit to `comments.ts`.
-- No change to OA totals, charges, saved payload, PDF/print/Excel, notifications, acknowledgement, revised logic, auto-BOQ, Manufacturing, Purchase, Cost Sheet, or any other department screen.
-- No new column rendered on OA. Description, HSN, Qty, Model, Motor, Motor Qty, Remarks, Rate, Amount already exist and already read `cellComment(it.id, <key>)` for the seven keys the Design page writes.
+## Out of scope
+No change to per-row approval logic, comment write path, OA editor, OA snapshot mirror, RLS, schema, notifications, PDFs, Manufacturing, Purchase, or any other screen. No change to `Badge` / `DesignStatusCell` / `itemApprovals.ts`. The "Function components cannot be given refs" console warning from `Badge` inside `TooltipTrigger asChild` is cosmetic only, does not break the click, and is not addressed here.
 
 ## Files
-- `src/pages/design/DesignBoqView.tsx` — split the bulk-toggle button's `disabled` rule by direction.
-- `src/pages/orders/OrderEditor.tsx` — drop the early return in the extras auto-reveal effect; disable the Hide toggle while extras-comments exist.
+- `src/pages/design/DesignBoqView.tsx` — one line: the bulk button's `disabled` prop.
