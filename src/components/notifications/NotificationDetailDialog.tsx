@@ -96,8 +96,8 @@ const FIELD_LABELS: Record<string, string> = {
   status: "Status",
   notes: "Notes",
   terms: "Terms & Conditions",
-  qty: "Qty",
-  quantity: "Qty",
+  qty: "Quantity",
+  quantity: "Quantity",
   rate: "Rate",
   amount: "Amount",
   model_number: "Model",
@@ -115,6 +115,9 @@ const FIELD_LABELS: Record<string, string> = {
   pi_date: "PI Date",
   po_date: "PO Date",
   item_no: "Item No",
+  hsn: "HSN",
+  hsn_code: "HSN",
+  hsn_sac: "HSN",
 };
 
 function labelOf(k: string) {
@@ -385,6 +388,7 @@ function HeaderCard({ notif }: { notif: NotifFull }) {
 }
 
 function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
+  // (legacy table — no longer rendered; kept for potential reuse)
   if (!changes.length) return null;
   const cols = ["Item", "Field / Cell", "Old Value", "New Value", "Status"];
   return (
@@ -469,6 +473,188 @@ function LineItemDetailsTable({ changes }: { changes: LineChange[] }) {
   );
 }
 
+const COLUMN_DEFS: { key: string; label: string; aliases: string[] }[] = [
+  { key: "description", label: "Description", aliases: ["description", "size_model", "model"] },
+  { key: "hsn", label: "HSN", aliases: ["hsn", "hsn_code", "hsn_sac"] },
+  { key: "qty", label: "Qty", aliases: ["qty", "quantity"] },
+  { key: "rate", label: "Rate", aliases: ["rate", "unit_rate", "price"] },
+  { key: "amount", label: "Amount", aliases: ["amount", "total"] },
+];
+
+function pickVal(
+  row: Record<string, unknown>,
+  aliases: string[],
+): { key: string | null; value: unknown } {
+  for (const k of aliases) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") {
+      return { key: k, value: row[k] };
+    }
+  }
+  for (const k of aliases) {
+    if (row[k] !== undefined) return { key: k, value: row[k] };
+  }
+  return { key: null, value: undefined };
+}
+
+function computeAmount(row: Record<string, unknown>): unknown {
+  const direct = pickVal(row, ["amount", "total"]).value;
+  if (direct !== undefined && direct !== null && direct !== "") return direct;
+  const q = Number(pickVal(row, ["qty", "quantity"]).value);
+  const r = Number(pickVal(row, ["rate", "unit_rate", "price"]).value);
+  if (!Number.isFinite(q) || !Number.isFinite(r)) return undefined;
+  return q * r;
+}
+
+function fmtCell(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "number") return String(v);
+  return typeof v === "string" ? v : JSON.stringify(v);
+}
+
+function BeforeAfterItemTable({
+  edit,
+}: {
+  edit: {
+    lineNo: string;
+    kind: "modified" | "added" | "removed";
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+    changedKeys: Set<string>;
+    by: string;
+    dept: string | null;
+    when: string;
+  };
+}) {
+  const { lineNo, kind, before, after, changedKeys, by, dept, when } = edit;
+
+  const renderRow = (
+    row: Record<string, unknown>,
+    variant: "before" | "after" | "added" | "removed",
+  ) => {
+    const cells = COLUMN_DEFS.map((col) => {
+      const val = col.key === "amount" ? computeAmount(row) : pickVal(row, col.aliases).value;
+      const isChanged =
+        variant !== "before" && col.aliases.some((a) => changedKeys.has(a));
+      const cls =
+        variant === "removed"
+          ? "text-red-600 line-through"
+          : isChanged
+            ? "text-red-600 font-semibold"
+            : "";
+      return (
+        <td key={col.key} className={`px-3 py-2 ${cls}`}>
+          {fmtCell(val)}
+        </td>
+      );
+    });
+
+    let changesText: React.ReactNode = "";
+    if (variant === "after" && kind === "modified") {
+      const sentences: string[] = [];
+      for (const col of COLUMN_DEFS) {
+        const aliasHit = col.aliases.find((a) => changedKeys.has(a));
+        if (!aliasHit) continue;
+        const oldV =
+          col.key === "amount" ? computeAmount(before) : pickVal(before, col.aliases).value;
+        const newV =
+          col.key === "amount" ? computeAmount(after) : pickVal(after, col.aliases).value;
+        sentences.push(
+          `Change in ${col.label}: Old value was ${fmtCell(oldV)} and new value is ${fmtCell(newV)}.`,
+        );
+      }
+      // Include any other changed fields not in the fixed columns
+      const known = new Set(COLUMN_DEFS.flatMap((c) => c.aliases));
+      for (const f of changedKeys) {
+        if (known.has(f)) continue;
+        sentences.push(
+          `Change in ${labelOf(f)}: Old value was ${fmtCell(before[f])} and new value is ${fmtCell(after[f])}.`,
+        );
+      }
+      changesText = (
+        <div className="space-y-1">
+          {sentences.map((s, i) => (
+            <div key={i} className="text-red-600">
+              {s}
+            </div>
+          ))}
+        </div>
+      );
+    } else if (variant === "added") {
+      changesText = <div className="text-emerald-700">New line item added.</div>;
+    } else if (variant === "removed") {
+      changesText = <div className="text-red-600">Line item removed.</div>;
+    }
+
+    return (
+      <tr className="border-t align-top">
+        <td className="whitespace-nowrap px-3 py-2 font-semibold">{lineNo}</td>
+        {cells}
+        <td className="px-3 py-2 text-xs">{changesText}</td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="rounded-lg border bg-background">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+        <span>
+          <span className="font-semibold text-foreground">Item {lineNo}</span>
+          {" · edited by "}
+          <span className="text-foreground">{by}</span>
+          {dept ? ` (${dept})` : ""}
+        </span>
+        <span>{new Date(when).toLocaleString()}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/40 text-left">
+            <tr>
+              <th className="px-3 py-2 font-semibold">S. No.</th>
+              {COLUMN_DEFS.map((c) => (
+                <th key={c.key} className="px-3 py-2 font-semibold">
+                  {c.label}
+                </th>
+              ))}
+              <th className="px-3 py-2 font-semibold">Changes/Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kind === "added" ? (
+              renderRow(after, "added")
+            ) : kind === "removed" ? (
+              renderRow(before, "removed")
+            ) : (
+              <>
+                {(() => {
+                  const beforeRow = renderRow(before, "before");
+                  const afterRow = renderRow(after, "after");
+                  return (
+                    <>
+                      {beforeRow}
+                      {afterRow}
+                    </>
+                  );
+                })()}
+              </>
+            )}
+          </tbody>
+          <tfoot>
+            <tr className="border-t bg-muted/20 text-[10px] text-muted-foreground">
+              <td className="px-3 py-1" colSpan={COLUMN_DEFS.length + 2}>
+                {kind === "modified"
+                  ? "Top row: Before Edit · Bottom row: After Edit (changed values in red)"
+                  : kind === "added"
+                    ? "New line item"
+                    : "Removed line item"}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function ChangedLineItemsHistory({
   notif,
   history,
@@ -476,13 +662,12 @@ function ChangedLineItemsHistory({
   notif: NotifFull;
   history: NotifFull[];
 }) {
-  type Edit = {
+  type ItemEdit = {
     lineNo: string;
-    itemName: string;
-    field: string;
-    oldV: unknown;
-    newV: unknown;
     kind: "modified" | "added" | "removed";
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+    changedKeys: Set<string>;
     by: string;
     dept: string | null;
     when: string;
@@ -498,7 +683,7 @@ function ChangedLineItemsHistory({
   }
   all.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
 
-  const edits: Edit[] = [];
+  const edits: ItemEdit[] = [];
   for (const h of all) {
     const changes = Array.isArray(h.line_item_changes)
       ? (h.line_item_changes as LineChange[])
@@ -508,35 +693,21 @@ function ChangedLineItemsHistory({
       const lineNo = String(c.line_no ?? i + 1);
       const before = (c.before || {}) as Record<string, unknown>;
       const after = (c.after || {}) as Record<string, unknown>;
-      const itemName = String(
-        after["description"] ??
-          before["description"] ??
-          after["size_model"] ??
-          before["size_model"] ??
-          "",
+      const changedKeys = new Set<string>(
+        (c.changed_fields || []).filter(
+          (f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"),
+        ),
       );
-      const base = {
+      edits.push({
         lineNo,
-        itemName,
+        kind: c.kind,
+        before,
+        after,
+        changedKeys,
         by: h.actor_user_name || "—",
         dept: h.actor_department || null,
         when: h.created_at,
-      };
-      if (c.kind === "modified") {
-        const fields = (c.changed_fields || []).filter(
-          (f) => !HIDDEN_FIELDS.has(f) && !f.endsWith("_id"),
-        );
-        for (const f of fields) {
-          const oldV = before[f];
-          const newV = after[f];
-          if (JSON.stringify(oldV ?? null) === JSON.stringify(newV ?? null)) continue;
-          edits.push({ ...base, field: f, oldV, newV, kind: "modified" });
-        }
-      } else if (c.kind === "added") {
-        edits.push({ ...base, field: "—", oldV: "—", newV: "Added", kind: "added" });
-      } else if (c.kind === "removed") {
-        edits.push({ ...base, field: "—", oldV: "Present", newV: "Removed", kind: "removed" });
-      }
+      });
     }
   }
 
@@ -582,58 +753,10 @@ function ChangedLineItemsHistory({
             <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Line Item Changes
             </div>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/40 text-left">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Line Item</th>
-                    <th className="px-3 py-2 font-semibold">Item Name</th>
-                    <th className="px-3 py-2 font-semibold">Field / Option Edited</th>
-                    <th className="px-3 py-2 font-semibold">Old Value</th>
-                    <th className="px-3 py-2 font-semibold">Current Value</th>
-                    <th className="px-3 py-2 font-semibold">Edited By</th>
-                    <th className="px-3 py-2 font-semibold">Edited On</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {edits.map((e, i) => {
-                    const fieldLabel =
-                      e.kind === "added"
-                        ? "Line item added"
-                        : e.kind === "removed"
-                          ? "Line item removed"
-                          : labelOf(e.field);
-                    return (
-                      <tr key={i} className="border-t align-top">
-                        <td className="whitespace-nowrap px-3 py-2 font-semibold">
-                          Item {e.lineNo}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="max-w-[220px] truncate" title={e.itemName}>
-                            {e.itemName || "—"}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 font-medium">{fieldLabel}</td>
-                        <td className="break-words px-3 py-2 text-red-600 line-through">
-                          {truncate(e.oldV, 200)}
-                        </td>
-                        <td className="break-words px-3 py-2 font-medium text-emerald-700">
-                          {truncate(e.newV, 200)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2">
-                          {e.by}
-                          {e.dept ? (
-                            <span className="text-muted-foreground"> ({e.dept})</span>
-                          ) : null}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                          {new Date(e.when).toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              {edits.map((e, i) => (
+                <BeforeAfterItemTable key={i} edit={e} />
+              ))}
             </div>
           </div>
         )}
