@@ -184,6 +184,7 @@ export type Database = {
           actor_user_name: string | null
           client_name: string | null
           created_at: string
+          dedupe_key: string | null
           event_type: string
           id: string
           line_item_changes: Json | null
@@ -208,6 +209,7 @@ export type Database = {
           actor_user_name?: string | null
           client_name?: string | null
           created_at?: string
+          dedupe_key?: string | null
           event_type: string
           id?: string
           line_item_changes?: Json | null
@@ -232,6 +234,7 @@ export type Database = {
           actor_user_name?: string | null
           client_name?: string | null
           created_at?: string
+          dedupe_key?: string | null
           event_type?: string
           id?: string
           line_item_changes?: Json | null
@@ -2927,6 +2930,7 @@ export type Database = {
           actor_user_name: string | null
           client_name: string | null
           created_at: string
+          dedupe_key: string | null
           event_type: string
           id: string
           line_item_changes: Json | null
