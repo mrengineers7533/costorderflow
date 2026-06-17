@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -511,6 +511,42 @@ function fmtCell(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+function HeaderFieldValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([k]) => !HIDDEN_FIELDS.has(k) && !k.endsWith("_id"),
+    );
+    if (!entries.length) return <span className="text-muted-foreground">—</span>;
+    return (
+      <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
+        {entries.map(([k, v]) => (
+          <React.Fragment key={k}>
+            <div className="text-[11px] text-muted-foreground">{labelOf(k)}</div>
+            <div className="text-xs break-words">
+              {v === null || v === undefined || v === ""
+                ? "—"
+                : typeof v === "object"
+                  ? JSON.stringify(v)
+                  : String(v)}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  }
+  if (Array.isArray(value)) {
+    return (
+      <div className="text-xs">
+        {value.length} item{value.length === 1 ? "" : "s"}
+      </div>
+    );
+  }
+  return <span>{String(value)}</span>;
+}
+
 function BeforeAfterItemTable({
   edit,
 }: {
@@ -688,6 +724,27 @@ function ChangedLineItemsHistory({
     const changes = Array.isArray(h.line_item_changes)
       ? (h.line_item_changes as LineChange[])
       : [];
+    // Fallback for create-style events that ship full line_items on new_value
+    // but no diff payload — synthesize "added" entries so the user can see
+    // the items in the same row-style table.
+    if (!changes.length) {
+      const nv = (h.new_value || {}) as Record<string, unknown>;
+      const items = Array.isArray(nv.line_items) ? (nv.line_items as Record<string, unknown>[]) : [];
+      for (let i = 0; i < items.length; i++) {
+        const after = items[i] || {};
+        edits.push({
+          lineNo: String((after as { line_no?: number | string }).line_no ?? i + 1),
+          kind: "added",
+          before: {},
+          after,
+          changedKeys: new Set<string>(),
+          by: h.actor_user_name || "—",
+          dept: h.actor_department || null,
+          when: h.created_at,
+        });
+      }
+      continue;
+    }
     for (let i = 0; i < changes.length; i++) {
       const c = changes[i];
       const lineNo = String(c.line_no ?? i + 1);
@@ -781,11 +838,11 @@ function ChangedLineItemsHistory({
                       <td className="whitespace-nowrap px-3 py-2 font-medium">
                         {labelOf(k)}
                       </td>
-                      <td className="break-words px-3 py-2 text-red-600 line-through">
-                        {truncate((ov as Record<string, unknown>)[k], 200)}
+                      <td className="break-words px-3 py-2 text-red-600">
+                        <HeaderFieldValue value={(ov as Record<string, unknown>)[k]} />
                       </td>
                       <td className="break-words px-3 py-2 font-medium text-emerald-700">
-                        {truncate((nv as Record<string, unknown>)[k], 200)}
+                        <HeaderFieldValue value={(nv as Record<string, unknown>)[k]} />
                       </td>
                     </tr>
                   ))}
