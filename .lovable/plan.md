@@ -1,28 +1,38 @@
-## Problem
+# Red + Bold Highlight for Commented Cells
 
-Design team comments on **Motor**, **Motor Qty**, **Remarks**, and **Model** are saved correctly in the database (the Design page stores them with the right `column_key`), and the OA editor already looks them up correctly via `cellComment(it.id, "motor")`, `"motor_quantity"`, `"remarks"`, `"model_number"`.
+Add visual highlighting (red border + bold red text) to any cell where a Design comment exists. Display-only change — no impact on calculations, save logic, workflow, approvals, notifications, PDF/print, or any other department screen.
 
-The reason they don't appear on OA: those `<OaCellDesignComment>` renders are wrapped in `{showItemExtras && (...)}` (OrderEditor.tsx lines 1178–1217). `showItemExtras` defaults to **false**, so the entire Model / Motor / Motor Qty / Remarks columns — and their attached Design comments — stay hidden until the user clicks "Show Model, Motor, Remarks & Approval".
+## 1. Design page — `src/pages/design/DesignBoqView.tsx`
 
-Description / Qty / Unit comments are visible because those columns are always rendered.
+For each per-cell `<Textarea>` in the items table (Model, Description, Qty, Unit, Motor, Motor Qty, Remarks):
 
-## Fix (OA display only — `src/pages/orders/OrderEditor.tsx`)
+- Compute `hasComment = (drafts[k]?.trim().length > 0) || (otherCommentsByCell[k]?.length > 0)`.
+- When `hasComment`:
+  - The cell's displayed value above the textarea gets `font-bold text-red-600`.
+  - The `<Textarea>` gets `border-red-500 ring-1 ring-red-500/40 font-bold text-red-600`.
+- Unchanged cells keep current styling.
 
-Make sure Design comments on the four "extras" fields always reach the OA, without changing OA's default column layout, calculations, PDF, or any other behaviour.
+No change to save/auto-unapprove/approval logic.
 
-Smallest, safest change:
+## 2. OA page — `src/pages/orders/OrderEditor.tsx`
 
-1. **Auto-open the extras columns when a Design comment exists for any extras field on the current BOQ.** Add a small `useEffect` after `designCellComments` is loaded: if any comment has `column_key` ∈ `{ "model_number", "motor", "motor_quantity", "remarks" }` and `showItemExtras === false`, call `setShowItemExtras(true)` once. This re-uses the exact same comment-display feature/format the user already knows, keeps "Apply" mapping intact, and only affects the OA editor view — no PDF/totals/state changes.
+For each input that has a corresponding `<OaCellDesignComment>` (Description, Qty, Unit, Model, Motor, Motor Qty, Remarks):
 
-2. **Belt-and-braces fallback** (covers users who manually hide extras again): when `!showItemExtras`, render a compact, read-only list of any Design comments for `model_number / motor / motor_quantity / remarks` underneath each row's description, using `<OaCellDesignComment canApply={false} ... />` prefixed with the field label (e.g. "Motor:", "Remarks:"). When extras are visible, this fallback list is suppressed so comments don't duplicate.
+- Check `cellComment(it.id, <columnKey>)`. If present → add classes `border-red-500 ring-1 ring-red-500/40 font-bold text-red-600` to that `<Input>`.
+- The existing `<OaCellDesignComment>` continues to render exactly as today (comment text/format unchanged).
+- Unchanged cells: no styling change.
 
-Nothing else is changed. No edits to:
-- `boq_design_comments` schema, RPC, or RLS
-- Design page save logic (column_key values already match)
-- OA calculations, totals, PDF/print, Excel export
-- Approval / unapprove / notification / revision logic
-- Manufacturing / Purchase / OA Creator behaviour
+Helper inline (no new file):
+```ts
+const hl = (has: boolean) => has ? "border-red-500 ring-1 ring-red-500/40 font-bold text-red-600" : "";
+```
+Applied via `className={`${existing} ${hl(!!cellComment(it.id, "motor_quantity"))}`}`.
 
-## Files touched
+## Out of scope (untouched)
 
-- `src/pages/orders/OrderEditor.tsx` — one `useEffect` to auto-enable extras when relevant comments exist, plus a fallback render block under each item row when extras are hidden.
+BOQ calculations, totals, PDF/Excel/print formats, save logic, design_review_status flow, per-item approval logic, auto-unapprove, notifications/acknowledgements, revision/auto-BOQ logic, Manufacturing/Purchase/OA Creator behaviour, schemas, RPCs.
+
+## Files
+
+- `src/pages/design/DesignBoqView.tsx` — add highlight classes in the cell render loop.
+- `src/pages/orders/OrderEditor.tsx` — add highlight classes on the 7 Inputs that already pair with `OaCellDesignComment`.

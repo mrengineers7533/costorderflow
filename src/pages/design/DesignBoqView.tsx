@@ -463,14 +463,15 @@ export default function DesignBoqView() {
                         const saving = savingKey[k];
                         const ts = savedAt[k];
                         const others = otherCommentsByCell[k] || [];
+                        const hasComment = value.trim().length > 0 || others.length > 0;
                         return (
                           <TableCell key={c.key} className="align-top min-w-[180px]">
-                            <div className="whitespace-pre-wrap text-sm mb-1">
+                            <div className={`whitespace-pre-wrap text-sm mb-1 ${hasComment ? "font-bold text-red-600" : ""}`}>
                               {val == null || val === "" ? "—" : String(val)}
                             </div>
                             <Textarea
                               rows={1}
-                              className="text-xs min-h-[32px]"
+                              className={`text-xs min-h-[32px] ${hasComment ? "border-red-500 ring-1 ring-red-500/40 font-bold text-red-600" : ""}`}
                               value={value}
                               disabled={disabled}
                               placeholder={disabled ? "Locked" : `Comment on ${c.label.toLowerCase()}…`}
