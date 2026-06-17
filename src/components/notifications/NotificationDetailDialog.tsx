@@ -796,9 +796,23 @@ function ChangedLineItemsHistory({
       <div className="space-y-5">
         {edits.length > 0 && (
           <div>
-            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Line Item Changes
-            </div>
+            {(() => {
+              let count = 0;
+              for (const e of edits) {
+                if (e.kind === "modified") count += Math.max(e.changedKeys.size, 1);
+                else count += 1;
+              }
+              return (
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Line Item Changes
+                  </div>
+                  <div className="text-xs font-semibold text-foreground">
+                    {count === 1 ? "1 edit in this document" : `${count} edits in this document`}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="space-y-4">
               {edits.map((e, i) => (
                 <BeforeAfterItemTable key={i} edit={e} />
