@@ -50,6 +50,11 @@ export interface NotifFull {
   related_requisition_id?: string | null;
   related_annexure_id?: string | null;
   line_item_changes?: LineChange[] | null;
+  merge_meta?: {
+    merge_count?: number;
+    first_created_at?: string;
+    last_merged_at?: string;
+  } | null;
 }
 
 export interface LineChange {
@@ -323,6 +328,34 @@ function pickStr(
     if (typeof v === "number") return String(v);
   }
   return null;
+}
+
+function MergeSummaryBanner({ notif }: { notif: NotifFull }) {
+  const meta = notif.merge_meta;
+  const count = Number(meta?.merge_count || 0);
+  if (!meta || count < 2) return null;
+  const first = meta.first_created_at ? new Date(meta.first_created_at) : null;
+  const last = meta.last_merged_at ? new Date(meta.last_merged_at) : null;
+  if (!first || !last || isNaN(first.getTime()) || isNaN(last.getTime())) return null;
+  const sameDay = first.toDateString() === last.toDateString();
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const fmtFull = (d: Date) => d.toLocaleString();
+  const range = sameDay
+    ? `${fmtTime(first)} to ${fmtTime(last)} on ${first.toLocaleDateString()}`
+    : `${fmtFull(first)} to ${fmtFull(last)}`;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs shadow-sm">
+      <History className="h-4 w-4 text-amber-600" />
+      <span className="font-semibold text-amber-800">
+        Merged {count} edits
+      </span>
+      <span className="text-amber-700">from {range}</span>
+      <span className="ml-auto text-[11px] text-amber-700/80">
+        Consolidated into one notification while unread
+      </span>
+    </div>
+  );
 }
 
 function HeaderCard({ notif }: { notif: NotifFull }) {
@@ -961,6 +994,7 @@ function NotificationDetailBody({
       </div>
 
       <HeaderCard notif={notif} />
+      <MergeSummaryBanner notif={notif} />
       <ChangedLineItemsHistory notif={notif} history={history} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
