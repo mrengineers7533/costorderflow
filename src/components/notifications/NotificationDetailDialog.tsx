@@ -660,25 +660,14 @@ function BeforeAfterItemTable({
             ) : kind === "removed" ? (
               renderRow(before, "removed")
             ) : (
-              <>
-                {(() => {
-                  const beforeRow = renderRow(before, "before");
-                  const afterRow = renderRow(after, "after");
-                  return (
-                    <>
-                      {beforeRow}
-                      {afterRow}
-                    </>
-                  );
-                })()}
-              </>
+              renderRow(after, "after")
             )}
           </tbody>
           <tfoot>
             <tr className="border-t bg-muted/20 text-[10px] text-muted-foreground">
               <td className="px-3 py-1" colSpan={COLUMN_DEFS.length + 2}>
                 {kind === "modified"
-                  ? "Top row: Before Edit · Bottom row: After Edit (changed values in red)"
+                  ? "Changed values shown in red. See Changes/Edit column for old → new details."
                   : kind === "added"
                     ? "New line item"
                     : "Removed line item"}
