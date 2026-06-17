@@ -511,6 +511,42 @@ function fmtCell(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+function HeaderFieldValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([k]) => !HIDDEN_FIELDS.has(k) && !k.endsWith("_id"),
+    );
+    if (!entries.length) return <span className="text-muted-foreground">—</span>;
+    return (
+      <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
+        {entries.map(([k, v]) => (
+          <React.Fragment key={k}>
+            <div className="text-[11px] text-muted-foreground">{labelOf(k)}</div>
+            <div className="text-xs break-words">
+              {v === null || v === undefined || v === ""
+                ? "—"
+                : typeof v === "object"
+                  ? JSON.stringify(v)
+                  : String(v)}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  }
+  if (Array.isArray(value)) {
+    return (
+      <div className="text-xs">
+        {value.length} item{value.length === 1 ? "" : "s"}
+      </div>
+    );
+  }
+  return <span>{String(value)}</span>;
+}
+
 function BeforeAfterItemTable({
   edit,
 }: {
