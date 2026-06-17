@@ -56,6 +56,7 @@ export default function DesignBoqView() {
   const [unapproving, setUnapproving] = useState(false);
   const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
+  const [bulking, setBulking] = useState(false);
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedValuesRef = useRef<Record<string, string>>({});
   const autoUnapprovingRef = useRef(false);
@@ -229,6 +230,51 @@ export default function DesignBoqView() {
     [items, approvals],
   );
   const approvalsDisabled = alreadySubmitted;
+  const allApproved = items.length > 0 && approvedCount === items.length;
+
+  async function bulkToggleAllApprovals() {
+    if (!boq || items.length === 0) return;
+    const next: "approved" | "pending" = allApproved ? "pending" : "approved";
+    const msg = next === "approved"
+      ? `Approve all ${items.length} items?`
+      : `Remove approval from all ${items.length} items?`;
+    if (!window.confirm(msg)) return;
+    const revision = boq.revision ?? 0;
+    const prevSnapshot = approvals;
+    setBulking(true);
+    setApprovals((p) => {
+      const out: Record<string, ItemApproval> = { ...p };
+      for (const it of items) {
+        const prev = p[it.id];
+        out[it.id] = {
+          status: next,
+          decided_by_name: prev?.decided_by_name ?? null,
+          decided_by_department: prev?.decided_by_department ?? null,
+          decided_at: prev?.decided_at ?? null,
+        };
+      }
+      return out;
+    });
+    try {
+      const ids = items.map((it) => it.id);
+      await bulkSetItemApprovals(boq.id, ids, revision, next);
+      await syncApprovalToBoqSnapshot(boq.id, ids, next);
+      const map = await fetchItemApprovals(boq.id, revision);
+      setApprovals(map);
+      toast({
+        title: next === "approved" ? "All items approved" : "All approvals removed",
+      });
+    } catch (e) {
+      setApprovals(prevSnapshot);
+      toast({
+        title: "Could not update approvals",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulking(false);
+    }
+  }
 
   async function toggleItemApproval(itemId: string, next: boolean) {
     if (!boq) return;
@@ -399,10 +445,28 @@ export default function DesignBoqView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Line items</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Add comments on any line item — not every row needs a comment. Comments auto-save as you type. When done, click <span className="font-medium text-foreground">Post Submit</span> at the bottom.
-          </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle className="text-base">Line items</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Add comments on any line item — not every row needs a comment. Comments auto-save as you type. When done, click <span className="font-medium text-foreground">Post Submit</span> at the bottom.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={allApproved ? "outline" : "default"}
+              onClick={() => void bulkToggleAllApprovals()}
+              disabled={
+                items.length === 0 || bulking || approvalsDisabled || designApproved
+              }
+            >
+              {bulking
+                ? "Working…"
+                : allApproved
+                  ? "Remove All Approvals"
+                  : "Approve All"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>

@@ -1,39 +1,41 @@
-# Sync Design per-item approval status to OA
+## Goal
+Add one toggle button on the Design BOQ page (`/design/:id`) that lets the user approve every line item in a single click, or remove approval from every line item in a single click.
 
-## Problem
-Design page writes per-item approval to `boq_item_design_status` (per revision). OA reads `boqs.line_items[].approval_status` (snapshot). The two are not kept in sync, so toggling Approved → Unapproved/Pending on Design does not show on OA.
+## Placement
+Inside the existing "Line items" `Card`, in the `CardHeader`, on the right side opposite the existing title/subtext. The table, sticky bottom bar (Post Submit / Approve Revised BOQ / Unapprove), and per-row Approve checkboxes stay exactly as they are.
 
-## Fix (Design → OA only)
-Add a small write-through helper that, whenever Design changes a per-item approval, also patches the matching items inside `boqs.line_items[].approval_status` (the same field OA already reads via `approvalByOaItem`). No schema change, no OA logic change.
+## Button behavior (single toggle)
+The label flips based on current state:
 
-### 1. New helper in `src/lib/design/itemApprovals.ts`
-```ts
-export async function syncApprovalToBoqSnapshot(
-  boqId: string,
-  itemIds: string[],
-  status: "approved" | "pending",
-): Promise<void>
-```
-- Fetches `boqs.line_items`.
-- For each item whose `id` is in `itemIds`, sets `approval_status` to `"approved"` or `"pending"`.
-- Writes the array back via `supabase.from("boqs").update({ line_items }).eq("id", boqId)`.
-- Best-effort: errors are caught and logged (does not break the UI).
+- If every item already has `approvals[id].status === "approved"` and there is at least one item → label is **"Remove All Approvals"**, clicking sets every item to `pending`.
+- Otherwise → label is **"Approve All"**, clicking sets every item to `approved`.
 
-### 2. Call the helper from Design page — `src/pages/design/DesignBoqView.tsx`
-After every successful approval write, call the sync helper with the affected ids and new status:
-- `toggleItemApproval(itemId, next)` → after `setItemApproval` succeeds.
-- `handleApprove()` bulk path → after `bulkSetItemApprovals(missing, ..., "approved")`, also sync all `items.map(i => i.id)` as `approved`.
-- `saveNow()` auto-clear-on-comment path → after `setItemApproval(... "pending")`, sync that id as `pending`.
+Important data-model note: the existing per-row Design approval state for this page only supports `approved` / `pending` (see `ItemApprovalStatus` in `src/lib/design/itemApprovals.ts` and the per-row Checkbox in `DesignBoqView.tsx`). "Remove All Approvals" therefore resets each item back to `pending` — the same state a freshly opened, untouched item has, and the same state the per-row checkbox produces when unchecked. This matches the existing meaning of "unapproved" on this page; no schema or status enum changes.
 
-That is the only behavioural change.
+## Disabled / hidden rules
+- Disabled when `items.length === 0`.
+- Disabled while the action is in flight (local `bulking` state).
+- Disabled when `approvalsDisabled` is true (i.e. `alreadySubmitted` — same rule the per-row checkbox already uses) so we don't fight the "Changes Requested — awaiting OA revision" lock.
+- Disabled while `designApproved` is true (the BOQ has already been Design-approved as a whole). Unapproving in that state must keep going through the existing "Unapprove" button so the BOQ-level `design_review_status` is reset properly — we do not duplicate that flow here.
 
-## Out of scope (untouched)
-- Schema/RLS, RPCs, `boq_item_design_status` semantics.
-- `fetchLatestApprovalRound`, `resolveLatestApprovalStatuses`, design review workflow, `submitDesignComments`, `approveRevisedBoq`.
-- OA totals/charges/saved payload/PDF/print/Excel/notifications/acknowledgement/revised logic/auto BOQ.
-- Manufacturing, Purchase, OA Creator behaviour, any other department screen.
-- OA-side reading code (`approvalByOaItem`) — already reads exactly the field we update.
+## Click handler
+New `async function bulkToggleAllApprovals()` inside `DesignBoqView`:
+
+1. Guard on `!boq || items.length === 0`.
+2. Compute `next: "approved" | "pending"` from the current "all approved?" check.
+3. Confirm with `window.confirm(...)` — "Approve all N items?" or "Remove approval from all N items?".
+4. `setBulking(true)`.
+5. Optimistically update local `approvals` for every item id to `next` (preserving existing `decided_by_name` / `decided_at` for display).
+6. `await bulkSetItemApprovals(boq.id, items.map(i => i.id), boq.revision ?? 0, next)` — already exists.
+7. `await syncApprovalToBoqSnapshot(boq.id, items.map(i => i.id), next)` — already exists, keeps the OA "Approved by Design" column in sync (consistent with the per-row toggle and `handleApprove`).
+8. Re-fetch with `fetchItemApprovals(boq.id, boq.revision ?? 0)` and `setApprovals(map)` so server-truth (decider name, timestamp) replaces the optimistic values.
+9. On error: revert to the previous `approvals` snapshot and `toast` an error.
+10. `setBulking(false)`.
+
+## Strictly out of scope
+- No change to per-row checkbox, badges, comment textareas, red/bold highlight, "auto-clear approval on comment edit" behavior, auto-unapprove-on-edit of a Design-approved BOQ, Post Submit, Approve Revised BOQ, Unapprove, comments fetch/save, BOQ revision history, OA editor, OA snapshot read path, Manufacturing/Purchase, notifications, PDFs, Excel exports, RLS, or any other department screen.
+- No DB migration. No edit to `itemApprovals.ts` (the existing `bulkSetItemApprovals` and `syncApprovalToBoqSnapshot` already do exactly what we need).
+- No change to `DesignStatusCell` (separate component, not used in this page's row UI).
 
 ## Files
-- `src/lib/design/itemApprovals.ts` — add `syncApprovalToBoqSnapshot`.
-- `src/pages/design/DesignBoqView.tsx` — three call sites above.
+- `src/pages/design/DesignBoqView.tsx` — add `bulking` state, the `bulkToggleAllApprovals` handler, and render the button in the `Line items` `CardHeader`.
