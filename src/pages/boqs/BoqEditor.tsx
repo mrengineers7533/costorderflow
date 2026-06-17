@@ -383,7 +383,7 @@ export default function BoqEditor() {
   }
 
   async function downloadPDF() {
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: false, showMotor });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: true, showMotor });
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     doc.save(`${safe}.pdf`);
     toast({ title: "BOQ PDF downloaded" });
@@ -414,7 +414,7 @@ export default function BoqEditor() {
       const upd = await supabase.from("boqs").update(payload as never).eq("id", savedId);
       if (upd.error) return toast({ title: "Save failed", description: upd.error.message, variant: "destructive" });
     }
-    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: false, showMotor });
+    const doc = await generateBoqPDF(buildRecord(), { showMake, showApproval: true, showMotor });
     const blob = doc.output("blob");
     const safe = (boqNumber || "BOQ").replace(/[/\\]/g, "_");
     const path = `${uid}/${orderId}/${safe}-v${version}.pdf`;
@@ -677,7 +677,7 @@ export default function BoqEditor() {
                 </Button>
               </div>
             </div>
-            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={false} showMotor={showMotor} />
+            <BoqDocPreview rec={buildRecord()} showMake={showMake} showApproval={true} showMotor={showMotor} />
           </div>
           </TabsContent>
 
