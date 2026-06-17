@@ -118,7 +118,6 @@ const FIELD_LABELS: Record<string, string> = {
   hsn: "HSN",
   hsn_code: "HSN",
   hsn_sac: "HSN",
-  qty: "Quantity",
 };
 
 function labelOf(k: string) {
