@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, FilePlus2, Columns3 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { CreateRequisitionDialog } from "@/components/manufacturing/CreateRequisitionDialog";
@@ -57,6 +58,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"MR" | "GMS">("MR");
 
   useEffect(() => {
     (async () => {
@@ -71,6 +73,11 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   }, []);
 
   const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const r of rows) (r.format === "MR" ? mr++ : gms++);
+    return { MR: mr, GMS: gms };
+  }, [rows]);
   const familyOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
@@ -79,15 +86,16 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((b) =>
+    const byTab = rows.filter((b) => b.format === tab);
+    if (!q) return byTab;
+    return byTab.filter((b) =>
       [b.boq_number, b.client_name, b.reference_oa_number, b.project_number]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(q),
     );
-  }, [rows, search]);
+  }, [rows, search, tab]);
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
@@ -107,12 +115,19 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
         </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "MR" | "GMS")}>
+        <TabsList>
+          <TabsTrigger value="MR">MR BOQs ({counts.MR})</TabsTrigger>
+          <TabsTrigger value="GMS">GMS BOQs ({counts.GMS})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No approved BOQs available yet. Once a BOQ is approved, it will appear here automatically.
+            No approved {tab} BOQs available yet. Once a BOQ is approved, it will appear here automatically.
           </CardContent>
         </Card>
       ) : (
