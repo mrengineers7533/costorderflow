@@ -501,7 +501,7 @@ export default function DesignBoqView() {
                           <div className="flex items-center gap-2">
                             <Checkbox
                               checked={isApproved}
-                              disabled={approvalsDisabled || savingApprovalId === it.id}
+                              disabled={savingApprovalId === it.id}
                               onCheckedChange={(v) => void toggleItemApproval(it.id, !!v)}
                               aria-label={`Approve item ${it.item_no}`}
                             />
