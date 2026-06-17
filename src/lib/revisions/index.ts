@@ -151,7 +151,11 @@ export async function reviseOrder(
       .from("boqs").select("*").in("order_id", familyIds);
     const currentBoq = (existingBoqs as unknown as BoqRecord[] | null)?.find((b) => b.is_current);
     if (currentBoq) {
-      newBoq = await reviseBoqFromOrder(newOrderRec, currentBoq);
+      // Cascade: suppress so the auto-revised BOQ doesn't emit its own
+      // "BOQ created" notification on top of the OA revision notification.
+      newBoq = await withNotifSuppress(() =>
+        reviseBoqFromOrder(newOrderRec, currentBoq),
+      );
     }
   }
 
