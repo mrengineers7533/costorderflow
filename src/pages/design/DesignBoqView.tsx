@@ -364,7 +364,7 @@ export default function DesignBoqView() {
                 </TableRow>
               )}
               {items.map((it) => {
-                const disabled = alreadySubmitted;
+                const disabled = false;
                 const rowKey = keyOf(it.id, "__row__");
                 const rowOthers = otherCommentsByCell[rowKey] || [];
                 const ap = approvals[it.id];
@@ -478,7 +478,7 @@ export default function DesignBoqView() {
             {designApproved
               ? "Design-approved. You can still add comments or Unapprove to request another revision."
               : alreadySubmitted
-                ? "Comments submitted. Awaiting OA Creator to publish a revised BOQ."
+                ? "Comments submitted. You can still add more comments and Post Submit again."
                 : `${myDraftCount} comment${myDraftCount === 1 ? "" : "s"} ready to submit.`}
             {!designApproved && items.length > 0 && (
               <span className="ml-2">· {approvedCount} of {items.length} items approved</span>
@@ -530,7 +530,7 @@ export default function DesignBoqView() {
 }
 
 function disabledSubmit(count: number, submitted: boolean, approved: boolean) {
+  void submitted;
   void approved;
-  if (submitted) return true;
   return count === 0;
 }
