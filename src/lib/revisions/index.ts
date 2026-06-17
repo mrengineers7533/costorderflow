@@ -589,7 +589,12 @@ export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqR
     terms: DEFAULT_BOQ_TERMS,
     notes: order.notes || null,
   };
-  const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
+  // Cascade: suppress the auto-emitted BOQ "created" notification — the
+  // originating OA save already produces ONE consolidated notification per
+  // related department.
+  const { data, error } = await withNotifSuppress(() =>
+    supabase.from("boqs").insert(payload as never).select().single(),
+  );
   if (error) {
     console.warn("createInitialBoqForOrder failed", error);
     return null;
