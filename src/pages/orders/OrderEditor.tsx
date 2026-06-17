@@ -431,6 +431,19 @@ export default function OrderEditor() {
     return m;
   }, [designCellComments]);
 
+  // Auto-reveal the extras columns (Model / Motor / Motor Qty / Remarks) when
+  // the Design team has commented on any of those fields, so their comments
+  // are not hidden behind the "Show Model, Motor, Remarks & Approval" toggle.
+  // Only flips false→true; never auto-hides if the user opened it manually.
+  const extrasCommentKeys = useRef(new Set(["model_number", "motor", "motor_quantity", "remarks"]));
+  useEffect(() => {
+    if (showItemExtras) return;
+    const hasExtrasComment = designCellComments.some(
+      (c) => c.column_key && extrasCommentKeys.current.has(c.column_key),
+    );
+    if (hasExtrasComment) setShowItemExtras(true);
+  }, [designCellComments, showItemExtras]);
+
   /** Map an OA item id → matching BOQ item id (id → norm description → positional). */
   const oaToBoqItemId = useMemo(() => {
     const out = new Map<string, string>();
