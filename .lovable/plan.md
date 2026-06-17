@@ -1,55 +1,81 @@
-# Notification "Details" — Before/After row-style view
-
 ## Goal
-Make the change clear at a glance: show each affected line item twice (Before Edit / After Edit) using a fixed header — S. No. | Description | HSN | Qty | Rate | Amount | Changes/Edit. Highlight only the changed cells in **red** on the After row, and describe each change in plain English in the **Changes/Edit** column.
 
-Only the Details dialog UI changes. Acknowledge, Not-Seen Notifications, dashboard, and all underlying data/logging stay exactly as today.
+Two scoped fixes to the **Notification system only**. No changes to OA/BOQ/Design/Manufacturing/Purchase data, calculations, workflows, approvals, acknowledgement, PDFs, or any module screen.
 
-## Scope
-- File: `src/components/notifications/NotificationDetailDialog.tsx`
-- No DB / migration / edge-function changes
-- No changes to how `line_item_changes` are produced (current `before` / `after` / `changed_fields` payload already has everything needed)
+---
 
-## New "Line Item Changes" block (replaces the current line-item table in `ChangedLineItemsHistory`)
+## Why multiple notifications appear today
 
-For every line item that appears in `line_item_changes` (across the current notification + sibling history, same as today), render a small 2-row table per item:
+When an OA is saved, the app cascades the change into linked **BOQ** and **PI** rows so they stay in sync (`src/lib/revisions/index.ts` updates `boqs.line_items` and `proforma_invoices.line_items`). Each table has its own DB trigger that calls `emit_notification(...)` → so one OA save can produce: 1 OA `line_items_changed` + 1 BOQ `line_items_changed` + 1 PI `line_items_changed`. That is the "3 notifications" the user sees.
 
+A single `emit_notification` already inserts **one row** per source event with a `target_departments[]` array, so the per-department fan-out is already correct. The real problem is the cascade producing 3 source events instead of 1.
+
+---
+
+## Part 1 — Backend: suppress cascade notifications (1 new migration)
+
+Add a per-connection suppression flag the trigger respects so cascaded updates from an OA save don't emit their own notifications. The originating OA event is the single consolidated notification per related department.
+
+1. New SQL function `public.set_notif_suppress(p_on boolean)` (SECURITY DEFINER, granted to `authenticated`) that calls `set_config('notif.suppress_cascade', 'on'/'off', false)`.
+2. Update `public.emit_notification` to early-return when `current_setting('notif.suppress_cascade', true) = 'on'`. All other logic (target resolution, actor exclusion, line-items short-circuit) stays identical.
+3. No trigger logic, no schema, no RLS, no other functions are changed.
+
+Frontend change to use it (notification plumbing only, no business logic change):
+- `src/lib/revisions/index.ts` — before the BOQ + PI sync loops call `supabase.rpc('set_notif_suppress', { p_on: true })`; after both loops finish (in a `finally`) call it again with `false`. The OA `UPDATE` itself runs BEFORE suppression is enabled, so the OA `line_items_changed` notification still fires once and reaches Design / Purchase / Manufacturing / Costing-BOQ / Costing-PI exactly as the user requested.
+
+Result for one OA edit:
+- BOQ recipients: 1 notification
+- Design recipients: 1 notification
+- Manufacturing recipients: 1 notification
+- Purchase recipients: 1 notification
+- OA (Costing-OA sub-module) recipients: excluded (already by existing source-module rule)
+
+No change for BOQ-only, PI-only, Purchase-only, Requisition-only, Design-only edits — those don't cascade, so they keep producing exactly one notification per related department as today.
+
+---
+
+## Part 2 — Notification Details view (frontend only)
+
+File: `src/components/notifications/NotificationDetailDialog.tsx`. Replace the current Before/After two-row table with a single-row-per-changed-item table matching the user's exact spec. No other file is touched.
+
+Table header (fixed):
+
+```text
+S. No. | Description | HSN | Qty | Rate | Amount | Changes/Edit
 ```
-| S. No. | Description    | HSN    | Qty | Rate | Amount | Changes/Edit                                     |
-| ------ | -------------- | ------ | --- | ---- | ------ | ------------------------------------------------ |
-| 1      | Timing Belt R. | 545686 | 11  | 500  | 5500   | (empty on Before row)                            |
-| 1      | Timing Belt R. | 545686 | 21  | 500  | 5500   | Change in Quantity: Old value was 11, new is 21. |
-```
 
-Rules:
-- The header row is fixed and always rendered, even if some fields are missing (show "—").
-- **Before Edit** row uses `change.before`; **After Edit** row uses `change.after`.
-- On the After row, every cell whose key is in `change.changed_fields` is wrapped in `text-red-600 font-semibold` so only the actually changed value is red. Unchanged cells render normally.
-- **Changes/Edit** column (After row only): one sentence per changed field, joined by line breaks, in the form
-  `Change in <Label>: Old value was <old>, new value is <new>.`
-  Use the existing `labelOf()` / `FIELD_LABELS` map so `qty → Quantity`, `rate → Rate`, `description → Description`, `hsn / hsn_code → HSN`, `amount → Amount`, etc. Add `hsn` / `hsn_code` → "HSN" to `FIELD_LABELS`.
-- **Added** line items: render only the After row, all cells normal color, Changes/Edit = "New line item added.".
-- **Removed** line items: render only the Before row, all cells in red strike-through, Changes/Edit = "Line item removed.".
-- Compute `Amount` from `qty * rate` when the payload doesn't carry an explicit `amount` field (best-effort, falls back to "—").
-- Field key resolution per column (tries first match found in the row object):
-  - Description: `description`, `size_model`, `model`
-  - HSN: `hsn`, `hsn_code`, `hsn_sac`
-  - Qty: `qty`, `quantity`
-  - Rate: `rate`, `unit_rate`, `price`
-  - Amount: `amount`, `total`, computed `qty*rate`
-- A cell is treated as "changed" if **any** of its candidate keys appears in `changed_fields`.
-- Sorting/grouping: keep one block per `(notification, line_no)` pair, ordered by line number then chronological — same iteration order as today.
-- Above each per-item table show a small subheader: `Item <lineNo> · edited by <name> (<dept>) · <timestamp>` so multi-edit history is still visible.
+Per row rules, driven entirely by the existing `line_item_changes` JSON payload (`{type: 'added'|'removed'|'modified', before, after, changed_fields[]}`):
 
-## Things that stay exactly the same
-- "Header Fields Changed" table (top-level field edits) — unchanged.
-- HeaderCard, StatusChipBar, Acknowledge flow, Acknowledge-as department select — unchanged.
-- NotSeen Notifications badge logic, dashboard, activity feed — untouched.
-- Data fetching, `line_item_changes` JSON shape, and all callers — untouched.
+- **modified** → one row showing `after` values. Any cell whose key (or its alias) appears in `changed_fields` is wrapped in `text-red-600 font-semibold`. "Changes/Edit" cell lists one line per changed field: `Change in <Label>: Old value was <old> and new value is <new>.` Labels: Description, HSN, Quantity, Rate, Amount (and other known fields).
+- **added** → one row with `after` values in normal style. Changes/Edit = "New line item added."
+- **removed** → one row with `before` values in red strike-through. Changes/Edit = "Line item removed."
+- **Unchanged items are not rendered** (per spec).
+
+Field alias resolution (already present, reused so no module breaks):
+- Description ← `description` / `size_model` / `model`
+- HSN ← `hsn` / `hsn_code` / `hsn_sac`
+- Qty ← `qty` / `quantity`
+- Rate ← `rate` / `unit_rate` / `price`
+- Amount ← `amount` / `total` (fallback `qty * rate`)
+
+Kept as-is: HeaderCard, StatusChipBar, "Header Fields Changed" section, Acknowledge button, Not-Seen Notifications badge, dashboard, data fetching, JSON shape, and every caller of the dialog.
+
+---
+
+## Files touched
+
+- `supabase/migrations/<new timestamp>_notif_suppress_cascade.sql` — adds `set_notif_suppress` and updates `emit_notification` only.
+- `src/lib/revisions/index.ts` — wraps the BOQ + PI cascade block with `set_notif_suppress(true/false)`. No data logic changed.
+- `src/components/notifications/NotificationDetailDialog.tsx` — rewrites only the line-items table to the single-row format above.
+
+## Out of scope (explicitly not changed)
+
+OA/BOQ/PI/Design/Purchase/Manufacturing/Requisition screens, calculations, save logic, PDFs/Excel, approvals, acknowledgement flow, RLS, triggers other than `emit_notification`, sidebar, dashboard charts.
 
 ## Acceptance
-- Opening Details for a notification with a Qty change shows two rows for that item; only the new Qty cell is red; Changes/Edit reads "Change in Quantity: Old value was 11, new value is 21.".
-- Changing multiple fields on one item produces one Before row, one After row, multiple red cells, and one sentence per field in Changes/Edit.
-- Added/Removed items render correctly with a single row.
-- Header is always S. No. | Description | HSN | Qty | Rate | Amount | Changes/Edit.
-- No regressions to acknowledge, not-seen badge, or any other feature.
+
+1. Save one Qty change on one OA item → exactly one notification per related department (BOQ, Design, Manufacturing, Purchase); zero for OA itself.
+2. Open Details on that notification → table shows only that one item, Qty cell in red, Changes/Edit reads "Change in Quantity: Old value was 11 and new value is 21."
+3. Save multi-field, multi-item OA edit → still one notification per department; Details shows only the changed items with all changed fields red and one sentence per field in Changes/Edit.
+4. BOQ-only / PI-only / Purchase-only edits behave exactly as before (one notification per related department).
+5. Acknowledge, Seen/Unseen, Not-Seen badge, dashboard counts, and all module pages behave identically to before.
