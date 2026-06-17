@@ -7,6 +7,27 @@ import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { PiRecord } from "@/lib/pi/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 
+/** Toggle the per-connection "suppress cascaded notifications" flag.
+ *  Used so that BOQ/PI rows auto-created or auto-synced as a side effect of
+ *  an OA save / revise do not emit their own duplicate notifications. */
+async function setNotifSuppress(on: boolean): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.rpc as any)("set_notif_suppress", { p_on: on });
+  } catch (e) {
+    console.warn(`set_notif_suppress(${on}) failed`, e);
+  }
+}
+
+async function withNotifSuppress<T>(fn: () => Promise<T>): Promise<T> {
+  await setNotifSuppress(true);
+  try {
+    return await fn();
+  } finally {
+    await setNotifSuppress(false);
+  }
+}
+
 /** Snapshot the given BOQ as a PDF in the `boq-documents` bucket under a
  *  history/ prefix so it is never overwritten by future revisions. Best
  *  effort — failures are logged but never break the revision flow. */
@@ -130,7 +151,11 @@ export async function reviseOrder(
       .from("boqs").select("*").in("order_id", familyIds);
     const currentBoq = (existingBoqs as unknown as BoqRecord[] | null)?.find((b) => b.is_current);
     if (currentBoq) {
-      newBoq = await reviseBoqFromOrder(newOrderRec, currentBoq);
+      // Cascade: suppress so the auto-revised BOQ doesn't emit its own
+      // "BOQ created" notification on top of the OA revision notification.
+      newBoq = await withNotifSuppress(() =>
+        reviseBoqFromOrder(newOrderRec, currentBoq),
+      );
     }
   }
 
@@ -564,7 +589,12 @@ export async function createInitialBoqForOrder(order: OrderRecord): Promise<BoqR
     terms: DEFAULT_BOQ_TERMS,
     notes: order.notes || null,
   };
-  const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
+  // Cascade: suppress the auto-emitted BOQ "created" notification — the
+  // originating OA save already produces ONE consolidated notification per
+  // related department.
+  const { data, error } = await withNotifSuppress(async () =>
+    await supabase.from("boqs").insert(payload as never).select().single(),
+  );
   if (error) {
     console.warn("createInitialBoqForOrder failed", error);
     return null;
