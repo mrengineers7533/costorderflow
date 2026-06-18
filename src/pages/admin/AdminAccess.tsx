@@ -148,7 +148,10 @@ export default function AdminAccess() {
                   <TableHead className="sticky left-0 bg-background z-10 min-w-[240px]">User</TableHead>
                   <TableHead className="text-center whitespace-nowrap">Active</TableHead>
                   {MODULES.map((m) => (
-                    <TableHead key={m.key} className="text-center whitespace-nowrap">{m.label}</TableHead>
+                    <TableHead key={m.key} className="text-center whitespace-nowrap">
+                      <div>{m.label}</div>
+                      <div className="text-[10px] font-normal text-muted-foreground">View / Edit</div>
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
