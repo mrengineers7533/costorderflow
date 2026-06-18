@@ -14,11 +14,12 @@ import { MODULES, type ModuleKey } from "@/lib/access/modules";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 
 type Profile = { id: string; full_name: string | null; email: string | null; is_active: boolean };
+type Perm = "view" | "edit";
 
 export default function AdminAccess() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
-  const [access, setAccess] = useState<Map<string, Set<string>>>(new Map());
+  const [access, setAccess] = useState<Map<string, Map<string, Perm>>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export default function AdminAccess() {
     const [{ data: profs }, { data: roles }, { data: rows }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, email, is_active"),
       supabase.from("user_roles").select("user_id, role"),
-      supabase.from("user_module_access").select("user_id, module"),
+      supabase.from("user_module_access").select("user_id, module, permission"),
     ]);
     setProfiles((profs as Profile[]) ?? []);
     const ad = new Set<string>();
@@ -42,10 +43,10 @@ export default function AdminAccess() {
       if (r.role === "admin") ad.add(r.user_id);
     });
     setAdminIds(ad);
-    const m = new Map<string, Set<string>>();
-    ((rows ?? []) as { user_id: string; module: string }[]).forEach((r) => {
-      if (!m.has(r.user_id)) m.set(r.user_id, new Set());
-      m.get(r.user_id)!.add(r.module);
+    const m = new Map<string, Map<string, Perm>>();
+    ((rows ?? []) as { user_id: string; module: string; permission?: Perm | null }[]).forEach((r) => {
+      if (!m.has(r.user_id)) m.set(r.user_id, new Map());
+      m.get(r.user_id)!.set(r.module, (r.permission as Perm) ?? "edit");
     });
     setAccess(m);
     setLoading(false);
