@@ -31,6 +31,8 @@ import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
+import { ManageDocAccessDialog } from "@/components/access/ManageDocAccessDialog";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
