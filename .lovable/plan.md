@@ -1,74 +1,116 @@
 
-## Problem
+# Model-wise Access Control (with full Admin access)
 
-The recent per-document RLS migration replaced the old BOQ SELECT policy with `has_doc_access(auth.uid(), 'boq', id, 'view')`. That function only returns true for:
+Adds two layers on top of the existing per-module access:
 
-- Admin
-- The BOQ creator
-- Users explicitly listed in `document_access` for that BOQ
+1. **Per-module View vs Edit** split (existing module checkbox becomes two: View, Edit).
+2. **Per-document access lists** on Orders, BOQs, PIs, Purchase Orders, Requisitions — admin chooses which users can view and which can edit a specific document.
 
-The Purchase and Manufacturing list pages (`ApprovedBoqModule`, `BoqFolder`, `DesignBoqList`, etc.) do `supabase.from("boqs").select("*")` and the same for `orders`. Non-admin Purchase/Manufacturing users are no longer in `document_access` for those BOQs (backfill only granted the creator), so the lists come back empty — even though the existing workflow has always shown approved BOQs to anyone with Purchase or Manufacturing module access.
+Admins always bypass both layers. Anonymous users get nothing. Enforcement happens in both UI (route/page guards, action buttons) and database (RLS policies).
 
-The same hides parent `orders` rows that those pages need to resolve format / family / make.
+## Default visibility on create
 
-## Fix (RLS only, no app/workflow changes)
+- Creator: edit access (auto-row in the document-access table).
+- Admin: always full access (bypass).
+- Everyone else: no access until admin adds them.
 
-Add **PERMISSIVE** SELECT policies on `boqs` and `orders` so a user can also view a row when both are true:
+## Admin management — two surfaces
 
-1. They have module access (`has_module_perm(uid, 'purchase'|'manufacturing'|'design', 'view')`), AND
-2. The BOQ is approved & design-approved/final-sent (the same gate the lists already use), i.e. `verification_status = 'approved' AND design_review_status IN ('design_approved','final_sent')`.
+- **Inside each document**: a "Manage Access" button (Order editor, BOQ editor, PI editor, PO detail, Requisition detail) opens a dialog to add/remove users and toggle View / Edit per user.
+- **Central admin screen**: new tab `Admin → Document Access` listing all documents with filters (type, number, client) and the assigned users; admin can edit lists from here too.
+- **Admin → Access Control** (existing): each module row now shows two checkboxes — **View** and **Edit** — instead of one.
 
-For `orders`, mirror it: a user with `purchase`/`manufacturing`/`design` view access can SELECT an order if any BOQ in its family (`parent_order_id || id`) is approved + design-approved. This keeps the parent-OA lookup working without exposing unrelated orders.
+## Technical plan
 
-This is **not** department-wide open access:
-- Only approved + design-approved BOQs become visible (the rows already meant to flow downstream).
-- Module access is still required — users without Purchase/Manufacturing/Design module permission see nothing extra.
-- Edit/insert/update/delete on BOQs and Orders remain unchanged (per-document `has_doc_access ... 'edit'`).
-- `document_access` table itself, creators, admins, and all other tables (PO, GRN, requisitions, PI) are untouched.
+### Database
 
-## Out of scope
+New enum + tables (one migration):
 
-No changes to: features, calculations, approval flow, notifications, acknowledgement, revised logic, auto-BOQ logic, PDF/print, data-saving, Purchase Order / GRN / Requisition / PI RLS, or any frontend code.
+```text
+create type access_perm as enum ('view','edit');
 
-## Technical details
+-- 1. Module-level view/edit split
+alter table public.user_module_access
+  add column permission access_perm not null default 'edit';
+-- existing rows = 'edit' (back-compat: prior single checkbox meant full module access)
 
-New policies (added; existing per-doc policies kept):
+-- 2. Per-document access (polymorphic)
+create type doc_kind as enum ('order','boq','pi','purchase_order','requisition');
 
-```sql
--- BOQs: module users can view approved + design-approved BOQs
-CREATE POLICY boqs_select_module_approved ON public.boqs
-  AS PERMISSIVE FOR SELECT TO authenticated
-  USING (
-    verification_status = 'approved'
-    AND design_review_status IN ('design_approved','final_sent')
-    AND (
-      public.has_module_perm(auth.uid(), 'purchase',      'view')
-      OR public.has_module_perm(auth.uid(), 'manufacturing','view')
-      OR public.has_module_perm(auth.uid(), 'design',      'view')
-    )
-  );
+create table public.document_access (
+  id uuid primary key default gen_random_uuid(),
+  doc_kind doc_kind not null,
+  doc_id   uuid not null,
+  user_id  uuid not null references auth.users(id) on delete cascade,
+  permission access_perm not null default 'view',
+  granted_by uuid,
+  created_at timestamptz not null default now(),
+  unique (doc_kind, doc_id, user_id)
+);
+-- GRANT SELECT,INSERT,UPDATE,DELETE to authenticated; GRANT ALL to service_role.
+-- RLS: admin manages all rows; users can SELECT only their own rows.
 
--- Orders: same module users can view orders whose family has such a BOQ
-CREATE POLICY orders_select_module_for_approved_boq ON public.orders
-  AS PERMISSIVE FOR SELECT TO authenticated
-  USING (
-    (
-      public.has_module_perm(auth.uid(), 'purchase',      'view')
-      OR public.has_module_perm(auth.uid(), 'manufacturing','view')
-      OR public.has_module_perm(auth.uid(), 'design',      'view')
-    )
-    AND EXISTS (
-      SELECT 1 FROM public.boqs b
-      JOIN public.orders o2 ON o2.id = b.order_id
-      WHERE COALESCE(o2.parent_order_id, o2.id) = COALESCE(orders.parent_order_id, orders.id)
-        AND b.verification_status = 'approved'
-        AND b.design_review_status IN ('design_approved','final_sent')
-    )
-  );
+-- 3. Security-definer helpers
+public.has_doc_access(_user uuid, _kind doc_kind, _doc_id uuid, _need access_perm) returns boolean
+-- admin → true
+-- creator of the doc → true (looked up per kind)
+-- has document_access row with permission >= _need → true ('edit' implies 'view')
+
+public.has_module_perm(_user uuid, _module text, _need access_perm) returns boolean
+-- admin → true; otherwise checks user_module_access.permission
 ```
 
-Admin and creator paths continue to work via the existing `*_select_doc_access` policies (PERMISSIVE policies OR together).
+### RLS changes per document table
 
-## Risk
+For `orders`, `boqs`, `proforma_invoices`, `purchase_orders`, `requisitions`:
 
-Low. Restores pre-change behavior for the Purchase/Manufacturing/Design lists. Users without any of those three module permissions see no extra rows. Edit permissions unchanged.
+- Replace existing SELECT policy with: `has_doc_access(auth.uid(), '<kind>', id, 'view')`.
+- Replace existing UPDATE/DELETE policies with: `has_doc_access(..., 'edit')`.
+- INSERT remains tied to authenticated module access; the creator row is added by a trigger:
+  - `AFTER INSERT` trigger inserts `document_access(doc_kind, doc_id, NEW.created_by/user_id, 'edit')`.
+- Cascade lookup for related tables (e.g. `boq_revisions`, `requisition_items`, `purchase_order_rows`, `proforma_invoice_documents`, `boq_design_comments`, `client_copies`) routed via their parent doc: policy uses `has_doc_access` on the parent.
+- Storage buckets: keep existing token-based RPCs; no change required for this layer.
+
+Activity, notifications, counters, audit logs are untouched.
+
+### Frontend
+
+- `src/lib/access/modules.ts` — extend `ModuleKey` unchanged; add `Perm = 'view'|'edit'`.
+- `src/hooks/useUserAccess.ts` — return `Map<ModuleKey, Perm>` instead of `Set<ModuleKey>`; helpers `canView(m)`, `canEdit(m)`.
+- New hook `useDocAccess(kind, id)` → `{ canView, canEdit, loading }` (admin/creator bypass).
+- New guard `<RequireDocAccess kind id need="view|edit">` used inside detail/editor pages; when `need='edit'` and user only has view, the page renders in read-only mode (existing components already support `readOnly` flags where applicable; otherwise inputs are disabled via a context provider).
+- `RequireModule` extended to take optional `need` prop (`view` default).
+- Admin → Access Control screen: each module cell becomes two checkboxes (View, Edit). Edit auto-implies View.
+- Admin → Document Access (new tab in `AdminTabs`): table with type filter + search; row click opens the same "Manage Access" dialog used inside documents.
+- "Manage Access" dialog: user search → add → toggle view/edit → remove. Writes to `document_access`.
+- Lists (`OrdersList`, `BoqList`, `PiList`, `PurchaseList`, `RequisitionsList`): rely on RLS — non-admin users will simply not see docs they can't access. No client-side filter changes needed beyond removing any stale assumptions.
+
+### Files to add
+
+- `supabase/migrations/<ts>_model_wise_access.sql`
+- `src/lib/access/docAccess.ts` (kind constants, perm helpers)
+- `src/hooks/useDocAccess.ts`
+- `src/components/RequireDocAccess.tsx`
+- `src/components/access/ManageDocAccessDialog.tsx`
+- `src/pages/admin/AdminDocumentAccess.tsx` + tab entry in `AdminTabs`
+
+### Files to edit
+
+- `src/hooks/useUserAccess.ts`, `src/components/RequireModule.tsx`
+- `src/pages/admin/AdminAccess.tsx` (split View/Edit columns)
+- Editor/detail pages: `OrderEditor`, `BoqEditor`, `DesignBoqView`, `PiEditor`, `PurchaseDetail`, `RequisitionDetail` — wrap in `RequireDocAccess`, add "Manage Access" button (admin or doc-editor only), gate save/edit buttons by `canEdit`.
+
+### Out of scope (unchanged)
+
+Calculations, workflow, approval logic, notifications, acknowledgements, revision/auto-BOQ logic, PDF/print, data-saving logic beyond access checks, manufacturing screens, and all token-based public review/verification RPCs.
+
+## Rollout / back-compat
+
+- Existing `user_module_access` rows default to `permission='edit'` (no UX regression).
+- Existing documents get a one-time backfill in the migration: insert `(doc_kind, id, creator_id, 'edit')` for every order, boq, pi, purchase_order, requisition with a known creator. Documents without a creator stay admin-only until access is granted.
+
+## Risks
+
+- RLS misconfiguration could hide existing user data. The migration includes the backfill above so current creators keep edit access on day one.
+- Related-table policies (revisions, items, attachments) must route through parent-doc access — covered in the migration.
+
