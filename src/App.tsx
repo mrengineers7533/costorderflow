@@ -25,6 +25,7 @@ import PoFolder from "./pages/purchase/PoFolder";
 import PoCreateFromAnnexure from "./pages/purchase/PoCreateFromAnnexure";
 import ManufacturingList from "./pages/manufacturing/ManufacturingList";
 import ManufacturingDetail from "./pages/manufacturing/ManufacturingDetail";
+import ManufacturingBoqFolder from "./pages/manufacturing/ManufacturingBoqFolder";
 import RequisitionsList from "./pages/requisitions/RequisitionsList";
 import RequisitionDetail from "./pages/requisitions/RequisitionDetail";
 import RequisitionPlan from "./pages/requisitions/RequisitionPlan";
@@ -98,6 +99,7 @@ const App = () => (
                       <Route path="/annexures/:annexureId/po/new" element={<RequireModule user={user} module="purchase"><PoCreateFromAnnexure /></RequireModule>} />
                       <Route path="/purchase/:boqId" element={<RequireModule user={user} module="purchase"><PurchaseDetail /></RequireModule>} />
                       <Route path="/manufacturing" element={<RequireModule user={user} module="manufacturing"><ManufacturingList /></RequireModule>} />
+                      <Route path="/manufacturing/boq-folder" element={<RequireModule user={user} module="manufacturing"><ManufacturingBoqFolder /></RequireModule>} />
                       <Route path="/manufacturing/:boqId" element={<RequireModule user={user} module="manufacturing"><ManufacturingDetail /></RequireModule>} />
                       <Route path="/requisitions" element={<RequireModule user={user} module="requisitions"><RequisitionsList /></RequireModule>} />
                       <Route path="/requisitions/plan" element={<RequireModule user={user} module="requisitions"><RequisitionPlan /></RequireModule>} />
