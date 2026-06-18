@@ -992,12 +992,32 @@ export default function OrderEditor() {
                 >
                   <Users className="mr-1 h-4 w-4" />Create Client Copy
                 </Button>
+                {isAdmin && orderId && (
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => setAccessOpen(true)}
+                    title="Manage which users can view/edit this OA"
+                  >
+                    <Users className="mr-1 h-4 w-4" />Manage Access
+                  </Button>
+                )}
               </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>
             <Button className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
+
+        {isAdmin && orderId && (
+          <ManageDocAccessDialog
+            open={accessOpen}
+            onOpenChange={setAccessOpen}
+            kind="order"
+            docId={orderId}
+            docLabel={oaNumber}
+          />
+        )}
 
         {/* Revision badge banner when viewing a non-current revision */}
         {!isNew && (
