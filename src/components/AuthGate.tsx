@@ -292,6 +292,15 @@ function AuthForm() {
           </button>
         </p>
 
+        <div className="mt-4 text-center">
+          <a
+            href="/trust"
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Trust & Privacy
+          </a>
+        </div>
+
         <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
           <DialogContent>
             <DialogHeader>
