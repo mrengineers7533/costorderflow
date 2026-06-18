@@ -39,8 +39,8 @@ export default function AdminDocumentAccess() {
       const { data } = await supabase.from("purchase_orders").select("id, po_number, vendor_name").order("created_at", { ascending: false }).limit(500);
       docs = (data ?? []).map((d) => ({ kind, id: d.id, label: d.po_number ?? "—", sub: d.vendor_name ?? "", assigned: 0 }));
     } else if (kind === "requisition") {
-      const { data } = await supabase.from("requisitions").select("id, requisition_number, reference_oa_number").order("created_at", { ascending: false }).limit(500);
-      docs = (data ?? []).map((d) => ({ kind, id: d.id, label: d.requisition_number ?? "—", sub: d.reference_oa_number ?? "", assigned: 0 }));
+      const { data } = await supabase.from("requisitions").select("id, requisition_number, title").order("created_at", { ascending: false }).limit(500);
+      docs = (data ?? []).map((d) => ({ kind, id: d.id, label: d.requisition_number ?? "—", sub: d.title ?? "", assigned: 0 }));
     }
 
     // Count assigned users per doc
@@ -49,7 +49,7 @@ export default function AdminDocumentAccess() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: acc } = await supabase.from("document_access").select("doc_id" as any).eq("doc_kind", kind).in("doc_id", ids);
       const c = new Map<string, number>();
-      ((acc ?? []) as { doc_id: string }[]).forEach((r) => c.set(r.doc_id, (c.get(r.doc_id) ?? 0) + 1));
+      (((acc ?? []) as unknown) as { doc_id: string }[]).forEach((r) => c.set(r.doc_id, (c.get(r.doc_id) ?? 0) + 1));
       setCounts(c);
     } else {
       setCounts(new Map());
