@@ -462,13 +462,20 @@ export default function OrderEditor() {
       arr.push(b);
       byDesc.set(k, arr);
     });
+    // Track how many OA rows with the same normalized description we've
+    // already seen, so the Nth OA copy maps to the Nth BOQ copy. Without
+    // this, the global OA index is used as the position inside the
+    // candidate list which mismatches whenever there are duplicates.
+    const seenDescCount = new Map<string, number>();
     items.forEach((it, idx) => {
       const direct = byId.get(it.id);
       if (direct) { out.set(it.id, direct.id); return; }
       const k = norm(it.description);
       const cand = k ? byDesc.get(k) || [] : [];
+      const localIdx = k ? (seenDescCount.get(k) || 0) : 0;
+      if (k) seenDescCount.set(k, localIdx + 1);
       const match = cand.length === 1 ? cand[0]
-        : cand.length > 1 ? cand[Math.min(idx, cand.length - 1)]
+        : cand.length > 1 ? cand[Math.min(localIdx, cand.length - 1)]
         : boqItems[idx];
       if (match) out.set(it.id, match.id);
     });
