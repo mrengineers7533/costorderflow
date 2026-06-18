@@ -159,7 +159,7 @@ export default function AdminAccess() {
                   <TableRow><TableCell colSpan={MODULES.length + 2} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
                 ) : filtered.map((p) => {
                   const isAdmin = adminIds.has(p.id);
-                  const userMods = access.get(p.id) ?? new Set();
+                  const userMods = access.get(p.id) ?? new Map<string, Perm>();
                   const activeKey = `active:${p.id}`;
                   return (
                     <TableRow key={p.id} className={!p.is_active ? "opacity-60" : undefined}>
@@ -179,15 +179,32 @@ export default function AdminAccess() {
                         />
                       </TableCell>
                       {MODULES.map((m) => {
-                        const checked = isAdmin || userMods.has(m.key);
+                        const perm = userMods.get(m.key) ?? null;
+                        const hasView = isAdmin || perm !== null;
+                        const hasEdit = isAdmin || perm === "edit";
                         const key = `${p.id}:${m.key}`;
+                        const disabled = isAdmin || busy === key || !p.is_active;
                         return (
                           <TableCell key={m.key} className="text-center">
-                            <Checkbox
-                              checked={checked}
-                              disabled={isAdmin || busy === key || !p.is_active}
-                              onCheckedChange={(v) => toggle(p.id, m.key, v === true)}
-                            />
+                            <div className="flex items-center justify-center gap-3">
+                              <Checkbox
+                                checked={hasView}
+                                disabled={disabled}
+                                onCheckedChange={(v) => {
+                                  if (v === true) { if (!hasView) setPerm(p.id, m.key, "view"); }
+                                  else { setPerm(p.id, m.key, null); }
+                                }}
+                                aria-label="View"
+                              />
+                              <Checkbox
+                                checked={hasEdit}
+                                disabled={disabled}
+                                onCheckedChange={(v) => {
+                                  setPerm(p.id, m.key, v === true ? "edit" : (hasView ? "view" : null));
+                                }}
+                                aria-label="Edit"
+                              />
+                            </div>
                           </TableCell>
                         );
                       })}
