@@ -489,18 +489,28 @@ export default function DesignBoqView() {
                 Add comments on any line item — not every row needs a comment. Comments auto-save as you type. When done, click <span className="font-medium text-foreground">Post Submit</span> at the bottom.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant={allApproved ? "outline" : "default"}
-              onClick={() => void bulkToggleAllApprovals()}
-              disabled={items.length === 0 || bulking}
-            >
-              {bulking
-                ? "Working…"
-                : allApproved
-                  ? "Remove All Approvals"
-                  : "Approve All"}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void bulkSetAllPending()}
+                disabled={items.length === 0 || bulking}
+              >
+                {bulking ? "Working…" : "All Pending"}
+              </Button>
+              <Button
+                size="sm"
+                variant={allApproved ? "outline" : "default"}
+                onClick={() => void bulkToggleAllApprovals()}
+                disabled={items.length === 0 || bulking}
+              >
+                {bulking
+                  ? "Working…"
+                  : allApproved
+                    ? "Remove All Approvals"
+                    : "Approve All"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
