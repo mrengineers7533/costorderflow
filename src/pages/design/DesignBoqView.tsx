@@ -232,6 +232,43 @@ export default function DesignBoqView() {
   const approvalsDisabled = alreadySubmitted;
   const allApproved = items.length > 0 && approvedCount === items.length;
 
+  async function bulkSetAllPending() {
+    if (!boq || items.length === 0) return;
+    if (!window.confirm(`Set all ${items.length} items to pending?`)) return;
+    const revision = boq.revision ?? 0;
+    const prevSnapshot = approvals;
+    setBulking(true);
+    setApprovals((p) => {
+      const out: Record<string, ItemApproval> = { ...p };
+      for (const it of items) {
+        out[it.id] = {
+          status: "pending",
+          decided_by_name: p[it.id]?.decided_by_name ?? null,
+          decided_by_department: p[it.id]?.decided_by_department ?? null,
+          decided_at: p[it.id]?.decided_at ?? null,
+        };
+      }
+      return out;
+    });
+    try {
+      const ids = items.map((it) => it.id);
+      await bulkSetItemApprovals(boq.id, ids, revision, "pending");
+      await syncApprovalToBoqSnapshot(boq.id, ids, "pending");
+      const map = await fetchItemApprovals(boq.id, revision);
+      setApprovals(map);
+      toast({ title: "All items set to pending" });
+    } catch (e) {
+      setApprovals(prevSnapshot);
+      toast({
+        title: "Could not update approvals",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulking(false);
+    }
+  }
+
   async function bulkToggleAllApprovals() {
     if (!boq || items.length === 0) return;
     const next: "approved" | "pending" = allApproved ? "pending" : "approved";
@@ -452,18 +489,28 @@ export default function DesignBoqView() {
                 Add comments on any line item — not every row needs a comment. Comments auto-save as you type. When done, click <span className="font-medium text-foreground">Post Submit</span> at the bottom.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant={allApproved ? "outline" : "default"}
-              onClick={() => void bulkToggleAllApprovals()}
-              disabled={items.length === 0 || bulking}
-            >
-              {bulking
-                ? "Working…"
-                : allApproved
-                  ? "Remove All Approvals"
-                  : "Approve All"}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void bulkSetAllPending()}
+                disabled={items.length === 0 || bulking}
+              >
+                {bulking ? "Working…" : "All Pending"}
+              </Button>
+              <Button
+                size="sm"
+                variant={allApproved ? "outline" : "default"}
+                onClick={() => void bulkToggleAllApprovals()}
+                disabled={items.length === 0 || bulking}
+              >
+                {bulking
+                  ? "Working…"
+                  : allApproved
+                    ? "Remove All Approvals"
+                    : "Approve All"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
