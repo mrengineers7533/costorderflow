@@ -213,6 +213,11 @@ export async function reviseBoqFromOrder(
       motor: (ext.motor || "").trim() || prevExt.motor,
       motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
       motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
+      // Carry forward per-item Design approval snapshot from previous BOQ
+      // revision so the OA's "Approved by Design" column remains correct
+      // after an OA revision, until the user manually changes it.
+      approval_status: prev?.approval_status,
+      approval_comment: prev?.approval_comment,
     };
   });
 
@@ -238,7 +243,71 @@ export async function reviseBoqFromOrder(
   };
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) throw error;
-  return data as unknown as BoqRecord;
+  const newBoq = data as unknown as BoqRecord;
+
+  // Carry forward per-item design status rows from the previous BOQ revision
+  // so the Design page's per-row Approve/Pending state survives the OA
+  // revision. Best-effort: failures are logged, never block the revision.
+  if (prevBoq) {
+    try {
+      const { data: prevStatuses } = await supabase
+        .from("boq_item_design_status")
+        .select("boq_item_id,status,decided_by,decided_by_name,decided_by_department,decided_at")
+        .eq("boq_id", prevBoq.id)
+        .eq("boq_revision", prevBoq.revision ?? 0);
+      const prevStatusByOldItemId = new Map<string, {
+        status: string;
+        decided_by: string | null;
+        decided_by_name: string | null;
+        decided_by_department: string | null;
+        decided_at: string | null;
+      }>();
+      for (const r of (prevStatuses || []) as Array<{
+        boq_item_id: string;
+        status: string;
+        decided_by: string | null;
+        decided_by_name: string | null;
+        decided_by_department: string | null;
+        decided_at: string | null;
+      }>) {
+        prevStatusByOldItemId.set(r.boq_item_id, r);
+      }
+      // Map old prev BOQ item id -> new BOQ item id using the same
+      // description|model key already computed above.
+      const inserts: Array<Record<string, unknown>> = [];
+      (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
+        const desc = it.description || "";
+        const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
+        const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
+        const prev = prevByKey.get(key);
+        if (!prev?.id) return;
+        const status = prevStatusByOldItemId.get(prev.id);
+        if (!status) return;
+        const newItemId = items[i]?.id;
+        if (!newItemId) return;
+        inserts.push({
+          boq_id: newBoq.id,
+          boq_item_id: newItemId,
+          boq_revision: newBoq.revision ?? nextRev,
+          status: status.status,
+          decided_by: status.decided_by,
+          decided_by_name: status.decided_by_name,
+          decided_by_department: status.decided_by_department,
+          decided_at: status.decided_at,
+        });
+      });
+      if (inserts.length) {
+        const { error: insStatusErr } = await supabase
+          .from("boq_item_design_status")
+          .insert(inserts as never);
+        if (insStatusErr) console.warn("Carry-forward boq_item_design_status failed", insStatusErr);
+      }
+    } catch (e) {
+      console.warn("Carry-forward boq_item_design_status threw", e);
+    }
+  }
+
+  return newBoq;
 }
 
 /** Fetch all OA revisions in a family, newest first, with linked current BOQ ids. */
