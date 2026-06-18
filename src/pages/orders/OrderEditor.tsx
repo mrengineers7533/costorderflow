@@ -62,6 +62,10 @@ export default function OrderEditor() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null)); }, []);
+  const { isAdmin } = useUserRole(currentUserId);
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [oaNumber, setOaNumber] = useState<string>("");
