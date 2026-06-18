@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword";
+import TrustPage from "./pages/TrustPage";
 import OrdersList from "./pages/orders/OrdersList";
 import OrderEditor from "./pages/orders/OrderEditor";
 import NewOrderChooser from "./pages/orders/NewOrderChooser";
@@ -64,6 +65,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/trust" element={<TrustPage />} />
           <Route path="/boq-verify/:token" element={<BoqVerify />} />
           <Route path="/design-review/:token" element={<DesignReview />} />
           <Route path="/boq/final/:token" element={<FinalBoq />} />
