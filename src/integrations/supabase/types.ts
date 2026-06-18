@@ -3137,6 +3137,10 @@ export type Database = {
         Args: { _event: string; _module: string }
         Returns: Database["public"]["Enums"]["notif_module"]
       }
+      order_visible_via_approved_boq: {
+        Args: { _order_id: string }
+        Returns: boolean
+      }
       peek_next_po_number: { Args: { _fy: string }; Returns: string }
       set_notif_suppress: { Args: { p_on: boolean }; Returns: undefined }
       sign_boq_item_doc_by_token: {
