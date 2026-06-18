@@ -65,6 +65,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/trust" element={<TrustPage />} />
           <Route path="/boq-verify/:token" element={<BoqVerify />} />
           <Route path="/design-review/:token" element={<DesignReview />} />
           <Route path="/boq/final/:token" element={<FinalBoq />} />
