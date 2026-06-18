@@ -65,30 +65,33 @@ export default function AdminAccess() {
     );
   }, [profiles, search]);
 
-  async function toggle(userId: string, mod: ModuleKey, on: boolean) {
+  async function setPerm(userId: string, mod: ModuleKey, next: Perm | null) {
     const key = `${userId}:${mod}`;
     setBusy(key);
     try {
-      if (on) {
-        const { error } = await supabase
-          .from("user_module_access")
-          .insert({ user_id: userId, module: mod });
-        if (error) throw error;
-      } else {
+      if (next === null) {
         const { error } = await supabase
           .from("user_module_access")
           .delete()
           .eq("user_id", userId)
           .eq("module", mod);
         if (error) throw error;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await supabase
+          .from("user_module_access")
+          .upsert(
+            { user_id: userId, module: mod, permission: next } as any,
+            { onConflict: "user_id,module" },
+          );
+        if (error) throw error;
       }
-      // Optimistic local update
       setAccess((prev) => {
-        const next = new Map(prev);
-        const set = new Set(next.get(userId) ?? []);
-        if (on) set.add(mod); else set.delete(mod);
-        next.set(userId, set);
-        return next;
+        const out = new Map(prev);
+        const mm = new Map(out.get(userId) ?? new Map<string, Perm>());
+        if (next === null) mm.delete(mod); else mm.set(mod, next);
+        out.set(userId, mm as Map<string, Perm>);
+        return out;
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update access");
