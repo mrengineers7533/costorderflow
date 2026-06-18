@@ -2657,6 +2657,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      can_edit_doc: {
+        Args: {
+          _doc_id: string
+          _doc_kind: string
+          _module: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      can_edit_module: {
+        Args: { _module: string; _user_id: string }
+        Returns: boolean
+      }
       cancel_purchase_order: {
         Args: { _po_id: string; _reason: string }
         Returns: {
