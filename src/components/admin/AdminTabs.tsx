@@ -5,6 +5,7 @@ const tabs = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/users", label: "Users" },
   { to: "/admin/access", label: "Access Control" },
+  { to: "/admin/document-access", label: "Document Access" },
   { to: "/admin/domains", label: "Domains" },
   { to: "/admin/boq-verification", label: "BOQ Verification" },
   { to: "/admin/raw-materials", label: "Raw Materials" },
