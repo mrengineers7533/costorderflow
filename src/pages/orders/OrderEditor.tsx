@@ -31,6 +31,8 @@ import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import type { BoqRecord } from "@/lib/boq/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
+import { ManageDocAccessDialog } from "@/components/access/ManageDocAccessDialog";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -60,6 +62,10 @@ export default function OrderEditor() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null)); }, []);
+  const { isAdmin } = useUserRole(currentUserId);
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [oaNumber, setOaNumber] = useState<string>("");
@@ -986,12 +992,32 @@ export default function OrderEditor() {
                 >
                   <Users className="mr-1 h-4 w-4" />Create Client Copy
                 </Button>
+                {isAdmin && orderId && (
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => setAccessOpen(true)}
+                    title="Manage which users can view/edit this OA"
+                  >
+                    <Users className="mr-1 h-4 w-4" />Manage Access
+                  </Button>
+                )}
               </>
             )}
             <Button variant="secondary" className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(false)}>Save Draft</Button>
             <Button className="rounded-lg" disabled={saving || (!isNew && !isCurrent)} onClick={() => save(true)}>Finalize</Button>
           </div>
         </div>
+
+        {isAdmin && orderId && (
+          <ManageDocAccessDialog
+            open={accessOpen}
+            onOpenChange={setAccessOpen}
+            kind="order"
+            docId={orderId}
+            docLabel={oaNumber}
+          />
+        )}
 
         {/* Revision badge banner when viewing a non-current revision */}
         {!isNew && (

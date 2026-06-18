@@ -14,11 +14,12 @@ import { MODULES, type ModuleKey } from "@/lib/access/modules";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 
 type Profile = { id: string; full_name: string | null; email: string | null; is_active: boolean };
+type Perm = "view" | "edit";
 
 export default function AdminAccess() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
-  const [access, setAccess] = useState<Map<string, Set<string>>>(new Map());
+  const [access, setAccess] = useState<Map<string, Map<string, Perm>>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export default function AdminAccess() {
     const [{ data: profs }, { data: roles }, { data: rows }] = await Promise.all([
       supabase.from("profiles").select("id, full_name, email, is_active"),
       supabase.from("user_roles").select("user_id, role"),
-      supabase.from("user_module_access").select("user_id, module"),
+      supabase.from("user_module_access").select("user_id, module, permission"),
     ]);
     setProfiles((profs as Profile[]) ?? []);
     const ad = new Set<string>();
@@ -42,10 +43,10 @@ export default function AdminAccess() {
       if (r.role === "admin") ad.add(r.user_id);
     });
     setAdminIds(ad);
-    const m = new Map<string, Set<string>>();
-    ((rows ?? []) as { user_id: string; module: string }[]).forEach((r) => {
-      if (!m.has(r.user_id)) m.set(r.user_id, new Set());
-      m.get(r.user_id)!.add(r.module);
+    const m = new Map<string, Map<string, Perm>>();
+    ((rows ?? []) as { user_id: string; module: string; permission?: Perm | null }[]).forEach((r) => {
+      if (!m.has(r.user_id)) m.set(r.user_id, new Map());
+      m.get(r.user_id)!.set(r.module, (r.permission as Perm) ?? "edit");
     });
     setAccess(m);
     setLoading(false);
@@ -64,30 +65,33 @@ export default function AdminAccess() {
     );
   }, [profiles, search]);
 
-  async function toggle(userId: string, mod: ModuleKey, on: boolean) {
+  async function setPerm(userId: string, mod: ModuleKey, next: Perm | null) {
     const key = `${userId}:${mod}`;
     setBusy(key);
     try {
-      if (on) {
-        const { error } = await supabase
-          .from("user_module_access")
-          .insert({ user_id: userId, module: mod });
-        if (error) throw error;
-      } else {
+      if (next === null) {
         const { error } = await supabase
           .from("user_module_access")
           .delete()
           .eq("user_id", userId)
           .eq("module", mod);
         if (error) throw error;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await supabase
+          .from("user_module_access")
+          .upsert(
+            { user_id: userId, module: mod, permission: next } as any,
+            { onConflict: "user_id,module" },
+          );
+        if (error) throw error;
       }
-      // Optimistic local update
       setAccess((prev) => {
-        const next = new Map(prev);
-        const set = new Set(next.get(userId) ?? []);
-        if (on) set.add(mod); else set.delete(mod);
-        next.set(userId, set);
-        return next;
+        const out = new Map(prev);
+        const mm = new Map(out.get(userId) ?? new Map<string, Perm>());
+        if (next === null) mm.delete(mod); else mm.set(mod, next);
+        out.set(userId, mm as Map<string, Perm>);
+        return out;
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update access");
@@ -144,7 +148,10 @@ export default function AdminAccess() {
                   <TableHead className="sticky left-0 bg-background z-10 min-w-[240px]">User</TableHead>
                   <TableHead className="text-center whitespace-nowrap">Active</TableHead>
                   {MODULES.map((m) => (
-                    <TableHead key={m.key} className="text-center whitespace-nowrap">{m.label}</TableHead>
+                    <TableHead key={m.key} className="text-center whitespace-nowrap">
+                      <div>{m.label}</div>
+                      <div className="text-[10px] font-normal text-muted-foreground">View / Edit</div>
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
@@ -155,7 +162,7 @@ export default function AdminAccess() {
                   <TableRow><TableCell colSpan={MODULES.length + 2} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
                 ) : filtered.map((p) => {
                   const isAdmin = adminIds.has(p.id);
-                  const userMods = access.get(p.id) ?? new Set();
+                  const userMods = access.get(p.id) ?? new Map<string, Perm>();
                   const activeKey = `active:${p.id}`;
                   return (
                     <TableRow key={p.id} className={!p.is_active ? "opacity-60" : undefined}>
@@ -175,15 +182,32 @@ export default function AdminAccess() {
                         />
                       </TableCell>
                       {MODULES.map((m) => {
-                        const checked = isAdmin || userMods.has(m.key);
+                        const perm = userMods.get(m.key) ?? null;
+                        const hasView = isAdmin || perm !== null;
+                        const hasEdit = isAdmin || perm === "edit";
                         const key = `${p.id}:${m.key}`;
+                        const disabled = isAdmin || busy === key || !p.is_active;
                         return (
                           <TableCell key={m.key} className="text-center">
-                            <Checkbox
-                              checked={checked}
-                              disabled={isAdmin || busy === key || !p.is_active}
-                              onCheckedChange={(v) => toggle(p.id, m.key, v === true)}
-                            />
+                            <div className="flex items-center justify-center gap-3">
+                              <Checkbox
+                                checked={hasView}
+                                disabled={disabled}
+                                onCheckedChange={(v) => {
+                                  if (v === true) { if (!hasView) setPerm(p.id, m.key, "view"); }
+                                  else { setPerm(p.id, m.key, null); }
+                                }}
+                                aria-label="View"
+                              />
+                              <Checkbox
+                                checked={hasEdit}
+                                disabled={disabled}
+                                onCheckedChange={(v) => {
+                                  setPerm(p.id, m.key, v === true ? "edit" : (hasView ? "view" : null));
+                                }}
+                                aria-label="Edit"
+                              />
+                            </div>
                           </TableCell>
                         );
                       })}
