@@ -43,6 +43,7 @@ import AdminBoqSettings from "./pages/admin/AdminBoqSettings";
 import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
 import AdminNotificationRecipients from "./pages/admin/AdminNotificationRecipients";
 import AdminAccess from "./pages/admin/AdminAccess";
+import AdminDocumentAccess from "./pages/admin/AdminDocumentAccess";
 import AdminVendors from "./pages/admin/AdminVendors";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
@@ -134,6 +135,10 @@ const App = () => (
                       <Route
                         path="/admin/access"
                         element={<RequireAdmin user={user}><AdminAccess /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/document-access"
+                        element={<RequireAdmin user={user}><AdminDocumentAccess /></RequireAdmin>}
                       />
                       <Route
                         path="/admin/vendors"
