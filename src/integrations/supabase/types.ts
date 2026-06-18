@@ -1094,6 +1094,36 @@ export type Database = {
         }
         Relationships: []
       }
+      document_access: {
+        Row: {
+          created_at: string
+          doc_id: string
+          doc_kind: Database["public"]["Enums"]["doc_kind"]
+          granted_by: string | null
+          id: string
+          permission: Database["public"]["Enums"]["access_perm"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_id: string
+          doc_kind: Database["public"]["Enums"]["doc_kind"]
+          granted_by?: string | null
+          id?: string
+          permission?: Database["public"]["Enums"]["access_perm"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_id?: string
+          doc_kind?: Database["public"]["Enums"]["doc_kind"]
+          granted_by?: string | null
+          id?: string
+          permission?: Database["public"]["Enums"]["access_perm"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       fg_raw_material_map: {
         Row: {
           created_at: string
@@ -2486,18 +2516,21 @@ export type Database = {
           granted_at: string
           granted_by: string | null
           module: string
+          permission: Database["public"]["Enums"]["access_perm"]
           user_id: string
         }
         Insert: {
           granted_at?: string
           granted_by?: string | null
           module: string
+          permission?: Database["public"]["Enums"]["access_perm"]
           user_id: string
         }
         Update: {
           granted_at?: string
           granted_by?: string | null
           module?: string
+          permission?: Database["public"]["Enums"]["access_perm"]
           user_id?: string
         }
         Relationships: []
@@ -3036,8 +3069,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      has_doc_access: {
+        Args: {
+          _doc_id: string
+          _kind: Database["public"]["Enums"]["doc_kind"]
+          _need: Database["public"]["Enums"]["access_perm"]
+          _user: string
+        }
+        Returns: boolean
+      }
       has_module_access: {
         Args: { _module: string; _user: string }
+        Returns: boolean
+      }
+      has_module_perm: {
+        Args: {
+          _module: string
+          _need: Database["public"]["Enums"]["access_perm"]
+          _user: string
+        }
         Returns: boolean
       }
       has_open_review_for_boq: { Args: { _boq_id: string }; Returns: boolean }
@@ -3269,7 +3319,9 @@ export type Database = {
       }
     }
     Enums: {
+      access_perm: "view" | "edit"
       app_role: "admin" | "user"
+      doc_kind: "order" | "boq" | "pi" | "purchase_order" | "requisition"
       notif_module:
         | "oa"
         | "boq"
@@ -3408,7 +3460,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      access_perm: ["view", "edit"],
       app_role: ["admin", "user"],
+      doc_kind: ["order", "boq", "pi", "purchase_order", "requisition"],
       notif_module: [
         "oa",
         "boq",
