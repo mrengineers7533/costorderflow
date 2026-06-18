@@ -35,12 +35,10 @@ export function useDocAccess(kind: DocKind, docId: string | undefined | null) {
     setIsAdmin(admin);
     if (admin) { setCanView(true); setCanEdit(true); setLoading(false); return; }
     const row = (rows ?? [])[0] as { permission?: "view" | "edit" } | undefined;
-    // If RLS allowed the row through, the user has at least view access (creator or grant).
-    // Server side: creator gets edit; grant rows are honoured by has_doc_access.
-    setCanView(true);
-    setCanEdit(row?.permission === "edit" || !row);
-    // Note: when row is missing, fall back to "edit" only if creator — server enforces, but
-    // we can't tell from here. Be conservative and require explicit grant for edit.
+    // The migration backfills creators and the AFTER INSERT trigger grants them
+    // 'edit' in document_access, so a row is expected for any user who can reach
+    // the document. RLS is the actual authority.
+    setCanView(!!row);
     setCanEdit(row?.permission === "edit");
     setLoading(false);
   }, [kind, docId]);
