@@ -226,7 +226,7 @@ export async function reviseBoqFromOrder(
     source_order_id: orderRev.id,
     revised_from_id: prevBoq?.id || null,
     user_id: ownerId,
-    boq_number: prevBoq?.boq_number || deriveBoqNumber(orderRev.oa_number),
+    boq_number: deriveBoqNumber(orderRev.oa_number),
     version: 1, // legacy column; we use revision for ordering now
     revision: nextRev,
     is_current: true,
@@ -555,7 +555,7 @@ export async function createPendingBoqRevision(
     source_order_id: orderRev.id,
     revised_from_id: prevBoq.id,
     user_id: orderRev.user_id ?? null,
-    boq_number: prevBoq.boq_number || deriveBoqNumber(orderRev.oa_number),
+    boq_number: deriveBoqNumber(orderRev.oa_number),
     version: 1,
     revision: orderRev.revision ?? 0,
     is_current: false, // pending — previous BOQ stays active until approval
