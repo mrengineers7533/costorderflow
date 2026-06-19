@@ -28,6 +28,73 @@ async function withNotifSuppress<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Clone applied/approved Design comments from a previous BOQ revision onto
+ *  a freshly inserted BOQ revision so the latest revised OA & BOQ keep
+ *  showing the same applied comments/remarks (linked to the correct
+ *  line/motor/quantity row).
+ *
+ *  - Only comments that were already applied to the OA (applied_to_oa_at IS
+ *    NOT NULL) are carried forward. Draft/pending/never-applied comments
+ *    stay on the previous revision (matching existing approval semantics).
+ *  - Old comments stay on the old BOQ revision so revision history is
+ *    preserved exactly as it was.
+ *  - Notifications are suppressed because this is a cascade of the OA
+ *    revision; the originating revision already emits its own notification.
+ */
+async function carryForwardAppliedDesignComments(
+  prevBoqId: string,
+  newBoqId: string,
+  oldItemIdToNewItemId: Map<string, string>,
+): Promise<void> {
+  if (!oldItemIdToNewItemId.size) return;
+  try {
+    const { data: prevComments, error } = await supabase
+      .from("boq_design_comments" as never)
+      .select(
+        "boq_item_id,column_key,comment,user_id,user_name,user_email,department,applied_to_oa_at,applied_to_oa_by,applied_value,oa_revision_id",
+      )
+      .eq("boq_id", prevBoqId)
+      .not("applied_to_oa_at", "is", null);
+    if (error) { console.warn("carryForwardAppliedDesignComments fetch failed", error); return; }
+    const rows = (prevComments || []) as Array<{
+      boq_item_id: string; column_key: string | null; comment: string;
+      user_id: string | null; user_name: string | null; user_email: string | null;
+      department: string | null; applied_to_oa_at: string | null;
+      applied_to_oa_by: string | null; applied_value: string | null;
+      oa_revision_id: string | null;
+    }>;
+    const inserts = rows
+      .map((r) => {
+        const newItemId = oldItemIdToNewItemId.get(r.boq_item_id);
+        if (!newItemId) return null;
+        return {
+          boq_id: newBoqId,
+          boq_item_id: newItemId,
+          column_key: r.column_key,
+          comment: r.comment,
+          user_id: r.user_id,
+          user_name: r.user_name,
+          user_email: r.user_email,
+          department: r.department,
+          applied_to_oa_at: r.applied_to_oa_at,
+          applied_to_oa_by: r.applied_to_oa_by,
+          applied_value: r.applied_value,
+          oa_revision_id: r.oa_revision_id,
+        };
+      })
+      .filter(Boolean) as Array<Record<string, unknown>>;
+    if (!inserts.length) return;
+    await withNotifSuppress(async () => {
+      const { error: insErr } = await supabase
+        .from("boq_design_comments" as never)
+        .insert(inserts as never);
+      if (insErr) console.warn("carryForwardAppliedDesignComments insert failed", insErr);
+    });
+  } catch (e) {
+    console.warn("carryForwardAppliedDesignComments threw", e);
+  }
+}
+
 /** Snapshot the given BOQ as a PDF in the `boq-documents` bucket under a
  *  history/ prefix so it is never overwritten by future revisions. Best
  *  effort — failures are logged but never break the revision flow. */
