@@ -767,51 +767,26 @@ function UploadRequisitionButton({
         }).eq("id", created.id);
         if (updErr) { console.error("[gen-req]", stage, updErr); throw updErr; }
 
-        // Parse Excel items if applicable
-        const lower = file.name.toLowerCase();
-        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-          try {
-            stage = "parse:excel";
-            const items = await parseRequisitionExcel(file);
-            console.info("[gen-req] parsed items", items.length, items.slice(0, 2));
-            if (items.length) {
-              const rows = items.map((it, idx) => ({
-                requisition_id: created.id,
-                boq_item_id: `gen-${idx + 1}`,
-                item_no: it.s_no != null ? String(it.s_no) : String(idx + 1),
-                model_number: it.size_model,
-                description: it.description,
-                quantity: it.qty,
-                unit: it.unit,
-                remarks: [
-                  it.make ? `Make: ${it.make}` : null,
-                  it.material ? `Material: ${it.material}` : null,
-                  it.required_date ? `Required: ${it.required_date}` : null,
-                  it.purpose ? `For: ${it.purpose}` : null,
-                  it.remarks,
-                ].filter(Boolean).join(" · ") || null,
-                fg_snapshot: it as unknown as Record<string, unknown>,
-                included_in_requisition: true,
-              }));
-              stage = "insert:requisition_items";
-              console.info("[gen-req]", stage, "rows", rows.length, rows[0]);
-              const { error: itErr } = await sb.from("requisition_items").insert(rows);
-              if (itErr) { console.error("[gen-req]", stage, itErr); throw itErr; }
-            } else {
-              toast({
-                title: "No items found in Excel",
-                description: "The first sheet had no parseable rows. Check that the header row matches the template exactly (Item Description, Qty, …).",
-                variant: "destructive",
-              });
-            }
-          } catch (parseErr) {
-            console.error("[gen-req] parse/insert error", parseErr);
+        // Parse Excel groups (FG + RM) and persist for annexure/PO flow.
+        try {
+          stage = "parse:excel";
+          const result = await persistUploadedRequisitionRows(sb, created.id, file);
+          if (result && result.groups === 0 && file.name.toLowerCase().match(/\.xlsx?$/)) {
             toast({
-              title: `Items not saved (stage: ${stage})`,
-              description: fmtErr(parseErr),
+              title: "No items found in Excel",
+              description: "The header row must match the template exactly (Sr. No., Finished Good, Raw Material, …).",
               variant: "destructive",
             });
+          } else if (result) {
+            console.info("[gen-req] persisted groups/rms", result);
           }
+        } catch (parseErr) {
+          console.error("[gen-req] parse/insert error", parseErr);
+          toast({
+            title: `Items not saved (stage: ${stage})`,
+            description: fmtErr(parseErr),
+            variant: "destructive",
+          });
         }
 
         toast({ title: "General requisition uploaded", description: reqNum });
@@ -879,6 +854,20 @@ function UploadRequisitionButton({
         upload_file_name: file.name,
         upload_mime_type: file.type || null,
       }).eq("id", created.id);
+
+      // Parse and persist FG/RM groups so annexure/PO flow works for
+      // uploaded requisitions exactly like BOQ-generated ones.
+      try {
+        const result = await persistUploadedRequisitionRows(sb, created.id, file);
+        if (result) console.info("[req-upload] persisted groups/rms", result);
+      } catch (parseErr) {
+        console.error("[req-upload] parse/insert error", parseErr);
+        toast({
+          title: "Items not saved",
+          description: (parseErr as Error).message,
+          variant: "destructive",
+        });
+      }
 
       toast({ title: "Requisition uploaded", description: reqNum });
       setOpen(false); reset();
