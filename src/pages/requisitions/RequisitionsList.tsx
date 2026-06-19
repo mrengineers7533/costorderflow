@@ -35,6 +35,86 @@ import { financialYearOf } from "@/lib/purchase/poPdf";
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
 
+/**
+ * Parse an uploaded Excel requisition in the grouped FG+RM format and
+ * persist it into requisition_items + requisition_raw_materials so it
+ * flows through annexure / PO creation just like a BOQ-generated one.
+ *
+ * Safe to call from any upload path (general or BOQ-linked). Non-Excel
+ * files and empty parses are silently skipped (the source file is still
+ * stored against the requisition).
+ */
+async function persistUploadedRequisitionRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sb: any,
+  requisitionId: string,
+  file: File,
+): Promise<{ groups: number; rms: number } | null> {
+  const lower = file.name.toLowerCase();
+  if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) return null;
+  const groups = await parseGroupedRequisitionExcel(file);
+  if (!groups.length) return { groups: 0, rms: 0 };
+
+  const itemRows = groups.map((g, idx) => ({
+    requisition_id: requisitionId,
+    boq_item_id: `upl-${idx + 1}`,
+    item_no: g.s_no != null ? String(g.s_no) : String(idx + 1),
+    model_number: null,
+    description: g.fg_description || "(Unspecified)",
+    quantity: g.fg_quantity,
+    unit: g.fg_unit,
+    remarks: null,
+    fg_snapshot: g as unknown as Record<string, unknown>,
+    included_in_requisition: true,
+  }));
+  const { data: inserted, error: itErr } = await sb
+    .from("requisition_items")
+    .insert(itemRows)
+    .select("id, item_no");
+  if (itErr) throw itErr;
+
+  const byItemNo = new Map<string, string>();
+  ((inserted as Array<{ id: string; item_no: string | null }>) || []).forEach((r) => {
+    if (r.item_no) byItemNo.set(r.item_no, r.id);
+  });
+
+  const rmRows: Array<Record<string, unknown>> = [];
+  groups.forEach((g, idx) => {
+    const reqItemId = byItemNo.get(g.s_no != null ? String(g.s_no) : String(idx + 1)) || null;
+    const fgQty = g.fg_quantity;
+    for (const rm of g.raw_materials) {
+      if (!rm.material && !rm.qty) continue;
+      const planStatus = mapCategoryToPlanStatus(rm.category);
+      const notes = [
+        rm.remarks,
+        !planStatus && rm.category ? `Category: ${rm.category}` : null,
+      ].filter(Boolean).join(" · ") || null;
+      rmRows.push({
+        requisition_id: requisitionId,
+        requisition_item_id: reqItemId,
+        model_number: null,
+        make: rm.party_name,
+        material: rm.material || "(Unspecified)",
+        size_model: rm.size_model,
+        qty_per_unit: null,
+        fg_quantity: fgQty,
+        required_qty: rm.qty,
+        unit: rm.unit,
+        source: "manual",
+        purchase_status: "pending",
+        notes,
+        lot_no: rm.lot,
+        plan_status: planStatus,
+      });
+    }
+  });
+  if (rmRows.length) {
+    const { error: rmErr } = await sb.from("requisition_raw_materials").insert(rmRows);
+    if (rmErr) throw rmErr;
+  }
+  return { groups: groups.length, rms: rmRows.length };
+}
+
 export default function RequisitionsList() {
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
   const [boqs, setBoqs] = useState<Record<string, BoqRecord>>({});
