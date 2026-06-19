@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportRequisitionTemplate } from "@/lib/requisition/uploadTemplate";
-import { parseRequisitionExcel } from "@/lib/requisition/parseUpload";
+import { parseRequisitionExcel, parseGroupedRequisitionExcel, mapCategoryToPlanStatus } from "@/lib/requisition/parseUpload";
 import { financialYearOf } from "@/lib/purchase/poPdf";
 
 const fmtDate = (s: string | null | undefined) =>
