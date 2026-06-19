@@ -29,11 +29,91 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportRequisitionTemplate } from "@/lib/requisition/uploadTemplate";
-import { parseRequisitionExcel } from "@/lib/requisition/parseUpload";
+import { parseGroupedRequisitionExcel, mapCategoryToPlanStatus } from "@/lib/requisition/parseUpload";
 import { financialYearOf } from "@/lib/purchase/poPdf";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
+
+/**
+ * Parse an uploaded Excel requisition in the grouped FG+RM format and
+ * persist it into requisition_items + requisition_raw_materials so it
+ * flows through annexure / PO creation just like a BOQ-generated one.
+ *
+ * Safe to call from any upload path (general or BOQ-linked). Non-Excel
+ * files and empty parses are silently skipped (the source file is still
+ * stored against the requisition).
+ */
+async function persistUploadedRequisitionRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sb: any,
+  requisitionId: string,
+  file: File,
+): Promise<{ groups: number; rms: number } | null> {
+  const lower = file.name.toLowerCase();
+  if (!lower.endsWith(".xlsx") && !lower.endsWith(".xls")) return null;
+  const groups = await parseGroupedRequisitionExcel(file);
+  if (!groups.length) return { groups: 0, rms: 0 };
+
+  const itemRows = groups.map((g, idx) => ({
+    requisition_id: requisitionId,
+    boq_item_id: `upl-${idx + 1}`,
+    item_no: g.s_no != null ? String(g.s_no) : String(idx + 1),
+    model_number: null,
+    description: g.fg_description || "(Unspecified)",
+    quantity: g.fg_quantity,
+    unit: g.fg_unit,
+    remarks: null,
+    fg_snapshot: g as unknown as Record<string, unknown>,
+    included_in_requisition: true,
+  }));
+  const { data: inserted, error: itErr } = await sb
+    .from("requisition_items")
+    .insert(itemRows)
+    .select("id, item_no");
+  if (itErr) throw itErr;
+
+  const byItemNo = new Map<string, string>();
+  ((inserted as Array<{ id: string; item_no: string | null }>) || []).forEach((r) => {
+    if (r.item_no) byItemNo.set(r.item_no, r.id);
+  });
+
+  const rmRows: Array<Record<string, unknown>> = [];
+  groups.forEach((g, idx) => {
+    const reqItemId = byItemNo.get(g.s_no != null ? String(g.s_no) : String(idx + 1)) || null;
+    const fgQty = g.fg_quantity;
+    for (const rm of g.raw_materials) {
+      if (!rm.material && !rm.qty) continue;
+      const planStatus = mapCategoryToPlanStatus(rm.category);
+      const notes = [
+        rm.remarks,
+        !planStatus && rm.category ? `Category: ${rm.category}` : null,
+      ].filter(Boolean).join(" · ") || null;
+      rmRows.push({
+        requisition_id: requisitionId,
+        requisition_item_id: reqItemId,
+        model_number: null,
+        make: rm.party_name,
+        material: rm.material || "(Unspecified)",
+        size_model: rm.size_model,
+        qty_per_unit: null,
+        fg_quantity: fgQty,
+        required_qty: rm.qty,
+        unit: rm.unit,
+        source: "manual",
+        purchase_status: "pending",
+        notes,
+        lot_no: rm.lot,
+        plan_status: planStatus,
+      });
+    }
+  });
+  if (rmRows.length) {
+    const { error: rmErr } = await sb.from("requisition_raw_materials").insert(rmRows);
+    if (rmErr) throw rmErr;
+  }
+  return { groups: groups.length, rms: rmRows.length };
+}
 
 export default function RequisitionsList() {
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
@@ -687,51 +767,26 @@ function UploadRequisitionButton({
         }).eq("id", created.id);
         if (updErr) { console.error("[gen-req]", stage, updErr); throw updErr; }
 
-        // Parse Excel items if applicable
-        const lower = file.name.toLowerCase();
-        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-          try {
-            stage = "parse:excel";
-            const items = await parseRequisitionExcel(file);
-            console.info("[gen-req] parsed items", items.length, items.slice(0, 2));
-            if (items.length) {
-              const rows = items.map((it, idx) => ({
-                requisition_id: created.id,
-                boq_item_id: `gen-${idx + 1}`,
-                item_no: it.s_no != null ? String(it.s_no) : String(idx + 1),
-                model_number: it.size_model,
-                description: it.description,
-                quantity: it.qty,
-                unit: it.unit,
-                remarks: [
-                  it.make ? `Make: ${it.make}` : null,
-                  it.material ? `Material: ${it.material}` : null,
-                  it.required_date ? `Required: ${it.required_date}` : null,
-                  it.purpose ? `For: ${it.purpose}` : null,
-                  it.remarks,
-                ].filter(Boolean).join(" · ") || null,
-                fg_snapshot: it as unknown as Record<string, unknown>,
-                included_in_requisition: true,
-              }));
-              stage = "insert:requisition_items";
-              console.info("[gen-req]", stage, "rows", rows.length, rows[0]);
-              const { error: itErr } = await sb.from("requisition_items").insert(rows);
-              if (itErr) { console.error("[gen-req]", stage, itErr); throw itErr; }
-            } else {
-              toast({
-                title: "No items found in Excel",
-                description: "The first sheet had no parseable rows. Check that the header row matches the template exactly (Item Description, Qty, …).",
-                variant: "destructive",
-              });
-            }
-          } catch (parseErr) {
-            console.error("[gen-req] parse/insert error", parseErr);
+        // Parse Excel groups (FG + RM) and persist for annexure/PO flow.
+        try {
+          stage = "parse:excel";
+          const result = await persistUploadedRequisitionRows(sb, created.id, file);
+          if (result && result.groups === 0 && file.name.toLowerCase().match(/\.xlsx?$/)) {
             toast({
-              title: `Items not saved (stage: ${stage})`,
-              description: fmtErr(parseErr),
+              title: "No items found in Excel",
+              description: "The header row must match the template exactly (Sr. No., Finished Good, Raw Material, …).",
               variant: "destructive",
             });
+          } else if (result) {
+            console.info("[gen-req] persisted groups/rms", result);
           }
+        } catch (parseErr) {
+          console.error("[gen-req] parse/insert error", parseErr);
+          toast({
+            title: `Items not saved (stage: ${stage})`,
+            description: fmtErr(parseErr),
+            variant: "destructive",
+          });
         }
 
         toast({ title: "General requisition uploaded", description: reqNum });
@@ -799,6 +854,20 @@ function UploadRequisitionButton({
         upload_file_name: file.name,
         upload_mime_type: file.type || null,
       }).eq("id", created.id);
+
+      // Parse and persist FG/RM groups so annexure/PO flow works for
+      // uploaded requisitions exactly like BOQ-generated ones.
+      try {
+        const result = await persistUploadedRequisitionRows(sb, created.id, file);
+        if (result) console.info("[req-upload] persisted groups/rms", result);
+      } catch (parseErr) {
+        console.error("[req-upload] parse/insert error", parseErr);
+        toast({
+          title: "Items not saved",
+          description: (parseErr as Error).message,
+          variant: "destructive",
+        });
+      }
 
       toast({ title: "Requisition uploaded", description: reqNum });
       setOpen(false); reset();
