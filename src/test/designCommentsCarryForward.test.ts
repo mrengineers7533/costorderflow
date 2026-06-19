@@ -30,10 +30,10 @@ function oaItem(partial: Partial<LineItem> & { description: string; model?: stri
     description: partial.description,
     quantity: partial.quantity ?? 1,
     unit: partial.unit ?? "Nos",
-    rate: partial.rate ?? 0,
+    unit_rate: partial.unit_rate ?? 0,
     amount: partial.amount ?? 0,
-    ...(partial as object),
-  } as LineItem;
+    ...partial,
+  };
 }
 
 function boqItem(partial: Partial<BoqLineItem> & { id: string; description: string; model_number: string }): BoqLineItem {
