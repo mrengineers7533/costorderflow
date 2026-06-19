@@ -288,6 +288,17 @@ export async function reviseBoqFromOrder(
     };
   });
 
+  // Build oldBoqItemId → newBoqItemId map so applied Design comments can
+  // be carried forward onto the new BOQ revision (same desc|model match).
+  const oldToNewItemId = new Map<string, string>();
+  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
+    const desc = it.description || "";
+    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
+    const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
+    const prev = prevByKey.get(key);
+    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
+  });
+
   const payload = {
     order_id: orderRev.id,
     source_order_id: orderRev.id,
@@ -311,6 +322,12 @@ export async function reviseBoqFromOrder(
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) throw error;
   const newBoq = data as unknown as BoqRecord;
+
+  // Carry forward applied/approved Design comments so the latest revised
+  // OA & BOQ keep showing the same comments on the right line/motor row.
+  if (prevBoq) {
+    await carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, oldToNewItemId);
+  }
 
   // Carry forward per-item design status rows from the previous BOQ revision
   // so the Design page's per-row Approve/Pending state survives the OA
