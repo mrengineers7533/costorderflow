@@ -269,14 +269,12 @@ export async function reviseBoqFromOrder(
 
   // Build oldBoqItemId → newBoqItemId map so applied Design comments can
   // be carried forward onto the new BOQ revision (same desc|model match).
-  const oldToNewItemId = new Map<string, string>();
-  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
-    const desc = it.description || "";
-    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
-    const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
-    const prev = prevByKey.get(key);
-    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
-  });
+  const oldToNewItemId = buildBoqItemIdRemap(
+    orderRev.line_items || [],
+    prevBoq?.line_items || [],
+    items,
+    "desc-model",
+  );
 
   const payload = {
     order_id: orderRev.id,
@@ -613,13 +611,14 @@ export async function createPendingBoqRevision(
     };
   });
   // oldBoqItemId → newBoqItemId mapping for carrying applied Design
-  // comments onto this pending BOQ revision.
-  const oldToNewItemId = new Map<string, string>();
-  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
-    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
-    const prev = prevByModel.get(model.trim().toLowerCase());
-    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
-  });
+  // comments onto this pending BOQ revision (model-only match here to
+  // mirror the line-item carry-over above).
+  const oldToNewItemId = buildBoqItemIdRemap(
+    orderRev.line_items || [],
+    prevBoq.line_items || [],
+    items,
+    "model",
+  );
   const token = crypto.randomUUID();
   const payload = {
     order_id: orderRev.id,
