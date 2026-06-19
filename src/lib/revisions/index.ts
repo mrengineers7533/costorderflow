@@ -6,6 +6,11 @@ import { calcPiTotals } from "@/lib/pi/calc";
 import { amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { PiRecord } from "@/lib/pi/types";
 import { generateBoqPDF } from "@/lib/boq/pdf";
+import {
+  buildAppliedCommentInserts,
+  buildBoqItemIdRemap,
+  type DesignCommentCarry,
+} from "@/lib/revisions/carryForward";
 
 /** Toggle the per-connection "suppress cascaded notifications" flag.
  *  Used so that BOQ/PI rows auto-created or auto-synced as a side effect of
@@ -53,36 +58,10 @@ async function carryForwardAppliedDesignComments(
       .select(
         "boq_item_id,column_key,comment,user_id,user_name,user_email,department,applied_to_oa_at,applied_to_oa_by,applied_value,oa_revision_id",
       )
-      .eq("boq_id", prevBoqId)
-      .not("applied_to_oa_at", "is", null);
+      .eq("boq_id", prevBoqId);
     if (error) { console.warn("carryForwardAppliedDesignComments fetch failed", error); return; }
-    const rows = (prevComments || []) as Array<{
-      boq_item_id: string; column_key: string | null; comment: string;
-      user_id: string | null; user_name: string | null; user_email: string | null;
-      department: string | null; applied_to_oa_at: string | null;
-      applied_to_oa_by: string | null; applied_value: string | null;
-      oa_revision_id: string | null;
-    }>;
-    const inserts = rows
-      .map((r) => {
-        const newItemId = oldItemIdToNewItemId.get(r.boq_item_id);
-        if (!newItemId) return null;
-        return {
-          boq_id: newBoqId,
-          boq_item_id: newItemId,
-          column_key: r.column_key,
-          comment: r.comment,
-          user_id: r.user_id,
-          user_name: r.user_name,
-          user_email: r.user_email,
-          department: r.department,
-          applied_to_oa_at: r.applied_to_oa_at,
-          applied_to_oa_by: r.applied_to_oa_by,
-          applied_value: r.applied_value,
-          oa_revision_id: r.oa_revision_id,
-        };
-      })
-      .filter(Boolean) as Array<Record<string, unknown>>;
+    const rows = (prevComments || []) as DesignCommentCarry[];
+    const inserts = buildAppliedCommentInserts(rows, oldItemIdToNewItemId, newBoqId);
     if (!inserts.length) return;
     await withNotifSuppress(async () => {
       const { error: insErr } = await supabase
@@ -290,14 +269,12 @@ export async function reviseBoqFromOrder(
 
   // Build oldBoqItemId → newBoqItemId map so applied Design comments can
   // be carried forward onto the new BOQ revision (same desc|model match).
-  const oldToNewItemId = new Map<string, string>();
-  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
-    const desc = it.description || "";
-    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
-    const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
-    const prev = prevByKey.get(key);
-    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
-  });
+  const oldToNewItemId = buildBoqItemIdRemap(
+    orderRev.line_items || [],
+    prevBoq?.line_items || [],
+    items,
+    "desc-model",
+  );
 
   const payload = {
     order_id: orderRev.id,
@@ -634,13 +611,14 @@ export async function createPendingBoqRevision(
     };
   });
   // oldBoqItemId → newBoqItemId mapping for carrying applied Design
-  // comments onto this pending BOQ revision.
-  const oldToNewItemId = new Map<string, string>();
-  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
-    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
-    const prev = prevByModel.get(model.trim().toLowerCase());
-    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
-  });
+  // comments onto this pending BOQ revision (model-only match here to
+  // mirror the line-item carry-over above).
+  const oldToNewItemId = buildBoqItemIdRemap(
+    orderRev.line_items || [],
+    prevBoq.line_items || [],
+    items,
+    "model",
+  );
   const token = crypto.randomUUID();
   const payload = {
     order_id: orderRev.id,
