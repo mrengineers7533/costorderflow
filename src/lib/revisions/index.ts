@@ -633,6 +633,14 @@ export async function createPendingBoqRevision(
       motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
     };
   });
+  // oldBoqItemId → newBoqItemId mapping for carrying applied Design
+  // comments onto this pending BOQ revision.
+  const oldToNewItemId = new Map<string, string>();
+  (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
+    const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
+    const prev = prevByModel.get(model.trim().toLowerCase());
+    if (prev?.id && items[i]?.id) oldToNewItemId.set(prev.id, items[i].id);
+  });
   const token = crypto.randomUUID();
   const payload = {
     order_id: orderRev.id,
@@ -663,6 +671,7 @@ export async function createPendingBoqRevision(
     return null;
   }
   const newBoq = data as unknown as BoqRecord;
+  await carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, oldToNewItemId);
   // Fire-and-forget verification email (no-op if recipient not configured).
   try {
     const verificationUrl = `${window.location.origin}/boq-verify/${token}`;
