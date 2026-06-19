@@ -63,7 +63,35 @@ export function ModuleNotifications({
   const [rows, setRows] = useState<NotifFull[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
-  const [open, setOpen] = useState(true);
+  const storageKey = `notif-open:${modsKey}:${linksKey}`;
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Re-hydrate when the page's link/module signature changes
+  useEffect(() => {
+    try {
+      setOpen(window.sessionStorage.getItem(storageKey) === "1");
+    } catch {
+      setOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+  const toggleOpen = useCallback(() => {
+    setOpen((o) => {
+      const next = !o;
+      try {
+        window.sessionStorage.setItem(storageKey, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [storageKey]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -192,7 +220,7 @@ export function ModuleNotifications({
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
       >
         <div className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
