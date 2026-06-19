@@ -25,9 +25,15 @@ function makeExcelFile(rows: unknown[][], headers: string[] = HEADERS, sheet = "
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   XLSX.utils.book_append_sheet(wb, ws, sheet);
   const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-  return new File([buf], "req.xlsx", {
+  // jsdom's File doesn't implement arrayBuffer(); attach a shim so the
+  // parser (which only needs file.arrayBuffer()) works in tests.
+  const f = new File([buf], "req.xlsx", {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  if (typeof (f as unknown as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer !== "function") {
+    (f as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer = async () => buf;
+  }
+  return f;
 }
 
 describe("mapCategoryToPlanStatus", () => {
