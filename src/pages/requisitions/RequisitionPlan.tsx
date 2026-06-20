@@ -23,6 +23,19 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 
+const fmtQty2 = (v: unknown): string => {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return (Math.trunc(n * 100) / 100).toFixed(2);
+};
+const fmtQty2Input = (v: unknown): string => {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "";
+  return (Math.trunc(n * 100) / 100).toFixed(2);
+};
+
 type PlanStatus =
   | "machine"
   | "3p"
@@ -607,7 +620,7 @@ export default function RequisitionPlan() {
                   ) : groups.flatMap((g) => {
                     const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
                     const fgMake = g.item ? resolveMake(g.item) : "";
-                    const fgQty = g.item?.quantity != null ? String(g.item.quantity) : "—";
+                          const fgQty = fmtQty2(g.item?.quantity);
                     return g.rms.map((r, idx) => (
                       <tr key={r.id} className="border-b last:border-0">
                         {idx === 0 && (
@@ -646,7 +659,7 @@ export default function RequisitionPlan() {
                                 <Input
                                   type="number"
                                   className="h-7 w-20 text-sm text-right"
-                                  defaultValue={g.item.quantity ?? ""}
+                                  defaultValue={fmtQty2Input(g.item.quantity)}
                                   onBlur={(e) => {
                                     const raw = e.target.value.trim();
                                     const v = raw === "" ? null : Math.max(0, Number(raw));
@@ -676,7 +689,7 @@ export default function RequisitionPlan() {
                             }} />
                         </td>
                         <td className="py-2 px-1 border-r text-right">
-                          <Input type="number" className="h-7 w-20 text-sm text-right" defaultValue={r.required_qty ?? ""}
+                          <Input type="number" className="h-7 w-20 text-sm text-right" defaultValue={fmtQty2Input(r.required_qty)}
                             onBlur={(e) => {
                               const raw = e.target.value.trim();
                               const v = raw === "" ? null : Math.max(0, Number(raw));
@@ -830,7 +843,7 @@ export default function RequisitionPlan() {
                       <td className="py-2 px-2 border-r">{c.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{c.make || "—"}</td>
                       <td className="py-2 px-2 border-r">{c.unit || "—"}</td>
-                      <td className="py-2 px-2 border-r text-right">{c.total}</td>
+                      <td className="py-2 px-2 border-r text-right">{fmtQty2(c.total)}</td>
                       <td className="py-2 px-2 border-r">
                         <Input
                           className="h-7 w-24"
@@ -975,7 +988,7 @@ export default function RequisitionPlan() {
                               <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                               <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                              <td className="py-2 px-2 border-r text-right">{r.total_qty ?? "—"}</td>
+                              <td className="py-2 px-2 border-r text-right">{fmtQty2(r.total_qty)}</td>
                               <td className="py-2 px-2">
                                 {reportMode === "saved" ? (
                                   <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
@@ -994,7 +1007,7 @@ export default function RequisitionPlan() {
                           <tfoot>
                             <tr className="bg-muted/30 font-medium">
                               <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
-                              <td className="py-2 px-2 text-right border-r">{total}</td>
+                              <td className="py-2 px-2 text-right border-r">{fmtQty2(total)}</td>
                               <td className="py-2 px-2"></td>
                             </tr>
                           </tfoot>
