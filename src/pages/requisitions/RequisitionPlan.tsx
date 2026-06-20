@@ -535,7 +535,7 @@ export default function RequisitionPlan() {
     const total = rows.reduce((s, r) => s + Number(r.total_qty || 0), 0);
     autoTable(doc, {
       startY: reportMode === "live" ? 38 : 34,
-      head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
+      head: [["Lot", "Raw Material", "Size", "BOQ/OA Number", "UOM", "Total Qty"]],
       body: rows.map((r) => [
         r.lot_no,
         r.material,
@@ -607,7 +607,7 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-right py-2 px-2 border-r">RM Qty</th>
-                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">BOQ/OA Number</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
@@ -807,7 +807,7 @@ export default function RequisitionPlan() {
                     <th className="w-8 py-2 px-2 border-r"></th>
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
-                    <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">BOQ/OA Number</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
@@ -972,7 +972,7 @@ export default function RequisitionPlan() {
                             <th className="text-left py-2 px-2 border-r">Lot</th>
                             <th className="text-left py-2 px-2 border-r">Raw Material</th>
                             <th className="text-left py-2 px-2 border-r">Size</th>
-                            <th className="text-left py-2 px-2 border-r">RM Make</th>
+                            <th className="text-left py-2 px-2 border-r">BOQ/OA Number</th>
                             <th className="text-left py-2 px-2 border-r">UOM</th>
                             <th className="text-right py-2 px-2 border-r">Total Qty</th>
                             <th className="text-left py-2 px-2">Annexure</th>
