@@ -1,53 +1,48 @@
-# Fix: Hidden notification banner + page scroll jump
+## Goal
+On `/requisitions/plan`, display all quantity values with exactly 2 decimal places across the three tabs — Generated Requisition, Raw Materials, Annexure Reports. Lot Number stays untouched. No calculation, storage, or report-logic changes.
 
-## Scope (only these two things)
+Formatting rule (truncate to 2 decimals, not round-half-up as banker's):
+- `10` → `10.00`
+- `10.5` → `10.50`
+- `10.567` → `10.57`
 
-1. The in-page notification banner (`ModuleNotifications`) must be **hidden by default** on every page/modal it appears on, and only open when the user clicks it.
-2. Reduce auto page jumps caused by that banner mounting/expanding while the user is typing in forms.
+This is `Math.trunc(n * 100) / 100` then `.toFixed(2)`. Empty / null / non-numeric stays as the current placeholder (`"—"`).
 
-Nothing else (workflows, approvals, calculations, save logic, PDF, notifications content, designs, BOQ/OA/PI/Purchase/Manufacturing/Design behavior) will be touched.
+## Scope (single file)
+`src/pages/requisitions/RequisitionPlan.tsx` only. Add one small local helper and use it at the display sites listed below. Nothing else changes.
 
----
+### Helper
+```ts
+const fmtQty2 = (v: unknown): string => {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return (Math.trunc(n * 100) / 100).toFixed(2);
+};
+```
 
-## Change 1 — Notification banner hidden by default
+### Display sites to update
 
-File: `src/components/notifications/ModuleNotifications.tsx`
+1. **Generated Requisition tab**
+   - Line ~610 `fgQty` fallback text → `fmtQty2(g.item?.quantity)`
+   - Line ~649 FG Qty `<Input defaultValue>` → `fmtQty2(g.item.quantity)` when value is present (keep empty string when null so the field stays blank/editable)
+   - Line ~679 RM Qty `<Input defaultValue>` → `fmtQty2(r.required_qty)` when value is present (else `""`)
+   - `onBlur` parsing logic stays unchanged so user input like `10.567` still saves the raw numeric value; only the displayed default formats it.
 
-Current behavior: `const [open, setOpen] = useState(true);` → banner auto-expands as soon as notifications load, on every page (BOQ Editor, OA Editor, PI Editor, Requisition Detail, Approved BOQ, Design BOQ View).
+2. **Raw Materials tab**
+   - Line ~833 `{c.total}` → `{fmtQty2(c.total)}`
 
-New behavior:
-- Default `open = false` (collapsed).
-- The component still mounts when there are notifications, but only renders the compact header bar (bell icon + count + "new" badge + chevron).
-- The full list renders only after the user clicks the header to expand it.
-- Clicking again collapses it. Once collapsed it stays collapsed until the user clicks again.
-- Persist the open/closed choice per page in `sessionStorage` keyed by the links signature, so that re-renders / data refetches do NOT re-open it after the user has closed it.
-- No change to: notification content, acknowledge logic, RPC call, detail dialog, badge counts, styling of items.
+3. **Annexure Reports tab**
+   - Line ~978 `{r.total_qty ?? "—"}` → `{fmtQty2(r.total_qty)}`
+   - Line ~997 grand-total `{total}` → `{fmtQty2(total)}`
 
-Pages that already use `<ModuleNotifications>` (BoqEditor, OrderEditor, PiEditor, RequisitionDetail, ApprovedBoqModule, DesignBoqView) get the new collapsed-by-default behavior automatically — no per-page edits needed.
-
-## Change 2 — Stop page jump caused by the banner
-
-Root cause of most "page jumps while typing": the banner is initially absent, then notifications load asynchronously and the expanded banner appears above the form, pushing all content down and shifting the user's caret/viewport.
-
-Fix (same file, no other behavior change):
-- Because the banner now renders only the small fixed-height header by default, expanding it from 0 → tall content no longer happens automatically — eliminating the main mid-typing layout shift.
-- No `scrollIntoView`, `focus()`, or `window.scrollTo` calls will be added or removed in editor pages; the existing user-initiated scroll buttons in `BoqEditor.tsx` (lines 492, 499, 674) stay exactly as they are.
-
-Out of scope: any other source of scroll jump that isn't the notification banner. If after this fix a specific page still jumps, we'll address that page separately with a follow-up scoped fix.
-
----
-
-## Technical summary
-
-- Edit only `src/components/notifications/ModuleNotifications.tsx`:
-  - `useState(true)` → `useState(false)` for `open`.
-  - On mount, hydrate `open` from `sessionStorage.getItem(\`notif-open:${linksKey}:${modsKey}\`)`.
-  - On toggle, persist the new value to `sessionStorage`.
-- No other files changed. No DB, no migrations, no edge functions, no UI library changes.
+### Explicitly NOT changed
+- Lot Number inputs / displays (lines ~706, ~837, ~973).
+- PDF generation (`downloadReportPdf`, line ~532) — user said "reports should not be changed".
+- Database writes, autosave, consolidation math, annexure creation, status logic.
+- Any other page or component.
 
 ## Verification
-
-- Open BOQ Editor / OA Editor / PI Editor / Requisition Detail / Design BOQ View / Approved BOQ: notification bar shows only the collapsed header, never auto-expands.
-- Click the header → expands. Click again → collapses and stays collapsed across refetches.
-- Typing in form fields while notifications are loading in the background no longer shifts the page (banner header reserves a constant small height instead of growing).
-- All existing acknowledge / detail / count behavior unchanged.
+- Manually render the three tabs; confirm quantities show `X.YY` and Lot column is unchanged.
+- Editing an FG Qty / RM Qty still saves; on re-render the value reflects formatted default.
+- Run `bunx vitest run` to ensure no existing tests regress (none target this file's display).
