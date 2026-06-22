@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Download, XCircle, Send, Eye, Search } from "lucide-react";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
+import { fmtQty2 } from "@/lib/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -339,7 +340,7 @@ export default function PoFolder() {
                       <tr key={r.id} className="border-t">
                         <td className="p-1 border-r">{r.material}</td>
                         <td className="p-1 border-r">{r.size_model || "—"}</td>
-                        <td className="p-1 border-r text-right">{r.qty ?? 0}</td>
+                        <td className="p-1 border-r text-right">{fmtQty2(r.qty, "0.00")}</td>
                         <td className="p-1 border-r text-right">{r.rate ?? 0}</td>
                         <td className="p-1 border-r text-right">{r.discount_pct ?? 0}</td>
                         <td className="p-1 border-r text-right">{r.gst_pct ?? 0}</td>

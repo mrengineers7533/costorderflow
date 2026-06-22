@@ -13,6 +13,7 @@ import { Download, FileText, ArrowLeft } from "lucide-react";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
 import { generatePoPDF, financialYearOf, type PoPdfContext } from "@/lib/purchase/poPdf";
 import { amountInWords } from "@/lib/purchase/amountInWords";
+import { fmtQty2 } from "@/lib/utils";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -417,7 +418,7 @@ export default function PoCreateFromAnnexure() {
                     <td className="px-2 py-1.5 border-r">{r.material}</td>
                     <td className="px-2 py-1.5 border-r">{r.size_model || "—"}</td>
                     <td className="px-2 py-1.5 border-r">{r.make || "—"}</td>
-                    <td className="px-2 py-1.5 border-r text-right">{r.total_qty ?? "—"}</td>
+                    <td className="px-2 py-1.5 border-r text-right">{fmtQty2(r.total_qty)}</td>
                     <td className="px-2 py-1.5 border-r">{r.unit || "—"}</td>
                     <td className="px-2 py-1.5 border-r">
                       <Input type="date" className="h-7 text-xs" disabled={!m.selected || lock.locked}
@@ -584,7 +585,7 @@ export default function PoCreateFromAnnexure() {
                     <td className="border px-1 py-1 text-center">{i + 1}</td>
                     <td className="border px-1 py-1">{x.row.material}{x.row.size_model ? ` (${x.row.size_model})` : ""}</td>
                     <td className="border px-1 py-1 text-center">{x.due || "—"}</td>
-                    <td className="border px-1 py-1 text-right">{x.qty} {x.row.unit || ""}</td>
+                    <td className="border px-1 py-1 text-right">{fmtQty2(x.qty, "0.00")} {x.row.unit || ""}</td>
                     <td className="border px-1 py-1 text-right">{fmt(x.rate)}</td>
                     <td className="border px-1 py-1 text-right">{x.discount}%</td>
                     <td className="border px-1 py-1 text-right">{x.gst}%</td>
@@ -596,7 +597,7 @@ export default function PoCreateFromAnnexure() {
             </table>
             <div className="grid grid-cols-2 mt-2 gap-3">
               <div>
-                <div className="font-bold">TOTAL QTY : {totalQty}</div>
+                 <div className="font-bold">TOTAL QTY : {fmtQty2(totalQty, "0.00")}</div>
                 <div className="mt-2 text-[10px]">{amountInWords(grand)}</div>
               </div>
               <div className="text-right">

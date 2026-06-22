@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { amountInWords } from "./amountInWords";
+import { fmtQty2 } from "@/lib/utils";
 
 export interface PoPdfPartyBlock {
   name: string;
@@ -157,7 +158,7 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
     String(i + 1),
     r.material + (r.size ? ` (${r.size})` : ""),
     r.dueOn || "",
-    String(r.qty ?? ""),
+    fmtQty2(r.qty, ""),
     r.rate != null ? fmtINR(r.rate) : "",
     r.discountPct != null ? `${r.discountPct}%` : "",
     r.gstPct != null ? `${r.gstPct}%` : "",
@@ -195,7 +196,7 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
 
   // Totals block
   doc.setFont("helvetica", "bold").setFontSize(9);
-  doc.text(`TOTAL QTY : ${totalQty}`, M, fy);
+  doc.text(`TOTAL QTY : ${fmtQty2(totalQty, "0.00")}`, M, fy);
   const rightX = W - M;
   const labelX = rightX - 50;
   doc.text("BASIC", labelX, fy, { align: "right" });

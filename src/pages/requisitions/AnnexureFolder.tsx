@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Download, FileText, Search, XCircle, RotateCcw, Eye, ShoppingCart } from "lucide-react";
+import { fmtQty2 } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
@@ -201,8 +202,8 @@ export default function AnnexureFolder() {
     autoTable(doc, {
       startY: 34,
       head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
-      body: e.rows.map((r) => [r.lot_no, r.material, r.size_model || "—", r.make || "—", r.unit || "—", String(r.total_qty ?? "—")]),
-      foot: [["", "", "", "", "Grand Total", String(e.total)]],
+      body: e.rows.map((r) => [r.lot_no, r.material, r.size_model || "—", r.make || "—", r.unit || "—", fmtQty2(r.total_qty)]),
+      foot: [["", "", "", "", "Grand Total", fmtQty2(e.total)]],
       styles: { fontSize: 9 },
       headStyles: { fillColor: [40, 40, 40] },
     });
@@ -293,7 +294,7 @@ export default function AnnexureFolder() {
                           : <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>}
                       </td>
                       <td className="py-2 px-2 border-r text-right">{e.rows.length}</td>
-                      <td className="py-2 px-2 border-r text-right font-medium">{e.total}</td>
+                      <td className="py-2 px-2 border-r text-right font-medium">{fmtQty2(e.total)}</td>
                       <td className="py-2 px-2">
                         <div className="flex flex-wrap gap-1.5">
                           <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => setViewEntry(e)}>
@@ -360,14 +361,14 @@ export default function AnnexureFolder() {
                       <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                       <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                      <td className="py-2 px-2 text-right">{r.total_qty ?? "—"}</td>
+                      <td className="py-2 px-2 text-right">{fmtQty2(r.total_qty)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted/30 font-medium">
                     <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
-                    <td className="py-2 px-2 text-right">{viewEntry.total}</td>
+                    <td className="py-2 px-2 text-right">{fmtQty2(viewEntry.total)}</td>
                   </tr>
                 </tfoot>
               </table>
