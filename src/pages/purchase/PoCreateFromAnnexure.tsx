@@ -427,6 +427,12 @@ export default function PoCreateFromAnnexure() {
         </Link>
       </div>
 
+      {revGuard.blocked && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <strong>PO creation blocked. </strong>{revGuard.reason}
+        </div>
+      )}
+
       {/* A. Selection */}
       <Card>
         <CardHeader className="py-3">
@@ -667,7 +673,7 @@ export default function PoCreateFromAnnexure() {
         <Button variant="outline" onClick={downloadPreview}>
           <FileText className="h-4 w-4 mr-1" />Download Preview PDF
         </Button>
-        <Button onClick={generate} disabled={submitting}>
+        <Button onClick={generate} disabled={submitting || revGuard.blocked}>
           <Download className="h-4 w-4 mr-1" />{submitting ? "Generating…" : "Generate PO & Download"}
         </Button>
       </div>
