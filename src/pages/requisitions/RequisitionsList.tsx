@@ -183,6 +183,39 @@ export default function RequisitionsList() {
             if (latest[fam] == null || (b.revision ?? 0) > latest[fam]) latest[fam] = b.revision ?? 0;
           });
         setLatestRevByRoot(latest);
+
+        // Best-effort auto-supersede: for each family where an open requisition
+        // is on an older BOQ revision than the latest approved one, ask the
+        // server to regenerate the requisition (and cancel its annexures)
+        // against the latest BOQ. Idempotent and silent.
+        try {
+          const stalePerFamily = new Map<string, string>(); // root -> latest boq_id
+          const latestByFam = new Map<string, { rev: number; boqId: string }>();
+          ((allBoqs as Array<{ id: string; order_id: string; revision: number; verification_status: string }>) || [])
+            .filter((b) => b.verification_status === "approved")
+            .forEach((b) => {
+              const fam = familyOf.get(b.order_id) || b.order_id;
+              const cur = latestByFam.get(fam);
+              if (!cur || (b.revision ?? 0) > cur.rev) latestByFam.set(fam, { rev: b.revision ?? 0, boqId: b.id });
+            });
+          for (const r of list) {
+            const top = latestByFam.get(r.order_root_id);
+            if (!top) continue;
+            if (top.rev > (r.boq_revision ?? 0) && r.status !== "closed") {
+              stalePerFamily.set(r.order_root_id, top.boqId);
+            }
+          }
+          if (stalePerFamily.size > 0) {
+            await Promise.all(Array.from(stalePerFamily.values()).map((boqId) =>
+              supabase.functions.invoke("supersede-on-boq-approval", { body: { boq_id: boqId } }).catch(() => null),
+            ));
+            // Reload requisitions silently so the new ones appear.
+            const { data: r2 } = await sb.from("requisitions").select("*").order("created_at", { ascending: false });
+            setReqs((r2 as RequisitionRecord[]) || list);
+          }
+        } catch (e) {
+          console.warn("[RequisitionsList] auto-supersede failed", e);
+        }
       }
       setLoading(false);
     })();
