@@ -86,7 +86,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
     item,
     indent = false,
   }: {
-    item: (typeof topItems)[number];
+    item: (typeof reportItems)[number];
     indent?: boolean;
   }) => {
     const active =
