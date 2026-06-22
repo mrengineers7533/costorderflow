@@ -17,15 +17,15 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const topItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Dashboard", url: "/", icon: LayoutGrid, module: "dashboard" },
+const reportItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Dashboard",              url: "/",              icon: LayoutGrid, module: "dashboard" },
+  { title: "Notification Dashboard", url: "/notifications", icon: Bell,      module: "notifications" },
+  { title: "Flow Report",            url: "/reports",       icon: BarChart3, module: "reports" },
+  { title: "Work Flow",              url: "/workflow",      icon: Workflow,  module: "workflow" },
 ];
 
 const midItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Notification Dashboard", url: "/notifications", icon: Bell,           module: "notifications" },
-  { title: "Flow Report",            url: "/reports",       icon: BarChart3,       module: "reports" },
-  { title: "Work Flow",              url: "/workflow",      icon: Workflow,        module: "workflow" },
-  { title: "Cost Sheet",             url: "/cost-sheets",   icon: FileSpreadsheet, module: "cost_sheets" },
+  { title: "Cost Sheet", url: "/cost-sheets", icon: FileSpreadsheet, module: "cost_sheets" },
 ];
 
 const costingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
@@ -37,9 +37,9 @@ const costingItems: { title: string; url: string; icon: typeof LayoutGrid; modul
 const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Design",              url: "/design",                 icon: PencilRuler,    module: "design" },
   { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
-  { title: "Purchase",            url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
   { title: "Requisition",         url: "/requisitions",           icon: ClipboardCheck, module: "requisitions" },
   { title: "Annexure Folder",     url: "/requisitions/annexures", icon: FileText,       module: "annexures" },
+  { title: "Purchase",            url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
   { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
   { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
 ];
@@ -51,7 +51,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const { isAdmin, canAccess } = useUserAccess(user?.id);
   const unread = useUnreadNotifications(user?.id);
 
-  const visibleTop = topItems.filter((it) =>
+  const visibleReport = reportItems.filter((it) =>
     it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
   );
   const visibleMid = midItems.filter((it) =>
@@ -73,11 +73,20 @@ export function AppSidebar({ user }: { user?: User | null }) {
     if (isCostingActive) setCostingOpen(true);
   }, [isCostingActive]);
 
+  const isReportActive = visibleReport.some((it) =>
+    it.url === "/" ? pathname === "/" : pathname === it.url || pathname.startsWith(it.url + "/"),
+  );
+  const [reportOpen, setReportOpen] = useState(true);
+
+  useEffect(() => {
+    if (isReportActive) setReportOpen(true);
+  }, [isReportActive]);
+
   const MenuItem = ({
     item,
     indent = false,
   }: {
-    item: (typeof topItems)[number];
+    item: (typeof reportItems)[number];
     indent?: boolean;
   }) => {
     const active =
@@ -134,9 +143,35 @@ export function AppSidebar({ user }: { user?: User | null }) {
         <SidebarGroup className="px-3 pt-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
-              {visibleTop.map((item) => (
-                <MenuItem key={item.title} item={item} />
-              ))}
+              {visibleReport.length > 0 && (
+                <>
+                  <SidebarMenuItem>
+                    <button
+                      onClick={() => setReportOpen((o) => !o)}
+                      className={`peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 rounded-full px-4 ${collapsed ? "" : "justify-between"} ${isReportActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <BarChart3 className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                        {!collapsed && <span className="text-sm">Report & Dashboard</span>}
+                      </span>
+                      {!collapsed && (
+                        <span>
+                          {reportOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  </SidebarMenuItem>
+
+                  {(reportOpen || collapsed) &&
+                    visibleReport.map((item) => (
+                      <MenuItem key={item.title} item={item} indent={!collapsed} />
+                    ))}
+                </>
+              )}
 
               {visibleMid.map((item) => (
                 <MenuItem key={item.title} item={item} />

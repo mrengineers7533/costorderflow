@@ -1,44 +1,38 @@
-## Goal
-Apply a display-only 2-decimal formatting to all Qty values shown on these pages:
-- Annexure Folder (`src/pages/requisitions/AnnexureFolder.tsx`)
-- PO Folder (`src/pages/purchase/PoFolder.tsx`)
-- PO create / detail (`src/pages/purchase/PoCreateFromAnnexure.tsx`, including the PDF preview rendered there)
-- PO PDF output (`src/lib/purchase/poPdf.ts`)
-- Annexure Entry (the View dialog and downloaded PDF inside `AnnexureFolder.tsx`)
+# Sidebar Reorganization
 
-Format rule: truncate to 2 decimals with rounding ⇒ `10 → 10.00`, `10.5 → 10.50`, `10.567 → 10.57`. Empty/null stays as `—` (or empty in PDF cells, matching current behavior).
+Only `src/components/AppSidebar.tsx` will change. No logic, routes, permissions, or modules touched — purely display order/grouping.
 
-## Approach
-Add a tiny shared helper (e.g. `fmtQty2` in `src/lib/utils.ts` or a new `src/lib/format.ts`) that returns `n.toFixed(2)` for finite numbers and `"—"` (or `""` for PDF) otherwise. Reuse it everywhere below — no calculation/logic changes.
+## New sidebar order (top → bottom)
 
-## Display sites to update
+```text
+Report & Dashboard   (new collapsible group, expanded by default)
+  ├─ Dashboard
+  ├─ Notification Dashboard
+  ├─ Flow Report
+  └─ Work Flow
 
-**AnnexureFolder.tsx**
-- Lot card table → `Grand Total` cell (`{e.total}`)
-- View dialog table → row `Total Qty` (`{r.total_qty ?? "—"}`) and footer `Grand Total` (`{viewEntry.total}`)
-- `downloadPdf()` autoTable → body `total_qty` cell and foot `Grand Total` cell
+Costing              (existing collapsible group, unchanged)
+  ├─ Orders
+  ├─ BOQ
+  └─ Proforma Invoices
 
-**PoFolder.tsx**
-- Items table `Qty` cell (`{r.qty ?? 0}`)
+Cost Sheet           (existing, unchanged position relative to others below)
+Design
+Manufacturing
+Requisition          ← (was Purchase slot)
+Annexure Folder      ← (was Requisition slot)
+Purchase             ← (now after Annexure Folder)
+GRN
+Raw Material Master
+```
 
-**PoCreateFromAnnexure.tsx**
-- Annexure rows preview table → `{r.total_qty ?? "—"}`
-- PO preview line → `{x.qty} {x.row.unit || ""}`
-- Any visible totals (e.g. `totalQty` if rendered)
+## Changes in `AppSidebar.tsx`
 
-**poPdf.ts**
-- Row qty rendering at line 160 (`String(r.qty ?? "")`)
-- Total qty rendering derived from `totalQty` at line 191
+1. **New `reportItems` array** containing: Dashboard, Notification Dashboard, Flow Report, Work Flow (moved out of `topItems` + `midItems`).
+2. **Remove** Dashboard from `topItems`, and Notification/Flow Report/Work Flow from `midItems`. Keep `Cost Sheet` in `midItems` (or move into `bottomItems` top — will keep in `midItems` so it renders between Costing group and the bottom list, preserving current visual placement).
+3. **Reorder `bottomItems`** so Requisition comes before Annexure Folder, then Purchase, then GRN, then Raw Material Master (Design + Manufacturing stay at top of bottom block as today).
+4. **Add a collapsible "Report & Dashboard" group** at the very top, mirroring the existing Costing group pattern (chevron, `reportOpen` state, auto-open when any child route is active, icon = `BarChart3` placeholder from already-imported icons).
+5. Unread notification badge logic stays attached to the Notification Dashboard entry (now inside the new group).
+6. Module-visibility filtering (`isAdmin || canAccess`) preserved per item; the new group only renders if at least one child is visible.
 
-## Explicitly NOT changed
-- Any math: `qty * rate`, gross/basic/gst/line totals, sums, validations
-- Database writes — `qty: x.qty` payloads keep raw numeric values
-- Rate, amounts, taxes, or any other numeric column
-- Lot numbers, IDs, or non-quantity fields
-- Other pages (RequisitionPlan, RequisitionDetail, etc. — already handled previously or out of scope)
-
-## Verification
-- Open Annexure Folder → confirm Grand Total and View dialog show `xx.xx`; download a PDF and confirm rows + grand total formatted.
-- Open PO Folder → Qty column shows `xx.xx`.
-- Create a PO from an annexure → preview rows and PO preview line show `xx.xx`; generated PO PDF shows `xx.xx` for row qty and total qty.
-- Confirm computed amounts (basic, GST, line, grand totals) are unchanged numerically.
+Nothing else changes — no edits to routes, permissions, `modules.ts`, AppLayout, or any page.
