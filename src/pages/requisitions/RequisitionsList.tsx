@@ -536,6 +536,9 @@ export default function RequisitionsList() {
                         <div className="flex items-center gap-1 flex-wrap">
                           <Badge>{r.status}</Badge>
                           {stale && <Badge variant="destructive">R{latest} avail</Badge>}
+                          {r.superseded_by_id && (
+                            <Badge variant="outline" className="text-[10px]">Superseded</Badge>
+                          )}
                         </div>
                       </td>
                       <td className="py-2 px-3">
