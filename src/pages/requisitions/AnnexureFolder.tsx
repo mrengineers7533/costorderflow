@@ -411,6 +411,9 @@ export default function AnnexureFolder() {
                         {cancelled
                           ? <Badge variant="outline" className="text-[10px]">Annexure Cancelled</Badge>
                           : <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>}
+                        {(e.annexure as unknown as { needs_refresh?: boolean }).needs_refresh && !cancelled && (
+                          <Badge variant="destructive" className="ml-1 text-[10px]">BOQ revised — rebuild</Badge>
+                        )}
                       </td>
                       <td className="py-2 px-2 border-r text-right">{e.rows.length}</td>
                       <td className="py-2 px-2 border-r text-right font-medium">{fmtQty2(e.total)}</td>
@@ -422,7 +425,7 @@ export default function AnnexureFolder() {
                           <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => downloadPdf(e)}>
                             <Download className="h-3 w-3 mr-1" />PDF
                           </Button>
-                          {!cancelled && (
+                          {!cancelled && !(e.annexure as unknown as { needs_refresh?: boolean }).needs_refresh && (
                             <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => navigate(`/annexures/${e.annexure.id}/po/new?lot=${encodeURIComponent(e.lot_no)}&type=${e.type}`)}>
                               <ShoppingCart className="h-3 w-3 mr-1" />Generate PO
                             </Button>

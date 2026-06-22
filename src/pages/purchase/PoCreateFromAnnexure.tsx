@@ -79,6 +79,16 @@ export default function PoCreateFromAnnexure() {
   const [poDate, setPoDate] = useState<string>(today);
   const [dueOn, setDueOn] = useState<string>("");
 
+  // Latest BOQ-revision guard. PO creation is hard-blocked unless the source
+  // requisitions are on the latest approved BOQ revision of their family AND
+  // the annexure is active and not flagged for refresh.
+  const [revGuard, setRevGuard] = useState<{
+    blocked: boolean;
+    reason: string;
+    latest: number | null;
+    current: number | null;
+  }>({ blocked: false, reason: "", latest: null, current: null });
+
   // Load annexure, rows, settings, profile
   useEffect(() => {
     (async () => {
@@ -136,6 +146,44 @@ export default function PoCreateFromAnnexure() {
       if (a?.requisition_ids?.length) {
         const { data: reqs } = await sb.from("requisitions").select("requisition_number").in("id", a.requisition_ids);
         setReqLine(((reqs as Array<{ requisition_number: string }>) || []).map((x) => x.requisition_number).join(", "));
+      }
+
+      // BOQ-revision guard: PO must be built from the latest approved BOQ.
+      try {
+        if (a?.status === "cancelled") {
+          setRevGuard({ blocked: true, reason: "This annexure has been cancelled (superseded by a newer BOQ).", latest: null, current: null });
+        } else if ((a as { needs_refresh?: boolean } | null)?.needs_refresh) {
+          setRevGuard({ blocked: true, reason: "BOQ has been revised. Rebuild this annexure from the latest requisition before creating a PO.", latest: null, current: null });
+        } else if (a?.requisition_ids?.length) {
+          const { data: reqs2 } = await sb.from("requisitions")
+            .select("order_root_id, boq_revision")
+            .in("id", a.requisition_ids);
+          const rootIds = Array.from(new Set(((reqs2 as Array<{ order_root_id: string; boq_revision: number }>) || []).map((x) => x.order_root_id)));
+          let latestForFamily = 0;
+          for (const root of rootIds) {
+            const { data: famOrders } = await sb.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+            const ids = ((famOrders as Array<{ id: string }>) || []).map((o) => o.id);
+            if (!ids.length) continue;
+            const { data: latestB } = await sb.from("boqs")
+              .select("revision").in("order_id", ids).eq("verification_status", "approved")
+              .order("revision", { ascending: false }).limit(1).maybeSingle();
+            const lv = Number((latestB as { revision?: number } | null)?.revision ?? 0);
+            if (lv > latestForFamily) latestForFamily = lv;
+          }
+          const currentRev = Math.max(0, ...((reqs2 as Array<{ boq_revision: number }>) || []).map((x) => Number(x.boq_revision || 0)));
+          if (latestForFamily > currentRev) {
+            setRevGuard({
+              blocked: true,
+              reason: `Cannot create PO: BOQ has been revised to R${latestForFamily}. Open the regenerated requisition / annexure for this lot.`,
+              latest: latestForFamily,
+              current: currentRev,
+            });
+          } else {
+            setRevGuard({ blocked: false, reason: "", latest: latestForFamily, current: currentRev });
+          }
+        }
+      } catch (e) {
+        console.warn("[PoCreate] revision guard check failed", e);
       }
 
       setLoading(false);
@@ -232,6 +280,7 @@ export default function PoCreateFromAnnexure() {
   });
 
   const validate = (): string | null => {
+    if (revGuard.blocked) return revGuard.reason;
     if (computed.length === 0) return "Select at least one row.";
     if (!vendor) return "Select a vendor.";
     if (computed.some((x) => !(x.rate > 0))) return "Enter a rate > 0 for every selected row.";
@@ -377,6 +426,12 @@ export default function PoCreateFromAnnexure() {
           <Button variant="outline" size="sm"><ArrowLeft className="h-3.5 w-3.5 mr-1" />Back to Annexure Folder</Button>
         </Link>
       </div>
+
+      {revGuard.blocked && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <strong>PO creation blocked. </strong>{revGuard.reason}
+        </div>
+      )}
 
       {/* A. Selection */}
       <Card>
@@ -618,7 +673,7 @@ export default function PoCreateFromAnnexure() {
         <Button variant="outline" onClick={downloadPreview}>
           <FileText className="h-4 w-4 mr-1" />Download Preview PDF
         </Button>
-        <Button onClick={generate} disabled={submitting}>
+        <Button onClick={generate} disabled={submitting || revGuard.blocked}>
           <Download className="h-4 w-4 mr-1" />{submitting ? "Generating…" : "Generate PO & Download"}
         </Button>
       </div>

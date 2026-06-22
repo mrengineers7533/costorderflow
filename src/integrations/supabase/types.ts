@@ -2123,6 +2123,7 @@ export type Database = {
           created_by: string | null
           id: string
           lot_numbers: string[]
+          needs_refresh: boolean
           notes: string | null
           requisition_ids: string[]
           status: string
@@ -2136,6 +2137,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           lot_numbers?: string[]
+          needs_refresh?: boolean
           notes?: string | null
           requisition_ids?: string[]
           status?: string
@@ -2149,6 +2151,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           lot_numbers?: string[]
+          needs_refresh?: boolean
           notes?: string | null
           requisition_ids?: string[]
           status?: string
