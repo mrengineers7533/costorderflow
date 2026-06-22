@@ -35,10 +35,34 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { boq_id, boq_number, oa_number, revision, verification_url } = body || {};
-    if (!verification_url) {
-      return new Response(JSON.stringify({ error: "verification_url required" }), {
+    if (!verification_url || !boq_id) {
+      return new Response(JSON.stringify({ error: "boq_id and verification_url required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate verification_url: must be a well-formed https URL whose origin
+    // matches an allow-listed app origin. Prevents attackers from sending a
+    // phishing link to the configured BOQ verifier.
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(verification_url);
+    } catch {
+      return new Response(JSON.stringify({ error: "invalid verification_url" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (parsedUrl.protocol !== "https:") {
+      return new Response(JSON.stringify({ error: "verification_url must be https" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const allowed = (Deno.env.get("APP_URL_ALLOWLIST") || "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    if (allowed.length > 0 && !allowed.includes(parsedUrl.origin)) {
+      return new Response(JSON.stringify({ error: "verification_url origin not allowed" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -46,6 +70,33 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Ownership / doc-access check: caller must own the BOQ, be admin, or have
+    // edit access via document_access. Prevents arbitrary users from spamming
+    // the configured verifier for BOQs they don't control.
+    const { data: boqRow, error: boqErr } = await supabase
+      .from("boqs").select("id, user_id").eq("id", boq_id).maybeSingle();
+    if (boqErr || !boqRow) {
+      return new Response(JSON.stringify({ error: "boq not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: adminRow } = await supabase
+      .from("user_roles").select("role")
+      .eq("user_id", userData.user.id).eq("role", "admin").maybeSingle();
+    const isAdmin = !!adminRow;
+    let canTrigger = isAdmin || boqRow.user_id === userData.user.id;
+    if (!canTrigger) {
+      const { data: rpc } = await supabase.rpc("has_doc_access", {
+        _user: userData.user.id, _kind: "boq", _doc_id: boq_id, _need: "edit",
+      });
+      canTrigger = !!rpc;
+    }
+    if (!canTrigger) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Recipient is configurable via app_settings → 'boq_verifier' → { email }.
     const { data: setting } = await supabase

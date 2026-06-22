@@ -63,12 +63,33 @@ Deno.serve(async (req) => {
     // Verify BOQ exists and is approved
     const { data: boq, error: bErr } = await admin
       .from("boqs")
-      .select("id, verification_status")
+      .select("id, verification_status, user_id")
       .eq("id", body.boq_id)
       .maybeSingle();
     if (bErr || !boq) {
       return new Response(JSON.stringify({ error: "boq not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Ownership / access check: only BOQ owner, admin, or doc-access grantees may
+    // distribute. Prevents arbitrary authenticated users from generating signed
+    // links + share URLs for other users' approved BOQs.
+    const { data: adminRow } = await admin
+      .from("user_roles").select("role").eq("user_id", userData.user.id).eq("role", "admin").maybeSingle();
+    const isAdmin = !!adminRow;
+    let hasAccess = isAdmin || boq.user_id === userData.user.id;
+    if (!hasAccess) {
+      const { data: rpc } = await admin.rpc("has_doc_access", {
+        _user: userData.user.id,
+        _kind: "boq",
+        _doc_id: body.boq_id,
+        _need: "view",
+      });
+      hasAccess = !!rpc;
+    }
+    if (!hasAccess) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (boq.verification_status !== "approved") {
