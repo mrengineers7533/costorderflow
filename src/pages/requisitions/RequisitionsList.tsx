@@ -303,10 +303,9 @@ export default function RequisitionsList() {
     }
     setBulkBusy(false);
     setBulkOpen(null);
-    setReqs((prev) => prev.filter((x) => !idSet.has(x.id) || !ok || /* keep if not deleted */ false ? true : !idSet.has(x.id)));
-    // safer refresh: re-fetch to reconcile blocked rows that remain
-    const { data: r } = await (supabase as unknown as { from: (t: string) => { select: (s: string) => { order: (c: string, o: { ascending: boolean }) => Promise<{ data: unknown }> } } })
-      .from("requisitions").select("*").order("created_at", { ascending: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sbAny = supabase as any;
+    const { data: r } = await sbAny.from("requisitions").select("*").order("created_at", { ascending: false });
     setReqs(((r as RequisitionRecord[]) || []));
     setSelected(new Set());
     if (blocked === 0 && fail === 0) {
