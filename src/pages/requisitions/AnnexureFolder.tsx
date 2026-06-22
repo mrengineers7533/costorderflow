@@ -7,8 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ConfirmBulkDeleteDialog } from "@/components/common/ConfirmBulkDeleteDialog";
+import { deleteAnnexureCascade, AnnexureDeleteBlockedError } from "@/lib/requisition/annexureDelete";
 import { toast } from "@/hooks/use-toast";
-import { Download, FileText, Search, XCircle, RotateCcw, Eye, ShoppingCart } from "lucide-react";
+import { Download, FileText, Search, XCircle, RotateCcw, Eye, ShoppingCart, Trash2 } from "lucide-react";
 import { fmtQty2 } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -75,6 +82,22 @@ export default function AnnexureFolder() {
 
   // View modal
   const [viewEntry, setViewEntry] = useState<FolderEntry | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDel, setConfirmDel] = useState<AnnexureRecord | null>(null);
+  const [bulkOpen, setBulkOpen] = useState<null | { ids: string[]; labels: string[] }>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id ?? null;
+      if (uid) {
+        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+        setIsAdmin(((roles as Array<{ role: string }>) || []).some((r) => r.role === "admin"));
+      }
+    })();
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -185,6 +208,67 @@ export default function AnnexureFolder() {
     toast({ title: "Annexure cancelled" });
   }
 
+  function labelFor(a: AnnexureRecord): string {
+    const lots = a.lot_numbers?.join(", ") || "—";
+    return `Lot ${lots} · ${new Date(a.created_at).toLocaleString("en-IN")}`;
+  }
+
+  async function deleteOne(a: AnnexureRecord) {
+    setDeleting(true);
+    try {
+      await deleteAnnexureCascade(a.id);
+      setAnnexures((prev) => prev.filter((x) => x.id !== a.id));
+      setRows((prev) => prev.filter((r) => r.annexure_id !== a.id));
+      setSelected((prev) => { const n = new Set(prev); n.delete(a.id); return n; });
+      toast({ title: "Annexure deleted", description: labelFor(a) });
+      setConfirmDel(null);
+    } catch (e) {
+      const err = e as Error;
+      toast({
+        title: err instanceof AnnexureDeleteBlockedError ? "Cannot delete" : "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function runBulkDelete() {
+    if (!bulkOpen) return;
+    setDeleting(true);
+    let ok = 0; let blocked = 0; let fail = 0; const errs: string[] = [];
+    for (const id of bulkOpen.ids) {
+      try { await deleteAnnexureCascade(id); ok++; }
+      catch (e) {
+        if (e instanceof AnnexureDeleteBlockedError) blocked++;
+        else fail++;
+        errs.push((e as Error).message);
+      }
+    }
+    setDeleting(false);
+    setBulkOpen(null);
+    setSelected(new Set());
+    await load();
+    if (blocked === 0 && fail === 0) toast({ title: `Deleted ${ok} annexure${ok === 1 ? "" : "s"}` });
+    else toast({
+      title: `Deleted ${ok}, blocked ${blocked}, failed ${fail}`,
+      description: errs.slice(0, 2).join("; "),
+      variant: blocked + fail > 0 ? "destructive" : "default",
+    });
+  }
+
+  // Distinct annexures in current filter (one annexure may produce multiple FolderEntries by type)
+  const filteredAnnexures = useMemo(() => {
+    const map = new Map<string, AnnexureRecord>();
+    filtered.forEach((e) => { if (!map.has(e.annexure.id)) map.set(e.annexure.id, e.annexure); });
+    return Array.from(map.values());
+  }, [filtered]);
+
+  function toggleOne(id: string) {
+    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
   function recreate(a: AnnexureRecord) {
     const ids = a.requisition_ids.join(",");
     const lots = a.lot_numbers.join(",");
@@ -259,6 +343,35 @@ export default function AnnexureFolder() {
         </CardContent>
       </Card>
 
+      {isAdmin && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-[11px] text-muted-foreground mr-auto">
+            {selected.size > 0 ? `${selected.size} annexure(s) selected` : `${filteredAnnexures.length} annexure(s) shown`}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] text-destructive"
+            disabled={selected.size === 0}
+            onClick={() => {
+              const list = annexures.filter((a) => selected.has(a.id));
+              setBulkOpen({ ids: list.map((a) => a.id), labels: list.map(labelFor) });
+            }}
+          >
+            <Trash2 className="h-3 w-3 mr-1" />Delete Selected
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] text-destructive"
+            disabled={filteredAnnexures.length === 0}
+            onClick={() => setBulkOpen({ ids: filteredAnnexures.map((a) => a.id), labels: filteredAnnexures.map(labelFor) })}
+          >
+            <Trash2 className="h-3 w-3 mr-1" />Delete All Filtered
+          </Button>
+        </div>
+      )}
+
       {byLot.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No annexures match.</CardContent></Card>
       ) : byLot.map(([lot, list]) => (
@@ -270,6 +383,7 @@ export default function AnnexureFolder() {
             <table className="w-full text-sm border">
               <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                 <tr>
+                  {isAdmin && <th className="text-left py-2 px-2 border-r w-8"></th>}
                   <th className="text-left py-2 px-2 border-r">Type</th>
                   <th className="text-left py-2 px-2 border-r">Created</th>
                   <th className="text-left py-2 px-2 border-r">Created By</th>
@@ -285,6 +399,11 @@ export default function AnnexureFolder() {
                   const cancelled = status === "cancelled";
                   return (
                     <tr key={`${e.annexure.id}::${e.type}`} className={`border-b last:border-0 ${cancelled ? "opacity-60" : ""}`}>
+                      {isAdmin && (
+                        <td className="py-2 px-2 border-r">
+                          <Checkbox checked={selected.has(e.annexure.id)} onCheckedChange={() => toggleOne(e.annexure.id)} />
+                        </td>
+                      )}
                       <td className="py-2 px-2 border-r font-medium">{TYPE_LABEL[e.type]}</td>
                       <td className="py-2 px-2 border-r">{new Date(e.annexure.created_at).toLocaleString("en-IN")}</td>
                       <td className="py-2 px-2 border-r text-xs">{e.createdByLabel}</td>
@@ -315,6 +434,11 @@ export default function AnnexureFolder() {
                           ) : (
                             <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 text-destructive" onClick={() => cancelAnnexure(e.annexure)}>
                               <XCircle className="h-3 w-3 mr-1" />Cancel
+                            </Button>
+                          )}
+                          {isAdmin && (
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 text-destructive" onClick={() => setConfirmDel(e.annexure)}>
+                              <Trash2 className="h-3 w-3 mr-1" />Delete
                             </Button>
                           )}
                         </div>
@@ -381,6 +505,37 @@ export default function AnnexureFolder() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmDel} onOpenChange={(o) => { if (!o && !deleting) setConfirmDel(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete annexure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDel && <>This permanently removes the annexure ({labelFor(confirmDel)}) and its rows. Linked raw materials will be released for re-planning. Active POs referencing this annexure will block the delete.</>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(ev) => { ev.preventDefault(); if (confirmDel) deleteOne(confirmDel); }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ConfirmBulkDeleteDialog
+        open={!!bulkOpen}
+        onOpenChange={(o) => { if (!o) setBulkOpen(null); }}
+        title="Delete annexures?"
+        description="Each annexure and its rows will be permanently removed. Linked raw materials will be released. Annexures referenced by active POs will be skipped."
+        items={bulkOpen?.labels || []}
+        busy={deleting}
+        onConfirm={runBulkDelete}
+      />
     </div>
   );
 }
