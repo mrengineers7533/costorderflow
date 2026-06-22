@@ -18,6 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
+import { ConfirmBulkDeleteDialog } from "@/components/common/ConfirmBulkDeleteDialog";
 import type {
   RequisitionRecord,
   RequisitionItemRecord,
@@ -131,6 +132,8 @@ export default function RequisitionsList() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmDel, setConfirmDel] = useState<RequisitionRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState<null | { ids: string[]; numbers: string[] }>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -284,6 +287,39 @@ export default function RequisitionsList() {
     return isAdmin || (currentUserId != null && r.user_id === currentUserId);
   }
 
+  async function runBulkDelete() {
+    if (!bulkOpen) return;
+    setBulkBusy(true);
+    let ok = 0; let blocked = 0; let fail = 0; const errs: string[] = [];
+    const idSet = new Set(bulkOpen.ids);
+    const targets = reqs.filter((r) => idSet.has(r.id));
+    for (const r of targets) {
+      try { await deleteRequisitionCascade(r); ok++; }
+      catch (e) {
+        if (e instanceof RequisitionDeleteBlockedError) blocked++;
+        else fail++;
+        errs.push((e as Error).message);
+      }
+    }
+    setBulkBusy(false);
+    setBulkOpen(null);
+    setReqs((prev) => prev.filter((x) => !idSet.has(x.id) || !ok || /* keep if not deleted */ false ? true : !idSet.has(x.id)));
+    // safer refresh: re-fetch to reconcile blocked rows that remain
+    const { data: r } = await (supabase as unknown as { from: (t: string) => { select: (s: string) => { order: (c: string, o: { ascending: boolean }) => Promise<{ data: unknown }> } } })
+      .from("requisitions").select("*").order("created_at", { ascending: false });
+    setReqs(((r as RequisitionRecord[]) || []));
+    setSelected(new Set());
+    if (blocked === 0 && fail === 0) {
+      toast({ title: `Deleted ${ok} requisition${ok === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `Deleted ${ok}, blocked ${blocked}, failed ${fail}`,
+        description: errs.slice(0, 2).join("; "),
+        variant: "destructive",
+      });
+    }
+  }
+
   const distinctProjects = useMemo(() => {
     const set = new Set<string>();
     Object.values(costSheetByRoot).forEach((v) => { if (v) set.add(v); });
@@ -352,8 +388,33 @@ export default function RequisitionsList() {
               >
                 <ClipboardList className="mr-1 h-4 w-4" />Open Plan
               </Button>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive"
+                  onClick={() => {
+                    const list = reqs.filter((r) => selected.has(r.id));
+                    setBulkOpen({ ids: list.map((r) => r.id), numbers: list.map((r) => r.requisition_number) });
+                  }}
+                >
+                  <Trash2 className="mr-1 h-4 w-4" />Delete Selected
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
             </>
+          )}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              disabled={filtered.length === 0}
+              onClick={() => setBulkOpen({ ids: filtered.map((r) => r.id), numbers: filtered.map((r) => r.requisition_number) })}
+              title="Delete all currently filtered requisitions"
+            >
+              <Trash2 className="mr-1 h-4 w-4" />Delete All Filtered
+            </Button>
           )}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -519,6 +580,16 @@ export default function RequisitionsList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmBulkDeleteDialog
+        open={!!bulkOpen}
+        onOpenChange={(o) => { if (!o) setBulkOpen(null); }}
+        title="Delete requisitions?"
+        description="Each requisition and its items, raw materials, annexures, and uploaded source files will be permanently removed. Requisitions referenced by active POs will be skipped."
+        items={bulkOpen?.numbers || []}
+        busy={bulkBusy}
+        onConfirm={runBulkDelete}
+      />
     </div>
   );
 }
