@@ -4,6 +4,19 @@ import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/resend';
 
+// Escape any text that will be interpolated into outbound HTML email so
+// stored values (vendor contact, PO number, prepared-by name, buyer name)
+// or caller-supplied message text cannot inject markup, scripts or trackers.
+function esc(s: unknown): string {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface PoRow {
   material: string;
   size_model: string | null;
@@ -193,10 +206,11 @@ Deno.serve(async (req) => {
 
     const buyerName = ((po.buyer_block as Record<string, Record<string, string>>)?.invoice_to?.name) || 'Buyer';
     const subject = `Purchase Order ${po.po_number} – ${buyerName}`;
-    const html = `<p>Dear ${vendor?.contact_person || 'Sir/Madam'},</p>
-      <p>Please find attached our Purchase Order <b>${po.po_number}</b>.</p>
-      ${message ? `<p>${String(message).replace(/</g, '&lt;')}</p>` : ''}
-      <p>Regards,<br/>${po.prepared_by_name || ''}<br/>${buyerName}</p>`;
+    const contactPerson = vendor?.contact_person ? esc(vendor.contact_person) : 'Sir/Madam';
+    const html = `<p>Dear ${contactPerson},</p>
+      <p>Please find attached our Purchase Order <b>${esc(po.po_number)}</b>.</p>
+      ${message ? `<p>${esc(message).replace(/\n/g, '<br/>')}</p>` : ''}
+      <p>Regards,<br/>${esc(po.prepared_by_name)}<br/>${esc(buyerName)}</p>`;
 
     const resendBody: Record<string, unknown> = {
       from: `${buyerName} <onboarding@resend.dev>`,
