@@ -9,8 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ConfirmBulkDeleteDialog } from "@/components/common/ConfirmBulkDeleteDialog";
+import { deletePurchaseOrderCascade } from "@/lib/purchase/poDelete";
 import { toast } from "sonner";
-import { Download, XCircle, Send, Eye, Search } from "lucide-react";
+import { Download, XCircle, Send, Eye, Search, Trash2 } from "lucide-react";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { fmtQty2 } from "@/lib/utils";
 
@@ -96,6 +103,11 @@ export default function PoFolder() {
   const [viewPo, setViewPo] = useState<Po | null>(null);
   const [sendPo, setSendPo] = useState<Po | null>(null);
   const [cancelPo, setCancelPo] = useState<Po | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDel, setConfirmDel] = useState<Po | null>(null);
+  const [bulkOpen, setBulkOpen] = useState<null | { ids: string[]; numbers: string[]; mode: "selected" | "filtered" }>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -124,6 +136,16 @@ export default function PoFolder() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id ?? null;
+      if (uid) {
+        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", uid);
+        setIsAdmin(((roles as Array<{ role: string }>) || []).some((r) => r.role === "admin"));
+      }
+    })();
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -201,6 +223,50 @@ export default function PoFolder() {
     await load();
   };
 
+  function toggleOne(id: string) {
+    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
+  function toggleAllFiltered() {
+    setSelected((p) => {
+      const n = new Set(p);
+      if (allFilteredSelected) filtered.forEach((x) => n.delete(x.id));
+      else filtered.forEach((x) => n.add(x.id));
+      return n;
+    });
+  }
+
+  async function deleteOne(po: Po) {
+    setDeleting(true);
+    try {
+      await deletePurchaseOrderCascade(po.id);
+      setPos((prev) => prev.filter((x) => x.id !== po.id));
+      setSelected((prev) => { const n = new Set(prev); n.delete(po.id); return n; });
+      toast.success(`Deleted PO ${po.po_number}`);
+      setConfirmDel(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function runBulkDelete() {
+    if (!bulkOpen) return;
+    setDeleting(true);
+    let ok = 0; let fail = 0; const errs: string[] = [];
+    for (const id of bulkOpen.ids) {
+      try { await deletePurchaseOrderCascade(id); ok++; }
+      catch (e) { fail++; errs.push((e as Error).message); }
+    }
+    setDeleting(false);
+    setBulkOpen(null);
+    setSelected(new Set());
+    await load();
+    if (fail === 0) toast.success(`Deleted ${ok} PO${ok === 1 ? "" : "s"}`);
+    else toast.error(`Deleted ${ok}, failed ${fail}: ${errs.slice(0, 2).join("; ")}`);
+  }
+
   // financialYearOf is referenced to silence unused warning when nothing else uses it
   void financialYearOf;
 
@@ -248,9 +314,42 @@ export default function PoFolder() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
+          {isAdmin && (
+            <div className="flex items-center justify-end gap-2 p-2 border-b bg-muted/20">
+              <span className="text-[11px] text-muted-foreground mr-auto">
+                {selected.size > 0 ? `${selected.size} selected` : `${filtered.length} shown`}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] text-destructive"
+                disabled={selected.size === 0}
+                onClick={() => {
+                  const list = pos.filter((p) => selected.has(p.id));
+                  setBulkOpen({ ids: list.map((p) => p.id), numbers: list.map((p) => p.po_number), mode: "selected" });
+                }}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />Delete Selected
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] text-destructive"
+                disabled={filtered.length === 0}
+                onClick={() => setBulkOpen({ ids: filtered.map((p) => p.id), numbers: filtered.map((p) => p.po_number), mode: "filtered" })}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />Delete All Filtered
+              </Button>
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground bg-muted/40 border-b">
               <tr>
+                {isAdmin && (
+                  <th className="text-left py-2 px-2 w-8">
+                    <Checkbox checked={allFilteredSelected} onCheckedChange={toggleAllFiltered} />
+                  </th>
+                )}
                 <th className="text-left py-2 px-2">PO No.</th>
                 <th className="text-left py-2 px-2">Lot(s)</th>
                 <th className="text-left py-2 px-2">Vendor</th>
@@ -265,12 +364,17 @@ export default function PoFolder() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">No POs match.</td></tr>
+                <tr><td colSpan={isAdmin ? 11 : 10} className="py-8 text-center text-muted-foreground">No POs match.</td></tr>
               ) : filtered.map((p) => {
                 const v = p.vendor_id ? vendors[p.vendor_id] : null;
                 const createdBy = p.created_by ? (profiles[p.created_by]?.email || profiles[p.created_by]?.full_name || p.created_by.slice(0, 8)) : "—";
                 return (
                   <tr key={p.id} className={`border-b last:border-0 ${p.status === "cancelled" ? "opacity-60" : ""}`}>
+                    {isAdmin && (
+                      <td className="py-2 px-2">
+                        <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleOne(p.id)} />
+                      </td>
+                    )}
                     <td className="py-2 px-2 font-medium">{p.po_number}</td>
                     <td className="py-2 px-2">{p.lot_numbers.join(", ") || "—"}</td>
                     <td className="py-2 px-2">{p.vendor_name}</td>
@@ -303,6 +407,11 @@ export default function PoFolder() {
                               <XCircle className="h-3 w-3 mr-1" />Cancel
                             </Button>
                           </>
+                        )}
+                        {isAdmin && (
+                          <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 text-destructive" onClick={() => setConfirmDel(p)}>
+                            <Trash2 className="h-3 w-3 mr-1" />Delete
+                          </Button>
                         )}
                       </div>
                     </td>
@@ -384,6 +493,41 @@ export default function PoFolder() {
 
       {/* Send dialog */}
       <SendDialog po={sendPo} vendor={sendPo?.vendor_id ? vendors[sendPo.vendor_id] : null} onClose={() => setSendPo(null)} onSent={load} />
+
+      {/* Single delete */}
+      <AlertDialog open={!!confirmDel} onOpenChange={(o) => { if (!o && !deleting) setConfirmDel(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete PO {confirmDel?.po_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the PO along with its line items, send log, and audit
+              records. Linked raw materials will be released so they can be re-planned.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); if (confirmDel) deleteOne(confirmDel); }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete */}
+      <ConfirmBulkDeleteDialog
+        open={!!bulkOpen}
+        onOpenChange={(o) => { if (!o) setBulkOpen(null); }}
+        title={bulkOpen?.mode === "filtered" ? "Delete all filtered POs?" : "Delete selected POs?"}
+        description="Each PO and its line items, send log, audit records will be permanently removed. Linked raw materials will be released. This cannot be undone."
+        items={bulkOpen?.numbers || []}
+        busy={deleting}
+        onConfirm={runBulkDelete}
+      />
     </div>
   );
 }
