@@ -1,0 +1,3 @@
+CREATE POLICY "rm_master_uploads_read_auth" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'rm-master-uploads');
+CREATE POLICY "rm_master_uploads_insert_admin" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'rm-master-uploads' AND public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "rm_master_uploads_delete_admin" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'rm-master-uploads' AND public.has_role(auth.uid(), 'admin'));
