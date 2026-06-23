@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Search, RefreshCw, Eye, Pencil, Trash2, Plus } from "lucide-react";
+import { Upload, FileSpreadsheet, Search, RefreshCw, Eye, Pencil, Trash2, Plus, Download } from "lucide-react";
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -166,6 +166,31 @@ export default function RawMaterialMaster() {
   }
   useEffect(() => { load(); }, []);
 
+  async function downloadUploadedExcel(u: RmMasterUploadRow) {
+    if (!u.file_path || !u.file_path.includes("/")) {
+      toast({ title: "No file available", description: "This upload predates file storage.", variant: "destructive" });
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from("rm-master-uploads")
+        .createSignedUrl(u.file_path, 60, { download: u.original_filename || "raw-material-master.xlsx" });
+      if (error || !data?.signedUrl) throw error || new Error("Could not create download link");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = u.original_filename || "raw-material-master.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      toast({
+        title: "Excel file is no longer available",
+        description: (e as Error).message || "The stored file could not be retrieved.",
+        variant: "destructive",
+      });
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const cleaned = rows.map((r) => ({ ...r, model_number: firstLine(r.model_number) || r.model_number }));
@@ -220,8 +245,32 @@ export default function RawMaterialMaster() {
 
       const totalRows = payload.reduce((a, p) => a + p.raw_materials.length, 0);
       const { data: u } = await supabase.auth.getUser();
+
+      // Upload original Excel to storage so it can be downloaded later.
+      // If this fails, we still record the history row so existing import behaviour is preserved.
+      let storedPath = file.name;
+      try {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+        const uid = u?.user?.id ?? "anon";
+        const objectPath = `${uid}/${Date.now()}-${safe}`;
+        const { error: storageErr } = await supabase.storage
+          .from("rm-master-uploads")
+          .upload(objectPath, file, {
+            contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            upsert: false,
+          });
+        if (storageErr) throw storageErr;
+        storedPath = objectPath;
+      } catch (storageErr) {
+        toast({
+          title: "File saved without attachment",
+          description: "Mappings imported, but the Excel file could not be stored for download: " + ((storageErr as Error).message || String(storageErr)),
+          variant: "destructive",
+        });
+      }
+
       await sb.from("rm_master_uploads").insert({
-        file_path: file.name,
+        file_path: storedPath,
         original_filename: file.name,
         sheet_count: wb.SheetNames.length,
         fg_count: payload.length,
@@ -294,22 +343,39 @@ export default function RawMaterialMaster() {
             <p className="text-xs text-muted-foreground">No uploads yet.</p>
           ) : (
             <div className="space-y-2">
-              {uploads.map((u) => (
-                <div key={u.id} className="text-xs border rounded p-2 flex flex-wrap items-center gap-4">
-                  <span className="font-medium">{u.original_filename}</span>
-                  <span className="text-muted-foreground">{new Date(u.created_at).toLocaleString()}</span>
-                  <span className="text-muted-foreground">By: {u.uploaded_by_email || "—"}</span>
-                  <Badge variant="outline">{u.sheet_count} sheets</Badge>
-                  <Badge variant="outline">{u.fg_count} FG</Badge>
-                  <Badge variant="outline">{u.row_count} RM rows</Badge>
-                  {isAdmin && (
-                    <Button variant="ghost" size="sm" className="ml-auto text-destructive"
-                            onClick={() => setDeletingUpload(u)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete entry
-                    </Button>
-                  )}
-                </div>
-              ))}
+              {uploads.map((u) => {
+                const hasStoredFile = !!u.file_path && u.file_path.includes("/");
+                return (
+                  <div key={u.id} className="text-xs border rounded p-2 flex flex-wrap items-center gap-4">
+                    <span className="font-medium">{u.original_filename}</span>
+                    <span className="text-muted-foreground">{new Date(u.created_at).toLocaleString()}</span>
+                    <span className="text-muted-foreground">By: {u.uploaded_by_email || "—"}</span>
+                    <Badge variant="outline">{u.sheet_count} sheets</Badge>
+                    <Badge variant="outline">{u.fg_count} FG</Badge>
+                    <Badge variant="outline">{u.row_count} RM rows</Badge>
+                    <div className="ml-auto flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasStoredFile}
+                        title={hasStoredFile ? "Download original Excel" : "Original file not stored for this upload"}
+                        onClick={() => downloadUploadedExcel(u)}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" /> Download
+                      </Button>
+                      {isAdmin && (
+                        <Button variant="ghost" size="sm" className="text-destructive"
+                                onClick={() => setDeletingUpload(u)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete entry
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-muted-foreground">
+                If an upload predates file storage, the Download button is disabled.
+              </p>
               <p className="text-[11px] text-muted-foreground">
                 Deleting an upload entry only clears the history record. It does not remove any Finish Good mappings or affect existing requisitions.
               </p>
@@ -466,6 +532,9 @@ export default function RawMaterialMaster() {
               onClick={async () => {
                 const target = deletingUpload; setDeletingUpload(null);
                 if (!target) return;
+                if (target.file_path && target.file_path.includes("/")) {
+                  await supabase.storage.from("rm-master-uploads").remove([target.file_path]);
+                }
                 const { error } = await sb.from("rm_master_uploads").delete().eq("id", target.id);
                 if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
                 else { toast({ title: "History entry deleted" }); load(); }
