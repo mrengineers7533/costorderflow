@@ -166,6 +166,31 @@ export default function RawMaterialMaster() {
   }
   useEffect(() => { load(); }, []);
 
+  async function downloadUploadedExcel(u: RmMasterUploadRow) {
+    if (!u.file_path || !u.file_path.includes("/")) {
+      toast({ title: "No file available", description: "This upload predates file storage.", variant: "destructive" });
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from("rm-master-uploads")
+        .createSignedUrl(u.file_path, 60, { download: u.original_filename || "raw-material-master.xlsx" });
+      if (error || !data?.signedUrl) throw error || new Error("Could not create download link");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = u.original_filename || "raw-material-master.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      toast({
+        title: "Excel file is no longer available",
+        description: (e as Error).message || "The stored file could not be retrieved.",
+        variant: "destructive",
+      });
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const cleaned = rows.map((r) => ({ ...r, model_number: firstLine(r.model_number) || r.model_number }));
