@@ -60,7 +60,7 @@ describe("Notification Detail — row-specific change rendering", () => {
     expect(headerCells).toContain("Row No.");
     expect(headerCells).toContain("Changes/Edit");
     const joined = headerCells.join("|").toLowerCase();
-    for (const label of ["item", "description", "make", "qty", "uom", "rate"]) {
+    for (const label of ["item", "description", "make", "quantity", "uom", "rate"]) {
       expect(joined, `expected header for ${label}`).toContain(label);
     }
   });
