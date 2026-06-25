@@ -258,7 +258,8 @@ export function NotificationDetailDialog({
         if (ok) onAcknowledged?.();
       });
     }
-  }, [notificationId, onAcknowledged]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationId]);
 
   // Pick a sensible default for the acknowledgement-department selector:
   // prefer the user's own department if it matches a target, else first target.
