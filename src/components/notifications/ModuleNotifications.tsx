@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, Check, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog, type NotifFull } from "./NotificationDetailDialog";
+import { canAckClient } from "@/lib/notifications/dept";
 
 /** Set of related-record ids for the page the banner is mounted on. */
 export interface NotifLinks {
@@ -277,7 +278,7 @@ export function ModuleNotifications({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  {!seen && (
+                  {!seen && canAckClient(n, me) && (
                     <Button size="sm" className="h-7" onClick={() => ack(n)}>
                       <Check className="h-3.5 w-3.5 mr-1" /> Acknowledge
                     </Button>

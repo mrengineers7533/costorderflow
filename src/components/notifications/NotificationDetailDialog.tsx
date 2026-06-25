@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
+import { canAckClient } from "@/lib/notifications/dept";
 import {
   Select,
   SelectContent,
@@ -987,6 +988,7 @@ function NotificationDetailBody({
   setAckDept: (v: string) => void;
   acknowledge: () => void;
 }) {
+  const canAck = canAckClient(notif, me);
   return (
     <div className="space-y-4 p-5">
       <div className="text-base font-bold">
@@ -1000,7 +1002,7 @@ function NotificationDetailBody({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <StatusChipBar notif={notif} reads={reads} />
         <div className="flex items-center gap-2">
-          {me && !myRead && notif.target_departments.length > 0 && (
+          {me && !myRead && canAck && notif.target_departments.length > 0 && (
             <Select value={ackDept} onValueChange={setAckDept}>
               <SelectTrigger className="h-9 w-44 text-xs">
                 <SelectValue placeholder="Acknowledge as" />
@@ -1014,7 +1016,7 @@ function NotificationDetailBody({
               </SelectContent>
             </Select>
           )}
-          {me && !myRead ? (
+          {me && !myRead && canAck ? (
             <Button
               onClick={acknowledge}
               className="bg-orange-500 text-white hover:bg-orange-600"
