@@ -50,12 +50,45 @@ function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): 
   );
 }
 
+/** Pick latest BOQ (any status) per OA family. */
+function pickLatestPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
+  const familyOf = new Map<string, string>();
+  for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
+  const byFamily = new Map<string, BoqRecord>();
+  for (const b of boqs) {
+    const fam = familyOf.get(b.order_id) || b.order_id;
+    const existing = byFamily.get(fam);
+    if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) {
+      byFamily.set(fam, b);
+    }
+  }
+  return Array.from(byFamily.values()).sort((a, b) =>
+    (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
+  );
+}
+
+/** Build a map: family-root id -> latest OA revision in that family. */
+function buildLatestOaByFamily(orders: OrderRecord[]): Map<string, OrderRecord> {
+  const m = new Map<string, OrderRecord>();
+  for (const o of orders) {
+    const fam = o.parent_order_id || o.id;
+    const cur = m.get(fam);
+    if (!cur || (o.revision ?? 0) > (cur.revision ?? 0)) m.set(fam, o);
+  }
+  return m;
+}
+
+function isOaApproved(o: OrderRecord | null | undefined): boolean {
+  return !!o && o.status === "finalized";
+}
+
 export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
+  const [folder, setFolder] = useState<"approved" | "general">("approved");
 
   useEffect(() => {
     (async () => {
@@ -69,17 +102,39 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
     })();
   }, []);
 
-  const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
-  const counts = useMemo(() => {
-    let mr = 0, gms = 0;
-    for (const r of rows) (r.format === "MR" ? mr++ : gms++);
-    return { MR: mr, GMS: gms };
-  }, [rows]);
   const familyOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
     return m;
   }, [orders]);
+  const latestOaByFamily = useMemo(() => buildLatestOaByFamily(orders), [orders]);
+
+  const isManufacturing = config.kind === "manufacturing";
+
+  // Approved pool: BOQ-approved AND (for manufacturing) latest OA also finalized.
+  const approvedRows = useMemo(() => {
+    const base = pickLatestApprovedPerFamily(boqs, orders);
+    if (!isManufacturing) return base;
+    return base.filter((b) => {
+      const fam = familyOf.get(b.order_id) || b.order_id;
+      return isOaApproved(latestOaByFamily.get(fam));
+    });
+  }, [boqs, orders, familyOf, latestOaByFamily, isManufacturing]);
+
+  // General pool (Manufacturing only): everything else (latest BOQ per family not in approved pool).
+  const generalRows = useMemo(() => {
+    if (!isManufacturing) return [] as BoqRecord[];
+    const approvedIds = new Set(approvedRows.map((b) => b.id));
+    return pickLatestPerFamily(boqs, orders).filter((b) => !approvedIds.has(b.id));
+  }, [boqs, orders, approvedRows, isManufacturing]);
+
+  const rows = isManufacturing && folder === "general" ? generalRows : approvedRows;
+  const folderCounts = { approved: approvedRows.length, general: generalRows.length };
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const r of rows) (r.format === "MR" ? mr++ : gms++);
+    return { MR: mr, GMS: gms };
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -119,6 +174,15 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
         </TabsList>
       </Tabs>
 
+      {isManufacturing && (
+        <Tabs value={folder} onValueChange={(v) => setFolder(v as "approved" | "general")}>
+          <TabsList>
+            <TabsTrigger value="approved">Approved BOQ ({folderCounts.approved})</TabsTrigger>
+            <TabsTrigger value="general">General BOQ — Not Approved ({folderCounts.general})</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
@@ -132,6 +196,10 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
           {filtered.map((b) => {
             const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
             const rootId = familyOf.get(b.order_id) || b.order_id;
+            const latestOa = latestOaByFamily.get(rootId);
+            const oaApproved = isOaApproved(latestOa);
+            const boqApproved = (b.verification_status ?? "approved") === "approved";
+            const showApprovedBadge = isManufacturing ? (boqApproved && oaApproved) : boqApproved;
             return (
               <Card key={b.id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="py-4 flex flex-wrap items-center gap-4">
@@ -139,7 +207,13 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{b.boq_number}</span>
                       <Badge variant="secondary">R{b.revision ?? 0}</Badge>
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      {showApprovedBadge ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      ) : isManufacturing ? (
+                        <Badge variant="outline" className="text-amber-700 border-amber-400">
+                          OA {latestOa ? (latestOa.status === "finalized" ? "Finalized" : "Draft") : "Pending"}
+                        </Badge>
+                      ) : null}
                       <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 truncate">
@@ -167,6 +241,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const { boqId } = useParams<{ boqId: string }>();
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [order, setOrder] = useState<OrderRecord | null>(null);
+  const [latestOa, setLatestOa] = useState<OrderRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
@@ -181,7 +256,21 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
       const oaId = b?.source_order_id || b?.order_id;
       if (oaId) {
         const { data: o } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
-        setOrder((o as unknown as OrderRecord) || null);
+        const linked = (o as unknown as OrderRecord) || null;
+        setOrder(linked);
+        if (linked) {
+          const rootId = linked.parent_order_id || linked.id;
+          const { data: family } = await supabase
+            .from("orders")
+            .select("*")
+            .or(`id.eq.${rootId},parent_order_id.eq.${rootId}`);
+          const fam = (family as unknown as OrderRecord[]) || [];
+          const latest = fam.reduce<OrderRecord | null>(
+            (acc, cur) => (!acc || (cur.revision ?? 0) > (acc.revision ?? 0) ? cur : acc),
+            null,
+          );
+          setLatestOa(latest || linked);
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
@@ -195,7 +284,9 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   if (!boq) return <div className="p-6 text-sm text-muted-foreground">BOQ not found.</div>;
 
   const items = Array.isArray(boq.line_items) ? boq.line_items : [];
-  const approved = (boq.verification_status ?? "approved") === "approved";
+  const boqApproved = (boq.verification_status ?? "approved") === "approved";
+  const oaApproved = isOaApproved(latestOa);
+  const approved = config.kind === "manufacturing" ? (boqApproved && oaApproved) : boqApproved;
   const resolveMake = buildMakeResolver(order?.line_items);
   const orderRootId = order ? (order as { parent_order_id?: string | null; id: string }).parent_order_id || order.id : null;
 
