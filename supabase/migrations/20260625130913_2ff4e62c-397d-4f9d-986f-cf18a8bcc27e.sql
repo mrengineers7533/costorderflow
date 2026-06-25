@@ -1,0 +1,1 @@
+ALTER TABLE public.fg_raw_material_map ADD COLUMN IF NOT EXISTS base_quantity numeric NOT NULL DEFAULT 1;

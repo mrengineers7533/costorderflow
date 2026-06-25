@@ -601,6 +601,7 @@ function EditMappingSheet({
     const { error } = await sb.from("fg_raw_material_map").update({
       raw_materials: draft.raw_materials,
       is_direct_purchase: draft.is_direct_purchase,
+      base_quantity: Number(draft.base_quantity) > 0 ? Number(draft.base_quantity) : 1,
       notes: draft.notes,
     }).eq("id", draft.id);
     setSaving(false);
@@ -625,6 +626,16 @@ function EditMappingSheet({
             </div>
             <Switch checked={draft.is_direct_purchase}
                     onCheckedChange={(v) => setDraft((d) => d ? { ...d, is_direct_purchase: v } : d)} />
+          </div>
+
+          <div className="flex items-center justify-between border rounded p-3 gap-3">
+            <div>
+              <Label className="text-sm">BOM Base Quantity</Label>
+              <p className="text-xs text-muted-foreground">Finished-good qty this BOM was built for. Requisition multiplies RM proportionally.</p>
+            </div>
+            <Input type="number" min={1} step="any" className="w-24 text-right"
+                   value={draft.base_quantity ?? 1}
+                   onChange={(e) => setDraft((d) => d ? { ...d, base_quantity: e.target.value === "" ? 1 : Number(e.target.value) } : d)} />
           </div>
 
           <div className="space-y-1">

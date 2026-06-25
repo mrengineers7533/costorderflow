@@ -43,12 +43,14 @@ type RmRow = {
 type EditedFg = {
   boq_item_id: string;
   is_direct_purchase: boolean;
+  base_quantity: number;
   raw_materials: RmRow[];
 };
 
 type FullMap = {
   model_number: string;
   is_direct_purchase: boolean;
+  base_quantity?: number | null;
   raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }>;
 };
 
@@ -89,7 +91,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
         .from("fg_raw_material_map")
-        .select("model_number, is_direct_purchase, raw_materials");
+        .select("model_number, is_direct_purchase, base_quantity, raw_materials");
       const all = (data as FullMap[]) || [];
       // normalize Column A to first line for matching + display
       const cleaned = all.map((m) => ({ ...m, model_number: firstLine(m.model_number) || m.model_number }));
@@ -165,17 +167,18 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       if (!selected[it.id]) continue;
       const mapping = mode === "auto" ? findMappingFor(it) : null;
       const isDirect = mode === "auto" && !!mapping?.is_direct_purchase;
+      const base = mapping && Number(mapping.base_quantity) > 0 ? Number(mapping.base_quantity) : 1;
       const rms: RmRow[] = mapping && !isDirect && mode === "auto"
         ? mapping.raw_materials.map((rm) => ({
             make: rm.make ?? "",
             material: rm.material ?? "",
             size_model: rm.size_model ?? "",
-            qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
+            qty_per_unit: rm.qty_per_unit != null ? String(Number(rm.qty_per_unit) / base) : "",
             unit: rm.unit ?? "",
             notes: rm.notes ?? "",
           }))
         : [];
-      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms };
+      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, base_quantity: base, raw_materials: rms };
     }
     setEdited(next);
     setStep("review");
@@ -216,16 +219,18 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   }
 
   function applyMappingTo(fgId: string, mapping: FullMap) {
+    const base = Number(mapping.base_quantity) > 0 ? Number(mapping.base_quantity) : 1;
     setEdited((prev) => ({
       ...prev,
       [fgId]: {
         ...prev[fgId],
         is_direct_purchase: !!mapping.is_direct_purchase,
+        base_quantity: base,
         raw_materials: mapping.raw_materials.map((rm) => ({
           make: rm.make ?? "",
           material: rm.material ?? "",
           size_model: rm.size_model ?? "",
-          qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
+          qty_per_unit: rm.qty_per_unit != null ? String(Number(rm.qty_per_unit) / base) : "",
           unit: rm.unit ?? "",
           notes: rm.notes ?? "",
         })),
@@ -234,7 +239,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     toast({
       title: mapping.is_direct_purchase
         ? `Marked as Direct Purchase from "${mapping.model_number}"`
-        : `Loaded ${mapping.raw_materials.length} raw material row(s) from "${mapping.model_number}"`,
+        : `Loaded ${mapping.raw_materials.length} raw material row(s) from "${mapping.model_number}"${base !== 1 ? ` · base qty ${base}` : ""}`,
     });
   }
 
