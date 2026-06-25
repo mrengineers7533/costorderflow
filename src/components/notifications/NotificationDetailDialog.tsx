@@ -802,7 +802,8 @@ function NotificationMetadataCard({
     })
     .filter((v): v is string => !!v);
   const targets = (notif.target_departments || []).join(", ") || "—";
-  const acks = reads.filter((r) => !!r.seen_at);
+  const seenReads = reads.filter((r) => r.kind === "seen" || r.kind === "ack");
+  const acks = reads.filter((r) => r.kind === "ack");
 
   const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div>
@@ -837,11 +838,11 @@ function NotificationMetadataCard({
         <Field
           label="Seen Status"
           value={
-            acks.length === 0 ? (
+            seenReads.length === 0 ? (
               <span className="text-red-600 font-semibold">Not Seen</span>
             ) : (
               <span className="text-emerald-700 font-semibold">
-                Seen ({acks.length})
+                Seen ({seenReads.length})
               </span>
             )
           }
@@ -1085,8 +1086,8 @@ function chipStatus(
   if (isMatch(notif.actor_department)) {
     return { text: "Revised", cls: "text-blue-600" };
   }
-  // Any acknowledger from this dept -> Seen
-  if (reads.some((r) => isMatch(r.department))) {
+  // Any Seen/Ack record from this dept -> Seen
+  if (reads.some((r) => isMatch(r.department) && (r.kind === "seen" || r.kind === "ack"))) {
     return { text: "Seen", cls: "text-emerald-600" };
   }
   // Targeted but not yet read
