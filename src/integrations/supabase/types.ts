@@ -200,9 +200,12 @@ export type Database = {
           related_pi_id: string | null
           related_po_id: string | null
           related_requisition_id: string | null
+          revision_key: string | null
           summary: string | null
           target_departments: string[]
           title: string
+          total_changed_cells: number | null
+          total_changed_rows: number | null
         }
         Insert: {
           actor_department?: string | null
@@ -226,9 +229,12 @@ export type Database = {
           related_pi_id?: string | null
           related_po_id?: string | null
           related_requisition_id?: string | null
+          revision_key?: string | null
           summary?: string | null
           target_departments?: string[]
           title: string
+          total_changed_cells?: number | null
+          total_changed_rows?: number | null
         }
         Update: {
           actor_department?: string | null
@@ -252,9 +258,12 @@ export type Database = {
           related_pi_id?: string | null
           related_po_id?: string | null
           related_requisition_id?: string | null
+          revision_key?: string | null
           summary?: string | null
           target_departments?: string[]
           title?: string
+          total_changed_cells?: number | null
+          total_changed_rows?: number | null
         }
         Relationships: []
       }
@@ -2633,6 +2642,14 @@ export type Database = {
         Returns: string
       }
       _line_items_diff: { Args: { _new: Json; _old: Json }; Returns: Json }
+      _notif_merge_changes: {
+        Args: { _existing: Json; _incoming: Json }
+        Returns: Json
+      }
+      _notif_revision_key: {
+        Args: { _boq: string; _module: string; _record_id: string }
+        Returns: string
+      }
       admin_reset_generated_data: { Args: never; Returns: Json }
       apply_design_comment_to_oa: {
         Args: { _applied_value: string; _comment_id: string; _oa_id: string }
@@ -3002,9 +3019,12 @@ export type Database = {
           related_pi_id: string | null
           related_po_id: string | null
           related_requisition_id: string | null
+          revision_key: string | null
           summary: string | null
           target_departments: string[]
           title: string
+          total_changed_cells: number | null
+          total_changed_rows: number | null
         }[]
         SetofOptions: {
           from: "*"

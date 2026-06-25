@@ -12,6 +12,10 @@ import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import {
+  HighlightCell,
+  NotifHighlightBanner,
+} from "@/components/notifications/HighlightCell";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
@@ -440,6 +444,7 @@ export default function BoqEditor() {
             links={{ boqId, orderRootId: orderRootId ?? undefined }}
           />
         )}
+        <NotifHighlightBanner />
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
             Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.
@@ -727,70 +732,85 @@ function BoqItemsList({
     <>
       {items.map((it, idx) => (
           <div key={it.id} className="space-y-1.5">
-            <div className="grid gap-1.5 items-start" style={{ gridTemplateColumns: gridCols }}>
+            <div
+              data-notif-row={it.item_no ?? String(idx + 1)}
+              className="grid gap-1.5 items-start"
+              style={{ gridTemplateColumns: gridCols }}
+            >
               <div className="h-9 flex items-center px-2 text-sm">{it.item_no}</div>
-              {canEditFull ? (
-                <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
-              ) : (
-                <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
-              )}
-              {canEditFull ? (
-                <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
-              ) : (
-                <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
-              )}
+              <HighlightCell rowKey={it.item_no ?? idx + 1} field="model_number">
+                {canEditFull ? (
+                  <Input value={it.model_number} onChange={(e) => onUpdate(it.id, { model_number: e.target.value })} className="h-9" />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.model_number}</div>
+                )}
+              </HighlightCell>
+              <HighlightCell rowKey={it.item_no ?? idx + 1} field="description">
+                {canEditFull ? (
+                  <Textarea value={it.description} onChange={(e) => onUpdate(it.id, { description: e.target.value })} className="min-h-9" rows={1} />
+                ) : (
+                  <div className="min-h-9 py-2 px-2 text-sm whitespace-pre-wrap">{it.description}</div>
+                )}
+              </HighlightCell>
               {showMake && (
-                canEditFull ? (
-                  <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
-                ) : (
-                  <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
-                )
+                <HighlightCell rowKey={it.item_no ?? idx + 1} field="make">
+                  {canEditFull ? (
+                    <Input value={it.make || ""} onChange={(e) => onUpdate(it.id, { make: e.target.value })} className="h-9" />
+                  ) : (
+                    <div className="h-9 flex items-center px-2 text-sm">{it.make || ""}</div>
+                  )}
+                </HighlightCell>
               )}
               {showMotor && (
-                canEditFull ? (
-                  <Input
-                    value={it.motor || ""}
-                    onChange={(e) => onUpdate(it.id, { motor: e.target.value })}
-                    className="h-9"
-                    placeholder="—"
-                  />
-                ) : (
-                  <div className="h-9 flex items-center px-2 text-sm">{it.motor || ""}</div>
-                )
+                <HighlightCell rowKey={it.item_no ?? idx + 1} field="motor">
+                  {canEditFull ? (
+                    <Input value={it.motor || ""} onChange={(e) => onUpdate(it.id, { motor: e.target.value })} className="h-9" placeholder="—" />
+                  ) : (
+                    <div className="h-9 flex items-center px-2 text-sm">{it.motor || ""}</div>
+                  )}
+                </HighlightCell>
               )}
               {showMotor && (
-                canEditFull ? (
-                  <Input
-                    type="number"
-                    value={it.motor_quantity ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      onUpdate(it.id, { motor_quantity: v === "" ? undefined : Number(v) || 0 });
-                    }}
-                    className="h-9"
-                    placeholder="—"
-                  />
+                <HighlightCell rowKey={it.item_no ?? idx + 1} field="motor_quantity">
+                  {canEditFull ? (
+                    <Input
+                      type="number"
+                      value={it.motor_quantity ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        onUpdate(it.id, { motor_quantity: v === "" ? undefined : Number(v) || 0 });
+                      }}
+                      className="h-9"
+                      placeholder="—"
+                    />
+                  ) : (
+                    <div className="h-9 flex items-center px-2 text-sm">{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</div>
+                  )}
+                </HighlightCell>
+              )}
+              <HighlightCell rowKey={it.item_no ?? idx + 1} field="quantity">
+                {canEditFull ? (
+                  <Input type="number" value={it.quantity ?? 0} onChange={(e) => onUpdate(it.id, { quantity: Number(e.target.value) || 0 })} className="h-9" />
                 ) : (
-                  <div className="h-9 flex items-center px-2 text-sm">{(it.motor_quantity ?? 0) > 0 ? it.motor_quantity : ""}</div>
-                )
-              )}
-              {canEditFull ? (
-                <Input type="number" value={it.quantity ?? 0} onChange={(e) => onUpdate(it.id, { quantity: Number(e.target.value) || 0 })} className="h-9" />
-              ) : (
-                <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
-              )}
-              {canEditFull ? (
-                <Input value={it.unit || ""} onChange={(e) => onUpdate(it.id, { unit: e.target.value })} className="h-9" />
-              ) : (
-                <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
-              )}
-              <Textarea
-                value={it.remarks}
-                onChange={(e) => onUpdate(it.id, { remarks: e.target.value })}
-                readOnly={!canEditRemarks && !canEditFull}
-                className="min-h-9"
-                rows={1}
-              />
+                  <div className="h-9 flex items-center px-2 text-sm">{it.quantity}</div>
+                )}
+              </HighlightCell>
+              <HighlightCell rowKey={it.item_no ?? idx + 1} field="unit">
+                {canEditFull ? (
+                  <Input value={it.unit || ""} onChange={(e) => onUpdate(it.id, { unit: e.target.value })} className="h-9" />
+                ) : (
+                  <div className="h-9 flex items-center px-2 text-sm">{it.unit}</div>
+                )}
+              </HighlightCell>
+              <HighlightCell rowKey={it.item_no ?? idx + 1} field="remarks">
+                <Textarea
+                  value={it.remarks}
+                  onChange={(e) => onUpdate(it.id, { remarks: e.target.value })}
+                  readOnly={!canEditRemarks && !canEditFull}
+                  className="min-h-9"
+                  rows={1}
+                />
+              </HighlightCell>
               <div className="text-[11px] pt-2">
                 {it.approval_status === "approved" ? (
                   <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">Approved</span>
