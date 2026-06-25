@@ -121,7 +121,6 @@ export interface FgRawMaterialMapRow {
   id: string;
   model_number: string;
   is_direct_purchase: boolean;
-  base_quantity?: number | null;
   raw_materials: Array<{
     make?: string;
     material: string;

@@ -61,44 +61,6 @@ export default function DesignBoqView() {
   const savedValuesRef = useRef<Record<string, string>>({});
   const autoUnapprovingRef = useRef(false);
   const keyOf = (itemId: string, col: string) => `${itemId}::${col}`;
-  const draftsRef = useRef<Record<string, string>>({});
-  useEffect(() => { draftsRef.current = drafts; }, [drafts]);
-
-  /** Flush every pending debounced draft immediately (fire-and-forget).
-   *  Runs on tab hide / beforeunload / component unmount so a comment
-   *  typed just before navigating away is never lost. */
-  const flushPendingSaves = () => {
-    const keys = Object.keys(debounceRef.current);
-    if (!keys.length || !id) return;
-    for (const k of keys) {
-      const t = debounceRef.current[k];
-      if (t) clearTimeout(t);
-      delete debounceRef.current[k];
-      const [itemId, col] = k.split("::");
-      const value = draftsRef.current[k] ?? "";
-      const prev = savedValuesRef.current[k] ?? "";
-      if (value === prev) continue;
-      void upsertDesignComment({
-        boqId: id,
-        itemId,
-        columnKey: col === "__row__" ? null : (col as ColKey),
-        comment: value,
-      }).then(() => { savedValuesRef.current[k] = value; }).catch(() => {});
-    }
-  };
-
-  useEffect(() => {
-    const onHide = () => { if (document.visibilityState === "hidden") flushPendingSaves(); };
-    const onUnload = () => flushPendingSaves();
-    window.addEventListener("beforeunload", onUnload);
-    document.addEventListener("visibilitychange", onHide);
-    return () => {
-      window.removeEventListener("beforeunload", onUnload);
-      document.removeEventListener("visibilitychange", onHide);
-      flushPendingSaves();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   async function refresh() {
     if (!id) return;

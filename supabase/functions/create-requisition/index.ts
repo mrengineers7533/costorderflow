@@ -147,9 +147,9 @@ Deno.serve(async (req) => {
     // Load full FG → RM master so we can fuzzy-match Column A entries
     const { data: allMaps } = await admin
       .from("fg_raw_material_map")
-      .select("model_number, is_direct_purchase, base_quantity, raw_materials")
+      .select("model_number, is_direct_purchase, raw_materials")
       .order("model_number");
-    type FgMap = { model_number: string; is_direct_purchase: boolean; base_quantity?: number | null; raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }> };
+    type FgMap = { model_number: string; is_direct_purchase: boolean; raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }> };
     const fgMaps: FgMap[] = ((allMaps as unknown as FgMap[]) || []);
     // Normalize Column A to first line defensively, in case legacy rows still
     // contain multi-line text. All matching keys below operate on this cleaned name.
@@ -230,10 +230,8 @@ Deno.serve(async (req) => {
         }
         const mapping = matchFg(ri.model_number, ri.description);
         if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
-          const base = Number(mapping.base_quantity) > 0 ? Number(mapping.base_quantity) : 1;
           for (const rm of mapping.raw_materials) {
             const per = Number(rm.qty_per_unit) || 0;
-            const effPer = per / base;
             rmRows.push({
               requisition_id: created.id,
               requisition_item_id: ri.id,
@@ -241,9 +239,9 @@ Deno.serve(async (req) => {
               make: rm.make ?? null,
               material: rm.material,
               size_model: rm.size_model ?? null,
-              qty_per_unit: effPer,
+              qty_per_unit: per,
               fg_quantity: fgQty,
-              required_qty: effPer * fgQty,
+              required_qty: per * fgQty,
               unit: rm.unit ?? null,
               source: "mapped",
               purchase_status: "pending",
