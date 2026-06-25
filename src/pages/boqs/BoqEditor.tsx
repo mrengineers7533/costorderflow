@@ -12,6 +12,10 @@ import { toast } from "@/hooks/use-toast";
 import { logEvent } from "@/lib/activity/log";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import {
+  HighlightCell,
+  NotifHighlightBanner,
+} from "@/components/notifications/HighlightCell";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import type { BoqLineItem, BoqRecord } from "@/lib/boq/types";
 import { DEFAULT_BOQ_TERMS, deriveBoqNumber, sortByItemNo } from "@/lib/boq/types";
@@ -440,6 +444,7 @@ export default function BoqEditor() {
             links={{ boqId, orderRootId: orderRootId ?? undefined }}
           />
         )}
+        <NotifHighlightBanner />
         {!isNew && !isCurrentBoq && (
           <div className="rounded-md border border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 print:hidden">
             Viewing superseded revision R{boqRevision} (read-only). Open the current revision from the BOQ Folder or the Revision History below to edit.
