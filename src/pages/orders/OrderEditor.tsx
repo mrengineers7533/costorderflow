@@ -45,6 +45,7 @@ import { findReviewItemForOaItem, parseColumnComments, type ColKey } from "@/lib
 import type { DesignReviewItemRow, DesignReviewRow } from "@/lib/boq/designReview";
 import type { BoqLineItem } from "@/lib/boq/types";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import { NotifHighlightBanner } from "@/components/notifications/HighlightCell";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
@@ -938,6 +939,7 @@ export default function OrderEditor() {
             links={{ orderRootId: parentOrderId ?? orderId, recordId: orderId }}
           />
         )}
+        <NotifHighlightBanner />
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
           <div className="flex items-center gap-3 min-w-0">
             <Button variant="ghost" size="sm" onClick={() => navigate("/orders")} className="rounded-lg">
