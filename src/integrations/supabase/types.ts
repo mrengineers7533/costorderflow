@@ -2660,6 +2660,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      can_ack_notification: {
+        Args: { _notif_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_edit_doc: {
         Args: {
           _doc_id: string
