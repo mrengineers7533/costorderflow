@@ -32,9 +32,8 @@ export async function fetchHighlightMap(
     .eq("id", notifId)
     .maybeSingle();
   if (error || !data) return null;
-  const changes = Array.isArray((data as { line_item_changes?: unknown }).line_item_changes)
-    ? ((data as { line_item_changes: NotifLineChange[] }).line_item_changes)
-    : [];
+  const raw = (data as { line_item_changes?: unknown }).line_item_changes;
+  const changes = (Array.isArray(raw) ? raw : []) as unknown as NotifLineChange[];
   const byRow = new Map<
     string,
     {
