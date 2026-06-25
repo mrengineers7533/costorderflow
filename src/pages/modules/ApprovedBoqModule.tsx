@@ -88,6 +88,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
+  const [folder, setFolder] = useState<"approved" | "general">("approved");
 
   useEffect(() => {
     (async () => {
@@ -101,17 +102,39 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
     })();
   }, []);
 
-  const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
-  const counts = useMemo(() => {
-    let mr = 0, gms = 0;
-    for (const r of rows) (r.format === "MR" ? mr++ : gms++);
-    return { MR: mr, GMS: gms };
-  }, [rows]);
   const familyOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
     return m;
   }, [orders]);
+  const latestOaByFamily = useMemo(() => buildLatestOaByFamily(orders), [orders]);
+
+  const isManufacturing = config.kind === "manufacturing";
+
+  // Approved pool: BOQ-approved AND (for manufacturing) latest OA also finalized.
+  const approvedRows = useMemo(() => {
+    const base = pickLatestApprovedPerFamily(boqs, orders);
+    if (!isManufacturing) return base;
+    return base.filter((b) => {
+      const fam = familyOf.get(b.order_id) || b.order_id;
+      return isOaApproved(latestOaByFamily.get(fam));
+    });
+  }, [boqs, orders, familyOf, latestOaByFamily, isManufacturing]);
+
+  // General pool (Manufacturing only): everything else (latest BOQ per family not in approved pool).
+  const generalRows = useMemo(() => {
+    if (!isManufacturing) return [] as BoqRecord[];
+    const approvedIds = new Set(approvedRows.map((b) => b.id));
+    return pickLatestPerFamily(boqs, orders).filter((b) => !approvedIds.has(b.id));
+  }, [boqs, orders, approvedRows, isManufacturing]);
+
+  const rows = isManufacturing && folder === "general" ? generalRows : approvedRows;
+  const folderCounts = { approved: approvedRows.length, general: generalRows.length };
+  const counts = useMemo(() => {
+    let mr = 0, gms = 0;
+    for (const r of rows) (r.format === "MR" ? mr++ : gms++);
+    return { MR: mr, GMS: gms };
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -151,6 +174,15 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
         </TabsList>
       </Tabs>
 
+      {isManufacturing && (
+        <Tabs value={folder} onValueChange={(v) => setFolder(v as "approved" | "general")}>
+          <TabsList>
+            <TabsTrigger value="approved">Approved BOQ ({folderCounts.approved})</TabsTrigger>
+            <TabsTrigger value="general">General BOQ — Not Approved ({folderCounts.general})</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
@@ -164,6 +196,10 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
           {filtered.map((b) => {
             const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
             const rootId = familyOf.get(b.order_id) || b.order_id;
+            const latestOa = latestOaByFamily.get(rootId);
+            const oaApproved = isOaApproved(latestOa);
+            const boqApproved = (b.verification_status ?? "approved") === "approved";
+            const showApprovedBadge = isManufacturing ? (boqApproved && oaApproved) : boqApproved;
             return (
               <Card key={b.id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="py-4 flex flex-wrap items-center gap-4">
@@ -171,7 +207,13 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{b.boq_number}</span>
                       <Badge variant="secondary">R{b.revision ?? 0}</Badge>
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      {showApprovedBadge ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      ) : isManufacturing ? (
+                        <Badge variant="outline" className="text-amber-700 border-amber-400">
+                          OA {latestOa ? (latestOa.status === "finalized" ? "Finalized" : "Draft") : "Pending"}
+                        </Badge>
+                      ) : null}
                       <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 truncate">
