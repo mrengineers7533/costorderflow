@@ -255,7 +255,10 @@ export function NotificationDetailDialog({
   useEffect(() => {
     if (notificationId) {
       markNotificationSeen(notificationId).then((ok) => {
-        if (ok) onAcknowledged?.();
+        if (ok) {
+          onAcknowledged?.();
+          load();
+        }
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
