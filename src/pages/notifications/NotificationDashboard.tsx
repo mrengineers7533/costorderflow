@@ -27,7 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
 import { deptOf } from "@/components/notifications/NotificationCharts";
 import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
-import { normalizeDept } from "@/lib/notifications/dept";
+import { canAckClient, markNotificationSeen, normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
 import {
   AlertDialog,
@@ -77,6 +77,7 @@ interface NotifRow {
   related_boq_id?: string | null;
   related_order_root_id?: string | null;
   related_pi_id?: string | null;
+  revision_key?: string | null;
 }
 
 /** Drop notifications that carry no actionable change. */
@@ -100,6 +101,7 @@ interface ReadRow {
   user_name: string | null;
   department: string | null;
   seen_at: string;
+  kind?: "seen" | "ack";
 }
 
 // Field keys that are noisy / internal — hide from dashboard & detail.
@@ -420,7 +422,8 @@ export default function NotificationDashboard() {
       myDept = (rec as { department?: string } | null)?.department || "Other";
       myName = (rec as { name?: string } | null)?.name || myName;
     }
-    setMe(uid ? { id: uid, name: myName, department: myDept } : null);
+    const currentMe = uid ? { id: uid, name: myName, department: myDept } : null;
+    setMe(currentMe);
 
     const { data: n } = await supabase
       .from("app_notifications" as never)
@@ -428,9 +431,42 @@ export default function NotificationDashboard() {
       .order("created_at", { ascending: false })
       .limit(500);
     const fetched = ((n || []) as unknown as NotifRow[]).filter(hasRealChange);
-    setRows(fetched);
+    const fetchedByDocument = Array.from(
+      fetched
+        .reduce((m, n) => {
+          const key =
+            n.record_ref
+              ? [n.module, n.record_ref].join("|")
+              : n.revision_key || [n.module, n.record_id || n.id].join("|");
+          const existing = m.get(key);
+          if (!existing) {
+            m.set(key, n);
+            return m;
+          }
 
-    const ids = ((n || []) as unknown as { id: string }[]).map((r) => r.id);
+          const mergedTargets = Array.from(
+            new Set([...(existing.target_departments || []), ...(n.target_departments || [])]),
+          );
+          const mergedChanges = [
+            ...(Array.isArray(existing.line_item_changes) ? existing.line_item_changes : []),
+            ...(Array.isArray(n.line_item_changes) ? n.line_item_changes : []),
+          ];
+          const preferN =
+            (currentMe && canAckClient(n, currentMe) && !canAckClient(existing, currentMe)) ||
+            (!currentMe && new Date(n.created_at) > new Date(existing.created_at));
+          const base = preferN ? n : existing;
+          m.set(key, {
+            ...base,
+            target_departments: mergedTargets,
+            line_item_changes: mergedChanges,
+          });
+          return m;
+        }, new Map<string, NotifRow>())
+        .values(),
+    );
+    setRows(fetchedByDocument);
+
+    const ids = fetchedByDocument.map((r) => r.id);
     if (ids.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
@@ -605,6 +641,38 @@ export default function NotificationDashboard() {
     }
     toast({ title: "Acknowledged" });
     await load();
+  }
+
+  async function markSeen(n: NotifRow) {
+    if (!me) return;
+    if (!canAckClient(n, me)) {
+      toast({ title: "Only target department users can mark this as seen" });
+      return;
+    }
+    const ok = await markNotificationSeen(n.id);
+    if (!ok) {
+      toast({ title: "Could not mark as seen", variant: "destructive" });
+      return;
+    }
+    const now = new Date().toISOString();
+    setReads((prev) => {
+      const exists = prev.some(
+        (r) => r.notification_id === n.id && r.user_id === me.id && r.kind === "seen",
+      );
+      if (exists) return prev;
+      return [
+        ...prev,
+        {
+          notification_id: n.id,
+          user_id: me.id,
+          user_name: me.name,
+          department: me.department,
+          seen_at: now,
+          kind: "seen",
+        },
+      ];
+    });
+    toast({ title: "Marked as seen" });
   }
 
   // Summary counts
@@ -1169,6 +1237,16 @@ export default function NotificationDashboard() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center justify-end gap-1">
+                            {!seen && canAckClient(n, me) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => markSeen(n)}
+                              >
+                                Seen
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"

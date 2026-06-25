@@ -155,7 +155,8 @@ export function ModuleNotifications({
       myDept = (rec as { department?: string } | null)?.department || "Other";
       myName = (rec as { name?: string } | null)?.name || myName;
     }
-    setMe(uid ? { id: uid, name: myName, department: myDept } : null);
+    const currentMe = uid ? { id: uid, name: myName, department: myDept } : null;
+    setMe(currentMe);
     if (uid) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: roleData } = await (supabase as any)
@@ -204,13 +205,46 @@ export function ModuleNotifications({
       }
       return true;
     });
-    setRows(filtered);
+    const grouped = Array.from(
+      filtered
+        .reduce((m, n) => {
+          const key =
+            n.record_ref
+              ? [n.module, n.record_ref].join("|")
+              : (n as NotifFull & { revision_key?: string | null }).revision_key ||
+                [n.module, n.record_id || n.id].join("|");
+          const existing = m.get(key);
+          if (!existing) {
+            m.set(key, n);
+            return m;
+          }
+          const mergedTargets = Array.from(
+            new Set([...(existing.target_departments || []), ...(n.target_departments || [])]),
+          );
+          const mergedChanges = [
+            ...(Array.isArray(existing.line_item_changes) ? existing.line_item_changes : []),
+            ...(Array.isArray(n.line_item_changes) ? n.line_item_changes : []),
+          ];
+          const preferN =
+            (currentMe && canAckClient(n, currentMe) && !canAckClient(existing, currentMe)) ||
+            (!currentMe && new Date(n.created_at) > new Date(existing.created_at));
+          const base = preferN ? n : existing;
+          m.set(key, {
+            ...base,
+            target_departments: mergedTargets,
+            line_item_changes: mergedChanges,
+          });
+          return m;
+        }, new Map<string, NotifFull>())
+        .values(),
+    );
+    setRows(grouped);
 
-    if (uid && filtered.length) {
+    if (uid && grouped.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
         .select("notification_id,kind")
-        .in("notification_id", filtered.map((n) => n.id));
+        .in("notification_id", grouped.map((n) => n.id));
       const seenSet = new Set<string>();
       const ackSet = new Set<string>();
       ((r || []) as { notification_id: string; kind: string }[]).forEach((x) => {
@@ -255,7 +289,8 @@ export function ModuleNotifications({
   async function markSeenLocal(n: NotifFull) {
     if (!me || seenIds.has(n.id)) return;
     if (!canAckClient(n, me)) return;
-    await markNotificationSeen(n.id);
+    const ok = await markNotificationSeen(n.id);
+    if (!ok) return;
     setSeenIds((s) => new Set([...s, n.id]));
   }
 
@@ -333,6 +368,16 @@ export function ModuleNotifications({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
+                  {!seen && canAckClient(n, me) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px]"
+                      onClick={() => markSeenLocal(n)}
+                    >
+                      Seen
+                    </Button>
+                  )}
                   {!acked && canAckClient(n, me) && (
                     <Button size="sm" className="h-7" onClick={() => ack(n)}>
                       <Check className="h-3.5 w-3.5 mr-1" /> Acknowledge
@@ -371,12 +416,7 @@ export function ModuleNotifications({
         onOpenChange={(o) => {
           if (!o) setOpenId(null);
         }}
-        onAcknowledged={() => {
-          if (openId) {
-            setSeenIds((s) => new Set([...s, openId]));
-            setAckedIds((s) => new Set([...s, openId]));
-          }
-        }}
+        onAcknowledged={() => load()}
       />
       <NotificationTrackingDialog
         notificationId={trackingId}

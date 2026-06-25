@@ -77,11 +77,13 @@ export function canAckClient(
  * Mark a notification as Seen for the current user. Server-side RPC enforces
  * that the caller is in a target department and is not the actor.
  */
-export async function markNotificationSeen(notifId: string): Promise<void> {
+export async function markNotificationSeen(notifId: string): Promise<boolean> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).rpc("mark_notification_seen", { _notif_id: notifId });
+    const { data, error } = await (supabase as any).rpc("mark_notification_seen", { _notif_id: notifId });
+    return !error && data !== false;
   } catch {
     /* non-fatal */
+    return false;
   }
 }
