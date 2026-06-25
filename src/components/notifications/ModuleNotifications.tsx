@@ -416,11 +416,7 @@ export function ModuleNotifications({
         onOpenChange={(o) => {
           if (!o) setOpenId(null);
         }}
-        onAcknowledged={() => {
-          if (openId) {
-            setSeenIds((s) => new Set([...s, openId]));
-          }
-        }}
+        onAcknowledged={() => load()}
       />
       <NotificationTrackingDialog
         notificationId={trackingId}
