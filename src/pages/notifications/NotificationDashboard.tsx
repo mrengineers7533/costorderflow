@@ -422,7 +422,8 @@ export default function NotificationDashboard() {
       myDept = (rec as { department?: string } | null)?.department || "Other";
       myName = (rec as { name?: string } | null)?.name || myName;
     }
-    setMe(uid ? { id: uid, name: myName, department: myDept } : null);
+    const currentMe = uid ? { id: uid, name: myName, department: myDept } : null;
+    setMe(currentMe);
 
     const { data: n } = await supabase
       .from("app_notifications" as never)
@@ -435,7 +436,7 @@ export default function NotificationDashboard() {
         .reduce((m, n) => {
           const key =
             n.revision_key ||
-            [n.module, n.record_ref || n.record_id || "", n.event_type, n.created_at].join("|");
+            [n.module, n.record_ref || n.record_id || n.id].join("|");
           const existing = m.get(key);
           if (!existing) {
             m.set(key, n);
@@ -450,8 +451,8 @@ export default function NotificationDashboard() {
             ...(Array.isArray(n.line_item_changes) ? n.line_item_changes : []),
           ];
           const preferN =
-            (me && canAckClient(n, me) && !canAckClient(existing, me)) ||
-            (!me && new Date(n.created_at) > new Date(existing.created_at));
+            (currentMe && canAckClient(n, currentMe) && !canAckClient(existing, currentMe)) ||
+            (!currentMe && new Date(n.created_at) > new Date(existing.created_at));
           const base = preferN ? n : existing;
           m.set(key, {
             ...base,
