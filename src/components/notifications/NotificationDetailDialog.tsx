@@ -758,9 +758,6 @@ function BeforeAfterItemTable({
   );
 }
 
-function ChangedLineItemsHistory({
-}
-
 function NotificationMetadataCard({
   notif,
   reads,
@@ -864,7 +861,7 @@ function NotificationMetadataCard({
   );
 }
 
-function _ChangedLineItemsHistoryStub({
+function ChangedLineItemsHistory({
   notif,
   history,
 }: {
