@@ -72,6 +72,7 @@ interface ReadRow {
   user_name: string | null;
   department: string | null;
   seen_at: string;
+  kind?: "seen" | "ack";
 }
 
 const HIDDEN_FIELDS = new Set<string>([
@@ -253,9 +254,11 @@ export function NotificationDetailDialog({
   // Mark Seen when the detail dialog opens (server-side RPC enforces dept).
   useEffect(() => {
     if (notificationId) {
-      markNotificationSeen(notificationId);
+      markNotificationSeen(notificationId).then((ok) => {
+        if (ok) onAcknowledged?.();
+      });
     }
-  }, [notificationId]);
+  }, [notificationId, onAcknowledged]);
 
   // Pick a sensible default for the acknowledgement-department selector:
   // prefer the user's own department if it matches a target, else first target.
@@ -294,7 +297,8 @@ export function NotificationDetailDialog({
     await load();
   }
 
-  const myRead = me ? reads.find((r) => r.user_id === me.id) : null;
+  const myAck = me ? reads.find((r) => r.user_id === me.id && r.kind === "ack") : null;
+  const mySeen = me ? reads.find((r) => r.user_id === me.id) : null;
   const lineChanges: LineChange[] = Array.isArray(notif?.line_item_changes)
     ? (notif!.line_item_changes as LineChange[])
     : [];
@@ -313,7 +317,8 @@ export function NotificationDetailDialog({
             lineChanges={lineChanges}
             history={history}
             me={me}
-            myRead={myRead}
+            mySeen={mySeen}
+            myAck={myAck}
             ackDept={ackDept}
             setAckDept={setAckDept}
             acknowledge={acknowledge}
@@ -1125,7 +1130,8 @@ function NotificationDetailBody({
   lineChanges,
   history,
   me,
-  myRead,
+  mySeen,
+  myAck,
   ackDept,
   setAckDept,
   acknowledge,
@@ -1135,7 +1141,8 @@ function NotificationDetailBody({
   lineChanges: LineChange[];
   history: NotifFull[];
   me: { id: string; name: string; department: string } | null;
-  myRead: ReadRow | null | undefined;
+  mySeen: ReadRow | null | undefined;
+  myAck: ReadRow | null | undefined;
   ackDept: string;
   setAckDept: (v: string) => void;
   acknowledge: () => void;
@@ -1155,7 +1162,7 @@ function NotificationDetailBody({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <StatusChipBar notif={notif} reads={reads} />
         <div className="flex items-center gap-2">
-          {me && !myRead && canAck && notif.target_departments.length > 0 && (
+          {me && !myAck && canAck && notif.target_departments.length > 0 && (
             <Select value={ackDept} onValueChange={setAckDept}>
               <SelectTrigger className="h-9 w-44 text-xs">
                 <SelectValue placeholder="Acknowledge as" />
@@ -1169,16 +1176,20 @@ function NotificationDetailBody({
               </SelectContent>
             </Select>
           )}
-          {me && !myRead && canAck ? (
+          {me && !myAck && canAck ? (
             <Button
               onClick={acknowledge}
               className="bg-orange-500 text-white hover:bg-orange-600"
             >
               <Check className="mr-1 h-4 w-4" /> Acknowledge
             </Button>
-          ) : myRead ? (
+          ) : myAck ? (
             <span className="rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700">
               <Check className="mr-1 inline h-3.5 w-3.5" /> Acknowledged
+            </span>
+          ) : mySeen ? (
+            <span className="rounded-md bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-700">
+              <Check className="mr-1 inline h-3.5 w-3.5" /> Seen
             </span>
           ) : null}
         </div>

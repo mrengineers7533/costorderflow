@@ -27,7 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog } from "@/components/notifications/NotificationDetailDialog";
 import { deptOf } from "@/components/notifications/NotificationCharts";
 import { DeptNotificationsDialog } from "@/components/notifications/DeptNotificationsDialog";
-import { normalizeDept } from "@/lib/notifications/dept";
+import { canAckClient, markNotificationSeen, normalizeDept } from "@/lib/notifications/dept";
 import { useUserRole } from "@/hooks/useUserRole";
 import {
   AlertDialog,
@@ -100,6 +100,7 @@ interface ReadRow {
   user_name: string | null;
   department: string | null;
   seen_at: string;
+  kind?: "seen" | "ack";
 }
 
 // Field keys that are noisy / internal — hide from dashboard & detail.
@@ -605,6 +606,38 @@ export default function NotificationDashboard() {
     }
     toast({ title: "Acknowledged" });
     await load();
+  }
+
+  async function markSeen(n: NotifRow) {
+    if (!me) return;
+    if (!canAckClient(n, me)) {
+      toast({ title: "Only target department users can mark this as seen" });
+      return;
+    }
+    const ok = await markNotificationSeen(n.id);
+    if (!ok) {
+      toast({ title: "Could not mark as seen", variant: "destructive" });
+      return;
+    }
+    const now = new Date().toISOString();
+    setReads((prev) => {
+      const exists = prev.some(
+        (r) => r.notification_id === n.id && r.user_id === me.id && r.kind === "seen",
+      );
+      if (exists) return prev;
+      return [
+        ...prev,
+        {
+          notification_id: n.id,
+          user_id: me.id,
+          user_name: me.name,
+          department: me.department,
+          seen_at: now,
+          kind: "seen",
+        },
+      ];
+    });
+    toast({ title: "Marked as seen" });
   }
 
   // Summary counts
@@ -1169,6 +1202,16 @@ export default function NotificationDashboard() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center justify-end gap-1">
+                            {!seen && canAckClient(n, me) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => markSeen(n)}
+                              >
+                                Seen
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"
