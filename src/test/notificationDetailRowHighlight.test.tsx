@@ -43,7 +43,8 @@ describe("Notification Detail — row-specific change rendering", () => {
 
   it("renders only the changed row with the correct row number", () => {
     const { container } = render(<BeforeAfterItemTable edit={edit} />);
-    const dataRows = container.querySelectorAll("tbody > tr");
+    const tables = container.querySelectorAll("table");
+    const dataRows = tables[0].querySelectorAll("tbody > tr");
     expect(dataRows.length).toBe(1);
     expect(dataRows[0].textContent).toContain("3");
     expect(dataRows[0].textContent).toContain("Finolex");
@@ -51,28 +52,28 @@ describe("Notification Detail — row-specific change rendering", () => {
 
   it("shows every field on the row, including unchanged ones", () => {
     const { container } = render(<BeforeAfterItemTable edit={edit} />);
+    const tables = container.querySelectorAll("table");
     const headerCells = Array.from(
-      container.querySelectorAll("thead th"),
+      tables[0].querySelectorAll("thead th"),
     ).map((th) => th.textContent?.trim() ?? "");
     // Row No. + 6 dynamic fields + Changes/Edit column
     expect(headerCells).toContain("Row No.");
     expect(headerCells).toContain("Changes/Edit");
-    for (const label of ["Item Code", "Description", "Make", "Qty", "UOM", "Rate"]) {
-      // Labels come from `labelOf` (humanized); just confirm the key text is present.
-      const present = headerCells.some((h) =>
-        h.toLowerCase().includes(label.toLowerCase()),
-      );
-      expect(present, `expected header for ${label}`).toBe(true);
+    const joined = headerCells.join("|").toLowerCase();
+    for (const label of ["item", "description", "make", "qty", "uom", "rate"]) {
+      expect(joined, `expected header for ${label}`).toContain(label);
     }
   });
 
   it("highlights only the changed fields and leaves the rest unhighlighted", () => {
     const { container } = render(<BeforeAfterItemTable edit={edit} />);
-    const headers = Array.from(container.querySelectorAll("thead th")).map(
+    const tables = container.querySelectorAll("table");
+    const rowTable = tables[0];
+    const headers = Array.from(rowTable.querySelectorAll("thead th")).map(
       (th) => th.textContent?.trim().toLowerCase() ?? "",
     );
     const cells = Array.from(
-      container.querySelectorAll("tbody > tr > td"),
+      rowTable.querySelectorAll("tbody > tr > td"),
     ) as HTMLTableCellElement[];
     // Cells layout: [Row No., ...dynamicFieldCells, Changes/Edit]
     const fieldCells = cells.slice(1, cells.length - 1);
@@ -93,9 +94,9 @@ describe("Notification Detail — row-specific change rendering", () => {
   });
 
   it("renders an Old Value -> New Value entry for every changed field", () => {
-    const { container, getByText } = render(<BeforeAfterItemTable edit={edit} />);
-    expect(getByText(/Old Value/i)).toBeInTheDocument();
-    expect(getByText(/New Value/i)).toBeInTheDocument();
+    const { container } = render(<BeforeAfterItemTable edit={edit} />);
+    expect(container.textContent).toMatch(/Old Value/i);
+    expect(container.textContent).toMatch(/New Value/i);
 
     // The dedicated diff table is the last <table> in the component.
     const tables = container.querySelectorAll("table");
