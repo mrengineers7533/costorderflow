@@ -2,10 +2,12 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronUp, ExternalLink, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog, type NotifFull } from "./NotificationDetailDialog";
 import { canAckClient } from "@/lib/notifications/dept";
+import { notifDeepLink } from "@/lib/notifications/highlight";
+import { useNavigate } from "react-router-dom";
 
 /** Set of related-record ids for the page the banner is mounted on. */
 export interface NotifLinks {
@@ -291,6 +293,7 @@ export function ModuleNotifications({
                   >
                     <Eye className="h-3.5 w-3.5 mr-1" /> Details
                   </Button>
+                  <OpenInPageButton n={n} />
                 </div>
               </div>
             );
