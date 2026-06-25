@@ -241,6 +241,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const { boqId } = useParams<{ boqId: string }>();
   const [boq, setBoq] = useState<BoqRecord | null>(null);
   const [order, setOrder] = useState<OrderRecord | null>(null);
+  const [latestOa, setLatestOa] = useState<OrderRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
@@ -255,7 +256,21 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
       const oaId = b?.source_order_id || b?.order_id;
       if (oaId) {
         const { data: o } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
-        setOrder((o as unknown as OrderRecord) || null);
+        const linked = (o as unknown as OrderRecord) || null;
+        setOrder(linked);
+        if (linked) {
+          const rootId = linked.parent_order_id || linked.id;
+          const { data: family } = await supabase
+            .from("orders")
+            .select("*")
+            .or(`id.eq.${rootId},parent_order_id.eq.${rootId}`);
+          const fam = (family as unknown as OrderRecord[]) || [];
+          const latest = fam.reduce<OrderRecord | null>(
+            (acc, cur) => (!acc || (cur.revision ?? 0) > (acc.revision ?? 0) ? cur : acc),
+            null,
+          );
+          setLatestOa(latest || linked);
+        }
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
@@ -269,7 +284,9 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   if (!boq) return <div className="p-6 text-sm text-muted-foreground">BOQ not found.</div>;
 
   const items = Array.isArray(boq.line_items) ? boq.line_items : [];
-  const approved = (boq.verification_status ?? "approved") === "approved";
+  const boqApproved = (boq.verification_status ?? "approved") === "approved";
+  const oaApproved = isOaApproved(latestOa);
+  const approved = config.kind === "manufacturing" ? (boqApproved && oaApproved) : boqApproved;
   const resolveMake = buildMakeResolver(order?.line_items);
   const orderRootId = order ? (order as { parent_order_id?: string | null; id: string }).parent_order_id || order.id : null;
 
