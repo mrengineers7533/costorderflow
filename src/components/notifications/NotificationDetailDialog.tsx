@@ -759,6 +759,112 @@ function BeforeAfterItemTable({
 }
 
 function ChangedLineItemsHistory({
+}
+
+function NotificationMetadataCard({
+  notif,
+  reads,
+}: {
+  notif: NotifFull;
+  reads: ReadRow[];
+}) {
+  const nv = (notif.new_value || {}) as Record<string, unknown>;
+  const ov = (notif.old_value || {}) as Record<string, unknown>;
+  const docNo =
+    notif.record_ref ||
+    pickStr(nv, ["oa_no", "boq_no", "pi_no", "po_no", "requisition_no", "annexure_no"]) ||
+    pickStr(ov, ["oa_no", "boq_no", "pi_no", "po_no", "requisition_no", "annexure_no"]) ||
+    "—";
+  const changes = Array.isArray(notif.line_item_changes)
+    ? (notif.line_item_changes as LineChange[])
+    : [];
+  const rowNos = changes
+    .map((c, i) => String(c.line_no ?? i + 1))
+    .filter(Boolean);
+  const itemIds = changes
+    .map((c) => {
+      const a = (c.after || {}) as Record<string, unknown>;
+      const b = (c.before || {}) as Record<string, unknown>;
+      return (
+        pickStr(a, ["item_id", "boq_item_id", "item_no"]) ||
+        pickStr(b, ["item_id", "boq_item_id", "item_no"])
+      );
+    })
+    .filter((v): v is string => !!v);
+  const targets = (notif.target_departments || []).join(", ") || "—";
+  const acks = reads.filter((r) => !!r.seen_at);
+
+  const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="text-xs font-medium break-words">
+        {value === undefined || value === null || value === "" ? "—" : value}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-sm">
+      <div className="mb-3 text-sm font-bold">Notification Details</div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-3">
+        <Field label="Notification ID" value={<span className="font-mono">{notif.id}</span>} />
+        <Field label="Change / Event ID" value={<span className="font-mono">{notif.id}</span>} />
+        <Field label="Notification Type" value={notif.event_type.replace(/_/g, " ")} />
+        <Field label="Created Date / Time" value={new Date(notif.created_at).toLocaleString()} />
+        <Field label="Source Module" value={notif.module?.toUpperCase() || "—"} />
+        <Field label="Document Type / Page" value={notif.module?.toUpperCase() || "—"} />
+        <Field label="Document No" value={docNo} />
+        <Field label="Row Number" value={rowNos.length ? rowNos.join(", ") : "—"} />
+        <Field label="Item ID / BOQ Item ID" value={itemIds.length ? itemIds.join(", ") : "—"} />
+        <Field
+          label="Actor Department / Created By"
+          value={
+            (notif.actor_department || "—") +
+            (notif.actor_user_name ? ` / ${notif.actor_user_name}` : "")
+          }
+        />
+        <Field label="Assigned / Target Department" value={targets} />
+        <Field
+          label="Seen Status"
+          value={
+            acks.length === 0 ? (
+              <span className="text-red-600 font-semibold">Not Seen</span>
+            ) : (
+              <span className="text-emerald-700 font-semibold">
+                Seen ({acks.length})
+              </span>
+            )
+          }
+        />
+        <Field
+          label="Acknowledged By"
+          value={
+            acks.length
+              ? acks
+                  .map(
+                    (r) =>
+                      `${r.user_name || "User"}${r.department ? ` (${r.department})` : ""}`,
+                  )
+                  .join(", ")
+              : "—"
+          }
+        />
+        <Field
+          label="Acknowledged Date / Time"
+          value={
+            acks.length
+              ? acks
+                  .map((r) => new Date(r.seen_at).toLocaleString())
+                  .join(", ")
+              : "—"
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function _ChangedLineItemsHistoryStub({
   notif,
   history,
 }: {
