@@ -9,6 +9,22 @@ import { canAckClient } from "@/lib/notifications/dept";
 import { notifDeepLink } from "@/lib/notifications/highlight";
 import { useNavigate } from "react-router-dom";
 
+function OpenInPageButton({ n }: { n: NotifFull }) {
+  const navigate = useNavigate();
+  const href = notifDeepLink(n);
+  if (!href) return null;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-6 text-[11px]"
+      onClick={() => navigate(href)}
+    >
+      <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open in page
+    </Button>
+  );
+}
+
 /** Set of related-record ids for the page the banner is mounted on. */
 export interface NotifLinks {
   orderRootId?: string | null;
