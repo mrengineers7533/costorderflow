@@ -594,9 +594,10 @@ export default function NotificationDashboard() {
           user_id: me.id,
           user_name: me.name,
           department: me.department,
+          kind: "ack",
           seen_at: new Date().toISOString(),
         } as never,
-        { onConflict: "notification_id,user_id" } as never,
+        { onConflict: "notification_id,user_id,kind" } as never,
       );
     if (error) {
       toast({ title: "Could not acknowledge", description: error.message, variant: "destructive" });
