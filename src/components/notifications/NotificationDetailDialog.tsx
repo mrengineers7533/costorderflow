@@ -581,7 +581,7 @@ function HeaderFieldValue({ value }: { value: unknown }) {
   return <span>{String(value)}</span>;
 }
 
-function BeforeAfterItemTable({
+export function BeforeAfterItemTable({
   edit,
 }: {
   edit: {
