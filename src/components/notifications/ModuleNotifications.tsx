@@ -204,13 +204,25 @@ export function ModuleNotifications({
       }
       return true;
     });
-    setRows(filtered);
+    const grouped = Array.from(
+      filtered
+        .reduce((m, n) => {
+          const key =
+            (n as NotifFull & { revision_key?: string | null }).revision_key ||
+            [n.module, n.record_ref || n.record_id || "", n.event_type, n.created_at].join("|");
+          const existing = m.get(key);
+          if (!existing || new Date(n.created_at) > new Date(existing.created_at)) m.set(key, n);
+          return m;
+        }, new Map<string, NotifFull>())
+        .values(),
+    );
+    setRows(grouped);
 
-    if (uid && filtered.length) {
+    if (uid && grouped.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
         .select("notification_id,kind")
-        .in("notification_id", filtered.map((n) => n.id));
+        .in("notification_id", grouped.map((n) => n.id));
       const seenSet = new Set<string>();
       const ackSet = new Set<string>();
       ((r || []) as { notification_id: string; kind: string }[]).forEach((x) => {
@@ -255,7 +267,8 @@ export function ModuleNotifications({
   async function markSeenLocal(n: NotifFull) {
     if (!me || seenIds.has(n.id)) return;
     if (!canAckClient(n, me)) return;
-    await markNotificationSeen(n.id);
+    const ok = await markNotificationSeen(n.id);
+    if (!ok) return;
     setSeenIds((s) => new Set([...s, n.id]));
   }
 
@@ -374,7 +387,6 @@ export function ModuleNotifications({
         onAcknowledged={() => {
           if (openId) {
             setSeenIds((s) => new Set([...s, openId]));
-            setAckedIds((s) => new Set([...s, openId]));
           }
         }}
       />
