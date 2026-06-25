@@ -435,8 +435,9 @@ export default function NotificationDashboard() {
       fetched
         .reduce((m, n) => {
           const key =
-            n.revision_key ||
-            [n.module, n.record_ref || n.record_id || n.id].join("|");
+            n.record_ref
+              ? [n.module, n.record_ref].join("|")
+              : n.revision_key || [n.module, n.record_id || n.id].join("|");
           const existing = m.get(key);
           if (!existing) {
             m.set(key, n);

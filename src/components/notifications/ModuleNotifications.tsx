@@ -209,8 +209,10 @@ export function ModuleNotifications({
       filtered
         .reduce((m, n) => {
           const key =
-            (n as NotifFull & { revision_key?: string | null }).revision_key ||
-            [n.module, n.record_ref || n.record_id || n.id].join("|");
+            n.record_ref
+              ? [n.module, n.record_ref].join("|")
+              : (n as NotifFull & { revision_key?: string | null }).revision_key ||
+                [n.module, n.record_id || n.id].join("|");
           const existing = m.get(key);
           if (!existing) {
             m.set(key, n);
