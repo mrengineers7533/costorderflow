@@ -18,7 +18,7 @@ import {
   History,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
+import { normalizeDept, matchTargetDept, markNotificationSeen } from "@/lib/notifications/dept";
 import { canAckClient } from "@/lib/notifications/dept";
 import {
   Select,
@@ -250,6 +250,13 @@ export function NotificationDetailDialog({
     }
   }, [notificationId, load]);
 
+  // Mark Seen when the detail dialog opens (server-side RPC enforces dept).
+  useEffect(() => {
+    if (notificationId) {
+      markNotificationSeen(notificationId);
+    }
+  }, [notificationId]);
+
   // Pick a sensible default for the acknowledgement-department selector:
   // prefer the user's own department if it matches a target, else first target.
   useEffect(() => {
@@ -269,9 +276,10 @@ export function NotificationDetailDialog({
           user_id: me.id,
           user_name: me.name,
           department: dept,
+          kind: "ack",
           seen_at: new Date().toISOString(),
         } as never,
-        { onConflict: "notification_id,user_id" } as never,
+        { onConflict: "notification_id,user_id,kind" } as never,
       );
     if (error) {
       toast({
