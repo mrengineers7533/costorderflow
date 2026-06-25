@@ -2,14 +2,15 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, ChevronDown, ChevronUp, ExternalLink, Eye } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronUp, ExternalLink, Eye, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog, type NotifFull } from "./NotificationDetailDialog";
-import { canAckClient } from "@/lib/notifications/dept";
+import { canAckClient, markNotificationSeen } from "@/lib/notifications/dept";
 import { notifDeepLink } from "@/lib/notifications/highlight";
 import { useNavigate } from "react-router-dom";
+import { NotificationTrackingDialog } from "./NotificationTrackingDialog";
 
-function OpenInPageButton({ n }: { n: NotifFull }) {
+function OpenInPageButton({ n, onClick }: { n: NotifFull; onClick?: () => void }) {
   const navigate = useNavigate();
   const href = notifDeepLink(n);
   if (!href) return null;
@@ -18,7 +19,10 @@ function OpenInPageButton({ n }: { n: NotifFull }) {
       size="sm"
       variant="outline"
       className="h-6 text-[11px]"
-      onClick={() => navigate(href)}
+      onClick={() => {
+        onClick?.();
+        navigate(href);
+      }}
     >
       <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open in page
     </Button>
@@ -81,6 +85,9 @@ export function ModuleNotifications({
 
   const [rows, setRows] = useState<NotifFull[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [ackedIds, setAckedIds] = useState<Set<string>>(new Set());
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
   const storageKey = `notif-open:${modsKey}:${linksKey}`;
   const [open, setOpen] = useState<boolean>(() => {
@@ -149,6 +156,18 @@ export function ModuleNotifications({
       myName = (rec as { name?: string } | null)?.name || myName;
     }
     setMe(uid ? { id: uid, name: myName, department: myDept } : null);
+    if (uid) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: roleData } = await (supabase as any)
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", uid)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!roleData);
+    } else {
+      setIsAdmin(false);
+    }
 
     const modsArr = modsKey ? modsKey.split(",") : null;
     const l = mergedLinks;
@@ -190,16 +209,19 @@ export function ModuleNotifications({
     if (uid && filtered.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
-        .select("notification_id")
-        .eq("user_id", uid)
+        .select("notification_id,kind")
         .in("notification_id", filtered.map((n) => n.id));
-      setSeenIds(
-        new Set(
-          ((r || []) as { notification_id: string }[]).map((x) => x.notification_id),
-        ),
-      );
+      const seenSet = new Set<string>();
+      const ackSet = new Set<string>();
+      ((r || []) as { notification_id: string; kind: string }[]).forEach((x) => {
+        seenSet.add(x.notification_id);
+        if (x.kind === "ack") ackSet.add(x.notification_id);
+      });
+      setSeenIds(seenSet);
+      setAckedIds(ackSet);
     } else {
       setSeenIds(new Set());
+      setAckedIds(new Set());
     }
     setLoading(false);
   }, [modsKey, linksKey, limit, hasAnyLink, mergedLinks]);
@@ -215,6 +237,7 @@ export function ModuleNotifications({
       user_id: me.id,
       user_name: me.name,
       department: me.department,
+      kind: "ack",
     } as never);
     if (error) {
       toast({
@@ -225,6 +248,14 @@ export function ModuleNotifications({
       return;
     }
     toast({ title: "Acknowledged" });
+    setSeenIds((s) => new Set([...s, n.id]));
+    setAckedIds((s) => new Set([...s, n.id]));
+  }
+
+  async function markSeenLocal(n: NotifFull) {
+    if (!me || seenIds.has(n.id)) return;
+    if (!canAckClient(n, me)) return;
+    await markNotificationSeen(n.id);
     setSeenIds((s) => new Set([...s, n.id]));
   }
 
@@ -255,6 +286,8 @@ export function ModuleNotifications({
         <div className="divide-y divide-amber-400/30 border-t border-amber-400/30">
           {rows.map((n) => {
             const seen = seenIds.has(n.id);
+            const acked = ackedIds.has(n.id);
+            const canTrack = isAdmin || (me && n.actor_user_id === me.id);
             const lineCount = Array.isArray(n.line_item_changes)
               ? n.line_item_changes.length
               : 0;
@@ -279,8 +312,12 @@ export function ModuleNotifications({
                         {lineCount} line(s)
                       </Badge>
                     )}
-                    {seen ? (
-                      <Badge className="text-[10px]">Seen</Badge>
+                    {acked ? (
+                      <Badge className="text-[10px]">Acknowledged</Badge>
+                    ) : seen ? (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Seen
+                      </Badge>
                     ) : (
                       <Badge variant="destructive" className="text-[10px]">
                         New
@@ -296,7 +333,7 @@ export function ModuleNotifications({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  {!seen && canAckClient(n, me) && (
+                  {!acked && canAckClient(n, me) && (
                     <Button size="sm" className="h-7" onClick={() => ack(n)}>
                       <Check className="h-3.5 w-3.5 mr-1" /> Acknowledge
                     </Button>
@@ -305,11 +342,24 @@ export function ModuleNotifications({
                     size="sm"
                     variant="ghost"
                     className="h-6 text-[11px]"
-                    onClick={() => setOpenId(n.id)}
+                    onClick={() => {
+                      markSeenLocal(n);
+                      setOpenId(n.id);
+                    }}
                   >
                     <Eye className="h-3.5 w-3.5 mr-1" /> Details
                   </Button>
-                  <OpenInPageButton n={n} />
+                  <OpenInPageButton n={n} onClick={() => markSeenLocal(n)} />
+                  {canTrack && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px]"
+                      onClick={() => setTrackingId(n.id)}
+                    >
+                      <Activity className="h-3.5 w-3.5 mr-1" /> Tracking
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -322,7 +372,16 @@ export function ModuleNotifications({
           if (!o) setOpenId(null);
         }}
         onAcknowledged={() => {
-          if (openId) setSeenIds((s) => new Set([...s, openId]));
+          if (openId) {
+            setSeenIds((s) => new Set([...s, openId]));
+            setAckedIds((s) => new Set([...s, openId]));
+          }
+        }}
+      />
+      <NotificationTrackingDialog
+        notificationId={trackingId}
+        onOpenChange={(o) => {
+          if (!o) setTrackingId(null);
         }}
       />
     </div>

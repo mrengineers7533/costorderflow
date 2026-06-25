@@ -146,6 +146,7 @@ export type Database = {
         Row: {
           department: string | null
           id: string
+          kind: string
           notification_id: string
           seen_at: string
           user_id: string
@@ -154,6 +155,7 @@ export type Database = {
         Insert: {
           department?: string | null
           id?: string
+          kind?: string
           notification_id: string
           seen_at?: string
           user_id: string
@@ -162,6 +164,7 @@ export type Database = {
         Update: {
           department?: string | null
           id?: string
+          kind?: string
           notification_id?: string
           seen_at?: string
           user_id?: string
@@ -2985,6 +2988,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_notification_tracking: {
+        Args: { _notif_id: string }
+        Returns: {
+          ack_at: string
+          ack_by: string
+          department: string
+          seen_at: string
+          seen_by: string
+        }[]
+      }
       get_related_notifications: {
         Args: {
           p_annex?: string
@@ -3150,6 +3163,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_notification_seen: { Args: { _notif_id: string }; Returns: boolean }
       next_general_requisition_number: {
         Args: { _fy: string }
         Returns: string
