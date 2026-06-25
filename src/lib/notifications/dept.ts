@@ -51,3 +51,24 @@ export function matchTargetDept(
   }
   return null;
 }
+
+/**
+ * Client-side mirror of the DB `can_ack_notification` rule:
+ * a user can acknowledge a notification only when they are NOT the actor
+ * AND their normalized department matches one of the notification's
+ * target departments.
+ */
+export function canAckClient(
+  notif: {
+    actor_user_id?: string | null;
+    target_departments?: string[] | null;
+  } | null | undefined,
+  me: { id: string; department: string } | null | undefined,
+): boolean {
+  if (!notif || !me) return false;
+  if (notif.actor_user_id && notif.actor_user_id === me.id) return false;
+  const targets = Array.isArray(notif.target_departments)
+    ? notif.target_departments
+    : [];
+  return !!matchTargetDept(me.department, targets);
+}
