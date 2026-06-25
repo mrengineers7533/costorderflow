@@ -50,6 +50,38 @@ function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): 
   );
 }
 
+/** Pick latest BOQ (any status) per OA family. */
+function pickLatestPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
+  const familyOf = new Map<string, string>();
+  for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
+  const byFamily = new Map<string, BoqRecord>();
+  for (const b of boqs) {
+    const fam = familyOf.get(b.order_id) || b.order_id;
+    const existing = byFamily.get(fam);
+    if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) {
+      byFamily.set(fam, b);
+    }
+  }
+  return Array.from(byFamily.values()).sort((a, b) =>
+    (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
+  );
+}
+
+/** Build a map: family-root id -> latest OA revision in that family. */
+function buildLatestOaByFamily(orders: OrderRecord[]): Map<string, OrderRecord> {
+  const m = new Map<string, OrderRecord>();
+  for (const o of orders) {
+    const fam = o.parent_order_id || o.id;
+    const cur = m.get(fam);
+    if (!cur || (o.revision ?? 0) > (cur.revision ?? 0)) m.set(fam, o);
+  }
+  return m;
+}
+
+function isOaApproved(o: OrderRecord | null | undefined): boolean {
+  return !!o && o.status === "finalized";
+}
+
 export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
