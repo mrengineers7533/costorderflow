@@ -77,6 +77,7 @@ interface NotifRow {
   related_boq_id?: string | null;
   related_order_root_id?: string | null;
   related_pi_id?: string | null;
+  revision_key?: string | null;
 }
 
 /** Drop notifications that carry no actionable change. */
@@ -429,9 +430,41 @@ export default function NotificationDashboard() {
       .order("created_at", { ascending: false })
       .limit(500);
     const fetched = ((n || []) as unknown as NotifRow[]).filter(hasRealChange);
-    setRows(fetched);
+    const fetchedByDocument = Array.from(
+      fetched
+        .reduce((m, n) => {
+          const key =
+            n.revision_key ||
+            [n.module, n.record_ref || n.record_id || "", n.event_type, n.created_at].join("|");
+          const existing = m.get(key);
+          if (!existing) {
+            m.set(key, n);
+            return m;
+          }
 
-    const ids = ((n || []) as unknown as { id: string }[]).map((r) => r.id);
+          const mergedTargets = Array.from(
+            new Set([...(existing.target_departments || []), ...(n.target_departments || [])]),
+          );
+          const mergedChanges = [
+            ...(Array.isArray(existing.line_item_changes) ? existing.line_item_changes : []),
+            ...(Array.isArray(n.line_item_changes) ? n.line_item_changes : []),
+          ];
+          const preferN =
+            (me && canAckClient(n, me) && !canAckClient(existing, me)) ||
+            (!me && new Date(n.created_at) > new Date(existing.created_at));
+          const base = preferN ? n : existing;
+          m.set(key, {
+            ...base,
+            target_departments: mergedTargets,
+            line_item_changes: mergedChanges,
+          });
+          return m;
+        }, new Map<string, NotifRow>())
+        .values(),
+    );
+    setRows(fetchedByDocument);
+
+    const ids = fetchedByDocument.map((r) => r.id);
     if (ids.length) {
       const { data: r } = await supabase
         .from("app_notification_reads" as never)
