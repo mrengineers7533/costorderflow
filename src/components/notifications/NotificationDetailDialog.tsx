@@ -597,22 +597,49 @@ function BeforeAfterItemTable({
 }) {
   const { lineNo, kind, before, after, changedKeys, by, dept, when } = edit;
 
+  // Build dynamic column list from the union of fields actually present in
+  // this row's before+after payloads. This shows the COMPLETE row, while the
+  // changed-field highlight still uses `changedKeys` only.
+  const ROW_HIDDEN = new Set<string>([
+    ...HIDDEN_FIELDS,
+    "line_no",
+    "row_no",
+    "sl_no",
+    "s_no",
+    "serial_no",
+  ]);
+  const dynamicKeys: string[] = (() => {
+    const seenK = new Set<string>();
+    const ordered: string[] = [];
+    const consider = (src: Record<string, unknown>) => {
+      for (const k of Object.keys(src || {})) {
+        if (ROW_HIDDEN.has(k)) continue;
+        if (k.endsWith("_id")) continue;
+        if (seenK.has(k)) continue;
+        seenK.add(k);
+        ordered.push(k);
+      }
+    };
+    consider(kind === "removed" ? before : after);
+    consider(kind === "removed" ? after : before);
+    return ordered;
+  })();
+
   const renderRow = (
     row: Record<string, unknown>,
     variant: "before" | "after" | "added" | "removed",
   ) => {
-    const cells = COLUMN_DEFS.map((col) => {
-      const val = col.key === "amount" ? computeAmount(row) : pickVal(row, col.aliases).value;
-      const isChanged =
-        variant !== "before" && col.aliases.some((a) => changedKeys.has(a));
+    const cells = dynamicKeys.map((k) => {
+      const val = (row || {})[k];
+      const isChanged = variant !== "before" && changedKeys.has(k);
       const cls =
         variant === "removed"
           ? "text-red-600 line-through"
           : isChanged
-            ? "text-red-600 font-semibold"
+            ? "bg-amber-100 text-red-700 font-semibold ring-1 ring-amber-300"
             : "";
       return (
-        <td key={col.key} className={`px-3 py-2 ${cls}`}>
+        <td key={k} className={`px-3 py-2 ${cls}`}>
           {fmtCell(val)}
         </td>
       );
@@ -621,21 +648,7 @@ function BeforeAfterItemTable({
     let changesText: React.ReactNode = "";
     if (variant === "after" && kind === "modified") {
       const sentences: string[] = [];
-      for (const col of COLUMN_DEFS) {
-        const aliasHit = col.aliases.find((a) => changedKeys.has(a));
-        if (!aliasHit) continue;
-        const oldV =
-          col.key === "amount" ? computeAmount(before) : pickVal(before, col.aliases).value;
-        const newV =
-          col.key === "amount" ? computeAmount(after) : pickVal(after, col.aliases).value;
-        sentences.push(
-          `Change in ${col.label}: Old value was ${fmtCell(oldV)} and new value is ${fmtCell(newV)}.`,
-        );
-      }
-      // Include any other changed fields not in the fixed columns
-      const known = new Set(COLUMN_DEFS.flatMap((c) => c.aliases));
       for (const f of changedKeys) {
-        if (known.has(f)) continue;
         sentences.push(
           `Change in ${labelOf(f)}: Old value was ${fmtCell(before[f])} and new value is ${fmtCell(after[f])}.`,
         );
@@ -668,7 +681,7 @@ function BeforeAfterItemTable({
     <div className="rounded-lg border bg-background">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
         <span>
-          <span className="font-semibold text-foreground">Item {lineNo}</span>
+          <span className="font-semibold text-foreground">Row {lineNo}</span>
           {" · edited by "}
           <span className="text-foreground">{by}</span>
           {dept ? ` (${dept})` : ""}
@@ -679,10 +692,10 @@ function BeforeAfterItemTable({
         <table className="w-full text-xs">
           <thead className="bg-muted/40 text-left">
             <tr>
-              <th className="px-3 py-2 font-semibold">S. No.</th>
-              {COLUMN_DEFS.map((c) => (
-                <th key={c.key} className="px-3 py-2 font-semibold">
-                  {c.label}
+              <th className="px-3 py-2 font-semibold">Row No.</th>
+              {dynamicKeys.map((k) => (
+                <th key={k} className="px-3 py-2 font-semibold">
+                  {labelOf(k)}
                 </th>
               ))}
               <th className="px-3 py-2 font-semibold">Changes/Edit</th>
@@ -699,9 +712,9 @@ function BeforeAfterItemTable({
           </tbody>
           <tfoot>
             <tr className="border-t bg-muted/20 text-[10px] text-muted-foreground">
-              <td className="px-3 py-1" colSpan={COLUMN_DEFS.length + 2}>
+              <td className="px-3 py-1" colSpan={dynamicKeys.length + 2}>
                 {kind === "modified"
-                  ? "Changed values shown in red. See Changes/Edit column for old → new details."
+                  ? "Changed fields are highlighted. Unchanged fields are shown for context but not highlighted."
                   : kind === "added"
                     ? "New line item"
                     : "Removed line item"}
@@ -710,6 +723,37 @@ function BeforeAfterItemTable({
           </tfoot>
         </table>
       </div>
+      {kind === "modified" && changedKeys.size > 0 && (
+        <div className="border-t bg-muted/10 px-3 py-2">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Old Value → New Value
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1 font-medium">Field</th>
+                  <th className="px-2 py-1 font-medium">Old Value</th>
+                  <th className="px-2 py-1 font-medium">New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(changedKeys).map((f) => (
+                  <tr key={f} className="border-t">
+                    <td className="px-2 py-1 font-medium">{labelOf(f)}</td>
+                    <td className="px-2 py-1 text-red-600 line-through">
+                      {fmtCell(before[f])}
+                    </td>
+                    <td className="px-2 py-1 text-emerald-700 font-semibold">
+                      {fmtCell(after[f])}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -732,15 +776,12 @@ function ChangedLineItemsHistory({
     when: string;
   };
 
-  // Merge current notification with history, dedupe by id, sort by created_at.
-  const seen = new Set<string>();
-  const all: NotifFull[] = [];
-  for (const h of [notif, ...(history || [])]) {
-    if (!h || seen.has(h.id)) continue;
-    seen.add(h.id);
-    all.push(h);
-  }
-  all.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+  // Per requirement: the notification detail must show ONLY the row(s)
+  // captured in THIS notification. Do NOT pull in sibling notifications
+  // for the same document — those are separate notifications with their
+  // own seen/ack state and their own detail dialog.
+  void history;
+  const all: NotifFull[] = [notif];
 
   const edits: ItemEdit[] = [];
   for (const h of all) {
