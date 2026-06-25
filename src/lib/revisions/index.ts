@@ -174,6 +174,10 @@ export async function reviseOrder(
 
   // Insert a new OA row carrying the same content, bumped revision.
   const base = stripOrderForInsert(source);
+  // Approval inheritance: if the source OA is already approved/finalized,
+  // the revised OA must remain Approved automatically. Otherwise the new
+  // revision starts as a draft.
+  const inheritFinalized = source.status === "finalized";
   const insertPayload = {
     ...base,
     oa_number: revisedOaNumber,
@@ -181,7 +185,7 @@ export async function reviseOrder(
     revision: nextRev,
     is_current: true,
     revised_from_id: source.id || null,
-    status: "draft" as const, // new revision starts as a draft
+    status: (inheritFinalized ? "finalized" : "draft") as "finalized" | "draft",
   };
   const { data: newOrder, error: insErr } = await supabase
     .from("orders").insert(insertPayload as never).select().single();
@@ -276,6 +280,10 @@ export async function reviseBoqFromOrder(
     "desc-model",
   );
 
+  // Approval inheritance: if the previous BOQ revision was already approved,
+  // the new revision (created as a cascade of an OA revision) should also
+  // remain Approved automatically — matching the OA approval inheritance.
+  const prevApproved = (prevBoq?.verification_status ?? "approved") === "approved";
   const payload = {
     order_id: orderRev.id,
     source_order_id: orderRev.id,
@@ -287,6 +295,11 @@ export async function reviseBoqFromOrder(
     is_current: true,
     format: orderRev.format,
     status: "draft" as const,
+    verification_status: (prevApproved ? "approved" : "pending_verification") as
+      | "approved"
+      | "pending_verification",
+    verified_at: prevApproved ? prevBoq?.verified_at ?? new Date().toISOString() : null,
+    verified_by_email: prevApproved ? prevBoq?.verified_by_email ?? null : null,
     prepared_by: orderRev.prepared_by || prevBoq?.prepared_by || null,
     boq_date: new Date().toISOString().slice(0, 10),
     reference_oa_number: orderRev.oa_number,
