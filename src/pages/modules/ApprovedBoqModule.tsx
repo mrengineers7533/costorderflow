@@ -183,6 +183,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
   const [showMake, setShowMake] = useColumnToggle(`module.${config.kind}.boq.columns.make`, false);
+  const [designApproved, setDesignApproved] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!boqId) return;
@@ -202,6 +203,15 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
       setLoading(false);
     })();
   }, [boqId]);
+
+  useEffect(() => {
+    if (!boq) { setDesignApproved(null); return; }
+    let cancelled = false;
+    fetchDesignApprovalStates([boq]).then((m) => {
+      if (!cancelled) setDesignApproved(m.get(boq.id) === "approved");
+    });
+    return () => { cancelled = true; };
+  }, [boq]);
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   if (!boq) return <div className="p-6 text-sm text-muted-foreground">BOQ not found.</div>;
@@ -223,7 +233,11 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">{config.title} · {boq.boq_number}</h1>
-            {approved && <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>}
+            {approved && (
+              designApproved
+                ? <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                : <Badge variant="secondary">Not Approved by Design</Badge>
+            )}
             <Badge variant="secondary">R{boq.revision ?? 0}</Badge>
             {boqId && (
               <NotSeenNotifBadge boqId={boqId} orderRootId={orderRootId ?? undefined} />
