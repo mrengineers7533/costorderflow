@@ -104,6 +104,33 @@ export default function DesignBoqView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Best-effort flush of pending comment drafts when the page is being
+  // closed/navigated away so Design comments are never lost.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (!id) return;
+      const pending = Object.entries(drafts).filter(
+        ([k, v]) => (savedValuesRef.current[k] ?? "") !== v,
+      );
+      if (!pending.length) return;
+      // Fire-and-forget; awaited Promise.allSettled keeps the calls in
+      // flight long enough for the browser to ship them in most cases.
+      void Promise.allSettled(
+        pending.map(([k, v]) => {
+          const [itemId, col] = k.split("::");
+          return upsertDesignComment({
+            boqId: id,
+            itemId,
+            columnKey: col === "__row__" ? null : col,
+            comment: v,
+          });
+        }),
+      );
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [drafts, id]);
+
   const items = useMemo<BoqLineItem[]>(
     () => sortByItemNo((boq?.line_items as BoqLineItem[]) || []),
     [boq],
