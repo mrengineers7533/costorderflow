@@ -89,6 +89,22 @@ Deno.serve(async (req) => {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Module gate: service-role inserts bypass RLS, so enforce the same
+    // `requisitions` module check that `can_edit_module` would apply.
+    if (!isAdmin) {
+      const { data: modAccess } = await admin
+        .from("user_module_access")
+        .select("permission")
+        .eq("user_id", userData.user.id)
+        .eq("module", "requisitions")
+        .maybeSingle();
+      const canEdit = !!modAccess && (modAccess.permission ?? "edit") === "edit";
+      if (!canEdit) {
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
     if (boq.verification_status !== "approved") {
       return new Response(JSON.stringify({ error: "BOQ is not approved" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
