@@ -146,15 +146,34 @@ describe("Revised BOQ — inherited Design approval & comment consistency", () =
     expect(map.get(BOQ_R7)).toBe("approved");
   });
 
-  it("Manufacturing/Purchase/BOQ Folder fall back to Not Approved when design status was NOT carried to R7 (regression guard)", async () => {
+  it("MR-style: R7 with NO design-status rows of its own inherits Approved from R6 via revised_from_id (no per-record backfill needed)", async () => {
     seed({ withR7DesignStatus: false });
     const map = await fetchDesignApprovalStates([
       { id: BOQ_R7, revision: 7, line_items: tables.boqs[1].line_items as never },
     ]);
-    // Even though line_items mirror is approved, missing design-status
-    // rows must read as Not Approved — this is what the user reported as
-    // the original bug and what the backfill + carry-forward fix restored.
+    expect(map.get(BOQ_R7)).toBe("approved");
+  });
+
+  it("Inherited negative state surfaces explicitly: ancestor has a rejection → revised BOQ reads Not Approved (never blank)", async () => {
+    seed({ withR7DesignStatus: false });
+    // Flip one R6 row to rejected
+    (tables.boq_item_design_status[0] as { status: string }).status = "rejected";
+    // Strip approval_status mirror on R7 so we exercise the inheritance path
+    for (const it of tables.boqs[1].line_items as Array<{ approval_status?: string }>) {
+      delete it.approval_status;
+    }
+    const map = await fetchDesignApprovalStates([
+      { id: BOQ_R7, revision: 7, line_items: tables.boqs[1].line_items as never },
+    ]);
     expect(map.get(BOQ_R7)).toBe("not_approved");
+  });
+
+  it("GMS-style parity: both line_items mirror and own design-status rows present → Approved (no regression)", async () => {
+    seed({ withR7DesignStatus: true });
+    const map = await fetchDesignApprovalStates([
+      { id: BOQ_R6, revision: 6, line_items: tables.boqs[0].line_items as never },
+    ]);
+    expect(map.get(BOQ_R6)).toBe("approved");
   });
 
   it("Design BOQ view: fetchLatestSubmittedRound inherits R6's round on R7 and remaps item ids to R7's line_items", async () => {

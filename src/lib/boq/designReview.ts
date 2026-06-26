@@ -359,10 +359,12 @@ async function findLatestRoundBoqId(boqId: string, mode: "submitted" | "approval
  *  Items are the BOQ state at the moment that comment link was generated —
  *  i.e. "Previous Data" before the creator applied any updates. */
 export async function fetchLatestCommentBaseline(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[] } | null> {
+  const sourceBoqId = await findLatestCommentBoqId(boqId);
+  if (!sourceBoqId) return null;
   const { data } = await supabase
     .from("boq_design_reviews")
     .select("*")
-    .eq("boq_id", boqId)
+    .eq("boq_id", sourceBoqId)
     .eq("kind", "comment")
     .order("round_no", { ascending: false })
     .limit(1);
@@ -392,6 +394,49 @@ export async function fetchLatestCommentBaseline(boqId: string): Promise<{ round
   }
   const items = await fetchReviewItems(round.id);
   return { round, items };
+}
+
+/** Walk the revision chain (and OA-family siblings) to find the most recent
+ *  BOQ id that has a comment-kind review round.  Mirrors `findLatestRoundBoqId`
+ *  so the PendingChanges panel works on revised BOQs. */
+async function findLatestCommentBoqId(boqId: string): Promise<string | null> {
+  const seen = new Set<string>();
+  let cursor: string | null = boqId;
+  let orderId: string | null = null;
+  const hasRound = async (id: string) => {
+    const { data } = await supabase
+      .from("boq_design_reviews").select("id")
+      .eq("boq_id", id).eq("kind", "comment").limit(1);
+    return !!(data && data.length);
+  };
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    if (await hasRound(cursor)) return cursor;
+    const { data: row } = await supabase
+      .from("boqs").select("revised_from_id,order_id").eq("id", cursor).maybeSingle();
+    const next = (row as { revised_from_id: string | null; order_id: string | null } | null);
+    if (next?.order_id && !orderId) orderId = next.order_id;
+    cursor = next?.revised_from_id || null;
+  }
+  if (orderId) {
+    const { data: oaRow } = await supabase
+      .from("orders").select("id,parent_order_id").eq("id", orderId).maybeSingle();
+    const root = (oaRow as { id: string; parent_order_id: string | null } | null)?.parent_order_id
+      || (oaRow as { id: string } | null)?.id || orderId;
+    const { data: fam } = await supabase
+      .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+    const familyIds = ((fam || []) as Array<{ id: string }>).map((r) => r.id);
+    if (familyIds.length) {
+      const { data: sibs } = await supabase
+        .from("boqs").select("id,revision").in("order_id", familyIds)
+        .order("revision", { ascending: false });
+      for (const s of ((sibs || []) as Array<{ id: string }>)) {
+        if (seen.has(s.id)) continue;
+        if (await hasRound(s.id)) return s.id;
+      }
+    }
+  }
+  return null;
 }
 
 export type DiffField = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
