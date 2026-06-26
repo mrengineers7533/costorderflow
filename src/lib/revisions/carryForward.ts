@@ -70,11 +70,18 @@ export function buildAppliedCommentInserts(
   prevComments: DesignCommentCarry[],
   oldToNewItemId: Map<string, string>,
   newBoqId: string,
+  /** Optional: extra "(boq_item_id|column_key)" keys that should be
+   *  treated as applied even when `applied_to_oa_at` is null. Lets the
+   *  caller carry forward comments the user applied in the editor when
+   *  the apply-stamp RPC didn't fire (e.g. offline / permission hiccup). */
+  extraAppliedKeys?: Set<string>,
 ): Array<Record<string, unknown>> {
   if (!prevComments.length || !oldToNewItemId.size) return [];
   const out: Array<Record<string, unknown>> = [];
   for (const r of prevComments) {
-    if (!r.applied_to_oa_at) continue;
+    const isApplied = !!r.applied_to_oa_at
+      || !!(extraAppliedKeys && extraAppliedKeys.has(`${r.boq_item_id}|${r.column_key ?? ""}`));
+    if (!isApplied) continue;
     const newItemId = oldToNewItemId.get(r.boq_item_id);
     if (!newItemId) continue;
     out.push({
@@ -86,7 +93,7 @@ export function buildAppliedCommentInserts(
       user_name: r.user_name,
       user_email: r.user_email,
       department: r.department,
-      applied_to_oa_at: r.applied_to_oa_at,
+      applied_to_oa_at: r.applied_to_oa_at ?? new Date().toISOString(),
       applied_to_oa_by: r.applied_to_oa_by,
       applied_value: r.applied_value,
       oa_revision_id: r.oa_revision_id,
