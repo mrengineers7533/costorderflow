@@ -60,7 +60,9 @@ Deno.serve(async (req) => {
     }
     const allowed = (Deno.env.get("APP_URL_ALLOWLIST") || "")
       .split(",").map((s) => s.trim()).filter(Boolean);
-    if (allowed.length > 0 && !allowed.includes(parsedUrl.origin)) {
+    // Fail closed: if the allowlist is unconfigured, reject all URLs so an
+    // authenticated caller can't smuggle arbitrary links into the verifier email.
+    if (allowed.length === 0 || !allowed.includes(parsedUrl.origin)) {
       return new Response(JSON.stringify({ error: "verification_url origin not allowed" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

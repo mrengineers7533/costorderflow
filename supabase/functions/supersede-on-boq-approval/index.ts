@@ -45,12 +45,23 @@ Deno.serve(async (req) => {
     // 1. Validate BOQ + resolve family root.
     const { data: boq } = await admin
       .from("boqs")
-      .select("id, order_id, revision, verification_status")
+      .select("id, order_id, revision, verification_status, user_id")
       .eq("id", body.boq_id)
       .maybeSingle();
     if (!boq || boq.verification_status !== "approved") {
       return new Response(JSON.stringify({ error: "BOQ not approved" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Ownership / admin check — prevent any authenticated user from probing
+    // arbitrary BOQ families (which would leak requisition numbers via errors).
+    const { data: adminRow } = await admin
+      .from("user_roles").select("role")
+      .eq("user_id", userData.user.id).eq("role", "admin").maybeSingle();
+    const isAdmin = !!adminRow;
+    if (!isAdmin && boq.user_id && boq.user_id !== userData.user.id) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const { data: order } = await admin
