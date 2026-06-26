@@ -1,64 +1,47 @@
-## Problem
+# Module-Level Access Fix
 
-In Manufacturing and Purchase folders, `26-27/GMSBOQ/0003/R0` shows a green **Approved** badge even though Design has not approved the BOQ and the linked OA is not approved. The working reference `26-27/GMSBOQ/0002/R9` is correctly approved (Design has approved all items).
+## Root cause
 
-### Root cause
+The `boqs` table currently has two SELECT policies (RLS is OR'd across policies):
 
-All three list pages (`BoqFolder`, Purchase `ApprovedBoqListPage`, Manufacturing `ApprovedBoqListPage`) and the detail page (`ApprovedBoqDetailPage`) decide the badge purely from `boqs.verification_status === 'approved'`. For BOQ `0003/R0` that flag is `'approved'`, but:
+1. `boqs_select_doc_access` — only rows the user has explicit per-document access to.
+2. `boqs_select_module_approved` — only rows where `verification_status='approved' AND design_review_status IN ('design_approved','final_sent')`, gated on Design/Manufacturing/Purchase module perm.
 
-- It has **zero** rows in `boq_item_design_status` (no Design approval applied).
-- Its line items have no `approval_status='approved'` (linked OA has not received Design approval mirror).
+`design@mrengineers.com` has **module perm = design** but no per-document grants, and the BOQs visible to admin (`MRBOQ/26-27/0007/R7`, `…/0006`) are in `draft` status. Neither policy matches, so the Design page shows zero rows. The same pattern blocks Orders (`orders_select_module_for_approved_boq` is also gated on approval).
 
-So `verification_status` alone is not a reliable signal of "Design + OA approved".
+This is exactly the "old document-level access filter" the user wants removed: module access should be sufficient to see that module's records.
 
-## Fix (display-only)
+## Fix (SQL migration only, no app/UI changes)
 
-Introduce a single shared helper and use it everywhere the green "Approved" pill is rendered. No changes to data writes, revision logic, calculations, workflows, list inclusion, navigation, or any other UI.
+Replace the approval-gated module SELECT policies with module-perm SELECT policies that don't require approval status:
 
-### New helper
+**`boqs`** — add policy so anyone with `design`, `manufacturing`, or `purchase` module view perm can SELECT all BOQs:
+- Drop `boqs_select_module_approved`.
+- Create `boqs_select_module_perm`: `USING (has_module_perm(auth.uid(),'design','view') OR has_module_perm(auth.uid(),'manufacturing','view') OR has_module_perm(auth.uid(),'purchase','view') OR has_module_perm(auth.uid(),'costing','view'))`.
+- Keep `boqs_select_doc_access` as a fallback for users without module perm but with explicit grants.
 
-`src/lib/boq/designApprovalStatus.ts`
+**`orders`** — same pattern:
+- Drop `orders_select_module_for_approved_boq`.
+- Create `orders_select_module_perm` allowing the same module perms (costing/design/manufacturing/purchase) to SELECT all orders.
 
-```ts
-export type DesignApprovalState = "approved" | "not_approved";
+**`requisitions`** and **`purchase_orders`** — add equivalent module-perm SELECT policies:
+- `requisitions_select_module_perm`: requires `requisitions` or `annexures` module perm.
+- `po_select_module_perm`: requires `purchase` module perm.
 
-export async function fetchDesignApprovalStates(
-  boqs: Pick<BoqRecord, "id" | "revision" | "line_items">[]
-): Promise<Map<string, DesignApprovalState>>
-```
+Edit/Insert/Delete policies (`module_edit_gate_*`, `*_update_doc_access`, etc.) stay unchanged — write access still flows through existing module-edit and per-doc rules. Only SELECT visibility broadens to match module assignment.
 
-Logic per BOQ — returns `"approved"` only when **both** are true:
+## Behavior after fix
 
-1. **Design BOQ approved:** `boq_item_design_status` has at least one row with `status='approved'` for this `boq_id` at the current revision, AND no row exists with `status='rejected'` or `status='pending'` for items in the current snapshot.
-2. **Linked OA approved:** every item in `line_items` has `approval_status === 'approved'` (this is the mirror that OrderEditor already uses to render "Approved by Design" on the OA — same source of truth, so the two views can never disagree).
-
-Otherwise returns `"not_approved"`.
-
-### Call sites to update (badge text only)
-
-- `src/pages/purchase/BoqFolder.tsx` — list badge (currently always `tab` label colored green): show `Approved` / `Not Approved by Design` based on helper.
-- `src/pages/modules/ApprovedBoqModule.tsx`:
-  - `ApprovedBoqListPage` card badge.
-  - `ApprovedBoqDetailPage` header badge (`approved && <Badge…>Approved</Badge>`).
-- These two pages drive both `/purchase` and `/manufacturing` via `PURCHASE_CONFIG` / `MANUFACTURING_CONFIG`, so one change covers both modules.
-
-Badge variants:
-- `approved` → existing green `Badge className="bg-emerald-600 hover:bg-emerald-600"`Approved.
-- `not_approved` → `Badge variant="secondary"` with text **Not Approved by Design** (amber/neutral; no green).
-
-### Behavior on the affected records
-
-- `26-27/GMSBOQ/0003/R0` → no `boq_item_design_status` rows → badge becomes **Not Approved by Design**.
-- `26-27/GMSBOQ/0002/R9` → 4 approved Design rows for 4 items, all line items mirror `approved` → badge stays **Approved** (matches today).
-
-### Explicitly NOT changing
-
-- List inclusion rule (`pickLatestApprovedPerFamily`) — same records continue to appear.
-- `verification_status`, revision/carry-forward logic, BOQ/OA numbering, totals, PDFs, routing, edit permissions.
-- OrderEditor, BoqEditor, DesignBoqView, requisition/PO flows — untouched.
+- Sidebar visibility (already module-perm via `useUserAccess`) is unchanged.
+- A user assigned only `design` sees all BOQs in `/design` and the linked OAs in any deep-link, can comment/approve per existing Design rules.
+- A user assigned only `manufacturing` sees BOQs in Manufacturing module; same for Purchase.
+- Users with no module perm and only per-document grants continue to see only those documents.
+- No change to calculations, numbering, workflow, notifications, UI, or any approval/edit logic.
 
 ## Verification
 
-1. Open `/purchase/approved` and `/manufacturing` GMS tab: `0003` shows **Not Approved by Design**, `0002/R9` shows **Approved**.
-2. Open detail page for `0003`: header badge shows **Not Approved by Design**; "Create Requisition" button remains as-is (separate `verification_status` gate, unchanged).
-3. DB sanity: `select boq_id, count(*) from boq_item_design_status where boq_id in (...) group by 1;` matches expectation.
+After migration:
+1. Re-query `pg_policies` to confirm new policies exist.
+2. Log in as `design@mrengineers.com` → `/design` shows both MR BOQs.
+3. Log in as admin → list unchanged.
+4. Run existing test suite (revision/notifications tests) to ensure no regressions.
