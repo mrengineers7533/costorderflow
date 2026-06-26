@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BoqLineItem } from "@/lib/boq/types";
+import {
+  fetchRevisionApprovalSnapshots,
+  mapSnapshotItems,
+} from "@/lib/boq/approvalSnapshots";
 
 export type ItemApprovalVerdict = "approved" | "not_approved";
 
@@ -30,9 +34,22 @@ export async function fetchItemApprovalVerdicts(
   const verdicts = new Map<string, ItemApprovalVerdict>();
   if (!items.length) return verdicts;
 
+  // Primary source: revision-wise approval snapshot for this (boq, revision).
+  const snapMap = await fetchRevisionApprovalSnapshots([boqId]);
+  const snapItems = mapSnapshotItems(snapMap.get(boqId), revision);
+  if (snapItems.size) {
+    for (const it of items) {
+      if (!it.id) continue;
+      const v = snapItems.get(it.id);
+      if (v) verdicts.set(it.id, v);
+    }
+    if (verdicts.size === items.filter((i) => i.id).length) return verdicts;
+  }
+
   // 1) line_items mirror
   for (const it of items) {
     if (!it.id) continue;
+    if (verdicts.has(it.id)) continue;
     const s = (it as unknown as { approval_status?: string }).approval_status;
     verdicts.set(it.id, s === "approved" ? "approved" : "not_approved");
   }
