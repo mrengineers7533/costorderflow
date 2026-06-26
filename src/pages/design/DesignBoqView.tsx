@@ -387,6 +387,28 @@ export default function DesignBoqView() {
     if (!id) return;
     setApproving(true);
     try {
+      // Flush any pending debounced comment saves first so an in-flight
+      // comment isn't lost when we flip the BOQ to approved.
+      const pendingKeys = Object.keys(debounceRef.current);
+      for (const k of pendingKeys) {
+        const t = debounceRef.current[k];
+        if (t) clearTimeout(t);
+        delete debounceRef.current[k];
+      }
+      const flushTasks: Promise<unknown>[] = [];
+      for (const [k, v] of Object.entries(drafts)) {
+        if ((savedValuesRef.current[k] ?? "") === v) continue;
+        const [itemId, col] = k.split("::");
+        flushTasks.push(
+          upsertDesignComment({
+            boqId: id,
+            itemId,
+            columnKey: col === "__row__" ? null : col,
+            comment: v,
+          }).then(() => { savedValuesRef.current[k] = v; }),
+        );
+      }
+      if (flushTasks.length) await Promise.all(flushTasks);
       // Ensure every line item is marked approved for this revision before finalizing.
       if (boq) {
         const revision = boq.revision ?? 0;
