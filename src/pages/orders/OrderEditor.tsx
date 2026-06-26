@@ -780,6 +780,12 @@ export default function OrderEditor() {
     if (!orderId) return;
     setSaving(true);
     try {
+      // Persist any in-editor changes (e.g. just-applied Design comments)
+      // before creating the new revision so R(n+1) is built from the
+      // latest applied content — never from a stale loaded copy.
+      if (!isNew && isCurrent) {
+        try { await save(false); } catch (e) { console.warn("Pre-revise save failed", e); }
+      }
       const { order: newOrder, boq: newBoq } = await reviseOrder(snapshotOrder(), { autoReviseBoq: true });
       toast({
         title: `OA Rev ${newOrder.revision} created`,
