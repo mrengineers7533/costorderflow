@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BoqRecord, BoqLineItem } from "@/lib/boq/types";
+import {
+  fetchRevisionApprovalSnapshots,
+  evaluateSnapshotApproval,
+} from "@/lib/boq/approvalSnapshots";
 
 export type DesignApprovalState = "approved" | "not_approved";
 
@@ -37,12 +41,25 @@ export async function fetchDesignApprovalStates(
   if (!boqs.length) return out;
 
   const ids = boqs.map((b) => b.id);
+
+  // Primary source: revision-wise approval snapshots (frozen per revision).
+  // When a snapshot exists for a (boq, revision), it is the verdict — even if
+  // newer revisions exist or live tables have since changed.
+  const snapshots = await fetchRevisionApprovalSnapshots(ids);
+  const stillUnresolved: BoqInput[] = [];
+  for (const b of boqs) {
+    const verdict = evaluateSnapshotApproval(snapshots.get(b.id), b.revision ?? 0);
+    if (verdict) out.set(b.id, verdict);
+    else stillUnresolved.push(b);
+  }
+  if (!stillUnresolved.length) return out;
+
   let statuses: Array<{ boq_id: string; boq_item_id: string; status: string; boq_revision: number | null }> = [];
   try {
     const { data } = await supabase
       .from("boq_item_design_status")
       .select("boq_id,boq_item_id,status,boq_revision")
-      .in("boq_id", ids);
+      .in("boq_id", stillUnresolved.map((b) => b.id));
     statuses = ((data || []) as unknown) as typeof statuses;
   } catch {
     statuses = [];
@@ -55,7 +72,7 @@ export async function fetchDesignApprovalStates(
     byBoq.set(r.boq_id, arr);
   }
 
-  for (const b of boqs) {
+  for (const b of stillUnresolved) {
     const items = (Array.isArray(b.line_items) ? b.line_items : []) as BoqLineItem[];
     const itemIds = new Set(items.map((it) => it.id).filter(Boolean));
     const rev = b.revision ?? 0;
