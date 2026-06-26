@@ -813,6 +813,137 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_revision_approval_snapshots: {
+        Row: {
+          applied_to_oa_at: string | null
+          applied_to_oa_by: string | null
+          approval_comment: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_department: string | null
+          approved_by_name: string | null
+          boq_id: string
+          boq_item_id: string
+          boq_revision: number
+          created_at: string
+          description: string | null
+          design_comments: Json
+          id: string
+          item_no: string | null
+          item_signature: string | null
+          model_number: string | null
+          oa_revision_id: string | null
+          order_id: string | null
+          order_revision: number
+          source_boq_id: string | null
+          source_snapshot_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_to_oa_at?: string | null
+          applied_to_oa_by?: string | null
+          approval_comment?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_department?: string | null
+          approved_by_name?: string | null
+          boq_id: string
+          boq_item_id: string
+          boq_revision?: number
+          created_at?: string
+          description?: string | null
+          design_comments?: Json
+          id?: string
+          item_no?: string | null
+          item_signature?: string | null
+          model_number?: string | null
+          oa_revision_id?: string | null
+          order_id?: string | null
+          order_revision?: number
+          source_boq_id?: string | null
+          source_snapshot_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_to_oa_at?: string | null
+          applied_to_oa_by?: string | null
+          approval_comment?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_department?: string | null
+          approved_by_name?: string | null
+          boq_id?: string
+          boq_item_id?: string
+          boq_revision?: number
+          created_at?: string
+          description?: string | null
+          design_comments?: Json
+          id?: string
+          item_no?: string | null
+          item_signature?: string | null
+          model_number?: string | null
+          oa_revision_id?: string | null
+          order_id?: string | null
+          order_revision?: number
+          source_boq_id?: string | null
+          source_snapshot_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_boq_id_fkey"
+            columns: ["boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_oa_revision_id_fkey"
+            columns: ["oa_revision_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_source_boq_id_fkey"
+            columns: ["source_boq_id"]
+            isOneToOne: false
+            referencedRelation: "boqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_source_boq_id_fkey"
+            columns: ["source_boq_id"]
+            isOneToOne: false
+            referencedRelation: "v_entity_pending_state"
+            referencedColumns: ["latest_boq_id"]
+          },
+          {
+            foreignKeyName: "boq_revision_approval_snapshots_source_snapshot_id_fkey"
+            columns: ["source_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "boq_revision_approval_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       boq_revisions: {
         Row: {
           boq_id: string
@@ -3199,6 +3330,14 @@ export type Database = {
         Returns: boolean
       }
       peek_next_po_number: { Args: { _fy: string }; Returns: string }
+      refresh_boq_revision_approval_snapshot: {
+        Args: { _boq_id: string }
+        Returns: number
+      }
+      refresh_boq_revision_approval_snapshot_internal: {
+        Args: { _boq_id: string }
+        Returns: number
+      }
       set_notif_suppress: { Args: { p_on: boolean }; Returns: undefined }
       sign_boq_item_doc_by_token: {
         Args: { _path: string; _token: string }
