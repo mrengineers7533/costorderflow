@@ -104,6 +104,33 @@ export default function DesignBoqView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Best-effort flush of pending comment drafts when the page is being
+  // closed/navigated away so Design comments are never lost.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (!id) return;
+      const pending = Object.entries(drafts).filter(
+        ([k, v]) => (savedValuesRef.current[k] ?? "") !== v,
+      );
+      if (!pending.length) return;
+      // Fire-and-forget; awaited Promise.allSettled keeps the calls in
+      // flight long enough for the browser to ship them in most cases.
+      void Promise.allSettled(
+        pending.map(([k, v]) => {
+          const [itemId, col] = k.split("::");
+          return upsertDesignComment({
+            boqId: id,
+            itemId,
+            columnKey: col === "__row__" ? null : col,
+            comment: v,
+          });
+        }),
+      );
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [drafts, id]);
+
   const items = useMemo<BoqLineItem[]>(
     () => sortByItemNo((boq?.line_items as BoqLineItem[]) || []),
     [boq],
@@ -141,6 +168,9 @@ export default function DesignBoqView() {
     const existing = debounceRef.current[k];
     if (existing) { clearTimeout(existing); delete debounceRef.current[k]; }
     setSavingKey((p) => ({ ...p, [k]: true }));
+    let savedOk = false;
+    let previous = "";
+    let changed = false;
     try {
       await upsertDesignComment({
         boqId: id,
@@ -148,13 +178,26 @@ export default function DesignBoqView() {
         columnKey: col === "row" ? null : col,
         comment: value,
       });
+      savedOk = true;
       setSavedAt((p) => ({ ...p, [k]: Date.now() }));
-      const previous = savedValuesRef.current[k] ?? "";
-      const changed = previous !== value;
+      previous = savedValuesRef.current[k] ?? "";
+      changed = previous !== value;
       savedValuesRef.current[k] = value;
-      // Auto-clear per-item approval when its comment is added/edited.
+    } catch (e) {
+      toast({
+        title: "Could not auto-save comment",
+        description: e instanceof Error ? e.message : "Permission denied.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingKey((p) => ({ ...p, [k]: false }));
+    }
+    if (!savedOk) return;
+    // Side-effects below run independently so a failure in any of them
+    // cannot mask a successful comment save (the user sees a separate
+    // toast for whichever step failed).
+    try {
       if (changed && boq && approvals[itemId]?.status === "approved") {
-        try {
           await setItemApproval(boq.id, itemId, boq.revision ?? 0, "pending");
           await syncApprovalToBoqSnapshot(boq.id, [itemId], "pending");
           setApprovals((p) => ({
@@ -166,17 +209,17 @@ export default function DesignBoqView() {
               decided_at: null,
             },
           }));
-        } catch (e) {
-          toast({
-            title: "Could not clear item approval",
-            description: e instanceof Error ? e.message : "Try again.",
-            variant: "destructive",
-          });
-        }
       }
+    } catch (e) {
+      toast({
+        title: "Could not clear item approval",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    }
+    try {
       if (changed && designApproved && !autoUnapprovingRef.current) {
         autoUnapprovingRef.current = true;
-        try {
           const { error } = await supabase
             .from("boqs")
             .update({
@@ -191,24 +234,15 @@ export default function DesignBoqView() {
             description: "Comment added. Review and Approve again when ready.",
           });
           await refresh();
-        } catch (e) {
-          toast({
-            title: "Could not auto-unapprove BOQ",
-            description: e instanceof Error ? e.message : "Try again.",
-            variant: "destructive",
-          });
-        } finally {
-          autoUnapprovingRef.current = false;
-        }
       }
     } catch (e) {
       toast({
-        title: "Could not auto-save comment",
-        description: e instanceof Error ? e.message : "Permission denied.",
+        title: "Could not auto-unapprove BOQ",
+        description: e instanceof Error ? e.message : "Try again.",
         variant: "destructive",
       });
     } finally {
-      setSavingKey((p) => ({ ...p, [k]: false }));
+      autoUnapprovingRef.current = false;
     }
   }
 
@@ -387,6 +421,28 @@ export default function DesignBoqView() {
     if (!id) return;
     setApproving(true);
     try {
+      // Flush any pending debounced comment saves first so an in-flight
+      // comment isn't lost when we flip the BOQ to approved.
+      const pendingKeys = Object.keys(debounceRef.current);
+      for (const k of pendingKeys) {
+        const t = debounceRef.current[k];
+        if (t) clearTimeout(t);
+        delete debounceRef.current[k];
+      }
+      const flushTasks: Promise<unknown>[] = [];
+      for (const [k, v] of Object.entries(drafts)) {
+        if ((savedValuesRef.current[k] ?? "") === v) continue;
+        const [itemId, col] = k.split("::");
+        flushTasks.push(
+          upsertDesignComment({
+            boqId: id,
+            itemId,
+            columnKey: col === "__row__" ? null : col,
+            comment: v,
+          }).then(() => { savedValuesRef.current[k] = v; }),
+        );
+      }
+      if (flushTasks.length) await Promise.all(flushTasks);
       // Ensure every line item is marked approved for this revision before finalizing.
       if (boq) {
         const revision = boq.revision ?? 0;

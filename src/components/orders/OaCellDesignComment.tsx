@@ -17,15 +17,24 @@ export function OaCellDesignComment({
   comment,
   onApply,
   canApply = true,
+  approval,
 }: {
   comment: DesignCellComment | null | undefined;
   onApply: (value: string) => void;
   canApply?: boolean;
+  approval?: {
+    status: "approved" | "pending" | "not_approved";
+    by?: string | null;
+    department?: string | null;
+    at?: string | null;
+  } | null;
 }) {
-  if (!comment) return null;
-  const applied = !!comment.applied_to_oa_at;
+  if (!comment && (!approval || approval.status !== "approved")) return null;
+  const applied = !!comment?.applied_to_oa_at;
   return (
     <div className="mt-1 border-l-2 border-primary/40 pl-2 text-[11px] leading-snug">
+      {comment && (
+      <>
       <div className="flex items-start gap-1">
         <MessageSquare className="h-3 w-3 mt-[2px] text-primary shrink-0" />
         <TooltipProvider>
@@ -61,6 +70,17 @@ export function OaCellDesignComment({
           </button>
         </div>
       ) : null}
+      </>
+      )}
+      {approval && approval.status === "approved" && (
+        <div className="text-emerald-700 flex items-center gap-1 mt-0.5">
+          <CheckCircle2 className="h-3 w-3" />
+          Design Approved
+          {approval.by ? ` by ${approval.by}` : ""}
+          {approval.department ? ` (${approval.department})` : ""}
+          {approval.at ? ` · ${new Date(approval.at).toLocaleDateString()}` : ""}
+        </div>
+      )}
     </div>
   );
 }

@@ -411,20 +411,48 @@ export default function OrderEditor() {
 
   // ---- Cell-wise Design comments (inline under each OA input) ----
   const [designCellComments, setDesignCellComments] = useState<DesignCellComment[]>([]);
+  // ---- Per-item Design approval status (shown alongside the comment) ----
+  const [designItemApprovals, setDesignItemApprovals] = useState<
+    Record<string, { status: "approved" | "pending" | "not_approved"; by?: string | null; department?: string | null; at?: string | null }>
+  >({});
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!currentBoq?.id) { setDesignCellComments([]); return; }
+      if (!currentBoq?.id) { setDesignCellComments([]); setDesignItemApprovals({}); return; }
       const { data } = await supabase
         .from("boq_design_comments" as never)
         .select("id,boq_id,boq_item_id,column_key,comment,user_name,department,created_at,applied_to_oa_at")
         .eq("boq_id", currentBoq.id)
         .order("created_at", { ascending: false });
       if (!cancelled) setDesignCellComments(((data || []) as unknown) as DesignCellComment[]);
+      try {
+        const { data: appr } = await supabase
+          .from("boq_item_design_status" as never)
+          .select("boq_item_id,status,decided_by_name,decided_by_department,decided_at,revision")
+          .eq("boq_id", currentBoq.id)
+          .eq("revision", currentBoq.revision ?? 0);
+        if (!cancelled) {
+          const map: typeof designItemApprovals = {};
+          for (const r of (appr || []) as Array<{
+            boq_item_id: string; status: string;
+            decided_by_name: string | null; decided_by_department: string | null; decided_at: string | null;
+          }>) {
+            map[r.boq_item_id] = {
+              status: (r.status as "approved" | "pending" | "not_approved") || "pending",
+              by: r.decided_by_name,
+              department: r.decided_by_department,
+              at: r.decided_at,
+            };
+          }
+          setDesignItemApprovals(map);
+        }
+      } catch {
+        if (!cancelled) setDesignItemApprovals({});
+      }
     }
     load();
     return () => { cancelled = true; };
-  }, [currentBoq?.id]);
+  }, [currentBoq?.id, currentBoq?.revision]);
 
   /** boq_item_id → column_key → latest comment */
   const designCommentByItemCol = useMemo(() => {
@@ -493,6 +521,12 @@ export default function OrderEditor() {
     const boqItemId = oaToBoqItemId.get(oaItemId);
     if (!boqItemId) return undefined;
     return designCommentByItemCol.get(boqItemId)?.get(columnKey);
+  }
+
+  function itemApproval(oaItemId: string) {
+    const boqItemId = oaToBoqItemId.get(oaItemId);
+    if (!boqItemId) return null;
+    return designItemApprovals[boqItemId] || null;
   }
 
   async function applyCellComment(
@@ -780,6 +814,12 @@ export default function OrderEditor() {
     if (!orderId) return;
     setSaving(true);
     try {
+      // Persist any in-editor changes (e.g. just-applied Design comments)
+      // before creating the new revision so R(n+1) is built from the
+      // latest applied content — never from a stale loaded copy.
+      if (!isNew && isCurrent) {
+        try { await save(false); } catch (e) { console.warn("Pre-revise save failed", e); }
+      }
       const { order: newOrder, boq: newBoq } = await reviseOrder(snapshotOrder(), { autoReviseBoq: true });
       toast({
         title: `OA Rev ${newOrder.revision} created`,
@@ -1211,7 +1251,7 @@ export default function OrderEditor() {
                 <div className="grid gap-2 items-start" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
                   <div className="col-span-4">
                     <Input className={cellComment(it.id, "description") ? "border-red-500 ring-1 ring-red-500/40 font-bold text-red-600" : ""} value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
-                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
+                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} approval={itemApproval(it.id)} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
                     {!showItemExtras && (
                       <>
                         {(["model_number","motor","motor_quantity","remarks"] as const).map((ck) => {

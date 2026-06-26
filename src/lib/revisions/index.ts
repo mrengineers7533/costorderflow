@@ -195,7 +195,15 @@ export async function reviseOrder(
     const familyIds = Array.from(new Set(allFamilyRows.map((r) => (r as { id: string }).id).concat(source.id)));
     const { data: existingBoqs } = await supabase
       .from("boqs").select("*").in("order_id", familyIds);
-    const currentBoq = (existingBoqs as unknown as BoqRecord[] | null)?.find((b) => b.is_current);
+    const allBoqs = (existingBoqs as unknown as BoqRecord[] | null) || [];
+    // Prefer the BOQ tied to the OA row the user actually revised from
+    // (highest revision wins). This is the BOQ the user was commenting on,
+    // so it owns the freshest applied Design comments. Fall back to the
+    // family's is_current BOQ to preserve existing behavior.
+    const boqsForSource = allBoqs
+      .filter((b) => b.order_id === source.id)
+      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0));
+    const currentBoq = boqsForSource[0] || allBoqs.find((b) => b.is_current) || null;
     if (currentBoq) {
       // Cascade: suppress so the auto-revised BOQ doesn't emit its own
       // "BOQ created" notification on top of the OA revision notification.
