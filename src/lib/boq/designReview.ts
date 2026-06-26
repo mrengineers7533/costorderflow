@@ -281,7 +281,7 @@ async function fetchInheritedRound(
   // Remap item ids onto the current BOQ's line_items so UI keys match.
   const { data: cur } = await supabase
     .from("boqs").select("line_items").eq("id", boqId).maybeSingle();
-  const curItems = ((cur as { line_items?: BoqLineItem[] } | null)?.line_items || []) as BoqLineItem[];
+  const curItems = (((cur as unknown as { line_items?: BoqLineItem[] } | null)?.line_items) || []) as BoqLineItem[];
   const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
   const byDescModel = new Map<string, string>();
   const byDesc = new Map<string, string>();
