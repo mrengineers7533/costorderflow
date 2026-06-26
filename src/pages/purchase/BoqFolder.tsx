@@ -10,6 +10,7 @@ import { Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
@@ -37,6 +38,7 @@ export default function BoqFolder({ basePath = "/purchase" }: { basePath?: strin
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
+  const [approvalMap, setApprovalMap] = useState<Map<string, DesignApprovalState>>(new Map());
 
   useEffect(() => {
     (async () => {
@@ -51,6 +53,12 @@ export default function BoqFolder({ basePath = "/purchase" }: { basePath?: strin
   }, []);
 
   const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  useEffect(() => {
+    if (!rows.length) { setApprovalMap(new Map()); return; }
+    let cancelled = false;
+    fetchDesignApprovalStates(rows).then((m) => { if (!cancelled) setApprovalMap(m); });
+    return () => { cancelled = true; };
+  }, [rows]);
   const orderFormatById = useMemo(() => {
     const m = new Map<string, "MR" | "GMS">();
     for (const o of orders) m.set(o.id, o.format);
@@ -124,7 +132,11 @@ export default function BoqFolder({ basePath = "/purchase" }: { basePath?: strin
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-sm">{b.boq_number}</span>
                           <Badge variant="secondary">R{b.revision ?? 0}</Badge>
-                          <Badge className="bg-emerald-600 hover:bg-emerald-600">{tab}</Badge>
+                          {approvalMap.get(b.id) === "approved" ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                          ) : (
+                            <Badge variant="secondary">Not Approved by Design</Badge>
+                          )}
                           <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                         </div>
                         <div className="text-xs text-muted-foreground mt-1 truncate">
