@@ -52,6 +52,7 @@ export default function DesignBoqView() {
   const [savingKey, setSavingKey] = useState<Record<string, boolean>>({});
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [approving, setApproving] = useState(false);
   const [unapproving, setUnapproving] = useState(false);
   const [approvals, setApprovals] = useState<Record<string, ItemApproval>>({});
@@ -417,6 +418,52 @@ export default function DesignBoqView() {
     }
   }
 
+  async function handleSaveAll() {
+    if (!id) return;
+    // Flush any pending debounced saves first.
+    for (const k of Object.keys(debounceRef.current)) {
+      const t = debounceRef.current[k];
+      if (t) clearTimeout(t);
+      delete debounceRef.current[k];
+    }
+    setSavingAll(true);
+    try {
+      const tasks: Promise<unknown>[] = [];
+      const now = Date.now();
+      const touched: string[] = [];
+      for (const [k, v] of Object.entries(drafts)) {
+        if ((savedValuesRef.current[k] ?? "") === v) continue;
+        const [itemId, col] = k.split("::");
+        touched.push(k);
+        tasks.push(
+          upsertDesignComment({
+            boqId: id,
+            itemId,
+            columnKey: col === "__row__" ? null : col,
+            comment: v,
+          }).then(() => { savedValuesRef.current[k] = v; }),
+        );
+      }
+      await Promise.all(tasks);
+      if (touched.length) {
+        setSavedAt((p) => {
+          const out = { ...p };
+          for (const k of touched) out[k] = now;
+          return out;
+        });
+      }
+      toast({ title: "Comments saved", description: `${touched.length} update${touched.length === 1 ? "" : "s"} saved.` });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
   async function handleApprove() {
     if (!id) return;
     setApproving(true);
@@ -713,6 +760,13 @@ export default function DesignBoqView() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSaveAll}
+              disabled={savingAll || submitting}
+            >
+              {savingAll ? "Saving…" : "Save"}
+            </Button>
             <Button
               onClick={handlePostSubmit}
               disabled={submitting || disabledSubmit(myDraftCount, alreadySubmitted, designApproved)}
