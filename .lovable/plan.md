@@ -1,69 +1,126 @@
 ## Goal
 
-Make Design-approval / OA-approval / BOQ-approval visibility behave identically for **MR** and **GMS** OA/BOQ documents across every consumer view, with clear **revision-wise** status (never blank). No changes to revision, generation, calc, numbering, validation, or workflow logic — display + carry-forward only.
+Permanently fix the recurring OA/BOQ approval-status issue with **revision-wise approval snapshots** saved at the data level, so old OA/BOQ history never flips to Pending because of a later/current revision.
 
-## What's wrong today
+## Already completed in this turn
 
-1. `fetchDesignApprovalStates` (the single source of truth for the "Approved" badge in Manufacturing / Purchase / BOQ Folder / Approved-BOQ detail) is **format-agnostic in code but data-dependent in practice**: GMS revisions consistently have both `line_items[].approval_status='approved'` AND `boq_item_design_status` rows; MR revisions (especially older or revised ones like `MROA/2026-27/0007/R7`) often have one but not the other, so they fall back to "Not Approved" even when Design has approved. Earlier MR cases were fixed with one-off backfills — there is no general rule.
-2. The OA page's per-item "Approved by Design" column reads from a different mirror than the folder badges, so the same item can read "Approved" on the OA and "Not Approved" on the linked Manufacturing card.
-3. `fetchLatestSubmittedRound` / `fetchLatestApprovalRound` already fall back through `revised_from_id` for the Design BOQ panel, but the **folder/list views do not** apply the same inheritance — a revised BOQ with no own design-status rows reads as blank/not-approved even when its parent revision was fully approved.
-4. When approval is genuinely missing, several views render blank instead of an explicit "Not Approved by Design" label. The user wants the negative state always visible per revision.
+Two Supabase migrations were applied successfully:
 
-## Plan
+1. Created `public.boq_revision_approval_snapshots`.
+   - Stores one fixed row per BOQ revision item.
+   - Captures the exact BOQ/OA revision, BOQ item id, item signature, Design comments, approval status, approved by/name/department, approved date/time, and OA-apply audit fields.
+   - Backfilled existing BOQ revisions from current saved BOQ line items, `boq_item_design_status`, `boq_design_comments`, and BOQ design/verification status.
+2. Added database functions/triggers to keep snapshots fresh.
+   - Refreshes snapshots after Design item approval rows change.
+   - Refreshes snapshots after Design comments are added/applied/updated.
+   - Refreshes snapshots after BOQ line items or BOQ design/verification status changes.
+   - Added a callable RPC `refresh_boq_revision_approval_snapshot(_boq_id uuid)` for immediate app-side healing.
+3. Tightened execute grants for the new security-definer refresh functions.
+   - Internal functions are not directly executable by anonymous/authenticated users.
+   - The app-facing RPC requires authentication and performs ownership/module checks.
 
-### 1. Make `fetchDesignApprovalStates` format-agnostic and inheritance-aware (`src/lib/boq/designApprovalStatus.ts`)
+Security linter warnings shown after migration are pre-existing/project-wide warnings, not specific unhandled findings for this task.
 
-For each BOQ id, compute the state from **whichever signal is present**, in this priority:
+## Remaining build-mode implementation
 
-1. If `boq_item_design_status` has rows for this boq+revision → use them (current rule).
-2. Else walk `revised_from_id` chain (and sibling BOQs in the same OA family, same as `findLatestRoundBoqId`) to find the nearest ancestor with design-status rows; remap by description+model to current `line_items`; treat as **inherited approval**.
-3. Independently, require the OA-mirror condition: every `line_items[].approval_status === 'approved'`. If `line_items` has no `approval_status` field at all on any row but the inherited design rows are fully approved → treat as approved (mirrors the resilient carry-forward already in `src/lib/revisions/index.ts`).
-4. Otherwise → `not_approved`.
+The app is currently in plan mode, so code files could not be edited. Switch to build mode to apply the following focused code changes.
 
-Return value stays the same `Map<boqId, "approved" | "not_approved">` so no caller changes.
+### 1. Add snapshot read helper
 
-This is the one rule that fixes GMS and MR identically.
+Create `src/lib/boq/approvalSnapshots.ts` with helpers:
 
-### 2. Always render an explicit badge — never blank
+- `fetchRevisionApprovalSnapshots(boqs)`
+  - Reads `boq_revision_approval_snapshots` by `boq_id` and filters by that BOQ’s own `revision`.
+  - Returns `Map<boqId, snapshotRows[]>`.
+- `evaluateSnapshotApproval(items, rows)`
+  - Returns `approved` only if every current item has a snapshot row with `approval_status='approved'`.
+  - Otherwise returns `not_approved`; returns `null` only when no snapshot exists so existing fallback can still heal old/incomplete data.
+- `mapSnapshotItems(items, rows)`
+  - Returns item-wise approval from the fixed snapshot by item id or description/model signature.
+- `refreshRevisionApprovalSnapshot(boqId)`
+  - Calls RPC `refresh_boq_revision_approval_snapshot` best-effort.
 
-Update the three consumers to render `"Approved"` (emerald) OR `"Not Approved by Design"` (neutral) and never an empty cell:
+### 2. Make all status consumers read the snapshot first
 
-- `src/pages/purchase/BoqFolder.tsx` — folder list rows.
-- `src/pages/modules/ApprovedBoqModule.tsx` — Manufacturing & Purchase list cards + detail header.
-- `src/pages/boqs/BoqList.tsx` — top-level BOQ list (currently doesn't show the gated badge consistently).
+Update:
 
-Each row already carries its revision number; the badge sits next to it so **every revision shows its own status** and history stays visible.
+- `src/lib/boq/designApprovalStatus.ts`
+  - Before fallback/inheritance logic, read snapshots for the exact BOQ revision.
+  - If snapshot rows exist, return their verdict.
+  - Keep existing fallback only for records not yet snapshot-backed or if permissions fail.
+- `src/lib/boq/itemApprovalSync.ts`
+  - Read snapshot rows first for item-wise Manufacturing/Purchase detail badges.
+  - Fall back to existing line-items/status/inheritance logic only if no snapshot exists.
+- `src/pages/orders/OrderEditor.tsx`
+  - For the “Approved by Design” column, read the exact linked BOQ revision snapshot/item map first.
+  - If snapshot is missing, keep existing `line_items[].approval_status` mirror fallback.
+  - Fix the current query typo: it selects `revision` from `boq_item_design_status`, but the column is `boq_revision`.
+- `src/components/orders/OaRevisionHistory.tsx`
+  - Load BOQs for every OA revision and call the same snapshot-backed status helper.
+  - Add explicit badge per revision: `Approved` or `Not Approved by Design`, while keeping Current/Superseded/Viewing badges.
+- `src/components/boqs/BoqRevisionHistory.tsx`
+  - Add explicit per-revision Design approval badge using snapshot-backed `fetchDesignApprovalStates`.
 
-### 3. Unify the OA-page "Approved by Design" column with the folder rule
+### 3. Refresh snapshot immediately at write points
 
-In `src/pages/orders/OrderEditor.tsx`, the per-item "Approved by Design" cell currently reads only the linked BOQ's `line_items[].approval_status` + `boq_item_design_status`. Add the same inheritance fallback (call a shared helper exported from `designApprovalStatus.ts`) so a revised OA whose BOQ inherits approval from a prior revision shows the column as Approved — matching what the folder badge now shows. No change to how the column is displayed, only to how the source value is computed.
+Update write paths without changing workflow/calculation/revision logic:
 
-### 4. Surface inherited Design comments on revised BOQs in every comment consumer
+- `src/lib/design/itemApprovals.ts`
+  - After `setItemApproval`, `bulkSetItemApprovals`, and `syncApprovalToBoqSnapshot`, call `refreshRevisionApprovalSnapshot(boqId)` best-effort.
+- `src/lib/design/comments.ts`
+  - After `upsertDesignComment`, `submitDesignComments`, and `approveRevisedBoq`, call `refreshRevisionApprovalSnapshot(boqId)` best-effort.
+- `src/pages/orders/OrderEditor.tsx`
+  - After `apply_design_comment_to_oa` succeeds, call `refreshRevisionApprovalSnapshot(currentBoq.id)`.
+- `src/lib/revisions/index.ts`
+  - After a revised BOQ is created and approvals/comments are carried forward, call the RPC for the new BOQ and previous BOQ.
+  - Do not change revision numbering, BOQ generation, cost sheet parsing, formulas, validations, notifications, or workflow.
 
-`fetchLatestSubmittedRound` / `fetchLatestApprovalRound` already inherit. Audit the remaining comment readers and route them through the same helpers:
+### 4. Ensure revised BOQs persist snapshots, not just inherited display
 
-- `src/components/boqs/DesignCommentsInline.tsx` — already uses `fetchLatestSubmittedRound`. ✅
-- `src/components/orders/OaCellDesignComment.tsx` — verify it uses the inheriting fetcher; if it queries `boq_design_review_items` directly, switch it to the helper.
-- `src/components/boqs/PendingChangesPanel.tsx` — `fetchLatestCommentBaseline` needs the same `revised_from_id` walk so the "Previous → Updated" panel works on revised BOQs too.
+In `src/lib/revisions/index.ts`, keep the existing carry-forward logic but ensure:
 
-### 5. Tests
+- Carried statuses are inserted into `boq_item_design_status` for the new BOQ revision.
+- Carried status is mirrored into `boqs.line_items[].approval_status`.
+- Snapshot refresh runs after both comment and status carry-forward.
 
-Extend `src/test/inheritedDesignApprovalConsistency.test.ts`:
+This makes the revised BOQ data-level approved/not-approved state fixed for that revision instead of relying only on frontend inheritance.
 
-- Add an MR-format fixture (no `boq_item_design_status` rows on the new revision, ancestor fully approved) and assert `fetchDesignApprovalStates` returns `approved` via inheritance.
-- Add a fixture where the ancestor has a rejection → assert `not_approved` (negative state surfaces, never blank).
-- Add a GMS-format fixture identical to today's passing case → asserts no regression.
-- Assert the OA-page helper returns the same value as the folder helper for the same BOQ id (parity guarantee between OA and folder views).
+### 5. Tests to update/add
 
-## Files touched
+Update existing Vitest mocks to include the new table/RPC:
 
-- `src/lib/boq/designApprovalStatus.ts` — inheritance + OA-page helper export.
-- `src/lib/boq/designReview.ts` — add `fetchLatestCommentBaseline` inheritance (small).
-- `src/pages/orders/OrderEditor.tsx` — route "Approved by Design" column through shared helper.
-- `src/pages/purchase/BoqFolder.tsx`, `src/pages/modules/ApprovedBoqModule.tsx`, `src/pages/boqs/BoqList.tsx` — always render explicit badge.
-- `src/components/orders/OaCellDesignComment.tsx`, `src/components/boqs/PendingChangesPanel.tsx` — use inheriting fetchers if not already.
-- `src/test/inheritedDesignApprovalConsistency.test.ts` — new cases for MR + negative state + OA/folder parity.
+- `src/test/oaRevisionE2E.test.ts`
+  - Verify R6 old snapshot remains approved and R7 new snapshot is created/approved after revision.
+- `src/test/inheritedDesignApprovalConsistency.test.ts`
+  - Verify snapshot rows are preferred over inherited/latest status.
+  - Verify negative snapshot returns `not_approved`, never blank.
+- `src/test/approvalBadgesE2E.test.ts`
+  - Verify OA history and BOQ history read each revision’s own snapshot.
 
-## What is NOT touched
+## Files to touch in build mode
 
-- `src/lib/revisions/index.ts` revision logic, numbering, BOQ generation, OA generation, calculations, formulas, validations, workflow steps, OA/BOQ schemas, RLS. No backfill migrations — fix is purely in read-side display so it works for every existing and future MR/GMS revision without per-record patches.
+- Add: `src/lib/boq/approvalSnapshots.ts`
+- Edit: `src/lib/boq/designApprovalStatus.ts`
+- Edit: `src/lib/boq/itemApprovalSync.ts`
+- Edit: `src/lib/design/itemApprovals.ts`
+- Edit: `src/lib/design/comments.ts`
+- Edit: `src/lib/revisions/index.ts`
+- Edit: `src/pages/orders/OrderEditor.tsx`
+- Edit: `src/components/orders/OaRevisionHistory.tsx`
+- Edit: `src/components/boqs/BoqRevisionHistory.tsx`
+- Edit tests listed above
+
+## Guardrails
+
+Do not change:
+
+- Cost sheet parsing
+- OA creation logic
+- BOQ generation logic beyond refreshing approval snapshots after existing carry-forward
+- Revision numbering
+- Formulas/calculations
+- Validations
+- UI layout/workflow/notifications
+- Approval flow
+
+Only approval/comment/status save, inheritance, and revision-wise history consistency are in scope.
