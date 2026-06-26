@@ -1138,6 +1138,7 @@ export type Database = {
       }
       fg_raw_material_map: {
         Row: {
+          base_quantity: number
           created_at: string
           fg_description_full: string | null
           id: string
@@ -1149,6 +1150,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          base_quantity?: number
           created_at?: string
           fg_description_full?: string | null
           id?: string
@@ -1160,6 +1162,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          base_quantity?: number
           created_at?: string
           fg_description_full?: string | null
           id?: string
