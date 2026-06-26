@@ -24,13 +24,13 @@ export async function fetchDesignApprovalStates(
   if (!boqs.length) return out;
 
   const ids = boqs.map((b) => b.id);
-  let statuses: Array<{ boq_id: string; boq_item_id: string; status: string; revision: number | null }> = [];
+  let statuses: Array<{ boq_id: string; boq_item_id: string; status: string; boq_revision: number | null }> = [];
   try {
     const { data } = await supabase
       .from("boq_item_design_status")
-      .select("boq_id,boq_item_id,status,revision")
+      .select("boq_id,boq_item_id,status,boq_revision")
       .in("boq_id", ids);
-    statuses = (data || []) as typeof statuses;
+    statuses = ((data || []) as unknown) as typeof statuses;
   } catch {
     statuses = [];
   }
@@ -47,7 +47,7 @@ export async function fetchDesignApprovalStates(
     const itemIds = new Set(items.map((it) => it.id).filter(Boolean));
     const rev = b.revision ?? 0;
     const rows = (byBoq.get(b.id) || []).filter(
-      (r) => (r.revision ?? rev) === rev,
+      (r) => (r.boq_revision ?? rev) === rev,
     );
     const relevant = rows.filter((r) => itemIds.has(r.boq_item_id));
     const hasApproved = relevant.some((r) => r.status === "approved");
