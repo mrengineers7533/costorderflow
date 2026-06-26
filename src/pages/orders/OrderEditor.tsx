@@ -411,20 +411,48 @@ export default function OrderEditor() {
 
   // ---- Cell-wise Design comments (inline under each OA input) ----
   const [designCellComments, setDesignCellComments] = useState<DesignCellComment[]>([]);
+  // ---- Per-item Design approval status (shown alongside the comment) ----
+  const [designItemApprovals, setDesignItemApprovals] = useState<
+    Record<string, { status: "approved" | "pending" | "not_approved"; by?: string | null; department?: string | null; at?: string | null }>
+  >({});
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!currentBoq?.id) { setDesignCellComments([]); return; }
+      if (!currentBoq?.id) { setDesignCellComments([]); setDesignItemApprovals({}); return; }
       const { data } = await supabase
         .from("boq_design_comments" as never)
         .select("id,boq_id,boq_item_id,column_key,comment,user_name,department,created_at,applied_to_oa_at")
         .eq("boq_id", currentBoq.id)
         .order("created_at", { ascending: false });
       if (!cancelled) setDesignCellComments(((data || []) as unknown) as DesignCellComment[]);
+      try {
+        const { data: appr } = await supabase
+          .from("boq_item_design_status" as never)
+          .select("boq_item_id,status,decided_by_name,decided_by_department,decided_at,revision")
+          .eq("boq_id", currentBoq.id)
+          .eq("revision", currentBoq.revision ?? 0);
+        if (!cancelled) {
+          const map: typeof designItemApprovals = {};
+          for (const r of (appr || []) as Array<{
+            boq_item_id: string; status: string;
+            decided_by_name: string | null; decided_by_department: string | null; decided_at: string | null;
+          }>) {
+            map[r.boq_item_id] = {
+              status: (r.status as "approved" | "pending" | "not_approved") || "pending",
+              by: r.decided_by_name,
+              department: r.decided_by_department,
+              at: r.decided_at,
+            };
+          }
+          setDesignItemApprovals(map);
+        }
+      } catch {
+        if (!cancelled) setDesignItemApprovals({});
+      }
     }
     load();
     return () => { cancelled = true; };
-  }, [currentBoq?.id]);
+  }, [currentBoq?.id, currentBoq?.revision]);
 
   /** boq_item_id → column_key → latest comment */
   const designCommentByItemCol = useMemo(() => {
@@ -493,6 +521,12 @@ export default function OrderEditor() {
     const boqItemId = oaToBoqItemId.get(oaItemId);
     if (!boqItemId) return undefined;
     return designCommentByItemCol.get(boqItemId)?.get(columnKey);
+  }
+
+  function itemApproval(oaItemId: string) {
+    const boqItemId = oaToBoqItemId.get(oaItemId);
+    if (!boqItemId) return null;
+    return designItemApprovals[boqItemId] || null;
   }
 
   async function applyCellComment(
