@@ -1,50 +1,64 @@
-## Plan: Fix missing Design approval/comment carry-forward for MROA R7
+## Problem
 
-### What I found
-- The working GMS case has the latest BOQ (`2026-27/GMS/0002/R9`) with:
-  - applied Design comments on the latest BOQ
-  - `boq_item_design_status` rows for revision 9
-  - `line_items[].approval_status = approved`
-- The broken MR case has R6 data, but the R7 BOQ (`MRBOQ/26-27/0007/R7`) was created with:
-  - 0 copied Design comments
-  - 0 copied Design approval status rows
-  - no `approval_status` values on BOQ line items
-- The key reason is item ID mismatch in the MR R6 BOQ: R6 status/comment rows point to older item IDs that are no longer present in the current R6 BOQ line item snapshot. The current carry-forward code only copies by exact previous item ID, so it skips everything even though the same items still exist by description/model/position.
+In Manufacturing and Purchase folders, `26-27/GMSBOQ/0003/R0` shows a green **Approved** badge even though Design has not approved the BOQ and the linked OA is not approved. The working reference `26-27/GMSBOQ/0002/R9` is correctly approved (Design has approved all items).
 
-### Fix scope
-Only fix the missing Design carry-forward/display behavior. No changes to OA/BOQ numbering, formulas, validations, layout, calculations, generation workflow, or revision sequence.
+### Root cause
 
-### Implementation steps
-1. **Make Design comment carry-forward resilient**
-   - Update the carry-forward helper to remap Design comments from the previous BOQ to the new BOQ using stable item matching when old item IDs do not match:
-     - first by exact item ID
-     - then by description + model
-     - then by description-only/position fallback for legacy MR records with blank model values
-   - Preserve comment metadata: comment text, column key, applied date/time, applied user, department, and OA revision reference.
+All three list pages (`BoqFolder`, Purchase `ApprovedBoqListPage`, Manufacturing `ApprovedBoqListPage`) and the detail page (`ApprovedBoqDetailPage`) decide the badge purely from `boqs.verification_status === 'approved'`. For BOQ `0003/R0` that flag is `'approved'`, but:
 
-2. **Make Design approval carry-forward resilient**
-   - Update `reviseBoqFromOrder` to carry `boq_item_design_status` rows forward with the same fallback matching.
-   - Preserve approval status, approved by, department, approved date/time, and revision number on the new BOQ.
-   - Mirror the carried status into `newBoq.line_items[].approval_status` so OA, BOQ editor, BOQ Folder, and linked BOQ places read the same approved state.
+- It has **zero** rows in `boq_item_design_status` (no Design approval applied).
+- Its line items have no `approval_status='approved'` (linked OA has not received Design approval mirror).
 
-3. **Backfill the already-created broken R7 record**
-   - Add a targeted database migration/data repair for `MROA/2026-27/0007/R7` only:
-     - copy applied comments from the latest R6 BOQ into the R7 BOQ using the resilient matching rules
-     - copy approval status rows from R6 into R7
-     - update R7 BOQ line items with inherited approval status
-   - This repairs the existing broken record without altering unrelated documents.
+So `verification_status` alone is not a reliable signal of "Design + OA approved".
 
-4. **Keep latest BOQ lookup stable**
-   - Verify the OA and BOQ folder code continues to select the current/latest BOQ for the family.
-   - If needed, make only a minimal read-selection adjustment so linked places do not display stale BOQ records.
+## Fix (display-only)
 
-5. **Regression test**
-   - Extend the existing OA revision E2E test to include the MR legacy-ID mismatch case:
-     - R6 has Design comments/status rows linked to older item IDs
-     - R7 revision is created
-     - test confirms comments, changes, approval status, approved by, and approved date/time are visible/carried forward on R7.
+Introduce a single shared helper and use it everywhere the green "Approved" pill is rendered. No changes to data writes, revision logic, calculations, workflows, list inclusion, navigation, or any other UI.
 
-### Validation
-- Run the focused revision/carry-forward tests.
-- Query the database after migration to confirm `MROA/2026-27/0007/R7` has inherited comments and approval rows.
-- Confirm behavior matches `2026-27/GMS/0002/R9` for OA, Design BOQ, BOQ Folder, and linked BOQ pages.
+### New helper
+
+`src/lib/boq/designApprovalStatus.ts`
+
+```ts
+export type DesignApprovalState = "approved" | "not_approved";
+
+export async function fetchDesignApprovalStates(
+  boqs: Pick<BoqRecord, "id" | "revision" | "line_items">[]
+): Promise<Map<string, DesignApprovalState>>
+```
+
+Logic per BOQ — returns `"approved"` only when **both** are true:
+
+1. **Design BOQ approved:** `boq_item_design_status` has at least one row with `status='approved'` for this `boq_id` at the current revision, AND no row exists with `status='rejected'` or `status='pending'` for items in the current snapshot.
+2. **Linked OA approved:** every item in `line_items` has `approval_status === 'approved'` (this is the mirror that OrderEditor already uses to render "Approved by Design" on the OA — same source of truth, so the two views can never disagree).
+
+Otherwise returns `"not_approved"`.
+
+### Call sites to update (badge text only)
+
+- `src/pages/purchase/BoqFolder.tsx` — list badge (currently always `tab` label colored green): show `Approved` / `Not Approved by Design` based on helper.
+- `src/pages/modules/ApprovedBoqModule.tsx`:
+  - `ApprovedBoqListPage` card badge.
+  - `ApprovedBoqDetailPage` header badge (`approved && <Badge…>Approved</Badge>`).
+- These two pages drive both `/purchase` and `/manufacturing` via `PURCHASE_CONFIG` / `MANUFACTURING_CONFIG`, so one change covers both modules.
+
+Badge variants:
+- `approved` → existing green `Badge className="bg-emerald-600 hover:bg-emerald-600"`Approved.
+- `not_approved` → `Badge variant="secondary"` with text **Not Approved by Design** (amber/neutral; no green).
+
+### Behavior on the affected records
+
+- `26-27/GMSBOQ/0003/R0` → no `boq_item_design_status` rows → badge becomes **Not Approved by Design**.
+- `26-27/GMSBOQ/0002/R9` → 4 approved Design rows for 4 items, all line items mirror `approved` → badge stays **Approved** (matches today).
+
+### Explicitly NOT changing
+
+- List inclusion rule (`pickLatestApprovedPerFamily`) — same records continue to appear.
+- `verification_status`, revision/carry-forward logic, BOQ/OA numbering, totals, PDFs, routing, edit permissions.
+- OrderEditor, BoqEditor, DesignBoqView, requisition/PO flows — untouched.
+
+## Verification
+
+1. Open `/purchase/approved` and `/manufacturing` GMS tab: `0003` shows **Not Approved by Design**, `0002/R9` shows **Approved**.
+2. Open detail page for `0003`: header badge shows **Not Approved by Design**; "Create Requisition" button remains as-is (separate `verification_status` gate, unchanged).
+3. DB sanity: `select boq_id, count(*) from boq_item_design_status where boq_id in (...) group by 1;` matches expectation.
