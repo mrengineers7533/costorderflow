@@ -1251,7 +1251,7 @@ export default function OrderEditor() {
                 <div className="grid gap-2 items-start" style={{ gridTemplateColumns: `repeat(${showItemExtras ? 26 : 14}, minmax(0, 1fr))` }}>
                   <div className="col-span-4">
                     <Input className={cellComment(it.id, "description") ? "border-red-500 ring-1 ring-red-500/40 font-bold text-red-600" : ""} value={it.description} onChange={(e) => updateItemById(it.id, { description: e.target.value })} placeholder="Item description" />
-                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
+                    <OaCellDesignComment comment={cellComment(it.id, "description")} canApply={oaEditable} approval={itemApproval(it.id)} onApply={(v) => applyCellComment(it.id, "description", v, cellComment(it.id, "description")!.id)} />
                     {!showItemExtras && (
                       <>
                         {(["model_number","motor","motor_quantity","remarks"] as const).map((ck) => {
