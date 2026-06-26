@@ -151,7 +151,8 @@ describe("E2E — approval badges & revision-wise history across screens", () =>
   for (const family of ["MR", "GMS"] as const) {
     it(`${family}: badge is identical across OA, Design BOQ, BOQ Folder, Manufacturing, Purchase`, async () => {
       const { boqCurr } = seedFamily(family);
-      const verdicts = await Promise.all(SCREENS.map((s) => readBadgeOnScreen(s, boqCurr)));
+      const verdicts: Array<string | null> = [];
+      for (const s of SCREENS) verdicts.push(await readBadgeOnScreen(s, boqCurr));
       // All five screens agree
       expect(new Set(verdicts).size).toBe(1);
       expect(verdicts[0]).toBe("approved");
