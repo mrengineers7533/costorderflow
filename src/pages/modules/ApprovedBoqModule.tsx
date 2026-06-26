@@ -16,6 +16,7 @@ import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -56,6 +57,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
+  const [approvalMap, setApprovalMap] = useState<Map<string, DesignApprovalState>>(new Map());
 
   useEffect(() => {
     (async () => {
@@ -70,6 +72,12 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   }, []);
 
   const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  useEffect(() => {
+    if (!rows.length) { setApprovalMap(new Map()); return; }
+    let cancelled = false;
+    fetchDesignApprovalStates(rows).then((m) => { if (!cancelled) setApprovalMap(m); });
+    return () => { cancelled = true; };
+  }, [rows]);
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
     for (const r of rows) (r.format === "MR" ? mr++ : gms++);
@@ -139,7 +147,11 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{b.boq_number}</span>
                       <Badge variant="secondary">R{b.revision ?? 0}</Badge>
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      {approvalMap.get(b.id) === "approved" ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      ) : (
+                        <Badge variant="secondary">Not Approved by Design</Badge>
+                      )}
                       <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 truncate">
