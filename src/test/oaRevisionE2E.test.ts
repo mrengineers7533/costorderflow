@@ -101,6 +101,20 @@ vi.mock("@/integrations/supabase/client", () => ({
           }));
           return buildQuery(table, "insert", enriched);
         },
+        update: (patch: Row) => {
+          const filters: Array<(r: Row) => boolean> = [];
+          const api = {
+            eq(col: string, val: unknown) { filters.push((r) => r[col] === val); return api; },
+            in(col: string, arr: unknown[]) { filters.push((r) => arr.includes(r[col] as never)); return api; },
+            then(onF: (v: { data: null; error: null }) => unknown) {
+              for (const r of tables[table] || []) {
+                if (filters.every((f) => f(r))) Object.assign(r, patch, { updated_at: new Date().toISOString() });
+              }
+              return Promise.resolve(onF({ data: null, error: null }));
+            },
+          };
+          return api;
+        },
       };
     },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
@@ -267,11 +281,20 @@ describe("OA revision E2E — R6 → R7 carries Design comment + approval", () =
     expect(carried[0].applied_to_oa_at).toBe("2026-06-02T10:00:00Z");
 
     // 5. Per-item Design status row carried forward to the new BOQ revision.
+    //    Pump matches R6's explicit status row by description+model. Motor
+    //    is also stamped 'approved' via the bulk-approved inference (R6
+    //    had only 'approved' statuses recorded and no 'rejected'), so the
+    //    OA's "Approved by Design" column stays correct on R7.
     const newStatuses = tables.boq_item_design_status.filter((s) => s.boq_id === newBoq.id);
-    expect(newStatuses).toHaveLength(1);
-    expect(newStatuses[0].boq_item_id).toBe(pumpItem.id);
-    expect(newStatuses[0].status).toBe("approved");
-    expect(newStatuses[0].boq_revision).toBe(7);
+    expect(newStatuses).toHaveLength(2);
+    const newStatusByItem = new Map(newStatuses.map((s) => [s.boq_item_id, s]));
+    const motorItem = newBoq.line_items.find((i) => i.description === "Motor")!;
+    expect(newStatusByItem.get(pumpItem.id)?.status).toBe("approved");
+    expect(newStatusByItem.get(pumpItem.id)?.boq_revision).toBe(7);
+    expect(newStatusByItem.get(motorItem.id)?.status).toBe("approved");
+    // Mirrored onto new BOQ line_items so OA/folder display matches.
+    expect(pumpItem.approval_status).toBe("approved");
+    expect(motorItem.approval_status).toBe("approved");
 
     // 6. Notification cascades from the BOQ auto-revise were suppressed.
     const suppressOn  = rpcCalls.filter((c) => c.name === "set_notif_suppress" && (c.args as { p_on: boolean }).p_on === true).length;

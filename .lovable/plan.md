@@ -1,64 +1,50 @@
+## Plan: Fix missing Design approval/comment carry-forward for MROA R7
 
-## Problem
+### What I found
+- The working GMS case has the latest BOQ (`2026-27/GMS/0002/R9`) with:
+  - applied Design comments on the latest BOQ
+  - `boq_item_design_status` rows for revision 9
+  - `line_items[].approval_status = approved`
+- The broken MR case has R6 data, but the R7 BOQ (`MRBOQ/26-27/0007/R7`) was created with:
+  - 0 copied Design comments
+  - 0 copied Design approval status rows
+  - no `approval_status` values on BOQ line items
+- The key reason is item ID mismatch in the MR R6 BOQ: R6 status/comment rows point to older item IDs that are no longer present in the current R6 BOQ line item snapshot. The current carry-forward code only copies by exact previous item ID, so it skips everything even though the same items still exist by description/model/position.
 
-After OA revision, Design comments / changes / approval no longer show up on the revised OA (R7) or revised BOQ. Auto-save also fails silently in some cases. Existing OA → BOQ revision, numbering, formulas, validation, and UI must not change — only the missing carry-forward + visibility behavior is restored.
+### Fix scope
+Only fix the missing Design carry-forward/display behavior. No changes to OA/BOQ numbering, formulas, validations, layout, calculations, generation workflow, or revision sequence.
 
-Root causes found while exploring the code:
+### Implementation steps
+1. **Make Design comment carry-forward resilient**
+   - Update the carry-forward helper to remap Design comments from the previous BOQ to the new BOQ using stable item matching when old item IDs do not match:
+     - first by exact item ID
+     - then by description + model
+     - then by description-only/position fallback for legacy MR records with blank model values
+   - Preserve comment metadata: comment text, column key, applied date/time, applied user, department, and OA revision reference.
 
-1. `reviseOrder` in `src/lib/revisions/index.ts` calls `stripOrderForInsert(source)` using whatever OA record the user revised from. If the user opens R6, applies a Design comment in the editor but does not click Save before Revise, R7 is built from R6's stored content (pre-apply), not the latest applied values. Comments themselves are tied to the linked BOQ revision via `boq_design_comments`, so they only carry forward through `carryForwardAppliedDesignComments`, which is gated on `applied_to_oa_at IS NOT NULL`. If the comment was applied locally in the editor but never persisted via the `apply_design_comment_to_oa` RPC for that BOQ id, it is treated as a draft and dropped.
-2. `reviseBoqFromOrder` already calls `carryForwardAppliedDesignComments`, but the OA-revision path runs `reviseOrder → reviseBoqFromOrder(newOrderRec, currentBoq)` where `currentBoq` is the *current* BOQ found via `is_current` on family ids. If the BOQ that owns the applied comments isn't `is_current` (e.g. user reopened an older BOQ), the comments don't get carried forward.
-3. `DesignBoqView.saveNow` swallows comment-save errors when `boq.design_review_status` flip-back fails, leaving the comment unsaved silently. The 600ms debounce can also be skipped when the user clicks "Approve / Send" before the timer fires; `handlePostSubmit` flushes drafts, but `handleApprove` does not.
-4. OA editor's `OaCellDesignComment` displays the comment + "Applied" timestamp but never surfaces the Design approval status / approver / approval date for the OA row, so even when carry-forward works, the OA reads as un-approved.
+2. **Make Design approval carry-forward resilient**
+   - Update `reviseBoqFromOrder` to carry `boq_item_design_status` rows forward with the same fallback matching.
+   - Preserve approval status, approved by, department, approved date/time, and revision number on the new BOQ.
+   - Mirror the carried status into `newBoq.line_items[].approval_status` so OA, BOQ editor, BOQ Folder, and linked BOQ places read the same approved state.
 
-## Fix scope (frontend + revision helper only — no schema, no workflow changes)
+3. **Backfill the already-created broken R7 record**
+   - Add a targeted database migration/data repair for `MROA/2026-27/0007/R7` only:
+     - copy applied comments from the latest R6 BOQ into the R7 BOQ using the resilient matching rules
+     - copy approval status rows from R6 into R7
+     - update R7 BOQ line items with inherited approval status
+   - This repairs the existing broken record without altering unrelated documents.
 
-### 1. Design BOQ auto-save hardening — `src/pages/design/DesignBoqView.tsx`
-- In `handleApprove`, mirror `handlePostSubmit`: flush `debounceRef` timers and `await Promise.all` of pending `upsertDesignComment` calls before calling the approve RPC.
-- In `saveNow`, separate the comment-upsert try/catch from the BOQ status flip-back so a status-update failure cannot mask a successful comment save (and vice-versa). Toast only the failing step.
-- Add a `beforeunload` flush that fires pending `saveNow` calls synchronously via `navigator.sendBeacon`-style fallback (use existing `upsertDesignComment` in an awaited `Promise.allSettled` inside an `unload` handler — best-effort).
+4. **Keep latest BOQ lookup stable**
+   - Verify the OA and BOQ folder code continues to select the current/latest BOQ for the family.
+   - If needed, make only a minimal read-selection adjustment so linked places do not display stale BOQ records.
 
-### 2. OA editor — make the latest applied comment + Design approval visible
-- `src/components/orders/OaCellDesignComment.tsx`: extend the props to optionally accept `approval?: { status: "approved" | "pending" | "not_approved"; by?: string | null; at?: string | null }`. When `approval.status === "approved"` render a small "✓ Approved by {by} on {date}" line under the comment. No layout change otherwise.
-- `src/pages/orders/OrderEditor.tsx`: build a `designApprovalByOaItemId` map from `boq_item_design_status` (already populated by the Design page) joined through `oaToBoqItemId`, and pass the matching entry into each `<OaCellDesignComment approval=…>` call. Read uses one extra `supabase.from("boq_item_design_status").select(...)` keyed on `currentBoq.id` + `currentBoq.revision`. No write/format changes.
+5. **Regression test**
+   - Extend the existing OA revision E2E test to include the MR legacy-ID mismatch case:
+     - R6 has Design comments/status rows linked to older item IDs
+     - R7 revision is created
+     - test confirms comments, changes, approval status, approved by, and approved date/time are visible/carried forward on R7.
 
-### 3. OA revise must capture the in-editor "applied" state — `src/pages/orders/OrderEditor.tsx`
-- Where the "Revise" button is wired, change the handler to first call the existing Save path (the same code that runs when clicking Save) and only then call `reviseOrder(savedRecord)`. This guarantees `reviseOrder` reads R6's *latest applied* content, not the stale loaded copy.
-- Do not change `reviseOrder`'s signature or `stripOrderForInsert` — only ensure the source argument is fresh.
-
-### 4. Carry forward applied Design comments even when BOQ isn't the family's current — `src/lib/revisions/index.ts`
-- In `reviseOrder`, when locating the BOQ to auto-revise, prefer (in order): (a) the BOQ whose `order_id === source.id` and is the highest-revision BOQ for that OA row, (b) the family's `is_current` BOQ (existing behavior). Pass that BOQ to `reviseBoqFromOrder`, so carry-forward draws from the BOQ the user was actually commenting on.
-- In `carryForwardAppliedDesignComments`, additionally include comments whose `applied_to_oa_at IS NULL` **only if** a row with the same `(boq_item_id, column_key)` exists in the parent OA's `line_items` with a matching applied value — i.e. it was applied in the editor and saved on the OA but the RPC stamp didn't fire. Implemented as a small post-filter in `buildAppliedCommentInserts` accepting an optional "applied keys" set; the helper stays pure and the new branch is opt-in (no behavior change for callers that don't pass it).
-- No SQL migration, no enum/grant changes.
-
-### 5. Linked-module visibility (read-only)
-- The carry-forward already makes the new BOQ revision (auto-marked `is_current`) own the inherited comments + per-item approval rows. The existing readers in Manufacturing / Requisition / Annexure / Purchase already resolve "latest BOQ" via `is_current`, so once steps 1–4 land they will display the right comment/approval automatically. No edits needed in those modules.
-
-### 6. Tests — extend `src/test/designCommentsCarryForward.test.ts`
-- Add cases proving:
-  - Comments with `applied_to_oa_at = null` but matching applied-key set still get carried forward.
-  - The BOQ-selection preference (per-OA-row latest > family is_current) returns the right BOQ id when both exist.
-- Re-run vitest to confirm green.
-
-## Out of scope (explicitly NOT changed)
-
-- OA → BOQ generation logic, BOQ formula/calc, revision numbering, validation, RLS, notifications, UI layout, sidebar, workflow status flow.
-
-## Technical notes
-
-```
-reviseOrder(source)
-  ├── (NEW) source = await saveOrderIfDirty(source)
-  ├── insert R(n+1) from source           ← unchanged code path
-  └── auto-revise BOQ
-        ├── (NEW) pickBoqForCarryForward(source.id, family)
-        └── reviseBoqFromOrder(newOrder, prevBoq)
-              └── carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, map, appliedKeys?)
-```
-
-Files touched:
-- `src/pages/design/DesignBoqView.tsx`
-- `src/components/orders/OaCellDesignComment.tsx`
-- `src/pages/orders/OrderEditor.tsx`
-- `src/lib/revisions/index.ts`
-- `src/lib/revisions/carryForward.ts`
-- `src/test/designCommentsCarryForward.test.ts`
+### Validation
+- Run the focused revision/carry-forward tests.
+- Query the database after migration to confirm `MROA/2026-27/0007/R7` has inherited comments and approval rows.
+- Confirm behavior matches `2026-27/GMS/0002/R9` for OA, Design BOQ, BOQ Folder, and linked BOQ pages.
