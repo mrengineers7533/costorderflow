@@ -17,6 +17,7 @@ import { EntityActivityBanner } from "@/components/activity/EntityActivityBanner
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
+import { fetchItemApprovalVerdicts, type ItemApprovalVerdict } from "@/lib/boq/itemApprovalSync";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -184,6 +185,7 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
   const [reqs, setReqs] = useState<RequisitionRecord[]>([]);
   const [showMake, setShowMake] = useColumnToggle(`module.${config.kind}.boq.columns.make`, false);
   const [designApproved, setDesignApproved] = useState<boolean | null>(null);
+  const [itemVerdicts, setItemVerdicts] = useState<Map<string, ItemApprovalVerdict>>(new Map());
 
   useEffect(() => {
     if (!boqId) return;
@@ -209,6 +211,16 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
     let cancelled = false;
     fetchDesignApprovalStates([boq]).then((m) => {
       if (!cancelled) setDesignApproved(m.get(boq.id) === "approved");
+    });
+    return () => { cancelled = true; };
+  }, [boq]);
+
+  useEffect(() => {
+    if (!boq) { setItemVerdicts(new Map()); return; }
+    let cancelled = false;
+    const items = (Array.isArray(boq.line_items) ? boq.line_items : []) as never[];
+    fetchItemApprovalVerdicts(boq.id, boq.revision ?? 0, items).then((m) => {
+      if (!cancelled) setItemVerdicts(m);
     });
     return () => { cancelled = true; };
   }, [boq]);
@@ -306,11 +318,12 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                 <th className="text-left py-2 pr-3">Remarks</th>
                 <th className="text-left py-2 pr-3">Motor</th>
                 <th className="text-right py-2 pr-3">Motor Qty</th>
+                <th className="text-left py-2 pr-3">Approved</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
+                <tr><td colSpan={showMake ? 10 : 9} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={it.id || idx} className="border-b last:border-0">
                   <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
@@ -322,6 +335,13 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                   <td className="py-2 pr-3 text-muted-foreground">{it.remarks}</td>
                   <td className="py-2 pr-3">{it.motor || "—"}</td>
                   <td className="py-2 pr-3 text-right">{it.motor_quantity ?? "—"}</td>
+                  <td className="py-2 pr-3">
+                    {itemVerdicts.get(it.id || "") === "approved" ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600 h-5 px-1.5 text-[10px]">Approved</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Pending</Badge>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
