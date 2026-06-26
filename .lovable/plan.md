@@ -1,45 +1,69 @@
+## Goal
 
-## Problem
+Make Design-approval / OA-approval / BOQ-approval visibility behave identically for **MR** and **GMS** OA/BOQ documents across every consumer view, with clear **revision-wise** status (never blank). No changes to revision, generation, calc, numbering, validation, or workflow logic — display + carry-forward only.
 
-When an OA is revised, the auto-created new BOQ revision:
-- correctly carries forward `line_items[].approval_status`, `boq_item_design_status` rows, and applied `boq_design_comments` (already implemented in `src/lib/revisions/index.ts`),
-- **but does not carry the `boq_design_reviews` "round"** that the BOQ UI uses to render the Design comment panel and the "Approved by Design" badge.
+## What's wrong today
 
-The BOQ editor renders the Design comment via `fetchLatestSubmittedRound(newBoqId)` and the approval column via `fetchLatestApprovalRound(newBoqId)` (`src/components/boqs/DesignCommentsInline.tsx`, `src/pages/boqs/BoqEditor.tsx` line 126). The new BOQ revision has no rows in `boq_design_reviews`, so both return `null` and the Design comment/approval disappear on the BOQ — even though the OA continues to show them correctly (OA reads from `line_items[].approval_status` + `boq_item_design_status`, which are already carried).
+1. `fetchDesignApprovalStates` (the single source of truth for the "Approved" badge in Manufacturing / Purchase / BOQ Folder / Approved-BOQ detail) is **format-agnostic in code but data-dependent in practice**: GMS revisions consistently have both `line_items[].approval_status='approved'` AND `boq_item_design_status` rows; MR revisions (especially older or revised ones like `MROA/2026-27/0007/R7`) often have one but not the other, so they fall back to "Not Approved" even when Design has approved. Earlier MR cases were fixed with one-off backfills — there is no general rule.
+2. The OA page's per-item "Approved by Design" column reads from a different mirror than the folder badges, so the same item can read "Approved" on the OA and "Not Approved" on the linked Manufacturing card.
+3. `fetchLatestSubmittedRound` / `fetchLatestApprovalRound` already fall back through `revised_from_id` for the Design BOQ panel, but the **folder/list views do not** apply the same inheritance — a revised BOQ with no own design-status rows reads as blank/not-approved even when its parent revision was fully approved.
+4. When approval is genuinely missing, several views render blank instead of an explicit "Not Approved by Design" label. The user wants the negative state always visible per revision.
 
-## Fix (display-only, no changes to OA/BOQ generation, numbering, formulas, workflow)
+## Plan
 
-Add a **previous-revision fallback** to the two design-review fetchers so that when the current BOQ has no review round, they walk back through `boqs.revised_from_id` (and as a secondary fallback the OA family's highest-revision sibling BOQ that does have a round) and return that round's items + docs, remapped to the current BOQ's item ids by description+model.
+### 1. Make `fetchDesignApprovalStates` format-agnostic and inheritance-aware (`src/lib/boq/designApprovalStatus.ts`)
 
-### Files to change
+For each BOQ id, compute the state from **whichever signal is present**, in this priority:
 
-1. `src/lib/boq/designReview.ts`
-   - Extract a small helper `findLatestRoundBoqId(boqId, kind: "submitted"|"approval")` that:
-     - checks the given `boqId` for a matching round (current behavior);
-     - if none, loads `boqs.revised_from_id` and recurses up the chain;
-     - if still none, queries sibling BOQs in the same OA family (`order_id ∈ family`) ordered by `revision desc` and returns the first that has a round.
-   - Update `fetchLatestSubmittedRound` and `fetchLatestApprovalRound` to use it. When the round is found on a different BOQ:
-     - fetch that round's items + docs as today,
-     - load the **current** BOQ's `line_items` and build a `desc|model → currentItemId` map,
-     - return items with `boq_item_id` rewritten to the current BOQ's item ids so the UI keys match (items that don't map are dropped),
-     - flag the returned `round` object with `inherited_from_boq_id` for debugging only.
-   - No DB writes, no schema changes.
+1. If `boq_item_design_status` has rows for this boq+revision → use them (current rule).
+2. Else walk `revised_from_id` chain (and sibling BOQs in the same OA family, same as `findLatestRoundBoqId`) to find the nearest ancestor with design-status rows; remap by description+model to current `line_items`; treat as **inherited approval**.
+3. Independently, require the OA-mirror condition: every `line_items[].approval_status === 'approved'`. If `line_items` has no `approval_status` field at all on any row but the inherited design rows are fully approved → treat as approved (mirrors the resilient carry-forward already in `src/lib/revisions/index.ts`).
+4. Otherwise → `not_approved`.
 
-2. `src/components/boqs/DesignCommentsInline.tsx` — no code change required; it already consumes the fetcher result. The inherited round will render with its original `round_no` and reviewer info.
+Return value stays the same `Map<boqId, "approved" | "not_approved">` so no caller changes.
 
-3. `src/pages/boqs/BoqEditor.tsx` (lines 119–194) — keep as-is. With the fallback in place, `fetchLatestApprovalRound` now returns the inherited round and the existing sync code mirrors `approval_status` onto the new BOQ's `line_items`, matching the working GMS R9 case. The carried `boq_item_design_status` rows inserted by `reviseBoqFromOrder` continue to seed the snapshot before the fetcher resolves.
+This is the one rule that fixes GMS and MR identically.
 
-4. Test: extend `src/test/oaRevisionE2E.test.ts` (or add a focused unit test on `fetchLatestSubmittedRound`) to assert that after revising R6→R7 with a submitted review on R6's BOQ, calling the fetcher with R7's `boqId` returns R6's round with item ids remapped to R7's items.
+### 2. Always render an explicit badge — never blank
 
-### What is intentionally NOT changed
+Update the three consumers to render `"Approved"` (emerald) OR `"Not Approved by Design"` (neutral) and never an empty cell:
 
-- `reviseOrder` / `reviseBoqFromOrder` carry-forward logic.
-- BOQ numbering, revision derivation, calculations, validations, PDF/Excel generators.
-- OA editor's "Approved by Design" column logic.
-- `boq_design_reviews` rows on the previous BOQ (kept exactly as-is so revision history is preserved).
-- Approval workflow (no auto-creation of new rounds; new approvals still go through Design as before).
+- `src/pages/purchase/BoqFolder.tsx` — folder list rows.
+- `src/pages/modules/ApprovedBoqModule.tsx` — Manufacturing & Purchase list cards + detail header.
+- `src/pages/boqs/BoqList.tsx` — top-level BOQ list (currently doesn't show the gated badge consistently).
 
-### Outcome
+Each row already carries its revision number; the badge sits next to it so **every revision shows its own status** and history stays visible.
 
-- MROA/2026-27/0007/R7's BOQ will show the same Design comment and "Approved by Design" badge that R6 had, matching the working `2026-27/GMS/0002/R9` reference.
-- BOQ Folder, Manufacturing, and Purchase already read `line_items[].approval_status` + `boq_item_design_status` (which are carried forward), so they keep displaying correctly once the BOQ snapshot is in sync.
+### 3. Unify the OA-page "Approved by Design" column with the folder rule
+
+In `src/pages/orders/OrderEditor.tsx`, the per-item "Approved by Design" cell currently reads only the linked BOQ's `line_items[].approval_status` + `boq_item_design_status`. Add the same inheritance fallback (call a shared helper exported from `designApprovalStatus.ts`) so a revised OA whose BOQ inherits approval from a prior revision shows the column as Approved — matching what the folder badge now shows. No change to how the column is displayed, only to how the source value is computed.
+
+### 4. Surface inherited Design comments on revised BOQs in every comment consumer
+
+`fetchLatestSubmittedRound` / `fetchLatestApprovalRound` already inherit. Audit the remaining comment readers and route them through the same helpers:
+
+- `src/components/boqs/DesignCommentsInline.tsx` — already uses `fetchLatestSubmittedRound`. ✅
+- `src/components/orders/OaCellDesignComment.tsx` — verify it uses the inheriting fetcher; if it queries `boq_design_review_items` directly, switch it to the helper.
+- `src/components/boqs/PendingChangesPanel.tsx` — `fetchLatestCommentBaseline` needs the same `revised_from_id` walk so the "Previous → Updated" panel works on revised BOQs too.
+
+### 5. Tests
+
+Extend `src/test/inheritedDesignApprovalConsistency.test.ts`:
+
+- Add an MR-format fixture (no `boq_item_design_status` rows on the new revision, ancestor fully approved) and assert `fetchDesignApprovalStates` returns `approved` via inheritance.
+- Add a fixture where the ancestor has a rejection → assert `not_approved` (negative state surfaces, never blank).
+- Add a GMS-format fixture identical to today's passing case → asserts no regression.
+- Assert the OA-page helper returns the same value as the folder helper for the same BOQ id (parity guarantee between OA and folder views).
+
+## Files touched
+
+- `src/lib/boq/designApprovalStatus.ts` — inheritance + OA-page helper export.
+- `src/lib/boq/designReview.ts` — add `fetchLatestCommentBaseline` inheritance (small).
+- `src/pages/orders/OrderEditor.tsx` — route "Approved by Design" column through shared helper.
+- `src/pages/purchase/BoqFolder.tsx`, `src/pages/modules/ApprovedBoqModule.tsx`, `src/pages/boqs/BoqList.tsx` — always render explicit badge.
+- `src/components/orders/OaCellDesignComment.tsx`, `src/components/boqs/PendingChangesPanel.tsx` — use inheriting fetchers if not already.
+- `src/test/inheritedDesignApprovalConsistency.test.ts` — new cases for MR + negative state + OA/folder parity.
+
+## What is NOT touched
+
+- `src/lib/revisions/index.ts` revision logic, numbering, BOQ generation, OA generation, calculations, formulas, validations, workflow steps, OA/BOQ schemas, RLS. No backfill migrations — fix is purely in read-side display so it works for every existing and future MR/GMS revision without per-record patches.
