@@ -761,6 +761,13 @@ export default function DesignBoqView() {
           </div>
           <div className="flex items-center gap-2">
             <Button
+              variant="outline"
+              onClick={handleSaveAll}
+              disabled={savingAll || submitting}
+            >
+              {savingAll ? "Saving…" : "Save"}
+            </Button>
+            <Button
               onClick={handlePostSubmit}
               disabled={submitting || disabledSubmit(myDraftCount, alreadySubmitted, designApproved)}
             >
