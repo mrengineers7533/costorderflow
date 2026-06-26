@@ -141,6 +141,9 @@ export default function DesignBoqView() {
     const existing = debounceRef.current[k];
     if (existing) { clearTimeout(existing); delete debounceRef.current[k]; }
     setSavingKey((p) => ({ ...p, [k]: true }));
+    let savedOk = false;
+    let previous = "";
+    let changed = false;
     try {
       await upsertDesignComment({
         boqId: id,
@@ -148,13 +151,26 @@ export default function DesignBoqView() {
         columnKey: col === "row" ? null : col,
         comment: value,
       });
+      savedOk = true;
       setSavedAt((p) => ({ ...p, [k]: Date.now() }));
-      const previous = savedValuesRef.current[k] ?? "";
-      const changed = previous !== value;
+      previous = savedValuesRef.current[k] ?? "";
+      changed = previous !== value;
       savedValuesRef.current[k] = value;
-      // Auto-clear per-item approval when its comment is added/edited.
+    } catch (e) {
+      toast({
+        title: "Could not auto-save comment",
+        description: e instanceof Error ? e.message : "Permission denied.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingKey((p) => ({ ...p, [k]: false }));
+    }
+    if (!savedOk) return;
+    // Side-effects below run independently so a failure in any of them
+    // cannot mask a successful comment save (the user sees a separate
+    // toast for whichever step failed).
+    try {
       if (changed && boq && approvals[itemId]?.status === "approved") {
-        try {
           await setItemApproval(boq.id, itemId, boq.revision ?? 0, "pending");
           await syncApprovalToBoqSnapshot(boq.id, [itemId], "pending");
           setApprovals((p) => ({
@@ -166,17 +182,17 @@ export default function DesignBoqView() {
               decided_at: null,
             },
           }));
-        } catch (e) {
-          toast({
-            title: "Could not clear item approval",
-            description: e instanceof Error ? e.message : "Try again.",
-            variant: "destructive",
-          });
-        }
       }
+    } catch (e) {
+      toast({
+        title: "Could not clear item approval",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "destructive",
+      });
+    }
+    try {
       if (changed && designApproved && !autoUnapprovingRef.current) {
         autoUnapprovingRef.current = true;
-        try {
           const { error } = await supabase
             .from("boqs")
             .update({
@@ -191,24 +207,15 @@ export default function DesignBoqView() {
             description: "Comment added. Review and Approve again when ready.",
           });
           await refresh();
-        } catch (e) {
-          toast({
-            title: "Could not auto-unapprove BOQ",
-            description: e instanceof Error ? e.message : "Try again.",
-            variant: "destructive",
-          });
-        } finally {
-          autoUnapprovingRef.current = false;
-        }
       }
     } catch (e) {
       toast({
-        title: "Could not auto-save comment",
-        description: e instanceof Error ? e.message : "Permission denied.",
+        title: "Could not auto-unapprove BOQ",
+        description: e instanceof Error ? e.message : "Try again.",
         variant: "destructive",
       });
     } finally {
-      setSavingKey((p) => ({ ...p, [k]: false }));
+      autoUnapprovingRef.current = false;
     }
   }
 
