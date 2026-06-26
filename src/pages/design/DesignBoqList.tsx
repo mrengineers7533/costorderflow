@@ -9,19 +9,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
+import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 
 export default function DesignBoqList() {
   const [rows, setRows] = useState<BoqRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
   const [q, setQ] = useState("");
+  const [approvalMap, setApprovalMap] = useState<Map<string, DesignApprovalState>>(new Map());
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       const { data } = await supabase
         .from("boqs")
-        .select("id, boq_number, client_name, project_number, reference_oa_number, format, status, design_review_status, updated_at, prepared_by, revision, is_current, order_id")
+        .select("id, boq_number, client_name, project_number, reference_oa_number, format, status, design_review_status, updated_at, prepared_by, revision, is_current, order_id, line_items")
         .order("updated_at", { ascending: false });
       const all = ((data || []) as unknown as BoqRecord[]);
       // Resolve OA family root for each BOQ so siblings collapse to the latest revision.
@@ -45,6 +47,13 @@ export default function DesignBoqList() {
       setLoading(false);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!rows.length) return;
+    let cancelled = false;
+    fetchDesignApprovalStates(rows).then((m) => { if (!cancelled) setApprovalMap(m); });
+    return () => { cancelled = true; };
+  }, [rows]);
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
@@ -109,6 +118,7 @@ export default function DesignBoqList() {
                   <TableHead>OA Ref</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Approval</TableHead>
                   <TableHead>Last Updated</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
@@ -129,6 +139,13 @@ export default function DesignBoqList() {
                       <Badge variant={r.status === "finalized" ? "default" : "secondary"}>
                         {r.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {approvalMap.get(r.id) === "approved" ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
+                      ) : (
+                        <Badge variant="secondary">Not Approved by Design</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.updated_at).toLocaleString()}
