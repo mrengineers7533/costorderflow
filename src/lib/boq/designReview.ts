@@ -254,34 +254,105 @@ export async function signedCreatorDocUrl(filePath: string, ttlSeconds = 600): P
 
 /** Fetch latest submitted review round + its items for a BOQ. */
 export async function fetchLatestSubmittedRound(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
-  const { data } = await supabase
-    .from("boq_design_reviews")
-    .select("*")
-    .eq("boq_id", boqId)
-    .eq("status", "submitted")
-    .order("round_no", { ascending: false })
-    .limit(1);
-  const round = data?.[0] as unknown as DesignReviewRow | undefined;
-  if (!round) return null;
-  const [items, docs] = await Promise.all([fetchReviewItems(round.id), fetchReviewDocs(round.id)]);
-  return { round, items, docs };
+  return fetchInheritedRound(boqId, "submitted");
 }
 
 /** Fetch latest approval round (any status) + its items for a BOQ.
  *  Used so per-item decisions made by the designer reflect in the editor
  *  Approval column even before the round is formally submitted. */
 export async function fetchLatestApprovalRound(boqId: string): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
-  const { data } = await supabase
-    .from("boq_design_reviews")
-    .select("*")
-    .eq("boq_id", boqId)
-    .eq("kind", "approval")
-    .order("round_no", { ascending: false })
-    .limit(1);
-  const round = data?.[0] as unknown as DesignReviewRow | undefined;
+  return fetchInheritedRound(boqId, "approval");
+}
+
+/** Locate the most recent design-review round of the requested kind for a
+ *  BOQ, falling back through `revised_from_id` and sibling BOQs in the OA
+ *  family so a freshly-revised BOQ keeps showing the carried-forward Design
+ *  comment / approval until Design issues a new one. Read-only. */
+async function fetchInheritedRound(
+  boqId: string,
+  mode: "submitted" | "approval",
+): Promise<{ round: DesignReviewRow; items: DesignReviewItemRow[]; docs: DesignReviewDocRow[] } | null> {
+  const sourceBoqId = await findLatestRoundBoqId(boqId, mode);
+  if (!sourceBoqId) return null;
+  const round = await fetchRoundForBoq(sourceBoqId, mode);
   if (!round) return null;
   const [items, docs] = await Promise.all([fetchReviewItems(round.id), fetchReviewDocs(round.id)]);
-  return { round, items, docs };
+  if (sourceBoqId === boqId) return { round, items, docs };
+  // Remap item ids onto the current BOQ's line_items so UI keys match.
+  const { data: cur } = await supabase
+    .from("boqs").select("line_items").eq("id", boqId).maybeSingle();
+  const curItems = ((cur as { line_items?: BoqLineItem[] } | null)?.line_items || []) as BoqLineItem[];
+  const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+  const byDescModel = new Map<string, string>();
+  const byDesc = new Map<string, string>();
+  for (const it of curItems) {
+    const k = `${norm(it.description)}|${norm(it.model_number)}`;
+    if (!byDescModel.has(k)) byDescModel.set(k, it.id);
+    const d = norm(it.description);
+    if (d && !byDesc.has(d)) byDesc.set(d, it.id);
+  }
+  const remapped: DesignReviewItemRow[] = [];
+  for (const it of items) {
+    const k = `${norm(it.description)}|${norm(it.model_number)}`;
+    const newId = byDescModel.get(k) || byDesc.get(norm(it.description));
+    if (!newId) continue;
+    remapped.push({ ...it, boq_item_id: newId });
+  }
+  const remappedDocs = docs.map((d) => {
+    const oldItem = items.find((i) => i.boq_item_id === d.boq_item_id);
+    if (!oldItem) return d;
+    const k = `${norm(oldItem.description)}|${norm(oldItem.model_number)}`;
+    const newId = byDescModel.get(k) || byDesc.get(norm(oldItem.description));
+    return newId ? { ...d, boq_item_id: newId } : d;
+  });
+  const taggedRound = { ...round, inherited_from_boq_id: sourceBoqId } as DesignReviewRow & { inherited_from_boq_id: string };
+  return { round: taggedRound, items: remapped, docs: remappedDocs };
+}
+
+async function fetchRoundForBoq(boqId: string, mode: "submitted" | "approval"): Promise<DesignReviewRow | null> {
+  let q = supabase.from("boq_design_reviews").select("*").eq("boq_id", boqId);
+  q = mode === "submitted" ? q.eq("status", "submitted") : q.eq("kind", "approval");
+  const { data } = await q.order("round_no", { ascending: false }).limit(1);
+  return (data?.[0] as unknown as DesignReviewRow) || null;
+}
+
+/** Walk the BOQ revision chain (and sibling BOQs in the OA family) to find
+ *  the most recent BOQ id that has a matching design-review round. */
+async function findLatestRoundBoqId(boqId: string, mode: "submitted" | "approval"): Promise<string | null> {
+  const seen = new Set<string>();
+  let cursor: string | null = boqId;
+  let orderId: string | null = null;
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const r = await fetchRoundForBoq(cursor, mode);
+    if (r) return cursor;
+    const { data: row } = await supabase
+      .from("boqs").select("revised_from_id,order_id").eq("id", cursor).maybeSingle();
+    const next = (row as { revised_from_id: string | null; order_id: string | null } | null);
+    if (next?.order_id && !orderId) orderId = next.order_id;
+    cursor = next?.revised_from_id || null;
+  }
+  // Sibling fallback: any BOQ tied to an OA in the same family.
+  if (orderId) {
+    const { data: oaRow } = await supabase
+      .from("orders").select("id,parent_order_id").eq("id", orderId).maybeSingle();
+    const root = (oaRow as { id: string; parent_order_id: string | null } | null)?.parent_order_id
+      || (oaRow as { id: string } | null)?.id || orderId;
+    const { data: fam } = await supabase
+      .from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
+    const familyIds = ((fam || []) as Array<{ id: string }>).map((r) => r.id);
+    if (familyIds.length) {
+      const { data: sibs } = await supabase
+        .from("boqs").select("id,revision").in("order_id", familyIds)
+        .order("revision", { ascending: false });
+      for (const s of ((sibs || []) as Array<{ id: string }>)) {
+        if (seen.has(s.id)) continue;
+        const r = await fetchRoundForBoq(s.id, mode);
+        if (r) return s.id;
+      }
+    }
+  }
+  return null;
 }
 
 /** Fetch the baseline BOQ snapshot from the latest **comment** review round.
