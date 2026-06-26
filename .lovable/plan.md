@@ -1,64 +1,45 @@
+
 ## Problem
 
-In Manufacturing and Purchase folders, `26-27/GMSBOQ/0003/R0` shows a green **Approved** badge even though Design has not approved the BOQ and the linked OA is not approved. The working reference `26-27/GMSBOQ/0002/R9` is correctly approved (Design has approved all items).
+When an OA is revised, the auto-created new BOQ revision:
+- correctly carries forward `line_items[].approval_status`, `boq_item_design_status` rows, and applied `boq_design_comments` (already implemented in `src/lib/revisions/index.ts`),
+- **but does not carry the `boq_design_reviews` "round"** that the BOQ UI uses to render the Design comment panel and the "Approved by Design" badge.
 
-### Root cause
+The BOQ editor renders the Design comment via `fetchLatestSubmittedRound(newBoqId)` and the approval column via `fetchLatestApprovalRound(newBoqId)` (`src/components/boqs/DesignCommentsInline.tsx`, `src/pages/boqs/BoqEditor.tsx` line 126). The new BOQ revision has no rows in `boq_design_reviews`, so both return `null` and the Design comment/approval disappear on the BOQ — even though the OA continues to show them correctly (OA reads from `line_items[].approval_status` + `boq_item_design_status`, which are already carried).
 
-All three list pages (`BoqFolder`, Purchase `ApprovedBoqListPage`, Manufacturing `ApprovedBoqListPage`) and the detail page (`ApprovedBoqDetailPage`) decide the badge purely from `boqs.verification_status === 'approved'`. For BOQ `0003/R0` that flag is `'approved'`, but:
+## Fix (display-only, no changes to OA/BOQ generation, numbering, formulas, workflow)
 
-- It has **zero** rows in `boq_item_design_status` (no Design approval applied).
-- Its line items have no `approval_status='approved'` (linked OA has not received Design approval mirror).
+Add a **previous-revision fallback** to the two design-review fetchers so that when the current BOQ has no review round, they walk back through `boqs.revised_from_id` (and as a secondary fallback the OA family's highest-revision sibling BOQ that does have a round) and return that round's items + docs, remapped to the current BOQ's item ids by description+model.
 
-So `verification_status` alone is not a reliable signal of "Design + OA approved".
+### Files to change
 
-## Fix (display-only)
+1. `src/lib/boq/designReview.ts`
+   - Extract a small helper `findLatestRoundBoqId(boqId, kind: "submitted"|"approval")` that:
+     - checks the given `boqId` for a matching round (current behavior);
+     - if none, loads `boqs.revised_from_id` and recurses up the chain;
+     - if still none, queries sibling BOQs in the same OA family (`order_id ∈ family`) ordered by `revision desc` and returns the first that has a round.
+   - Update `fetchLatestSubmittedRound` and `fetchLatestApprovalRound` to use it. When the round is found on a different BOQ:
+     - fetch that round's items + docs as today,
+     - load the **current** BOQ's `line_items` and build a `desc|model → currentItemId` map,
+     - return items with `boq_item_id` rewritten to the current BOQ's item ids so the UI keys match (items that don't map are dropped),
+     - flag the returned `round` object with `inherited_from_boq_id` for debugging only.
+   - No DB writes, no schema changes.
 
-Introduce a single shared helper and use it everywhere the green "Approved" pill is rendered. No changes to data writes, revision logic, calculations, workflows, list inclusion, navigation, or any other UI.
+2. `src/components/boqs/DesignCommentsInline.tsx` — no code change required; it already consumes the fetcher result. The inherited round will render with its original `round_no` and reviewer info.
 
-### New helper
+3. `src/pages/boqs/BoqEditor.tsx` (lines 119–194) — keep as-is. With the fallback in place, `fetchLatestApprovalRound` now returns the inherited round and the existing sync code mirrors `approval_status` onto the new BOQ's `line_items`, matching the working GMS R9 case. The carried `boq_item_design_status` rows inserted by `reviseBoqFromOrder` continue to seed the snapshot before the fetcher resolves.
 
-`src/lib/boq/designApprovalStatus.ts`
+4. Test: extend `src/test/oaRevisionE2E.test.ts` (or add a focused unit test on `fetchLatestSubmittedRound`) to assert that after revising R6→R7 with a submitted review on R6's BOQ, calling the fetcher with R7's `boqId` returns R6's round with item ids remapped to R7's items.
 
-```ts
-export type DesignApprovalState = "approved" | "not_approved";
+### What is intentionally NOT changed
 
-export async function fetchDesignApprovalStates(
-  boqs: Pick<BoqRecord, "id" | "revision" | "line_items">[]
-): Promise<Map<string, DesignApprovalState>>
-```
+- `reviseOrder` / `reviseBoqFromOrder` carry-forward logic.
+- BOQ numbering, revision derivation, calculations, validations, PDF/Excel generators.
+- OA editor's "Approved by Design" column logic.
+- `boq_design_reviews` rows on the previous BOQ (kept exactly as-is so revision history is preserved).
+- Approval workflow (no auto-creation of new rounds; new approvals still go through Design as before).
 
-Logic per BOQ — returns `"approved"` only when **both** are true:
+### Outcome
 
-1. **Design BOQ approved:** `boq_item_design_status` has at least one row with `status='approved'` for this `boq_id` at the current revision, AND no row exists with `status='rejected'` or `status='pending'` for items in the current snapshot.
-2. **Linked OA approved:** every item in `line_items` has `approval_status === 'approved'` (this is the mirror that OrderEditor already uses to render "Approved by Design" on the OA — same source of truth, so the two views can never disagree).
-
-Otherwise returns `"not_approved"`.
-
-### Call sites to update (badge text only)
-
-- `src/pages/purchase/BoqFolder.tsx` — list badge (currently always `tab` label colored green): show `Approved` / `Not Approved by Design` based on helper.
-- `src/pages/modules/ApprovedBoqModule.tsx`:
-  - `ApprovedBoqListPage` card badge.
-  - `ApprovedBoqDetailPage` header badge (`approved && <Badge…>Approved</Badge>`).
-- These two pages drive both `/purchase` and `/manufacturing` via `PURCHASE_CONFIG` / `MANUFACTURING_CONFIG`, so one change covers both modules.
-
-Badge variants:
-- `approved` → existing green `Badge className="bg-emerald-600 hover:bg-emerald-600"`Approved.
-- `not_approved` → `Badge variant="secondary"` with text **Not Approved by Design** (amber/neutral; no green).
-
-### Behavior on the affected records
-
-- `26-27/GMSBOQ/0003/R0` → no `boq_item_design_status` rows → badge becomes **Not Approved by Design**.
-- `26-27/GMSBOQ/0002/R9` → 4 approved Design rows for 4 items, all line items mirror `approved` → badge stays **Approved** (matches today).
-
-### Explicitly NOT changing
-
-- List inclusion rule (`pickLatestApprovedPerFamily`) — same records continue to appear.
-- `verification_status`, revision/carry-forward logic, BOQ/OA numbering, totals, PDFs, routing, edit permissions.
-- OrderEditor, BoqEditor, DesignBoqView, requisition/PO flows — untouched.
-
-## Verification
-
-1. Open `/purchase/approved` and `/manufacturing` GMS tab: `0003` shows **Not Approved by Design**, `0002/R9` shows **Approved**.
-2. Open detail page for `0003`: header badge shows **Not Approved by Design**; "Create Requisition" button remains as-is (separate `verification_status` gate, unchanged).
-3. DB sanity: `select boq_id, count(*) from boq_item_design_status where boq_id in (...) group by 1;` matches expectation.
+- MROA/2026-27/0007/R7's BOQ will show the same Design comment and "Approved by Design" badge that R6 had, matching the working `2026-27/GMS/0002/R9` reference.
+- BOQ Folder, Manufacturing, and Purchase already read `line_items[].approval_status` + `boq_item_design_status` (which are carried forward), so they keep displaying correctly once the BOQ snapshot is in sync.
