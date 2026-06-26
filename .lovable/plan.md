@@ -1,59 +1,64 @@
-## Goal
-Fix notification duplication, separate **Seen** vs **Acknowledged**, and add an actor/admin **Tracking** view. Keep existing UI, triggers, and emit call sites unchanged.
 
-## Root causes of the duplicates in screenshot
-1. **`emit_notification` merge is too narrow.** It only merges rows where `record_id`, `event_type`, AND `target_departments = ARRAY[_dept]` all match. Notifications created before `revision_key` was added (or with slightly different event labels / extra target depts) never merge → 4 identical "OA…R9 line items updated" rows persist.
-2. **`design_comment` notifications** use the comment row's id as `record_id`, so every new comment is a new `record_id` and merge cannot find the prior row even when `revision_key` (`boq:id:rN`) is identical.
-3. **No backfill** of `revision_key` / merge for the rows that already exist.
-4. **Seen == Acknowledged today.** The list only writes `app_notification_reads` on Acknowledge; merely opening Details / Open in page does not mark the row seen, and there are no `seen_*` columns.
-5. **No tracking surface** for the actor/creator dept or admin.
+## Problem
 
-## Plan
+After OA revision, Design comments / changes / approval no longer show up on the revised OA (R7) or revised BOQ. Auto-save also fails silently in some cases. Existing OA → BOQ revision, numbering, formulas, validation, and UI must not change — only the missing carry-forward + visibility behavior is restored.
 
-### 1. Database migration — stronger per-document merge
-- Rewrite `emit_notification` merge lookup to key on **`(target_department, revision_key)`** only (drop the `record_id` + `event_type` predicate inside the merge SELECT, but keep the new INSERT writing both). This makes one row per (document-revision, target dept) regardless of how many edit events fire.
-- For `design_comment`, set `_record_id` used in merge lookup to the BOQ id so all comments on the same BOQ revision collapse into the single row.
-- Switch `target_departments = ARRAY[_dept]` comparison to `_dept = ANY(target_departments)` so legacy multi-dept rows are reused.
-- Title becomes `"<DocRef> — N change(s)"` using `record_ref`.
+Root causes found while exploring the code:
 
-### 2. Database migration — backfill existing dupes
-- For every `(module, COALESCE(related_boq_id, related_order_root_id, record_id), target_department)` group with un-acknowledged rows, keep the oldest row, merge all `line_item_changes` into it, recompute `total_changed_rows` / `total_changed_cells` / `title`, and delete the rest (cascade `app_notification_reads`).
+1. `reviseOrder` in `src/lib/revisions/index.ts` calls `stripOrderForInsert(source)` using whatever OA record the user revised from. If the user opens R6, applies a Design comment in the editor but does not click Save before Revise, R7 is built from R6's stored content (pre-apply), not the latest applied values. Comments themselves are tied to the linked BOQ revision via `boq_design_comments`, so they only carry forward through `carryForwardAppliedDesignComments`, which is gated on `applied_to_oa_at IS NOT NULL`. If the comment was applied locally in the editor but never persisted via the `apply_design_comment_to_oa` RPC for that BOQ id, it is treated as a draft and dropped.
+2. `reviseBoqFromOrder` already calls `carryForwardAppliedDesignComments`, but the OA-revision path runs `reviseOrder → reviseBoqFromOrder(newOrderRec, currentBoq)` where `currentBoq` is the *current* BOQ found via `is_current` on family ids. If the BOQ that owns the applied comments isn't `is_current` (e.g. user reopened an older BOQ), the comments don't get carried forward.
+3. `DesignBoqView.saveNow` swallows comment-save errors when `boq.design_review_status` flip-back fails, leaving the comment unsaved silently. The 600ms debounce can also be skipped when the user clicks "Approve / Send" before the timer fires; `handlePostSubmit` flushes drafts, but `handleApprove` does not.
+4. OA editor's `OaCellDesignComment` displays the comment + "Applied" timestamp but never surfaces the Design approval status / approver / approval date for the OA row, so even when carry-forward works, the OA reads as un-approved.
 
-### 3. Database migration — Seen vs Acknowledged split
-- Add columns to `app_notifications`: none. Add columns to `app_notification_reads`: `kind text not null default 'ack' check (kind in ('seen','ack'))`, `department text`, plus drop the implicit uniqueness so a (notification, user) can have one `seen` and one `ack` row. Replace the unique index with `unique (notification_id, user_id, kind)`.
-- Add RPC `mark_notification_seen(_id uuid)` (SECURITY DEFINER) that inserts a `seen` row only when the caller's dept matches a target dept and the caller is not the actor.
-- Update RLS: `seen` rows readable by actor + admin + target-dept users; `ack` rows unchanged.
+## Fix scope (frontend + revision helper only — no schema, no workflow changes)
 
-### 4. Frontend — fire `seen` on view, keep `ack` separate
-- `NotificationDetailDialog` and the "Open in page" button call `mark_notification_seen(id)` on open. Acknowledge button keeps writing the `ack` row via the existing path.
-- `ModuleNotifications` row pill renders **New → Seen → Acknowledged** based on which read kinds exist for the current user.
-- No layout / styling changes; only the badge text + an `onClick` side-effect.
+### 1. Design BOQ auto-save hardening — `src/pages/design/DesignBoqView.tsx`
+- In `handleApprove`, mirror `handlePostSubmit`: flush `debounceRef` timers and `await Promise.all` of pending `upsertDesignComment` calls before calling the approve RPC.
+- In `saveNow`, separate the comment-upsert try/catch from the BOQ status flip-back so a status-update failure cannot mask a successful comment save (and vice-versa). Toast only the failing step.
+- Add a `beforeunload` flush that fires pending `saveNow` calls synchronously via `navigator.sendBeacon`-style fallback (use existing `upsertDesignComment` in an awaited `Promise.allSettled` inside an `unload` handler — best-effort).
 
-### 5. Frontend — Tracking view for actor & admin
-- Add `<NotificationTrackingDialog/>` (new file `src/components/notifications/NotificationTrackingDialog.tsx`) showing, per target department:
-  - Sent ✓ · Seen by `<user>` at `<ts>` (or Not Seen) · Acknowledged by `<user>` at `<ts>` (or Not Acknowledged).
-- Powered by a new SECURITY DEFINER RPC `get_notification_tracking(_id uuid)` that returns one row per target dept by joining `app_notification_reads`. Visible only to the actor or admins (`has_role(uid,'admin')`).
-- Surface a small "Tracking" button in `ModuleNotifications` and `NotificationDashboard` rows when the current user is the actor or admin.
+### 2. OA editor — make the latest applied comment + Design approval visible
+- `src/components/orders/OaCellDesignComment.tsx`: extend the props to optionally accept `approval?: { status: "approved" | "pending" | "not_approved"; by?: string | null; at?: string | null }`. When `approval.status === "approved"` render a small "✓ Approved by {by} on {date}" line under the comment. No layout change otherwise.
+- `src/pages/orders/OrderEditor.tsx`: build a `designApprovalByOaItemId` map from `boq_item_design_status` (already populated by the Design page) joined through `oaToBoqItemId`, and pass the matching entry into each `<OaCellDesignComment approval=…>` call. Read uses one extra `supabase.from("boq_item_design_status").select(...)` keyed on `currentBoq.id` + `currentBoq.revision`. No write/format changes.
 
-### 6. Tests
-- Extend `notificationDocLevelMergeAndDeepLink.test.ts` to cover:
-  - Two consecutive `order` `line_items_changed` emits with overlapping + new rows → one notification per dept, merged change list, correct totals.
-  - Three `design_comment` emits on same BOQ revision → one notification per dept.
-  - Backfill collapses pre-existing dupes.
-  - `mark_notification_seen` only succeeds for target-dept user; actor cannot.
-  - `get_notification_tracking` returns per-dept Sent/Seen/Ack rows; non-actor non-admin call is rejected.
+### 3. OA revise must capture the in-editor "applied" state — `src/pages/orders/OrderEditor.tsx`
+- Where the "Revise" button is wired, change the handler to first call the existing Save path (the same code that runs when clicking Save) and only then call `reviseOrder(savedRecord)`. This guarantees `reviseOrder` reads R6's *latest applied* content, not the stale loaded copy.
+- Do not change `reviseOrder`'s signature or `stripOrderForInsert` — only ensure the source argument is fresh.
 
-## Files
+### 4. Carry forward applied Design comments even when BOQ isn't the family's current — `src/lib/revisions/index.ts`
+- In `reviseOrder`, when locating the BOQ to auto-revise, prefer (in order): (a) the BOQ whose `order_id === source.id` and is the highest-revision BOQ for that OA row, (b) the family's `is_current` BOQ (existing behavior). Pass that BOQ to `reviseBoqFromOrder`, so carry-forward draws from the BOQ the user was actually commenting on.
+- In `carryForwardAppliedDesignComments`, additionally include comments whose `applied_to_oa_at IS NULL` **only if** a row with the same `(boq_item_id, column_key)` exists in the parent OA's `line_items` with a matching applied value — i.e. it was applied in the editor and saved on the OA but the RPC stamp didn't fire. Implemented as a small post-filter in `buildAppliedCommentInserts` accepting an optional "applied keys" set; the helper stays pure and the new branch is opt-in (no behavior change for callers that don't pass it).
+- No SQL migration, no enum/grant changes.
 
-**Created**
-- `supabase/migrations/<ts>_notif_merge_seen_tracking.sql`
-- `src/components/notifications/NotificationTrackingDialog.tsx`
-- additions to `src/test/notificationDocLevelMergeAndDeepLink.test.ts`
+### 5. Linked-module visibility (read-only)
+- The carry-forward already makes the new BOQ revision (auto-marked `is_current`) own the inherited comments + per-item approval rows. The existing readers in Manufacturing / Requisition / Annexure / Purchase already resolve "latest BOQ" via `is_current`, so once steps 1–4 land they will display the right comment/approval automatically. No edits needed in those modules.
 
-**Edited (frontend, no layout change)**
-- `src/components/notifications/ModuleNotifications.tsx` — call seen RPC, render Seen/Ack badges, add Tracking button.
-- `src/components/notifications/NotificationDetailDialog.tsx` — call seen RPC on open.
-- `src/lib/notifications/dept.ts` — small helper `markSeen(id)`.
-- `src/pages/notifications/NotificationDashboard.tsx` — Tracking button for actor/admin rows.
+### 6. Tests — extend `src/test/designCommentsCarryForward.test.ts`
+- Add cases proving:
+  - Comments with `applied_to_oa_at = null` but matching applied-key set still get carried forward.
+  - The BOQ-selection preference (per-OA-row latest > family is_current) returns the right BOQ id when both exist.
+- Re-run vitest to confirm green.
 
-Existing emit call sites, triggers, RLS for other tables, badges, page layouts, and module UIs remain untouched.
+## Out of scope (explicitly NOT changed)
+
+- OA → BOQ generation logic, BOQ formula/calc, revision numbering, validation, RLS, notifications, UI layout, sidebar, workflow status flow.
+
+## Technical notes
+
+```
+reviseOrder(source)
+  ├── (NEW) source = await saveOrderIfDirty(source)
+  ├── insert R(n+1) from source           ← unchanged code path
+  └── auto-revise BOQ
+        ├── (NEW) pickBoqForCarryForward(source.id, family)
+        └── reviseBoqFromOrder(newOrder, prevBoq)
+              └── carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, map, appliedKeys?)
+```
+
+Files touched:
+- `src/pages/design/DesignBoqView.tsx`
+- `src/components/orders/OaCellDesignComment.tsx`
+- `src/pages/orders/OrderEditor.tsx`
+- `src/lib/revisions/index.ts`
+- `src/lib/revisions/carryForward.ts`
+- `src/test/designCommentsCarryForward.test.ts`
