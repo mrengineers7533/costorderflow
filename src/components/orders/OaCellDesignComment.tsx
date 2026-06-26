@@ -30,7 +30,7 @@ export function OaCellDesignComment({
   } | null;
 }) {
   if (!comment && (!approval || approval.status !== "approved")) return null;
-  const applied = !!comment.applied_to_oa_at;
+  const applied = !!comment?.applied_to_oa_at;
   return (
     <div className="mt-1 border-l-2 border-primary/40 pl-2 text-[11px] leading-snug">
       {comment && (
