@@ -47,6 +47,7 @@ import type { BoqLineItem } from "@/lib/boq/types";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { NotifHighlightBanner } from "@/components/notifications/HighlightCell";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { fetchRevisionApprovalSnapshots, mapSnapshotItems } from "@/lib/boq/approvalSnapshots";
 
 const emptyAddress: Address = { name: "", address: "", gstin: "", state: "", state_code: "" };
 const emptyCharges: Charges = {
@@ -77,6 +78,7 @@ export default function OrderEditor() {
   const [revisionsKey, setRevisionsKey] = useState(0);
   // Tracks the BOQ that's current for this OA family (for View / Revise / Download BOQ buttons).
   const [currentBoq, setCurrentBoq] = useState<BoqRecord | null>(null);
+  const [snapshotApprovalByBoqItem, setSnapshotApprovalByBoqItem] = useState<Map<string, "approved" | "not_approved">>(new Map());
   // Confirmation dialogs
   const [confirmReviseOa, setConfirmReviseOa] = useState(false);
   // BOQ revisions removed — BOQ auto-syncs from current OA on save.
@@ -178,6 +180,18 @@ export default function OrderEditor() {
       setCurrentBoq((data as unknown as BoqRecord) || null);
     })();
   }, [parentOrderId, revisionsKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSnapshotApprovals() {
+      if (!currentBoq?.id) { setSnapshotApprovalByBoqItem(new Map()); return; }
+      const snapshots = await fetchRevisionApprovalSnapshots([currentBoq.id]);
+      const mapped = mapSnapshotItems(snapshots.get(currentBoq.id), currentBoq.revision ?? 0);
+      if (!cancelled) setSnapshotApprovalByBoqItem(mapped);
+    }
+    loadSnapshotApprovals();
+    return () => { cancelled = true; };
+  }, [currentBoq?.id, currentBoq?.revision]);
 
   // Auto-backfill `make_label` from the linked cost sheet for OAs saved
   // before the Make column was captured. Read-only state hydration: matches
@@ -372,11 +386,12 @@ export default function OrderEditor() {
       const match = candidates.length === 1 ? candidates[0]
         : candidates.length > 1 ? candidates[Math.min(idx, candidates.length - 1)]
         : boqItems[idx];
-      const s = (match?.approval_status || "pending") as "approved" | "rejected" | "pending";
+      const snap = match?.id ? snapshotApprovalByBoqItem.get(match.id) : undefined;
+      const s = (snap === "approved" ? "approved" : match?.approval_status || "pending") as "approved" | "rejected" | "pending";
       map.set(it.id, s === "approved" || s === "rejected" ? s : "pending");
     });
     return map;
-  }, [currentBoq, items]);
+  }, [currentBoq, items, snapshotApprovalByBoqItem]);
   // Debounced auto-save trigger used by the design "Apply" buttons. Defers
   // to allow React state (model/remarks) to flush before save() reads it.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -428,9 +443,9 @@ export default function OrderEditor() {
       try {
         const { data: appr } = await supabase
           .from("boq_item_design_status" as never)
-          .select("boq_item_id,status,decided_by_name,decided_by_department,decided_at,revision")
+          .select("boq_item_id,status,decided_by_name,decided_by_department,decided_at,boq_revision")
           .eq("boq_id", currentBoq.id)
-          .eq("revision", currentBoq.revision ?? 0);
+          .eq("boq_revision", currentBoq.revision ?? 0);
         if (!cancelled) {
           const map: typeof designItemApprovals = {};
           for (const r of (appr || []) as Array<{

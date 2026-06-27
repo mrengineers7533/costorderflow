@@ -82,7 +82,7 @@ export async function fetchDesignApprovalStates(
     const relevant = rows.filter((r) => itemIds.has(r.boq_item_id));
     let hasApproved = relevant.some((r) => r.status === "approved");
     let hasBlocking = relevant.some(
-      (r) => r.status === "rejected" || r.status === "pending",
+      (r) => r.status === "not_approved" || r.status === "rejected" || r.status === "pending",
     );
     let inherited = false;
 
@@ -156,7 +156,7 @@ async function findInheritedApproval(
       const descOnly = k.split("|")[0];
       if (!currentDescKeys.has(k) && !currentDescKeys.has(descOnly)) continue;
       if (r.status === "approved") approved = true;
-      else if (r.status === "rejected" || r.status === "pending") blocking = true;
+      else if (r.status === "not_approved" || r.status === "rejected" || r.status === "pending") blocking = true;
     }
     if (!approved && !blocking) return null;
     return { approved, blocking };

@@ -11,6 +11,138 @@ import {
   buildBoqItemIdRemap,
   type DesignCommentCarry,
 } from "@/lib/revisions/carryForward";
+import { fetchRevisionApprovalSnapshots } from "@/lib/boq/approvalSnapshots";
+
+type CarriedDesignStatus = {
+  status: "approved" | "pending" | "not_approved";
+  reason?: string | null;
+  decided_by?: string | null;
+  decided_by_name?: string | null;
+  decided_by_department?: string | null;
+  decided_at?: string | null;
+};
+
+const normApprovalText = (s: string | null | undefined) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+const boqSig = (description?: string | null, model?: string | null) => `${normApprovalText(description)}|${normApprovalText(model)}`;
+const oaModel = (it: LineItem) => ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
+
+async function refreshBoqApprovalSnapshot(boqId: string): Promise<void> {
+  try {
+    await (supabase.rpc as any)("refresh_boq_revision_approval_snapshot", { _boq_id: boqId });
+  } catch (e) {
+    console.warn("refreshBoqApprovalSnapshot failed", e);
+  }
+}
+
+async function loadCarriedDesignStatuses(prevBoq: BoqRecord): Promise<{
+  byItemId: Map<string, CarriedDesignStatus>;
+  bySignature: Map<string, CarriedDesignStatus>;
+  representativeApproved: CarriedDesignStatus | null;
+  approvedCount: number;
+  blockingCount: number;
+}> {
+  const byItemId = new Map<string, CarriedDesignStatus>();
+  const bySignature = new Map<string, CarriedDesignStatus>();
+  const itemById = new Map((prevBoq.line_items || []).map((it) => [it.id, it]));
+  let representativeApproved: CarriedDesignStatus | null = null;
+  let approvedCount = 0;
+  let blockingCount = 0;
+  const remember = (itemId: string, status: CarriedDesignStatus, item?: Pick<BoqLineItem, "description" | "model_number"> | null) => {
+    byItemId.set(itemId, status);
+    const src = item || itemById.get(itemId);
+    if (src) bySignature.set(boqSig(src.description, src.model_number), status);
+    if (status.status === "approved") {
+      approvedCount += 1;
+      if (!representativeApproved || (status.decided_at || "") > (representativeApproved.decided_at || "")) representativeApproved = status;
+    } else {
+      blockingCount += 1;
+    }
+  };
+
+  for (const it of prevBoq.line_items || []) {
+    if (it.id && it.approval_status === "approved") remember(it.id, { status: "approved", reason: it.approval_comment }, it);
+  }
+  try {
+    const { data } = await supabase
+      .from("boq_item_design_status")
+      .select("boq_item_id,status,reason,decided_by,decided_by_name,decided_by_department,decided_at,updated_at")
+      .eq("boq_id", prevBoq.id);
+    for (const r of (data || []) as Array<CarriedDesignStatus & { boq_item_id: string }>) {
+      remember(r.boq_item_id, {
+        status: r.status === "approved" ? "approved" : r.status === "not_approved" ? "not_approved" : "pending",
+        reason: r.reason,
+        decided_by: r.decided_by,
+        decided_by_name: r.decided_by_name,
+        decided_by_department: r.decided_by_department,
+        decided_at: r.decided_at,
+      });
+    }
+  } catch (e) {
+    console.warn("loadCarriedDesignStatuses status fetch failed", e);
+  }
+  try {
+    const snaps = await fetchRevisionApprovalSnapshots([prevBoq.id]);
+    for (const r of (snaps.get(prevBoq.id) || []).filter((s) => s.boq_revision === (prevBoq.revision ?? 0))) {
+      remember(r.boq_item_id, {
+        status: r.approval_status === "approved" ? "approved" : "not_approved",
+        reason: r.approval_comment,
+        decided_by: r.approved_by || null,
+        decided_by_name: r.approved_by_name,
+        decided_by_department: r.approved_by_department || null,
+        decided_at: r.approved_at,
+      }, { description: r.description || "", model_number: r.model_number || "" });
+    }
+  } catch (e) {
+    console.warn("loadCarriedDesignStatuses snapshot fetch failed", e);
+  }
+  return { byItemId, bySignature, representativeApproved, approvedCount, blockingCount };
+}
+
+async function cloneCarriedDesignStatuses(
+  prevBoq: BoqRecord,
+  newBoq: BoqRecord,
+  orderItems: LineItem[],
+  newItems: BoqLineItem[],
+  prevBySignature: Map<string, BoqLineItem>,
+  carried?: Awaited<ReturnType<typeof loadCarriedDesignStatuses>>,
+): Promise<BoqLineItem[]> {
+  carried ||= await loadCarriedDesignStatuses(prevBoq);
+  const inserts: Array<Record<string, unknown>> = [];
+  const byNewItem = new Map<string, CarriedDesignStatus>();
+  orderItems.forEach((oa, i) => {
+    const sig = boqSig(oa.description, oaModel(oa));
+    const prev = prevBySignature.get(sig);
+    const status = (prev?.id && carried.byItemId.get(prev.id)) || carried.bySignature.get(sig)
+      || (carried.approvedCount > 0 && carried.blockingCount === 0 ? carried.representativeApproved : null);
+    const newId = newItems[i]?.id;
+    if (!status || !newId) return;
+    byNewItem.set(newId, status);
+    inserts.push({
+      boq_id: newBoq.id,
+      boq_item_id: newId,
+      boq_revision: newBoq.revision ?? 0,
+      status: status.status === "approved" ? "approved" : status.status === "not_approved" ? "not_approved" : "pending",
+      reason: status.reason ?? null,
+      decided_by: status.decided_by ?? null,
+      decided_by_name: status.decided_by_name ?? null,
+      decided_by_department: status.decided_by_department ?? null,
+      decided_at: status.decided_at ?? null,
+    });
+  });
+  if (inserts.length) {
+    const { error } = await supabase.from("boq_item_design_status").insert(inserts as never);
+    if (error) console.warn("cloneCarriedDesignStatuses insert failed", error);
+  }
+  if (!byNewItem.size) return newItems;
+  const patched = newItems.map((it) => {
+    const s = byNewItem.get(it.id);
+    if (!s) return it;
+    return { ...it, approval_status: s.status === "approved" ? "approved" : "pending", approval_comment: s.reason ?? it.approval_comment } as BoqLineItem;
+  });
+  await supabase.from("boqs").update({ line_items: patched } as never).eq("id", newBoq.id);
+  await refreshBoqApprovalSnapshot(newBoq.id);
+  return patched;
+}
 
 /** Toggle the per-connection "suppress cascaded notifications" flag.
  *  Used so that BOQ/PI rows auto-created or auto-synced as a side effect of
@@ -247,12 +379,16 @@ export async function reviseBoqFromOrder(
     const k = `${(it.description || "").trim().toLowerCase()}|${(it.model_number || "").trim().toLowerCase()}`;
     prevByKey.set(k, it);
   });
+  const carriedApprovals = prevBoq ? await loadCarriedDesignStatuses(prevBoq) : null;
 
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const desc = it.description || "";
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
     const prev = prevByKey.get(key);
+    const carried = carriedApprovals
+      ? ((prev?.id && carriedApprovals.byItemId.get(prev.id)) || carriedApprovals.bySignature.get(boqSig(desc, model)))
+      : null;
     const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
     const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
@@ -270,8 +406,8 @@ export async function reviseBoqFromOrder(
       // Carry forward per-item Design approval snapshot from previous BOQ
       // revision so the OA's "Approved by Design" column remains correct
       // after an OA revision, until the user manually changes it.
-      approval_status: prev?.approval_status,
-      approval_comment: prev?.approval_comment,
+      approval_status: prev?.approval_status || (carried?.status === "approved" ? "approved" : undefined),
+      approval_comment: prev?.approval_comment || carried?.reason || undefined,
     };
   });
 
@@ -303,6 +439,10 @@ export async function reviseBoqFromOrder(
     line_items: items,
     terms: prevBoq?.terms || DEFAULT_BOQ_TERMS,
     notes: prevBoq?.notes || orderRev.notes || null,
+    verification_status: prevBoq?.verification_status || "approved",
+    design_review_status: prevBoq?.design_review_status || null,
+    verified_at: prevBoq?.verified_at || null,
+    verified_by_email: prevBoq?.verified_by_email || null,
   };
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) throw error;
@@ -314,146 +454,10 @@ export async function reviseBoqFromOrder(
     await carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, oldToNewItemId);
   }
 
-  // Carry forward per-item design status rows from the previous BOQ revision
-  // so the Design page's per-row Approve/Pending state survives the OA
-  // revision. Best-effort: failures are logged, never block the revision.
-  //
-  // Robustness: we no longer filter by `boq_revision` and we fall back to a
-  // "bulk approved" inference when prev status rows reference orphan item
-  // ids (legacy BOQs where line_items were regenerated after Design clicked
-  // Approve). This keeps the carried OA / BOQ folder display correct even
-  // when ID-level matching cannot resolve a row.
   if (prevBoq) {
     try {
-      const { data: prevStatuses } = await supabase
-        .from("boq_item_design_status")
-        .select("boq_item_id,status,decided_by,decided_by_name,decided_by_department,decided_at,boq_revision")
-        .eq("boq_id", prevBoq.id);
-      const prevStatusByOldItemId = new Map<string, {
-        status: string;
-        decided_by: string | null;
-        decided_by_name: string | null;
-        decided_by_department: string | null;
-        decided_at: string | null;
-      }>();
-      let approvedSeen = 0;
-      let rejectedSeen = 0;
-      let representativeApproved: {
-        decided_by: string | null;
-        decided_by_name: string | null;
-        decided_by_department: string | null;
-        decided_at: string | null;
-      } | null = null;
-      for (const r of (prevStatuses || []) as Array<{
-        boq_item_id: string;
-        status: string;
-        decided_by: string | null;
-        decided_by_name: string | null;
-        decided_by_department: string | null;
-        decided_at: string | null;
-        boq_revision: number | null;
-      }>) {
-        // Latest-row-wins for a given old item id.
-        const existing = prevStatusByOldItemId.get(r.boq_item_id);
-        if (!existing || (r.decided_at || "") > (existing.decided_at || "")) {
-          prevStatusByOldItemId.set(r.boq_item_id, r);
-        }
-        if (r.status === "approved") {
-          approvedSeen++;
-          if (!representativeApproved || (r.decided_at || "") > (representativeApproved.decided_at || "")) {
-            representativeApproved = r;
-          }
-        } else if (r.status === "rejected") {
-          rejectedSeen++;
-        }
-      }
-      // Map old prev BOQ item id -> new BOQ item id using the same
-      // description|model key already computed above.
-      const inserts: Array<Record<string, unknown>> = [];
-      const carriedNewItemIds = new Set<string>();
-      const newItemStatus = new Map<string, { status: string; comment?: string | null }>();
-      (orderRev.line_items || []).forEach((it: LineItem, i: number) => {
-        const desc = it.description || "";
-        const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
-        const key = `${desc.trim().toLowerCase()}|${model.trim().toLowerCase()}`;
-        const prev = prevByKey.get(key);
-        const newItemId = items[i]?.id;
-        if (!newItemId) return;
-        // Prefer explicit prev-id match; fall back to prev item's own
-        // line_items.approval_status (already carried on `items[i]`).
-        let status = prev?.id ? prevStatusByOldItemId.get(prev.id) : undefined;
-        if (!status && prev && (prev as unknown as { approval_status?: string }).approval_status === "approved") {
-          status = representativeApproved
-            ? { status: "approved", ...representativeApproved }
-            : { status: "approved", decided_by: null, decided_by_name: null, decided_by_department: null, decided_at: null };
-        }
-        if (!status) return;
-        inserts.push({
-          boq_id: newBoq.id,
-          boq_item_id: newItemId,
-          boq_revision: newBoq.revision ?? nextRev,
-          status: status.status,
-          decided_by: status.decided_by,
-          decided_by_name: status.decided_by_name,
-          decided_by_department: status.decided_by_department,
-          decided_at: status.decided_at,
-        });
-        carriedNewItemIds.add(newItemId);
-        newItemStatus.set(newItemId, { status: status.status });
-      });
-
-      // Bulk-approved inference: if Design approved items on prev BOQ but
-      // the rows reference orphan ids (no per-item match resolved) and no
-      // rejection was recorded, treat the whole new BOQ as approved. This
-      // matches the "All items approved" bulk action's intent and keeps
-      // OA / BOQ Folder display correct after a revision.
-      const inferBulk = approvedSeen > 0
-        && rejectedSeen === 0
-        && carriedNewItemIds.size < items.length;
-      if (inferBulk) {
-        for (const it of items) {
-          if (carriedNewItemIds.has(it.id)) continue;
-          inserts.push({
-            boq_id: newBoq.id,
-            boq_item_id: it.id,
-            boq_revision: newBoq.revision ?? nextRev,
-            status: "approved",
-            decided_by: representativeApproved?.decided_by ?? null,
-            decided_by_name: representativeApproved?.decided_by_name ?? null,
-            decided_by_department: representativeApproved?.decided_by_department ?? null,
-            decided_at: representativeApproved?.decided_at ?? null,
-          });
-          carriedNewItemIds.add(it.id);
-          newItemStatus.set(it.id, { status: "approved" });
-        }
-      }
-
-      if (inserts.length) {
-        const { error: insStatusErr } = await supabase
-          .from("boq_item_design_status")
-          .insert(inserts as never);
-        if (insStatusErr) console.warn("Carry-forward boq_item_design_status failed", insStatusErr);
-      }
-
-      // Mirror carried statuses onto the new BOQ's line_items snapshot so
-      // the OA editor's "Approved by Design" column and BOQ Folder read
-      // the same approved state — matches the working GMS case where
-      // line_items[].approval_status is the source of truth.
-      if (newItemStatus.size) {
-        const patched = items.map((it) => {
-          const s = newItemStatus.get(it.id);
-          if (!s) return it;
-          const existing = (it as unknown as { approval_status?: string }).approval_status;
-          if (existing === s.status) return it;
-          return { ...it, approval_status: s.status } as typeof it;
-        });
-        const { error: upErr } = await supabase
-          .from("boqs")
-          .update({ line_items: patched } as never)
-          .eq("id", newBoq.id);
-        if (upErr) console.warn("Mirror carried approval to line_items failed", upErr);
-        else (newBoq as unknown as { line_items: typeof patched }).line_items = patched;
-      }
+      const patched = await cloneCarriedDesignStatuses(prevBoq, newBoq, orderRev.line_items || [], items, prevByKey, carriedApprovals || undefined);
+      (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = patched;
     } catch (e) {
       console.warn("Carry-forward boq_item_design_status threw", e);
     }
@@ -678,13 +682,18 @@ export async function createPendingBoqRevision(
   await snapshotPreviousBoqPdf(prevBoq);
 
   const prevByModel = new Map<string, BoqLineItem>();
+  const prevBySignature = new Map<string, BoqLineItem>();
   (prevBoq.line_items || []).forEach((it) => {
     const k = (it.model_number || "").trim().toLowerCase();
     if (k) prevByModel.set(k, it);
+    prevBySignature.set(boqSig(it.description, it.model_number), it);
   });
+  const carriedApprovals = await loadCarriedDesignStatuses(prevBoq);
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const prev = prevByModel.get(model.trim().toLowerCase());
+    const carried = (prev?.id && carriedApprovals.byItemId.get(prev.id))
+      || carriedApprovals.bySignature.get(boqSig(it.description, model));
     const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
     const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
@@ -699,6 +708,8 @@ export async function createPendingBoqRevision(
       motor: (ext.motor || "").trim() || prevExt.motor,
       motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
       motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
+      approval_status: prev?.approval_status || (carried?.status === "approved" ? "approved" : undefined),
+      approval_comment: prev?.approval_comment || carried?.reason || undefined,
     };
   });
   // oldBoqItemId → newBoqItemId mapping for carrying applied Design
@@ -733,6 +744,9 @@ export async function createPendingBoqRevision(
     verification_status: "pending_verification",
     verification_token: token,
     verification_requested_at: new Date().toISOString(),
+    design_review_status: prevBoq.design_review_status || null,
+    verified_at: prevBoq.verified_at || null,
+    verified_by_email: prevBoq.verified_by_email || null,
   };
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) {
@@ -741,6 +755,12 @@ export async function createPendingBoqRevision(
   }
   const newBoq = data as unknown as BoqRecord;
   await carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, oldToNewItemId);
+  try {
+    const patched = await cloneCarriedDesignStatuses(prevBoq, newBoq, orderRev.line_items || [], items, prevBySignature, carriedApprovals);
+    (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = patched;
+  } catch (e) {
+    console.warn("Carry-forward pending BOQ design statuses threw", e);
+  }
   // Fire-and-forget verification email (no-op if recipient not configured).
   try {
     const verificationUrl = `${window.location.origin}/boq-verify/${token}`;
