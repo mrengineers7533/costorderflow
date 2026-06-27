@@ -104,8 +104,9 @@ async function cloneCarriedDesignStatuses(
   orderItems: LineItem[],
   newItems: BoqLineItem[],
   prevBySignature: Map<string, BoqLineItem>,
-  carried = await loadCarriedDesignStatuses(prevBoq),
+  carried?: Awaited<ReturnType<typeof loadCarriedDesignStatuses>>,
 ): Promise<BoqLineItem[]> {
+  carried ||= await loadCarriedDesignStatuses(prevBoq);
   const inserts: Array<Record<string, unknown>> = [];
   const byNewItem = new Map<string, CarriedDesignStatus>();
   orderItems.forEach((oa, i) => {
