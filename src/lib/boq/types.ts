@@ -65,6 +65,8 @@ export interface BoqRecord {
   verification_requested_at?: string | null;
   verified_at?: string | null;
   verified_by_email?: string | null;
+  /** BOQ Design review lifecycle/header status. */
+  design_review_status?: string | null;
   /** When false, Motor and Motor Qty are hidden from BOQ surfaces
    *  (editor table, PDF, Excel, distribution link, approval page).
    *  Defaults to true. Auto-hide rule still applies — columns only

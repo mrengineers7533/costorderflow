@@ -14,11 +14,15 @@ export type ApprovalSnapshotRow = {
   boq_id: string;
   boq_revision: number;
   boq_item_id: string;
+  description?: string | null;
+  model_number?: string | null;
   approval_status: "approved" | "not_approved";
   approval_comment: string | null;
   design_comments: unknown;
+  approved_by?: string | null;
   approved_at: string | null;
   approved_by_name: string | null;
+  approved_by_department?: string | null;
   applied_to_oa_at: string | null;
 };
 
@@ -30,7 +34,7 @@ export async function fetchRevisionApprovalSnapshots(
   const { data, error } = await supabase
     .from("boq_revision_approval_snapshots")
     .select(
-      "boq_id,boq_revision,boq_item_id,approval_status,approval_comment,design_comments,approved_at,approved_by_name,applied_to_oa_at",
+      "boq_id,boq_revision,boq_item_id,description,model_number,approval_status,approval_comment,design_comments,approved_by,approved_at,approved_by_name,approved_by_department,applied_to_oa_at",
     )
     .in("boq_id", boqIds);
   if (error || !data) return out;
