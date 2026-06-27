@@ -2774,6 +2774,10 @@ export type Database = {
       }
     }
     Functions: {
+      _boq_item_signature: {
+        Args: { _description: string; _model: string }
+        Returns: string
+      }
       _format_boq_item_changes: {
         Args: { _diff: Json; _oa: string }
         Returns: string
@@ -3338,6 +3342,7 @@ export type Database = {
         Args: { _boq_id: string }
         Returns: number
       }
+      repair_inherited_boq_approval_snapshots: { Args: never; Returns: number }
       set_notif_suppress: { Args: { p_on: boolean }; Returns: undefined }
       sign_boq_item_doc_by_token: {
         Args: { _path: string; _token: string }
