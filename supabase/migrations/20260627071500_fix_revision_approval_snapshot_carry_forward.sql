@@ -610,3 +610,13 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.repair_inherited_boq_approval_snapshots() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.repair_inherited_boq_approval_snapshots() TO service_role;
+
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN SELECT id FROM public.boqs ORDER BY created_at ASC LOOP
+    PERFORM public.refresh_boq_revision_approval_snapshot_internal(r.id);
+  END LOOP;
+  PERFORM public.repair_inherited_boq_approval_snapshots();
+END $$;
