@@ -11,6 +11,7 @@ const tabs = [
   { to: "/admin/raw-materials", label: "Raw Materials" },
   { to: "/admin/vendors", label: "Vendors" },
   { to: "/admin/notifications", label: "Notifications" },
+  { to: "/admin/revision-repair", label: "Revision Repair" },
 ];
 
 export function AdminTabs({ title, description }: { title: string; description?: string }) {
