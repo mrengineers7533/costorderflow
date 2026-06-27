@@ -11,6 +11,137 @@ import {
   buildBoqItemIdRemap,
   type DesignCommentCarry,
 } from "@/lib/revisions/carryForward";
+import { fetchRevisionApprovalSnapshots } from "@/lib/boq/approvalSnapshots";
+
+type CarriedDesignStatus = {
+  status: "approved" | "pending" | "not_approved";
+  reason?: string | null;
+  decided_by?: string | null;
+  decided_by_name?: string | null;
+  decided_by_department?: string | null;
+  decided_at?: string | null;
+};
+
+const normApprovalText = (s: string | null | undefined) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+const boqSig = (description?: string | null, model?: string | null) => `${normApprovalText(description)}|${normApprovalText(model)}`;
+const oaModel = (it: LineItem) => ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
+
+async function refreshBoqApprovalSnapshot(boqId: string): Promise<void> {
+  try {
+    await (supabase.rpc as any)("refresh_boq_revision_approval_snapshot", { _boq_id: boqId });
+  } catch (e) {
+    console.warn("refreshBoqApprovalSnapshot failed", e);
+  }
+}
+
+async function loadCarriedDesignStatuses(prevBoq: BoqRecord): Promise<{
+  byItemId: Map<string, CarriedDesignStatus>;
+  bySignature: Map<string, CarriedDesignStatus>;
+  representativeApproved: CarriedDesignStatus | null;
+  approvedCount: number;
+  blockingCount: number;
+}> {
+  const byItemId = new Map<string, CarriedDesignStatus>();
+  const bySignature = new Map<string, CarriedDesignStatus>();
+  const itemById = new Map((prevBoq.line_items || []).map((it) => [it.id, it]));
+  let representativeApproved: CarriedDesignStatus | null = null;
+  let approvedCount = 0;
+  let blockingCount = 0;
+  const remember = (itemId: string, status: CarriedDesignStatus, item?: Pick<BoqLineItem, "description" | "model_number"> | null) => {
+    byItemId.set(itemId, status);
+    const src = item || itemById.get(itemId);
+    if (src) bySignature.set(boqSig(src.description, src.model_number), status);
+    if (status.status === "approved") {
+      approvedCount += 1;
+      if (!representativeApproved || (status.decided_at || "") > (representativeApproved.decided_at || "")) representativeApproved = status;
+    } else {
+      blockingCount += 1;
+    }
+  };
+
+  for (const it of prevBoq.line_items || []) {
+    if (it.id && it.approval_status === "approved") remember(it.id, { status: "approved", reason: it.approval_comment }, it);
+  }
+  try {
+    const { data } = await supabase
+      .from("boq_item_design_status")
+      .select("boq_item_id,status,reason,decided_by,decided_by_name,decided_by_department,decided_at,updated_at")
+      .eq("boq_id", prevBoq.id);
+    for (const r of (data || []) as Array<CarriedDesignStatus & { boq_item_id: string }>) {
+      remember(r.boq_item_id, {
+        status: r.status === "approved" ? "approved" : r.status === "not_approved" ? "not_approved" : "pending",
+        reason: r.reason,
+        decided_by: r.decided_by,
+        decided_by_name: r.decided_by_name,
+        decided_by_department: r.decided_by_department,
+        decided_at: r.decided_at,
+      });
+    }
+  } catch (e) {
+    console.warn("loadCarriedDesignStatuses status fetch failed", e);
+  }
+  try {
+    const snaps = await fetchRevisionApprovalSnapshots([prevBoq.id]);
+    for (const r of (snaps.get(prevBoq.id) || []).filter((s) => s.boq_revision === (prevBoq.revision ?? 0))) {
+      remember(r.boq_item_id, {
+        status: r.approval_status === "approved" ? "approved" : "not_approved",
+        reason: r.approval_comment,
+        decided_by: r.approved_by || null,
+        decided_by_name: r.approved_by_name,
+        decided_by_department: r.approved_by_department || null,
+        decided_at: r.approved_at,
+      }, { description: r.description || "", model_number: r.model_number || "" });
+    }
+  } catch (e) {
+    console.warn("loadCarriedDesignStatuses snapshot fetch failed", e);
+  }
+  return { byItemId, bySignature, representativeApproved, approvedCount, blockingCount };
+}
+
+async function cloneCarriedDesignStatuses(
+  prevBoq: BoqRecord,
+  newBoq: BoqRecord,
+  orderItems: LineItem[],
+  newItems: BoqLineItem[],
+  prevBySignature: Map<string, BoqLineItem>,
+  carried = await loadCarriedDesignStatuses(prevBoq),
+): Promise<BoqLineItem[]> {
+  const inserts: Array<Record<string, unknown>> = [];
+  const byNewItem = new Map<string, CarriedDesignStatus>();
+  orderItems.forEach((oa, i) => {
+    const sig = boqSig(oa.description, oaModel(oa));
+    const prev = prevBySignature.get(sig);
+    const status = (prev?.id && carried.byItemId.get(prev.id)) || carried.bySignature.get(sig)
+      || (carried.approvedCount > 0 && carried.blockingCount === 0 ? carried.representativeApproved : null);
+    const newId = newItems[i]?.id;
+    if (!status || !newId) return;
+    byNewItem.set(newId, status);
+    inserts.push({
+      boq_id: newBoq.id,
+      boq_item_id: newId,
+      boq_revision: newBoq.revision ?? 0,
+      status: status.status === "approved" ? "approved" : status.status === "not_approved" ? "not_approved" : "pending",
+      reason: status.reason ?? null,
+      decided_by: status.decided_by ?? null,
+      decided_by_name: status.decided_by_name ?? null,
+      decided_by_department: status.decided_by_department ?? null,
+      decided_at: status.decided_at ?? null,
+    });
+  });
+  if (inserts.length) {
+    const { error } = await supabase.from("boq_item_design_status").insert(inserts as never);
+    if (error) console.warn("cloneCarriedDesignStatuses insert failed", error);
+  }
+  if (!byNewItem.size) return newItems;
+  const patched = newItems.map((it) => {
+    const s = byNewItem.get(it.id);
+    if (!s) return it;
+    return { ...it, approval_status: s.status === "approved" ? "approved" : "pending", approval_comment: s.reason ?? it.approval_comment } as BoqLineItem;
+  });
+  await supabase.from("boqs").update({ line_items: patched } as never).eq("id", newBoq.id);
+  await refreshBoqApprovalSnapshot(newBoq.id);
+  return patched;
+}
 
 /** Toggle the per-connection "suppress cascaded notifications" flag.
  *  Used so that BOQ/PI rows auto-created or auto-synced as a side effect of
