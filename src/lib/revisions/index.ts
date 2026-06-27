@@ -682,13 +682,18 @@ export async function createPendingBoqRevision(
   await snapshotPreviousBoqPdf(prevBoq);
 
   const prevByModel = new Map<string, BoqLineItem>();
+  const prevBySignature = new Map<string, BoqLineItem>();
   (prevBoq.line_items || []).forEach((it) => {
     const k = (it.model_number || "").trim().toLowerCase();
     if (k) prevByModel.set(k, it);
+    prevBySignature.set(boqSig(it.description, it.model_number), it);
   });
+  const carriedApprovals = await loadCarriedDesignStatuses(prevBoq);
   const items: BoqLineItem[] = (orderRev.line_items || []).map((it: LineItem, i: number) => {
     const model = ((it as unknown as { model?: string }).model || "").trim() || it.hsn_code || "";
     const prev = prevByModel.get(model.trim().toLowerCase());
+    const carried = (prev?.id && carriedApprovals.byItemId.get(prev.id))
+      || carriedApprovals.bySignature.get(boqSig(it.description, model));
     const ext = it as unknown as { motor?: string; motor_quantity?: number; motor_price?: number; remarks?: string };
     const prevExt = (prev || {}) as { motor?: string; motor_quantity?: number; motor_price?: number };
     return {
@@ -703,6 +708,8 @@ export async function createPendingBoqRevision(
       motor: (ext.motor || "").trim() || prevExt.motor,
       motor_quantity: ext.motor_quantity != null ? Number(ext.motor_quantity) : prevExt.motor_quantity,
       motor_price: ext.motor_price != null ? Number(ext.motor_price) : prevExt.motor_price,
+      approval_status: prev?.approval_status || (carried?.status === "approved" ? "approved" : undefined),
+      approval_comment: prev?.approval_comment || carried?.reason || undefined,
     };
   });
   // oldBoqItemId → newBoqItemId mapping for carrying applied Design
@@ -737,6 +744,9 @@ export async function createPendingBoqRevision(
     verification_status: "pending_verification",
     verification_token: token,
     verification_requested_at: new Date().toISOString(),
+    design_review_status: prevBoq.design_review_status || null,
+    verified_at: prevBoq.verified_at || null,
+    verified_by_email: prevBoq.verified_by_email || null,
   };
   const { data, error } = await supabase.from("boqs").insert(payload as never).select().single();
   if (error) {
@@ -745,6 +755,12 @@ export async function createPendingBoqRevision(
   }
   const newBoq = data as unknown as BoqRecord;
   await carryForwardAppliedDesignComments(prevBoq.id, newBoq.id, oldToNewItemId);
+  try {
+    const patched = await cloneCarriedDesignStatuses(prevBoq, newBoq, orderRev.line_items || [], items, prevBySignature, carriedApprovals);
+    (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = patched;
+  } catch (e) {
+    console.warn("Carry-forward pending BOQ design statuses threw", e);
+  }
   // Fire-and-forget verification email (no-op if recipient not configured).
   try {
     const verificationUrl = `${window.location.origin}/boq-verify/${token}`;
