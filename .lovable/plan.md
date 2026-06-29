@@ -1,47 +1,41 @@
+## Production OA → BOQ approval synchronization fix plan
 
-## Scope guard (confirmed)
+### Scope guard
 
-This change is read-only and additive. Existing OA, BOQ, Design, Manufacturing, Purchase, costing, numbering, Save Draft, Finalize, Convert to PI, access, and UI flows are NOT modified. The previously-shipped carry-forward in `src/lib/revisions/index.ts` and the snapshot triggers/functions in migration `20260627071535_*.sql` stay exactly as they are — this task only adds a diagnostic view on top of them.
+Only approval/comment/status synchronization will be changed. I will not change UI layout, OA/BOQ numbering, costing formulas, quantities/rates/amounts, Save Draft, Finalize, Convert to PI, Manufacturing workflow, Purchase workflow, or access-control rules.
 
-## What will be touched and why
+### Exact functions involved
 
-Added (new files only):
+- OA item approval is written from the Design BOQ page through `setItemApproval()` / `bulkSetItemApprovals()` in `src/lib/design/itemApprovals.ts`, and mirrored to BOQ JSON by `syncApprovalToBoqSnapshot()`.
+- Initial auto-created BOQ comes from `createInitialBoqForOrder()` in `src/lib/revisions/index.ts`.
+- Revised OA comes from `reviseOrder()` in `src/lib/revisions/index.ts`.
+- Revised BOQ comes from `reviseBoqFromOrder()` and `createPendingBoqRevision()` in `src/lib/revisions/index.ts`.
+- The broken/missing persisted fields are approval-only fields in `boqs.line_items[].approval_status/approval_comment`, `boq_item_design_status`, `boq_design_comments`, and `boq_revision_approval_snapshots`.
 
-- `src/pages/admin/RevisionRepairReport.tsx` — new admin page, read-only table + summary.
-- `src/lib/boq/revisionRepairReport.ts` — new helper that runs SELECT-only queries against existing tables (`orders`, `boqs`, `boq_revision_approval_snapshots`, `boq_item_design_status`) and classifies each revision.
-- `src/App.tsx` — add ONE new `<Route path="/admin/revision-repair" …>` line under the existing admin routes. No other route/logic changes.
-- `src/pages/admin/AdminDashboard.tsx` — add ONE link/card pointing to the new page. No other UI changes.
-- `src/test/revisionRepairReport.test.ts` — unit test for the classification helper.
+### Root cause being fixed
 
-Not touched: `src/lib/revisions/index.ts`, `src/lib/boq/approvalSnapshots.ts`, `src/lib/boq/designApprovalStatus.ts`, `src/lib/boq/itemApprovalSync.ts`, OrderEditor, BoqEditor, Design/Manufacturing/Purchase pages, numbering counters, calc helpers, PDF/Excel, access rules, RLS, triggers, edge functions.
+The real flow can still lose item-wise approval because approval is written in one table first and the mirror/snapshot is only best-effort from the UI. Separately, `syncBoqsAndPisForOrder()` rebuilds BOQ `line_items` during OA save and currently resets open BOQ item approvals to `pending`, which can overwrite inherited/approved item snapshots after OA approval or revision.
 
-No new migration. No DB writes. No new RPC. No schema change. Existing `boq_revision_approval_snapshots` rows are read as-is; opening the report does NOT call `repair_inherited_boq_approval_snapshots()` or any refresh function.
+### Files to change
 
-## Page behavior
+1. `src/lib/design/itemApprovals.ts`
+   - Make `setItemApproval()` call the mirror/snapshot sync immediately after every insert/update.
+   - Make `syncApprovalToBoqSnapshot()` also refresh revision-wise snapshot rows and preserve approval comments when available.
 
-Route: `/admin/revision-repair` (wrapped in existing `RequireAdmin`).
+2. `src/lib/revisions/index.ts`
+   - In `syncBoqsAndPisForOrder()`, preserve existing/carried approved item status for open BOQs instead of blindly resetting to pending.
+   - Refresh snapshots after sync updates.
+   - Keep initial/revised BOQ creation behavior unchanged except approval metadata carry-forward.
 
-Filters (client-side only):
-- Family: All / GMS / MR
-- Status: All / Needs repair / Repaired-inherited / Native-approved / Genuinely not approved
-- OA number search
+3. `supabase/migrations/<new>_approval_sync_repair.sql`
+   - Approval-only backfill/repair: restore approved item status/comments/status rows/snapshots from linked previous approved BOQ revisions where records are blank/pending.
+   - No amounts, quantities, costing, numbering, item structure, or workflow data changed.
 
-For each OA revision (joined to its linked BOQ revision) the helper computes one of:
+4. `src/test/oaBoqApprovalSyncFlow.test.ts`
+   - Test 1: initial OA → auto BOQ → design approval sync persists to `boqs.line_items`, `boq_item_design_status`, snapshots, and shared module helpers.
+   - Test 2: approved OA/BOQ revision carries approved item status/comments to revised OA/revised BOQ and shared helpers after refresh.
+   - Test 3: old approved revision stays approved after new revision is created.
 
-| Status | Definition |
-| --- | --- |
-| `native_approved` | Snapshot rows exist for this revision and all are `approved`, and at least one approval row was written directly against this revision (not inherited). |
-| `repaired_inherited` | Snapshot rows exist, all are `approved`, but no direct `boq_item_design_status` rows for this revision — approval came from an ancestor via the repair/carry-forward. This is the "verified repaired" case. |
-| `needs_repair` | An ancestor revision in the same OA family is approved (snapshot or direct rows), but this revision's snapshot is missing rows, partially populated, or all `not_approved`/blank. Surfaces the bug condition. |
-| `not_approved_by_design` | No ancestor is approved either; this is a legitimately pending revision, not a repair candidate. |
+### Why unrelated logic is unaffected
 
-Each row shows: OA no., revision, linked BOQ no./revision, item counts (approved/total), latest approval source (direct vs inherited), and a "View OA" / "View BOQ" link to the existing pages. Top of page shows totals per status.
-
-The page is purely diagnostic. It does NOT call any repair RPC, mutation, or refresh — the existing automatic triggers and the carry-forward inside `reviseOrder` continue to be the only writers.
-
-## Acceptance check
-
-- Load `/admin/revision-repair` and confirm `MROA/2026-27/0001/R2`, `MROA/2026-27/0007/R6`, `MROA/2026-27/0007/R7`, and `GMS/2026-27/0002/R9` show as `repaired_inherited` or `native_approved` (not `needs_repair`).
-- Confirm no DB writes during page load (verify via network tab — only `SELECT` queries).
-- Existing OA/BOQ/Design/Manufacturing/Purchase pages render unchanged.
-- New unit test passes; existing tests (`oaRevisionE2E`, `approvalBadgesE2E`, `inheritedDesignApprovalConsistency`) still pass.
+All edits are limited to approval metadata fields (`approval_status`, `approval_comment`, `boq_item_design_status`, `boq_design_comments`, `boq_revision_approval_snapshots`, `verification_status`, `design_review_status`, `verified_at`, `verified_by_email`). No numbering functions, costing helpers, item amount math, PI conversion logic, UI layout components, requisition/manufacturing/purchase workflows, or draft/finalize flows are rewritten.
