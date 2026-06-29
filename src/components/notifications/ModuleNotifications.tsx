@@ -371,11 +371,10 @@ export function ModuleNotifications({
                   {!seen && canAckClient(n, me) && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-6 text-[11px]"
+                      className="h-7 text-[11px] shadow-sm ring-2 ring-primary/20 animate-pulse"
                       onClick={() => markSeenLocal(n)}
                     >
-                      Seen
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Mark as Seen
                     </Button>
                   )}
                   {!acked && canAckClient(n, me) && (
