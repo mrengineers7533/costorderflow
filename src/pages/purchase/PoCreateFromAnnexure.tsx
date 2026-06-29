@@ -420,7 +420,7 @@ export default function PoCreateFromAnnexure() {
         <ModuleNotifications
           links={{
             annexureId,
-            requisitionId: annexure.requisition_id ?? undefined,
+            requisitionId: annexure.requisition_ids?.[0] ?? undefined,
           }}
         />
       )}
