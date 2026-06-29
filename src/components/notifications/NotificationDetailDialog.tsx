@@ -251,18 +251,15 @@ export function NotificationDetailDialog({
     }
   }, [notificationId, load]);
 
-  // Mark Seen when the detail dialog opens (server-side RPC enforces dept).
-  useEffect(() => {
-    if (notificationId) {
-      markNotificationSeen(notificationId).then((ok) => {
-        if (ok) {
-          onAcknowledged?.();
-          load();
-        }
-      });
+  // Explicit Seen action — no auto mark on open.
+  async function markSeenExplicit() {
+    if (!notificationId) return;
+    const ok = await markNotificationSeen(notificationId);
+    if (ok) {
+      onAcknowledged?.();
+      await load();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationId]);
+  }
 
   // Pick a sensible default for the acknowledgement-department selector:
   // prefer the user's own department if it matches a target, else first target.
@@ -326,6 +323,7 @@ export function NotificationDetailDialog({
             ackDept={ackDept}
             setAckDept={setAckDept}
             acknowledge={acknowledge}
+            markSeen={markSeenExplicit}
           />
         )}
       </DialogContent>
@@ -1140,6 +1138,7 @@ function NotificationDetailBody({
   ackDept,
   setAckDept,
   acknowledge,
+  markSeen,
 }: {
   notif: NotifFull;
   reads: ReadRow[];
@@ -1151,6 +1150,7 @@ function NotificationDetailBody({
   ackDept: string;
   setAckDept: (v: string) => void;
   acknowledge: () => void;
+  markSeen: () => void | Promise<void>;
 }) {
   const canAck = canAckClient(notif, me);
   return (
@@ -1197,6 +1197,15 @@ function NotificationDetailBody({
               <Check className="mr-1 inline h-3.5 w-3.5" /> Seen
             </span>
           ) : null}
+          {me && !myAck && !mySeen && canAck && (
+            <Button
+              onClick={() => void markSeen()}
+              variant="default"
+              className="shadow-sm ring-2 ring-primary/20"
+            >
+              <Check className="mr-1 h-4 w-4" /> Seen
+            </Button>
+          )}
         </div>
       </div>
     </div>
