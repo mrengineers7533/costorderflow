@@ -1138,6 +1138,7 @@ function NotificationDetailBody({
   ackDept,
   setAckDept,
   acknowledge,
+  markSeen,
 }: {
   notif: NotifFull;
   reads: ReadRow[];
@@ -1149,6 +1150,7 @@ function NotificationDetailBody({
   ackDept: string;
   setAckDept: (v: string) => void;
   acknowledge: () => void;
+  markSeen: () => void | Promise<void>;
 }) {
   const canAck = canAckClient(notif, me);
   return (
@@ -1195,6 +1197,15 @@ function NotificationDetailBody({
               <Check className="mr-1 inline h-3.5 w-3.5" /> Seen
             </span>
           ) : null}
+          {me && !myAck && !mySeen && canAck && (
+            <Button
+              onClick={() => void markSeen()}
+              variant="default"
+              className="shadow-sm ring-2 ring-primary/20"
+            >
+              <Check className="mr-1 h-4 w-4" /> Seen
+            </Button>
+          )}
         </div>
       </div>
     </div>
