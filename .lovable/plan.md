@@ -1,41 +1,79 @@
-## Production OA → BOQ approval synchronization fix plan
+## Goal
 
-### Scope guard
+Add integration tests that lock in the approval sync contract end-to-end, without touching any existing feature code, helpers, migrations, or UI.
 
-Only approval/comment/status synchronization will be changed. I will not change UI layout, OA/BOQ numbering, costing formulas, quantities/rates/amounts, Save Draft, Finalize, Convert to PI, Manufacturing workflow, Purchase workflow, or access-control rules.
+## Scope guard
 
-### Exact functions involved
+- Test-only additions under `src/test/`.
+- No edits to `src/lib/**`, `src/pages/**`, `src/components/**`, `supabase/**`, or any config beyond what's needed to register new test files (none expected — `vitest.config.ts` already globs `src/**/*.test.ts`).
+- Reuse the existing in-memory Supabase fake pattern from `src/test/oaRevisionE2E.test.ts` and the snapshot/approval helpers already exercised in `src/test/approvalBadgesE2E.test.ts` and `src/test/inheritedDesignApprovalConsistency.test.ts`.
 
-- OA item approval is written from the Design BOQ page through `setItemApproval()` / `bulkSetItemApprovals()` in `src/lib/design/itemApprovals.ts`, and mirrored to BOQ JSON by `syncApprovalToBoqSnapshot()`.
-- Initial auto-created BOQ comes from `createInitialBoqForOrder()` in `src/lib/revisions/index.ts`.
-- Revised OA comes from `reviseOrder()` in `src/lib/revisions/index.ts`.
-- Revised BOQ comes from `reviseBoqFromOrder()` and `createPendingBoqRevision()` in `src/lib/revisions/index.ts`.
-- The broken/missing persisted fields are approval-only fields in `boqs.line_items[].approval_status/approval_comment`, `boq_item_design_status`, `boq_design_comments`, and `boq_revision_approval_snapshots`.
+## New test files
 
-### Root cause being fixed
+### 1. `src/test/initialOaBoqApprovalSync.test.ts`
+Covers: **Initial OA → auto BOQ approval sync.**
 
-The real flow can still lose item-wise approval because approval is written in one table first and the mirror/snapshot is only best-effort from the UI. Separately, `syncBoqsAndPisForOrder()` rebuilds BOQ `line_items` during OA save and currently resets open BOQ item approvals to `pending`, which can overwrite inherited/approved item snapshots after OA approval or revision.
+Flow:
+1. Seed a fresh OA (R0, no parent) with 2 line items, no BOQ yet.
+2. Call `createInitialBoqForOrder` from `src/lib/revisions/index.ts` to auto-create the BOQ.
+3. Simulate Design approving one item via `setItemApproval` + `syncApprovalToBoqSnapshot` from `src/lib/design/itemApprovals.ts`.
+4. Simulate bulk approve via `bulkSetItemApprovals` for the second item.
 
-### Files to change
+Assertions:
+- Auto-created BOQ exists with `revision = 0`, `is_current = true`, correct `order_id`.
+- After per-item approval, `boqs.line_items[itemId].approval_status === "approved"` (mirror written by `syncApprovalToBoqSnapshot`).
+- `boq_item_design_status` has matching rows with `status="approved"` and correct `boq_revision`.
+- `fetchItemApprovalVerdicts` (from `src/lib/boq/itemApprovalSync.ts`) returns `"approved"` for both items.
+- `fetchDesignApprovalStates` (from `src/lib/boq/designApprovalStatus.ts`) reports BOQ-level approved when all items approved.
 
-1. `src/lib/design/itemApprovals.ts`
-   - Make `setItemApproval()` call the mirror/snapshot sync immediately after every insert/update.
-   - Make `syncApprovalToBoqSnapshot()` also refresh revision-wise snapshot rows and preserve approval comments when available.
+### 2. `src/test/revisedOaBoqApprovalInheritance.test.ts`
+Covers: **Revised OA → revised BOQ inheritance** with simulated refresh/navigation.
 
-2. `src/lib/revisions/index.ts`
-   - In `syncBoqsAndPisForOrder()`, preserve existing/carried approved item status for open BOQs instead of blindly resetting to pending.
-   - Refresh snapshots after sync updates.
-   - Keep initial/revised BOQ creation behavior unchanged except approval metadata carry-forward.
+Flow:
+1. Seed R6 OA + R6 BOQ with one approved item (Pump) and one pending item (Motor), plus an applied Design comment — reusing the fixture shape from `oaRevisionE2E.test.ts`.
+2. Call `reviseOrder(..., { autoReviseBoq: true })` to create R7.
+3. Simulate a "refresh" by clearing all in-memory caches/maps held by the test (re-instantiate any module-level state) and re-querying through the same public helpers a fresh page load would call:
+   - `fetchRevisionApprovalSnapshots([r7BoqId])`
+   - `fetchItemApprovalVerdicts(r7BoqId, 7, r7Items)`
+   - `fetchDesignApprovalStates([r7BoqId])`
+   - `fetchLatestSubmittedRound` (used by Design view)
+4. Simulate "navigation" by running the same three helper calls a second time in a different order (mimicking Manufacturing → Purchase → BOQ Folder → OA Editor traversal) and asserting identical results.
 
-3. `supabase/migrations/<new>_approval_sync_repair.sql`
-   - Approval-only backfill/repair: restore approved item status/comments/status rows/snapshots from linked previous approved BOQ revisions where records are blank/pending.
-   - No amounts, quantities, costing, numbering, item structure, or workflow data changed.
+Assertions:
+- R7 OA created with `revision=7`, `revised_from_id=r6Id`, `is_current=true`.
+- R7 BOQ created with `revision=7`, inherits Pump approved (via snapshot or carried `line_items.approval_status`).
+- Applied Design comment carried to R7 BOQ and remapped to the new Pump item id; draft comment dropped.
+- Per-item verdicts identical across all four helper call sites (snapshot is the single source of truth).
+- Running the helper batch twice returns deeply-equal results (no stateful drift).
+- No writes occur during read path: spy on the fake `from(...).update/insert` and assert zero calls during the refresh/navigation phase.
 
-4. `src/test/oaBoqApprovalSyncFlow.test.ts`
-   - Test 1: initial OA → auto BOQ → design approval sync persists to `boqs.line_items`, `boq_item_design_status`, snapshots, and shared module helpers.
-   - Test 2: approved OA/BOQ revision carries approved item status/comments to revised OA/revised BOQ and shared helpers after refresh.
-   - Test 3: old approved revision stays approved after new revision is created.
+### 3. `src/test/approvalSyncCrossModuleConsistency.test.ts`
+Covers: **Same revision viewed from OA, BOQ, Design, Manufacturing, Purchase, BOQ Folder.**
 
-### Why unrelated logic is unaffected
+Flow:
+1. Seed R7 state from test 2 (or reseed equivalently).
+2. For each "view", call exactly the helper(s) that page uses today:
+   - OA editor → `fetchRevisionApprovalSnapshots` + line-item match (mirrors `OrderEditor.tsx`).
+   - Design BOQ list → `fetchDesignApprovalStates` (mirrors `DesignBoqList.tsx`).
+   - Manufacturing → `fetchDesignApprovalStates` + `fetchItemApprovalVerdicts` (mirrors `ApprovedBoqModule.tsx`).
+   - Purchase BOQ Folder → `fetchDesignApprovalStates` (mirrors `BoqFolder.tsx`).
+3. Assert every view reports the same per-item verdict map and the same BOQ-level badge string.
 
-All edits are limited to approval metadata fields (`approval_status`, `approval_comment`, `boq_item_design_status`, `boq_design_comments`, `boq_revision_approval_snapshots`, `verification_status`, `design_review_status`, `verified_at`, `verified_by_email`). No numbering functions, costing helpers, item amount math, PI conversion logic, UI layout components, requisition/manufacturing/purchase workflows, or draft/finalize flows are rewritten.
+## Test infrastructure
+
+- Reuse the in-memory `tables` + `buildQuery` fake from `oaRevisionE2E.test.ts`. Extract it into `src/test/helpers/fakeSupabase.ts` **only if needed**; preferred path is copy-local per file to avoid creating a new shared module that future tests might couple to. Decision: copy-local — keeps zero impact on existing files.
+- Mock `@/lib/boq/pdf` the same way as `oaRevisionE2E.test.ts` to avoid jspdf in jsdom.
+- No new dependencies.
+
+## Verification
+
+- Run `bunx vitest run src/test/initialOaBoqApprovalSync.test.ts src/test/revisedOaBoqApprovalInheritance.test.ts src/test/approvalSyncCrossModuleConsistency.test.ts`.
+- Run full suite to confirm no regressions: `bunx vitest run`.
+- Confirm zero diffs in `src/lib`, `src/pages`, `src/components`, `supabase/`.
+
+## Out of scope
+
+- No production code changes.
+- No new migrations or backfills.
+- No UI changes.
+- No edits to existing tests (they already pass and document current behavior).
