@@ -251,18 +251,15 @@ export function NotificationDetailDialog({
     }
   }, [notificationId, load]);
 
-  // Mark Seen when the detail dialog opens (server-side RPC enforces dept).
-  useEffect(() => {
-    if (notificationId) {
-      markNotificationSeen(notificationId).then((ok) => {
-        if (ok) {
-          onAcknowledged?.();
-          load();
-        }
-      });
+  // Explicit Seen action — no auto mark on open.
+  async function markSeenExplicit() {
+    if (!notificationId) return;
+    const ok = await markNotificationSeen(notificationId);
+    if (ok) {
+      onAcknowledged?.();
+      await load();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationId]);
+  }
 
   // Pick a sensible default for the acknowledgement-department selector:
   // prefer the user's own department if it matches a target, else first target.
@@ -326,6 +323,7 @@ export function NotificationDetailDialog({
             ackDept={ackDept}
             setAckDept={setAckDept}
             acknowledge={acknowledge}
+            markSeen={markSeenExplicit}
           />
         )}
       </DialogContent>
