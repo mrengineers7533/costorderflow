@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Eye } from "lucide-react";
+import { canAckClient, markNotificationSeen } from "@/lib/notifications/dept";
+import { toast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +37,7 @@ interface NotifRow {
   actor_department: string | null;
   target_departments: string[];
   created_at: string;
+  actor_user_id?: string | null;
 }
 
 interface ReadRow {
@@ -61,13 +67,45 @@ export function DeptNotificationsDialog({
     mode === "seen" ? "seen" : "all",
   );
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
+  const [localSeen, setLocalSeen] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return;
+      const { data: rec } = await supabase
+        .from("notification_recipients")
+        .select("department,name")
+        .eq("user_id", uid)
+        .limit(1)
+        .maybeSingle();
+      setMe({
+        id: uid,
+        name: (rec as { name?: string } | null)?.name || auth.user?.email || "User",
+        department: (rec as { department?: string } | null)?.department || "Other",
+      });
+    })();
+  }, [open]);
 
   const deptKey = normalizeDept(department);
 
   const seenForDept = (id: string) =>
+    localSeen.has(id) ||
     (readsByNotif[id] || []).some(
       (r) => normalizeDept(r.department) === deptKey,
     );
+
+  async function handleMarkSeen(n: NotifRow) {
+    const ok = await markNotificationSeen(n.id);
+    if (!ok) {
+      toast({ title: "Could not mark seen", variant: "destructive" });
+      return;
+    }
+    setLocalSeen((s) => new Set([...s, n.id]));
+  }
 
   const list = useMemo(() => {
     if (!deptKey) return [];
@@ -146,18 +184,20 @@ export function DeptNotificationsDialog({
                   <TableHead className="w-[180px]">Actor</TableHead>
                   <TableHead className="w-[160px]">Date</TableHead>
                   <TableHead className="w-[90px]">Status</TableHead>
+                  <TableHead className="w-[120px]">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {list.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                       No notifications.
                     </TableCell>
                   </TableRow>
                 ) : (
                   list.map((n) => {
                     const seen = seenForDept(n.id);
+                    const canSeen = canAckClient(n, me) && !seen;
                     return (
                       <TableRow
                         key={n.id}
@@ -186,6 +226,19 @@ export function DeptNotificationsDialog({
                             <Badge variant="secondary" className="text-[10px]">
                               Unseen
                             </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          {canSeen ? (
+                            <Button
+                              size="sm"
+                              className="h-7 text-[11px] shadow-sm ring-2 ring-primary/20"
+                              onClick={() => handleMarkSeen(n)}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Seen
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">—</span>
                           )}
                         </TableCell>
                       </TableRow>

@@ -1,45 +1,33 @@
 ## Goal
-Make the existing "Seen" action visible on every module page that owns a notification's target record, without changing any notification rule, approval flow, or other behavior.
+Ensure every notification row exposes its own explicit **Seen** button, visible only to target-department users (never the actor). Backend rules and existing workflows are untouched.
 
-## Root cause
-`ModuleNotifications` already renders a "Seen" button under the strict rule (`canAckClient`: user's department matches `target_departments` and user is not the actor). That banner is currently mounted only on:
+## Scope
+Only three UI surfaces are changed. No DB, no edge function, no workflow code.
 
-- `src/pages/design/DesignBoqView.tsx`
-- `src/pages/boqs/BoqEditor.tsx`
-- `src/pages/orders/OrderEditor.tsx`
-- `src/pages/pi/PiEditor.tsx`
-- `src/pages/modules/ApprovedBoqModule.tsx`
-- `src/pages/requisitions/RequisitionDetail.tsx`
+### 1. `src/components/notifications/DeptNotificationsDialog.tsx`
+- Accept `meId` and `meDepartment` (or fetch the current user once with `supabase.auth.getUser` + `notification_recipients`) so we can gate per-row.
+- Add a new `Action` column with a **Seen** button on each row when:
+  - row is not yet seen for this department, AND
+  - `canAckClient(notif, me)` returns true (target dept + not actor).
+- On click: call `markNotificationSeen(n.id)`. On success, optimistically add a synthesised read row into `readsByNotif[n.id]` so the badge flips to **Seen** and the button hides. No refetch of parent.
+- Keep existing row-click → detail dialog behavior unchanged (stop propagation on button click).
 
-So users in Purchase, Manufacturing, BOQ Folder, PO Folder, Annexure Folder, Planning/Tracking/Dispatch views never see the Seen button — because the banner itself isn't on those pages.
+### 2. `src/components/notifications/NotificationDetailDialog.tsx`
+- Remove the auto `markNotificationSeen` effect (lines 254–265).
+- In `NotificationDetailBody`, add an explicit **Seen** button next to/in place of the existing read-only "Seen" pill when `canAck && !mySeen && !myAck`. Clicking calls `markNotificationSeen(notif.id)` then `onAcknowledged?.()` + `load()`. The existing **Acknowledge** button stays as-is.
+- Actor / non-target users continue to see nothing actionable (only the read-only chips), preserving the actor-hide rule.
 
-## Scope (display-only)
-Mount the existing `ModuleNotifications` banner near the top of each missing module page, passing the correct `links` (orderRootId / boqId / piId / poId / requisitionId / annexureId) so the RPC returns only that record's notifications. Keep the strict `canAckClient` rule unchanged.
+### 3. `src/components/notifications/ModuleNotifications.tsx`
+- The button already exists and is gated by `canAckClient`. The reported "missing" case usually means the page mounts the banner without enough `links` for the RPC to return the row. Audit and (read-only verify) the mounting points listed in earlier turns; no logic change unless a specific page is missing a link prop. If a page is missing, pass the appropriate `links` (e.g. `orderRootId`, `boqId`, `requisitionId`, `annexureId`) — no other behavior change.
+- Keep the existing solid-blue, pulsing **Mark as Seen** button untouched.
 
-Pages to add the banner to:
-
-1. `src/pages/purchase/BoqFolder.tsx` — links: `{ boqId, orderRootId }`
-2. `src/pages/purchase/PoFolder.tsx` — links: `{ poId, orderRootId }`
-3. `src/pages/purchase/PurchaseDetail.tsx` — links: `{ orderRootId, boqId }`
-4. `src/pages/manufacturing/ManufacturingDetail.tsx` — links: `{ orderRootId, boqId }`
-5. `src/pages/manufacturing/ManufacturingBoqFolder.tsx` — links: `{ boqId, orderRootId }`
-6. `src/pages/requisitions/AnnexureFolder.tsx` — links: `{ annexureId, requisitionId }`
-7. `src/pages/purchase/PoCreateFromAnnexure.tsx` — links: `{ annexureId }`
-8. `src/pages/grn/GrnList.tsx` (Dispatch/GRN per-row context if a single record is open; otherwise skip)
-9. `src/pages/boqs/FamilyBoq.tsx` and `src/pages/boqs/FinalBoq.tsx` — links: `{ boqId, orderRootId }`
-
-For each page I'll:
-- Import `ModuleNotifications`.
-- Read the already-loaded record ids in that page (no new fetches; reuse existing state).
-- Render `<ModuleNotifications links={...} />` directly under the page header.
-
-No changes to:
-- `canAckClient`, `mark_notification_seen` RPC, or any other notification logic
-- Approval/sync logic, OA/BOQ revision flow, numbering, access checks
-- The banner component itself
-- Notification dashboard or header bell
+## Non-goals (explicit guard)
+- No changes to OA, BOQ, Design, Manufacturing, Purchase, Requisition, Annexure, Planning, Tracking, Dispatch, costing, numbering, approval, Save Draft, Finalize, or Convert to PI logic.
+- No changes to notification creation, `mark_notification_seen` RPC, `app_notification_reads` schema, `canAckClient`, or actor-hide rule.
+- No bulk "Mark all seen" added.
 
 ## Verification
-- Build passes.
-- On each updated page, the amber Notifications banner appears when a notification exists for that record; users in a matching target department see the "Seen" button; actors and non-target users do not (existing rule preserved).
-- Run `bunx vitest run` to confirm no regressions in the existing notification/approval tests.
+- Lint/build via existing pipeline.
+- Manual: open Dept Notifications dialog as a target-dept (non-actor) user → row shows **Seen** button → click → flips to **Seen** chip.
+- As the actor → no Seen button anywhere.
+- Detail dialog no longer marks Seen automatically; explicit button required.
