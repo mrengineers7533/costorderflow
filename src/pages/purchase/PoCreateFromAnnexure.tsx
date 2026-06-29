@@ -15,6 +15,7 @@ import { generatePoPDF, financialYearOf, type PoPdfContext } from "@/lib/purchas
 import { amountInWords } from "@/lib/purchase/amountInWords";
 import { fmtQty2 } from "@/lib/utils";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -415,6 +416,14 @@ export default function PoCreateFromAnnexure() {
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      {annexureId && (
+        <ModuleNotifications
+          links={{
+            annexureId,
+            requisitionId: annexure.requisition_ids?.[0] ?? undefined,
+          }}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Generate PO from Annexure</h1>
