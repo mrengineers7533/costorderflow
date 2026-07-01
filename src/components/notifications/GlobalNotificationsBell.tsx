@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeDept } from "@/lib/notifications/dept";
 import { DeptNotificationsDialog } from "./DeptNotificationsDialog";
+import { getPersonalSeen, onPersonalSeenChange } from "@/lib/notifications/personalSeen";
 
 interface NotifRow {
   id: string;
@@ -55,11 +56,14 @@ export function GlobalNotificationsBell() {
   const [rows, setRows] = useState<NotifRow[]>([]);
   const [reads, setReads] = useState<ReadRow[]>([]);
   const [dept, setDept] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(null);
+  const [personalSeen, setPersonalSeen] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const { data: auth } = await supabase.auth.getUser();
-    const uid = auth.user?.id;
-    if (!uid) {
+    const currentUid = auth.user?.id;
+    setUid(currentUid || null);
+    if (!currentUid) {
       setRows([]);
       setReads([]);
       setDept(null);
@@ -68,7 +72,7 @@ export function GlobalNotificationsBell() {
     const { data: rec } = await supabase
       .from("notification_recipients")
       .select("department")
-      .eq("user_id", uid)
+      .eq("user_id", currentUid)
       .limit(1)
       .maybeSingle();
     const myDept = (rec as { department?: string } | null)?.department || "Other";
@@ -114,6 +118,12 @@ export function GlobalNotificationsBell() {
     };
   }, [load]);
 
+  useEffect(() => {
+    const refresh = () => setPersonalSeen(getPersonalSeen(uid));
+    refresh();
+    return onPersonalSeenChange(refresh);
+  }, [uid]);
+
   const readsByNotif = useMemo(() => {
     const m: Record<string, ReadRow[]> = {};
     for (const r of reads) {
@@ -128,13 +138,14 @@ export function GlobalNotificationsBell() {
     let c = 0;
     for (const n of rows) {
       if (!n.target_departments?.some((d) => normalizeDept(d) === deptKey)) continue;
+      if (personalSeen.has(n.id)) continue;
       const seen = (readsByNotif[n.id] || []).some(
         (r) => normalizeDept(r.department) === deptKey,
       );
       if (!seen) c++;
     }
     return c;
-  }, [rows, readsByNotif, deptKey]);
+  }, [rows, readsByNotif, deptKey, personalSeen]);
 
   if (!dept) return null;
 

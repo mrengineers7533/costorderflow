@@ -9,6 +9,13 @@ import { canAckClient, markNotificationSeen } from "@/lib/notifications/dept";
 import { notifDeepLink } from "@/lib/notifications/highlight";
 import { useNavigate } from "react-router-dom";
 import { NotificationTrackingDialog } from "./NotificationTrackingDialog";
+import {
+  getPersonalAck,
+  getPersonalSeen,
+  markPersonalAck,
+  markPersonalSeen,
+  onPersonalSeenChange,
+} from "@/lib/notifications/personalSeen";
 
 function OpenInPageButton({ n, onClick }: { n: NotifFull; onClick?: () => void }) {
   const navigate = useNavigate();
@@ -86,6 +93,8 @@ export function ModuleNotifications({
   const [rows, setRows] = useState<NotifFull[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [ackedIds, setAckedIds] = useState<Set<string>>(new Set());
+  const [personalSeen, setPersonalSeen] = useState<Set<string>>(new Set());
+  const [personalAck, setPersonalAck] = useState<Set<string>>(new Set());
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
@@ -264,38 +273,55 @@ export function ModuleNotifications({
     load();
   }, [load]);
 
+  // Refresh personal (localStorage) seen/ack when user or store changes.
+  useEffect(() => {
+    const refresh = () => {
+      setPersonalSeen(getPersonalSeen(me?.id));
+      setPersonalAck(getPersonalAck(me?.id));
+    };
+    refresh();
+    return onPersonalSeenChange(refresh);
+  }, [me?.id]);
+
   async function ack(n: NotifFull) {
     if (!me) return;
-    const { error } = await supabase.from("app_notification_reads" as never).insert({
-      notification_id: n.id,
-      user_id: me.id,
-      user_name: me.name,
-      department: me.department,
-      kind: "ack",
-    } as never);
-    if (error) {
-      toast({
-        title: "Could not acknowledge",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
+    // Always record locally so the badge/count clears for this user, even if
+    // backend RLS rejects (e.g. actor or non-target-dept viewers).
+    markPersonalAck(me.id, n.id);
+    setPersonalSeen((s) => new Set([...s, n.id]));
+    setPersonalAck((s) => new Set([...s, n.id]));
+    if (canAckClient(n, me)) {
+      const { error } = await supabase.from("app_notification_reads" as never).insert({
+        notification_id: n.id,
+        user_id: me.id,
+        user_name: me.name,
+        department: me.department,
+        kind: "ack",
+      } as never);
+      if (!error) {
+        setSeenIds((s) => new Set([...s, n.id]));
+        setAckedIds((s) => new Set([...s, n.id]));
+      }
     }
     toast({ title: "Acknowledged" });
-    setSeenIds((s) => new Set([...s, n.id]));
-    setAckedIds((s) => new Set([...s, n.id]));
   }
 
   async function markSeenLocal(n: NotifFull) {
-    if (!me || seenIds.has(n.id)) return;
-    if (!canAckClient(n, me)) return;
-    const ok = await markNotificationSeen(n.id);
-    if (!ok) return;
-    setSeenIds((s) => new Set([...s, n.id]));
+    if (!me) return;
+    // Personal local mark for every user so their own count reduces.
+    markPersonalSeen(me.id, n.id);
+    setPersonalSeen((s) => new Set([...s, n.id]));
+    // Also try the backend RPC when eligible (target dept, non-actor).
+    if (canAckClient(n, me) && !seenIds.has(n.id)) {
+      const ok = await markNotificationSeen(n.id);
+      if (ok) setSeenIds((s) => new Set([...s, n.id]));
+    }
   }
 
   if (loading || rows.length === 0) return null;
-  const unread = rows.filter((n) => !seenIds.has(n.id)).length;
+  const isSeen = (id: string) => seenIds.has(id) || personalSeen.has(id);
+  const isAcked = (id: string) => ackedIds.has(id) || personalAck.has(id);
+  const unread = rows.filter((n) => !isSeen(n.id)).length;
 
   return (
     <div
@@ -320,9 +346,9 @@ export function ModuleNotifications({
       {open && (
         <div className="divide-y divide-amber-400/30 border-t border-amber-400/30">
           {rows.map((n) => {
-            const seen = seenIds.has(n.id);
-            const acked = ackedIds.has(n.id);
-            const canAct = canAckClient(n, me);
+            const seen = isSeen(n.id);
+            const acked = isAcked(n.id);
+            const canAct = !!me;
             const canTrack = isAdmin || (me && n.actor_user_id === me.id);
             const lineCount = Array.isArray(n.line_item_changes)
               ? n.line_item_changes.length
