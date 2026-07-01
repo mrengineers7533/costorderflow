@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import "@/styles/oa-pdf.css";
 
 /**
  * Capture a live-preview DOM element and export it as a paginated A4 PDF.
@@ -15,32 +16,73 @@ export async function capturePreviewToPdf(
 ): Promise<{ ok: true; blob: Blob } | { ok: false }> {
   if (!element) return { ok: false };
 
-  // Temporarily force a fixed rendering width so the capture is deterministic
-  // regardless of the surrounding layout / zoom.
-  const prevWidth = element.style.width;
-  const prevMaxWidth = element.style.maxWidth;
-  const CAPTURE_WIDTH_PX = 900; // ~ A4 width at 96dpi with margins
-  element.style.width = `${CAPTURE_WIDTH_PX}px`;
-  element.style.maxWidth = `${CAPTURE_WIDTH_PX}px`;
+  // A4 @ 96dpi minus 8mm margins ≈ 794px. Matches the width used by
+  // `oa-pdf.css` so wrapping in the PDF equals wrapping in the clone.
+  const CAPTURE_WIDTH_PX = 794;
 
-  // Collect safe break boundaries (top offsets of every row/section we do
-  // NOT want to split across pages) BEFORE capture. These are used to snap
-  // page breaks so Terms/Bank/Signature blocks aren't sliced.
-  const rootTop = element.getBoundingClientRect().top;
-  const boundaries: number[] = [0];
-  element.querySelectorAll<HTMLElement>(
-    "tr, .pdf-keep, [data-pdf-keep]",
-  ).forEach((el) => {
-    const t = el.getBoundingClientRect().top - rootTop;
-    if (t > 0) boundaries.push(t);
-    const b = t + el.getBoundingClientRect().height;
-    if (b > 0) boundaries.push(b);
-  });
-  boundaries.sort((a, b) => a - b);
+  // Build an off-screen clone so the live UI is never mutated and the
+  // capture is deterministic (no scrollbars / sticky headers / Card
+  // constraints from the surrounding app layout).
+  const host = document.createElement("div");
+  host.className = "oa-pdf-capture";
+  host.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    `width:${CAPTURE_WIDTH_PX}px`,
+    "background:#ffffff",
+    "z-index:-1",
+    "pointer-events:none",
+  ].join(";");
+  const clone = element.cloneNode(true) as HTMLElement;
+  // Kill scroll/height caps inherited from the live layout.
+  clone.style.width = "100%";
+  clone.style.maxWidth = "100%";
+  clone.style.maxHeight = "none";
+  clone.style.overflow = "visible";
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  // Wait for images (stamp, logos) to finish decoding before capture.
+  const imgs = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      img.loading = "eager";
+      img.decoding = "sync";
+      try { await img.decode(); } catch { /* ignore */ }
+    }),
+  );
+  // Also allow layout/fonts to settle.
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+  // Collect safe break boundaries from the CLONE (post-normalization). We
+  // never want to slice across a `<tr>` or `.pdf-keep`, and inside a
+  // `.pdf-keep-group` we still allow the group's direct children to break.
+  const hostTop = clone.getBoundingClientRect().top;
+  const boundarySet = new Set<number>();
+  boundarySet.add(0);
+  const addBounds = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const t = r.top - hostTop;
+    const b = t + r.height;
+    if (t > 0) boundarySet.add(t);
+    if (b > 0) boundarySet.add(b);
+  };
+  clone
+    .querySelectorAll<HTMLElement>(
+      "tr, .pdf-keep, .pdf-keep-group > *, [data-pdf-keep]",
+    )
+    .forEach(addBounds);
+  // Line-level fallbacks inside Terms so a very tall Terms block can flow
+  // across pages instead of being sliced mid-glyph.
+  clone
+    .querySelectorAll<HTMLElement>(".pdf-keep p, .pdf-keep div, .pdf-keep li")
+    .forEach(addBounds);
+  const boundaries = Array.from(boundarySet).sort((a, b) => a - b);
 
   let canvas: HTMLCanvasElement;
   try {
-    canvas = await html2canvas(element, {
+    canvas = await html2canvas(clone, {
       scale: 2,
       useCORS: true,
       backgroundColor: "#ffffff",
@@ -48,8 +90,7 @@ export async function capturePreviewToPdf(
       windowWidth: CAPTURE_WIDTH_PX,
     });
   } finally {
-    element.style.width = prevWidth;
-    element.style.maxWidth = prevMaxWidth;
+    document.body.removeChild(host);
   }
 
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
@@ -64,20 +105,23 @@ export async function capturePreviewToPdf(
   const pageCssPx = pdfH / cssPxToMm;         // CSS px per PDF page
 
   // Pick page breaks that snap to the nearest safe boundary BEFORE the
-  // theoretical page cutoff. Never advance less than 40% of a page.
+  // theoretical page cutoff. Never advance less than 40% of a page. If no
+  // safe boundary exists in-window we accept the hard cutoff so the flow
+  // still progresses (better than an infinite loop).
   const totalCssPx = canvas.height / scale;
   const breaks: number[] = [0];
-  while (breaks[breaks.length - 1] < totalCssPx) {
+  while (breaks[breaks.length - 1] < totalCssPx - 0.5) {
     const start = breaks[breaks.length - 1];
     const maxEnd = start + pageCssPx;
     if (maxEnd >= totalCssPx) { breaks.push(totalCssPx); break; }
-    // largest boundary <= maxEnd and > start + 40% page
     const minEnd = start + pageCssPx * 0.4;
     let snap = maxEnd;
     for (let i = boundaries.length - 1; i >= 0; i--) {
       const b = boundaries[i];
       if (b <= maxEnd && b >= minEnd) { snap = b; break; }
     }
+    // Guarantee forward progress.
+    if (snap <= start) snap = Math.min(maxEnd, totalCssPx);
     breaks.push(snap);
   }
 
