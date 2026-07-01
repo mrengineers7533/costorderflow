@@ -16,6 +16,7 @@ import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { capturePreviewToPdf, findOaPreviewRoot } from "@/lib/orders/previewPdf";
 import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
