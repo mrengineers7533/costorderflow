@@ -648,11 +648,12 @@ export default function RequisitionDetail() {
                     <th className="text-left py-2 pr-3">Unit</th>
                     <th className="text-left py-2 pr-3">Lot</th>
                     <th className="text-left py-2 pr-3">Category</th>
+                    <th className="text-left py-2 pr-3 w-14">Files</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
-                    <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No items.</td></tr>
+                    <tr><td colSpan={showMake ? 10 : 9} className="py-4 text-center text-muted-foreground">No items.</td></tr>
                   ) : items.map((it) => (
                     <tr key={it.id} className="border-b last:border-0">
                       <td className="py-2 pr-3">
@@ -688,6 +689,7 @@ export default function RequisitionDetail() {
                           </SelectContent>
                         </Select>
                       </td>
+                      <td className="py-2 pr-3"><BoqItemAttachmentsView files={attMap.get(it.id)} /></td>
                     </tr>
                   ))}
                 </tbody>
