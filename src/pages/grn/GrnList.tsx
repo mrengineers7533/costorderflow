@@ -531,6 +531,60 @@ export default function GrnList() {
                         </Button>
                       )}
                     </td>
+                    <td className="p-2 min-w-[180px]">
+                      <input
+                        ref={(el) => { fileInputRefs.current[j.row.id] = el; }}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xls,.xlsx,.doc,.docx,application/pdf,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleInvoiceUpload(j, f);
+                          e.target.value = "";
+                        }}
+                      />
+                      {!g?.gate_entry_done ? (
+                        <span className="text-[10px] text-muted-foreground">Do Gate Entry first</span>
+                      ) : g?.invoice_path ? (
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-medium truncate max-w-[160px]" title={g.invoice_file_name || ""}>
+                            {g.invoice_file_name || "invoice"}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {g.invoice_uploaded_at ? new Date(g.invoice_uploaded_at).toLocaleString("en-IN") : ""}
+                          </div>
+                          {invBy && <div className="text-[10px] text-muted-foreground">by {invBy}</div>}
+                          <div className="flex gap-1 flex-wrap">
+                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openInvoice(g)}>
+                              <Eye className="h-3 w-3 mr-1" />View
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openInvoice(g, true)}>
+                              <Download className="h-3 w-3 mr-1" />Download
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px]"
+                              disabled={isUploading}
+                              onClick={() => fileInputRefs.current[j.row.id]?.click()}
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />Replace
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[11px] px-2"
+                          disabled={isUploading}
+                          onClick={() => fileInputRefs.current[j.row.id]?.click()}
+                        >
+                          <Upload className="h-3 w-3 mr-1" />
+                          {isUploading ? "Uploading…" : "Upload Invoice"}
+                        </Button>
+                      )}
+                    </td>
                     <td className="p-2">
                       <Badge className={`${statusColor[status]} text-[10px]`}>{statusLabel[status]}</Badge>
                     </td>
