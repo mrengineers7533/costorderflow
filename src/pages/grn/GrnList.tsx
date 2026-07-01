@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Search, PackageCheck, MessageSquare, RotateCcw } from "lucide-react";
+import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, RefreshCw } from "lucide-react";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -50,6 +50,12 @@ type Grn = {
   gate_entry_at: string | null;
   gate_entry_by: string | null;
   status: string;
+  invoice_path?: string | null;
+  invoice_file_name?: string | null;
+  invoice_mime?: string | null;
+  invoice_size?: number | null;
+  invoice_uploaded_by?: string | null;
+  invoice_uploaded_at?: string | null;
 };
 type Requisition = {
   id: string;
@@ -122,6 +128,8 @@ export default function GrnList() {
 
   const [commentRow, setCommentRow] = useState<Joined | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [uploadingRow, setUploadingRow] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const load = async () => {
     setLoading(true);
@@ -178,8 +186,10 @@ export default function GrnList() {
     }
 
     const gateUserIds = Array.from(new Set(((gData || []) as Grn[]).map((g) => g.gate_entry_by).filter(Boolean) as string[]));
-    if (gateUserIds.length) {
-      const { data: pr } = await sb.from("profiles").select("id,full_name,email").in("id", gateUserIds);
+    const invUserIds = Array.from(new Set(((gData || []) as Grn[]).map((g) => g.invoice_uploaded_by).filter(Boolean) as string[]));
+    const allUserIds = Array.from(new Set([...gateUserIds, ...invUserIds]));
+    if (allUserIds.length) {
+      const { data: pr } = await sb.from("profiles").select("id,full_name,email").in("id", allUserIds);
       const pm: Record<string, Profile> = {};
       ((pr || []) as Profile[]).forEach((p) => { pm[p.id] = p; });
       setProfiles(pm);
@@ -303,6 +313,72 @@ export default function GrnList() {
     toast.success("Comment saved");
   };
 
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+
+  const handleInvoiceUpload = async (j: Joined, file: File) => {
+    setUploadingRow(j.row.id);
+    try {
+      const { data: u } = await sb.auth.getUser();
+      const uid = u?.user?.id || null;
+      const path = `${j.po.id}/${j.row.id}/${Date.now()}-${sanitize(file.name)}`;
+      const { error: upErr } = await sb.storage.from("grn-invoices").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+      if (upErr) { toast.error(upErr.message); return; }
+
+      const invoiceFields = {
+        invoice_path: path,
+        invoice_file_name: file.name,
+        invoice_mime: file.type || null,
+        invoice_size: file.size,
+        invoice_uploaded_by: uid,
+        invoice_uploaded_at: new Date().toISOString(),
+      };
+
+      let saved: Grn | null = null;
+      if (j.grn?.id) {
+        const { data, error } = await sb
+          .from("grn_receipts")
+          .update(invoiceFields)
+          .eq("id", j.grn.id)
+          .select("*")
+          .maybeSingle();
+        if (error) { toast.error(error.message); return; }
+        saved = data as Grn;
+      } else {
+        const { data, error } = await sb
+          .from("grn_receipts")
+          .upsert(
+            { po_row_id: j.row.id, po_id: j.po.id, status: "pending", ...invoiceFields },
+            { onConflict: "po_row_id" }
+          )
+          .select("*")
+          .maybeSingle();
+        if (error) { toast.error(error.message); return; }
+        saved = data as Grn;
+      }
+      if (saved) setGrns((m) => ({ ...m, [j.row.id]: saved as Grn }));
+      if (uid && !profiles[uid]) {
+        const { data: pr } = await sb.from("profiles").select("id,full_name,email").eq("id", uid).maybeSingle();
+        if (pr) setProfiles((m) => ({ ...m, [pr.id]: pr as Profile }));
+      }
+      toast.success("Invoice uploaded");
+    } finally {
+      setUploadingRow(null);
+    }
+  };
+
+  const openInvoice = async (g: Grn, download = false) => {
+    if (!g.invoice_path) return;
+    const { data, error } = await sb.storage
+      .from("grn-invoices")
+      .createSignedUrl(g.invoice_path, 60, download ? { download: g.invoice_file_name || true } : undefined);
+    if (error || !data?.signedUrl) { toast.error(error?.message || "Cannot open file"); return; }
+    window.open(data.signedUrl, "_blank");
+  };
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   return (
@@ -364,18 +440,21 @@ export default function GrnList() {
                 <th className="text-right p-2">Delay</th>
                 <th className="text-left p-2">Reference</th>
                 <th className="text-left p-2">Gate Entry</th>
+                <th className="text-left p-2">Invoice</th>
                 <th className="text-left p-2">Status</th>
                 <th className="text-left p-2">Note</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={13} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
+                <tr><td colSpan={14} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
               ) : filtered.map((j) => {
                 const g = j.grn;
                 const status = g?.status || "pending";
                 const delay = g?.delay_days ?? null;
                 const gateBy = g?.gate_entry_by ? (profiles[g.gate_entry_by]?.email || profiles[g.gate_entry_by]?.full_name || "") : "";
+                const invBy = g?.invoice_uploaded_by ? (profiles[g.invoice_uploaded_by]?.email || profiles[g.invoice_uploaded_by]?.full_name || "") : "";
+                const isUploading = uploadingRow === j.row.id;
                 return (
                   <tr key={j.row.id} className="border-b last:border-0 align-top">
                     <td className="p-2">
@@ -449,6 +528,60 @@ export default function GrnList() {
                       ) : (
                         <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => markGateEntry(j)}>
                           <PackageCheck className="h-3 w-3 mr-1" />Gate Entry
+                        </Button>
+                      )}
+                    </td>
+                    <td className="p-2 min-w-[180px]">
+                      <input
+                        ref={(el) => { fileInputRefs.current[j.row.id] = el; }}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xls,.xlsx,.doc,.docx,application/pdf,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleInvoiceUpload(j, f);
+                          e.target.value = "";
+                        }}
+                      />
+                      {!g?.gate_entry_done ? (
+                        <span className="text-[10px] text-muted-foreground">Do Gate Entry first</span>
+                      ) : g?.invoice_path ? (
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-medium truncate max-w-[160px]" title={g.invoice_file_name || ""}>
+                            {g.invoice_file_name || "invoice"}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {g.invoice_uploaded_at ? new Date(g.invoice_uploaded_at).toLocaleString("en-IN") : ""}
+                          </div>
+                          {invBy && <div className="text-[10px] text-muted-foreground">by {invBy}</div>}
+                          <div className="flex gap-1 flex-wrap">
+                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openInvoice(g)}>
+                              <Eye className="h-3 w-3 mr-1" />View
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openInvoice(g, true)}>
+                              <Download className="h-3 w-3 mr-1" />Download
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px]"
+                              disabled={isUploading}
+                              onClick={() => fileInputRefs.current[j.row.id]?.click()}
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />Replace
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[11px] px-2"
+                          disabled={isUploading}
+                          onClick={() => fileInputRefs.current[j.row.id]?.click()}
+                        >
+                          <Upload className="h-3 w-3 mr-1" />
+                          {isUploading ? "Uploading…" : "Upload Invoice"}
                         </Button>
                       )}
                     </td>
