@@ -674,6 +674,7 @@ export default function DesignBoqView() {
                             ) : (
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Pending</Badge>
                             )}
+                            <BoqItemAttachmentsView files={itemAttachments.get(it.id)} />
                           </div>
                         </div>
                       </TableCell>
