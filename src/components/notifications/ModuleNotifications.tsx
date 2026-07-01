@@ -322,6 +322,7 @@ export function ModuleNotifications({
           {rows.map((n) => {
             const seen = seenIds.has(n.id);
             const acked = ackedIds.has(n.id);
+            const canAct = canAckClient(n, me);
             const canTrack = isAdmin || (me && n.actor_user_id === me.id);
             const lineCount = Array.isArray(n.line_item_changes)
               ? n.line_item_changes.length
@@ -368,17 +369,35 @@ export function ModuleNotifications({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  {!seen && canAckClient(n, me) && (
+                  {seen ? (
+                    <Button size="sm" variant="secondary" className="h-7 text-[11px]" disabled>
+                      <Check className="h-3.5 w-3.5 mr-1" /> Seen
+                    </Button>
+                  ) : (
                     <Button
                       size="sm"
-                      className="h-7 text-[11px] shadow-sm ring-2 ring-primary/20 animate-pulse"
+                      variant={canAct ? "default" : "outline"}
+                      className={`h-7 text-[11px] shadow-sm ${canAct ? "ring-2 ring-primary/20 animate-pulse" : ""}`}
+                      disabled={!canAct}
+                      title={canAct ? "Mark this notification as seen" : "Seen is available only to the target department/user"}
                       onClick={() => markSeenLocal(n)}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1" /> Mark as Seen
                     </Button>
                   )}
-                  {!acked && canAckClient(n, me) && (
-                    <Button size="sm" className="h-7" onClick={() => ack(n)}>
+                  {acked ? (
+                    <Button size="sm" variant="secondary" className="h-7 text-[11px]" disabled>
+                      <Check className="h-3.5 w-3.5 mr-1" /> Acknowledged
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant={canAct ? "default" : "outline"}
+                      className="h-7 text-[11px]"
+                      disabled={!canAct}
+                      title={canAct ? "Acknowledge this notification" : "Acknowledge is available only to the target department/user"}
+                      onClick={() => ack(n)}
+                    >
                       <Check className="h-3.5 w-3.5 mr-1" /> Acknowledge
                     </Button>
                   )}
