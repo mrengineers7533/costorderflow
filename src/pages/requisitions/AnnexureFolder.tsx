@@ -20,6 +20,7 @@ import { fmtQty2 } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -469,6 +470,7 @@ export default function AnnexureFolder() {
           </DialogHeader>
           {viewEntry && (
             <div className="overflow-x-auto">
+              <ModuleNotifications links={{ annexureId: viewEntry.annexure.id }} />
               <table className="w-full text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
