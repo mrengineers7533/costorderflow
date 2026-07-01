@@ -1333,6 +1333,12 @@ export type Database = {
           gate_entry_by: string | null
           gate_entry_done: boolean
           id: string
+          invoice_file_name: string | null
+          invoice_mime: string | null
+          invoice_path: string | null
+          invoice_size: number | null
+          invoice_uploaded_at: string | null
+          invoice_uploaded_by: string | null
           late_comment: string | null
           material_reached_date: string | null
           po_id: string
@@ -1349,6 +1355,12 @@ export type Database = {
           gate_entry_by?: string | null
           gate_entry_done?: boolean
           id?: string
+          invoice_file_name?: string | null
+          invoice_mime?: string | null
+          invoice_path?: string | null
+          invoice_size?: number | null
+          invoice_uploaded_at?: string | null
+          invoice_uploaded_by?: string | null
           late_comment?: string | null
           material_reached_date?: string | null
           po_id: string
@@ -1365,6 +1377,12 @@ export type Database = {
           gate_entry_by?: string | null
           gate_entry_done?: boolean
           id?: string
+          invoice_file_name?: string | null
+          invoice_mime?: string | null
+          invoice_path?: string | null
+          invoice_size?: number | null
+          invoice_uploaded_at?: string | null
+          invoice_uploaded_by?: string | null
           late_comment?: string | null
           material_reached_date?: string | null
           po_id?: string
