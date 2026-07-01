@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
 import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
+import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -98,6 +99,12 @@ export default function RequisitionDetail() {
   const familyLink = useMemo(
     () => req?.family_token ? `${window.location.origin}/boq/family/${req.family_token}` : "",
     [req],
+  );
+  // Attachments live on the source BOQ; match req items back to BOQ items by
+  // description + model_number signature.
+  const attMap = useItemAttachments(
+    req?.boq_id ?? null,
+    items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })) as never,
   );
   const stale = latestRev != null && req != null && latestRev > req.boq_revision;
 
