@@ -226,12 +226,16 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
     return () => { cancelled = true; };
   }, [boq]);
 
+  const attItems = useMemo(
+    () => (boq && Array.isArray(boq.line_items) ? boq.line_items : []) as never,
+    [boq],
+  );
+  const attMap = useItemAttachments(boq?.id ?? null, attItems);
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   if (!boq) return <div className="p-6 text-sm text-muted-foreground">BOQ not found.</div>;
 
   const items = Array.isArray(boq.line_items) ? boq.line_items : [];
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const attMap = useItemAttachments(boq.id, items as never);
   const approved = (boq.verification_status ?? "approved") === "approved";
   const resolveMake = buildMakeResolver(order?.line_items);
   const orderRootId = order ? (order as { parent_order_id?: string | null; id: string }).parent_order_id || order.id : null;
