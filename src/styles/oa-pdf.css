@@ -1,0 +1,109 @@
+/*
+ * Scoped stylesheet applied only inside the off-screen clone that
+ * `capturePreviewToPdf` uses to rasterise the OA Live Preview.
+ *
+ * All rules live under `.oa-pdf-capture` so nothing here can affect the
+ * running app UI. The goal is to remove html2canvas quirks (oklch tokens,
+ * hsl(var(--…)) borders, modern color-mix) by pinning explicit colours,
+ * fonts, borders and wrapping — so the exported PDF looks 1:1 with the
+ * live preview.
+ */
+
+.oa-pdf-capture {
+  /* Force plain-hex design tokens so html2canvas resolves colours cleanly. */
+  --background: #ffffff;
+  --foreground: #000000;
+  --border: #000000;
+  --input: #000000;
+  --ring: #000000;
+  --muted: #f3f4f6;
+  --muted-foreground: #374151;
+  --primary: #facc15;
+  --primary-foreground: #111111;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #111111;
+  --accent: #f3f4f6;
+  --accent-foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-family: "Inter", "Arial", sans-serif !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+  width: 794px;
+  padding: 0;
+  margin: 0;
+}
+
+.oa-pdf-capture * {
+  box-sizing: border-box;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Hide UI chrome that only makes sense on screen (Live Preview toolbar,
+   badges, buttons, print-hidden helpers). */
+.oa-pdf-capture .print\:hidden,
+.oa-pdf-capture [data-oa-preview-toolbar],
+.oa-pdf-capture button,
+.oa-pdf-capture [role="tablist"] {
+  display: none !important;
+}
+
+/* Table + text wrapping: guarantee content never leaves cell borders. */
+.oa-pdf-capture table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  table-layout: auto;
+}
+.oa-pdf-capture th,
+.oa-pdf-capture td {
+  vertical-align: top;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  page-break-inside: avoid;
+}
+.oa-pdf-capture div,
+.oa-pdf-capture p,
+.oa-pdf-capture span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Pin the specific tailwind opacity/token classes that html2canvas
+   otherwise renders as washed / transparent. */
+.oa-pdf-capture .bg-primary\/90,
+.oa-pdf-capture .bg-primary\/80,
+.oa-pdf-capture .bg-primary {
+  background-color: #facc15 !important;
+  color: #111111 !important;
+}
+.oa-pdf-capture .text-primary-foreground { color: #111111 !important; }
+.oa-pdf-capture .bg-muted\/40,
+.oa-pdf-capture .bg-muted\/60,
+.oa-pdf-capture .bg-muted { background-color: #f3f4f6 !important; }
+.oa-pdf-capture .text-muted-foreground { color: #374151 !important; }
+.oa-pdf-capture .border-foreground,
+.oa-pdf-capture .border { border-color: #000000 !important; }
+.oa-pdf-capture .border-foreground\/40 { border-color: rgba(0,0,0,0.4) !important; }
+
+/* Signature block: html2canvas mis-composites tailwind `opacity-90`, so we
+   render the stamp at full opacity and rely on the source image for tone. */
+.oa-pdf-capture img { image-rendering: -webkit-optimize-contrast; }
+.oa-pdf-capture .oa-pdf-stamp { opacity: 1 !important; filter: none !important; }
+
+/* Root preview padding — mirror `p-5 space-y-4` from OrderPreview. */
+.oa-pdf-capture [data-oa-preview-root] {
+  padding: 20px !important;
+  background: #ffffff !important;
+}
