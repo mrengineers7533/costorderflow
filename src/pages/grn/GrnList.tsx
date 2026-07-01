@@ -313,6 +313,72 @@ export default function GrnList() {
     toast.success("Comment saved");
   };
 
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+
+  const handleInvoiceUpload = async (j: Joined, file: File) => {
+    setUploadingRow(j.row.id);
+    try {
+      const { data: u } = await sb.auth.getUser();
+      const uid = u?.user?.id || null;
+      const path = `${j.po.id}/${j.row.id}/${Date.now()}-${sanitize(file.name)}`;
+      const { error: upErr } = await sb.storage.from("grn-invoices").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+      if (upErr) { toast.error(upErr.message); return; }
+
+      const invoiceFields = {
+        invoice_path: path,
+        invoice_file_name: file.name,
+        invoice_mime: file.type || null,
+        invoice_size: file.size,
+        invoice_uploaded_by: uid,
+        invoice_uploaded_at: new Date().toISOString(),
+      };
+
+      let saved: Grn | null = null;
+      if (j.grn?.id) {
+        const { data, error } = await sb
+          .from("grn_receipts")
+          .update(invoiceFields)
+          .eq("id", j.grn.id)
+          .select("*")
+          .maybeSingle();
+        if (error) { toast.error(error.message); return; }
+        saved = data as Grn;
+      } else {
+        const { data, error } = await sb
+          .from("grn_receipts")
+          .upsert(
+            { po_row_id: j.row.id, po_id: j.po.id, status: "pending", ...invoiceFields },
+            { onConflict: "po_row_id" }
+          )
+          .select("*")
+          .maybeSingle();
+        if (error) { toast.error(error.message); return; }
+        saved = data as Grn;
+      }
+      if (saved) setGrns((m) => ({ ...m, [j.row.id]: saved as Grn }));
+      if (uid && !profiles[uid]) {
+        const { data: pr } = await sb.from("profiles").select("id,full_name,email").eq("id", uid).maybeSingle();
+        if (pr) setProfiles((m) => ({ ...m, [pr.id]: pr as Profile }));
+      }
+      toast.success("Invoice uploaded");
+    } finally {
+      setUploadingRow(null);
+    }
+  };
+
+  const openInvoice = async (g: Grn, download = false) => {
+    if (!g.invoice_path) return;
+    const { data, error } = await sb.storage
+      .from("grn-invoices")
+      .createSignedUrl(g.invoice_path, 60, download ? { download: g.invoice_file_name || true } : undefined);
+    if (error || !data?.signedUrl) { toast.error(error?.message || "Cannot open file"); return; }
+    window.open(data.signedUrl, "_blank");
+  };
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
 
   return (
