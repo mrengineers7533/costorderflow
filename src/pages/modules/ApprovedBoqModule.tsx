@@ -18,6 +18,7 @@ import { ModuleNotifications } from "@/components/notifications/ModuleNotificati
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 import { fetchItemApprovalVerdicts, type ItemApprovalVerdict } from "@/lib/boq/itemApprovalSync";
+import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -319,11 +320,12 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                 <th className="text-left py-2 pr-3">Motor</th>
                 <th className="text-right py-2 pr-3">Motor Qty</th>
                 <th className="text-left py-2 pr-3">Approved</th>
+                <th className="text-left py-2 pr-3">Files</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={showMake ? 10 : 9} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
+                <tr><td colSpan={showMake ? 11 : 10} className="py-4 text-center text-muted-foreground">No line items.</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={it.id || idx} className="border-b last:border-0">
                   <td className="py-2 pr-3">{it.item_no || idx + 1}</td>
@@ -341,6 +343,9 @@ export function ApprovedBoqDetailPage({ config }: { config: ModuleConfig }) {
                     ) : (
                       <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Pending</Badge>
                     )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <BoqItemAttachmentsView files={attMap.get(it.id || "")} />
                   </td>
                 </tr>
               ))}
