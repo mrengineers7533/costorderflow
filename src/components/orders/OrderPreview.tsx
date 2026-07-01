@@ -8,6 +8,7 @@ import { visibleColumns, type PdfColumnKey } from "@/lib/orders/pdfColumns";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
 import ugurLogo from "@/assets/ugur-logo.png";
+import mrStamp from "@/assets/mr-stamp.png";
 import {
   MR_FOOTER_ADDRESS,
   GMS_HEAD_OFFICE_LINES,
