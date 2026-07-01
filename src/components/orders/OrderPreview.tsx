@@ -856,17 +856,17 @@ function GMSTermsBlock({
 
 function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankDetails; preparedBy?: string }) {
   return (
-    <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2">
+    <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2 pdf-keep">
       {/* Amount in words band */}
       {/* Terms & Conditions */}
-      <div className="border border-foreground border-t-0 px-2 py-1.5">
+      <div className="border border-foreground border-t-0 px-2 py-1.5 pdf-keep">
         <div className="font-bold uppercase italic mb-0.5">Terms &amp; Conditions</div>
-        <div className="whitespace-pre-wrap leading-relaxed">{terms || ""}</div>
+        <div className="whitespace-pre-wrap break-words leading-relaxed">{terms || ""}</div>
       </div>
 
       {/* Bank + Signature row */}
-      <div className="grid grid-cols-2 border border-foreground border-t-0">
-        <div className="px-2 py-1.5 border-r border-foreground">
+      <div className="grid grid-cols-2 border border-foreground border-t-0 pdf-keep">
+        <div className="px-2 py-1.5 border-r border-foreground break-words">
           <div className="font-bold italic uppercase">Our Bank Details :-</div>
           {bank && (
             <div className="mt-0.5 space-y-0.5 font-semibold">
@@ -877,8 +877,14 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
             </div>
           )}
         </div>
-        <div className="px-2 py-1.5 flex flex-col items-end justify-between min-h-[90px]">
+        <div className="px-2 py-1.5 flex flex-col items-end justify-between min-h-[110px] relative">
           <div className="font-semibold italic">Yours faithfully</div>
+          <img
+            src={mrStamp}
+            alt="M.R. Engineers stamp"
+            className="absolute right-3 top-6 h-16 w-16 object-contain opacity-90 pointer-events-none select-none"
+            crossOrigin="anonymous"
+          />
           <div className="text-right">
             <div className="font-bold tracking-wide">M.R. ENGINEERS</div>
             {preparedBy && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
@@ -887,12 +893,12 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
       </div>
 
       {/* Small "M.R. ENGINEERS" label row above the yellow strip (matches PDF) */}
-      <div className="border border-foreground border-t-0 px-2 py-1 text-right text-[10px] font-bold">
+      <div className="border border-foreground border-t-0 px-2 py-1 text-right text-[10px] font-bold pdf-keep">
         M.R. ENGINEERS
       </div>
 
       {/* Footer address band */}
-      <div className="bg-primary/90 text-primary-foreground text-center font-semibold uppercase tracking-wide px-2 py-1.5 text-[10px]">
+      <div className="bg-primary/90 text-primary-foreground text-center font-semibold uppercase tracking-wide px-2 py-1.5 text-[10px] pdf-keep">
         {MR_FOOTER_ADDRESS}
       </div>
     </div>
