@@ -440,18 +440,21 @@ export default function GrnList() {
                 <th className="text-right p-2">Delay</th>
                 <th className="text-left p-2">Reference</th>
                 <th className="text-left p-2">Gate Entry</th>
+                <th className="text-left p-2">Invoice</th>
                 <th className="text-left p-2">Status</th>
                 <th className="text-left p-2">Note</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={13} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
+                <tr><td colSpan={14} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
               ) : filtered.map((j) => {
                 const g = j.grn;
                 const status = g?.status || "pending";
                 const delay = g?.delay_days ?? null;
                 const gateBy = g?.gate_entry_by ? (profiles[g.gate_entry_by]?.email || profiles[g.gate_entry_by]?.full_name || "") : "";
+                const invBy = g?.invoice_uploaded_by ? (profiles[g.invoice_uploaded_by]?.email || profiles[g.invoice_uploaded_by]?.full_name || "") : "";
+                const isUploading = uploadingRow === j.row.id;
                 return (
                   <tr key={j.row.id} className="border-b last:border-0 align-top">
                     <td className="p-2">
