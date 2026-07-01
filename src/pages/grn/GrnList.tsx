@@ -184,8 +184,10 @@ export default function GrnList() {
     }
 
     const gateUserIds = Array.from(new Set(((gData || []) as Grn[]).map((g) => g.gate_entry_by).filter(Boolean) as string[]));
-    if (gateUserIds.length) {
-      const { data: pr } = await sb.from("profiles").select("id,full_name,email").in("id", gateUserIds);
+    const invUserIds = Array.from(new Set(((gData || []) as Grn[]).map((g) => g.invoice_uploaded_by).filter(Boolean) as string[]));
+    const allUserIds = Array.from(new Set([...gateUserIds, ...invUserIds]));
+    if (allUserIds.length) {
+      const { data: pr } = await sb.from("profiles").select("id,full_name,email").in("id", allUserIds);
       const pm: Record<string, Profile> = {};
       ((pr || []) as Profile[]).forEach((p) => { pm[p.id] = p; });
       setProfiles(pm);
