@@ -28,6 +28,7 @@ import {
 } from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
+import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
