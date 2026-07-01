@@ -734,11 +734,12 @@ export default function RequisitionDetail() {
                       <th className="text-right py-2 pr-3">Qty</th>
                       <th className="text-left py-2 pr-3">Unit</th>
                       <th className="text-left py-2 pr-3">Lot</th>
+                      <th className="text-left py-2 pr-3 w-14">Files</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.filter((i) => i.purchase_category === cat).length === 0 ? (
-                      <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
+                      <tr><td colSpan={showMake ? 8 : 7} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
                     ) : items.filter((i) => i.purchase_category === cat).map((it) => (
                       <tr key={it.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">{it.item_no}</td>
@@ -750,6 +751,7 @@ export default function RequisitionDetail() {
                         <td className="py-2 pr-3 text-right">{it.quantity}</td>
                         <td className="py-2 pr-3">{it.unit}</td>
                         <td className="py-2 pr-3">{it.lot_no || "—"}</td>
+                        <td className="py-2 pr-3"><BoqItemAttachmentsView files={attMap.get(it.id)} /></td>
                       </tr>
                     ))}
                   </tbody>
