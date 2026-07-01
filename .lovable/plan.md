@@ -1,62 +1,67 @@
 ## Goal
-Make MR **and** GMS OA PDF output render exactly like the on-screen Live Preview by hardening the existing DOM-capture pipeline. No changes to OA/BOQ data, calculations, GST, numbering, approval flow, Save Draft, Finalize, Convert to PI, Manufacturing/Purchase workflow, or any existing feature.
+Make item-wise BOQ attachments (already saved in `boq_item_attachments`) visible with their item everywhere the item appears — read-only outside the BOQ editor / Design review panel where upload already exists. No changes to any calculation, approval, notification, or workflow logic.
 
-## Root causes in the current capture pipeline
-Files: `src/lib/orders/previewPdf.ts`, `src/components/orders/OrderPreview.tsx`.
+## Current state (verified)
 
-1. **CSS variables / modern color functions mis-rendered by html2canvas.** Preview uses design tokens (`border-foreground`, `bg-primary/90`, `bg-muted/*`, `text-primary-foreground`) that resolve to `hsl(var(--…))` or `oklch(...)`. html2canvas 1.x mishandles these → thin/missing borders, washed backgrounds, and text that visually spills past cells.
-2. **Capture runs on the live node.** The preview lives inside a Card with scroll containers, sticky headers, and `space-y-4`. Temporarily setting `width:900px` in place doesn't neutralize the surrounding layout, so wrapping in the PDF drifts vs what's on screen.
-3. **Pagination snap set is too coarse.** Boundaries include only `tr, .pdf-keep`. When a `.pdf-keep` block (Terms) is taller than a page, the loop hard-slices it. Bank/Signature/yellow footer can also fall on unsafe cuts because they aren't grouped.
-4. **Stamp not guaranteed decoded before capture.** `<img src={mrStamp}>` may still be loading when html2canvas snapshots → stamp missing near "Yours faithfully / M.R. ENGINEERS".
-5. **`page-break-before` / print-only CSS is ignored** by html2canvas.
+- Table `public.boq_item_attachments` already stores files per `(boq_id, boq_item_id)` with `file_name`, `file_path`, `mime_type`, `size_bytes`, `uploaded_by`, `created_at`.
+- Upload UI (`BoqItemAttachments` popover) is mounted only in `BoqEditor` and `DesignReviewPanel` — that stays as the single write surface.
+- Line-item IDs change on each BOQ revision, but the existing revision layer already matches items by signature `description|model_number` (`boqSig` in `src/lib/revisions/index.ts`). Attachment lookup must use the same signature to follow the item across revisions.
+- Line items are rendered item-wise in: Design BOQ view, Approved BOQ module, Manufacturing detail, Purchase detail, Requisition detail, Annexure folder (row detail), BOQ Folder (opens BoqEditor — already covered), Family/Final BOQ pages.
 
-## Fix (rendering layer only)
+## What to build
 
-### 1. Off-screen clone with normalized styles — `src/lib/orders/previewPdf.ts`
-- Deep-clone `[data-oa-preview-root]` into a fixed off-screen container:
-  `position:fixed; left:-10000px; top:0; width:794px;` (A4 @ 96dpi minus margins).
-- Wrap in `<div class="oa-pdf-capture">` so the scoped stylesheet applies.
-- Preload images: `await Promise.all([...clone.querySelectorAll('img')].map(img => img.decode().catch(()=>{})))` — guarantees stamp/logos are ready.
-- Capture the clone, then remove it. Live UI is never mutated (also removes the existing `element.style.width` side-effect).
+1. **New helper** `src/lib/boq/itemAttachments.ts`
+   - `fetchItemAttachments(boqId, items[])` → `Map<itemId, Attachment[]>`.
+   - Loads all rows for `boqId`. For each current item, includes:
+     - direct matches on `boq_item_id`, plus
+     - inherited matches from earlier revisions in the same BOQ family (walking `revised_from_id`) where the ancestor item shares the same `description|model_number` signature.
+   - Returns file metadata + a helper `getSignedUrl(path)` using existing `boq-item-docs` storage bucket (already used by the uploader).
+   - Read-only; never writes.
 
-### 2. Scoped print-safe stylesheet — new `src/styles/oa-pdf.css`
-Imported only by `previewPdf.ts`; all rules under `.oa-pdf-capture` so app UI is untouched:
-- Force explicit hex tokens: `--foreground:#000; --border:#000; --muted:#f3f4f6; --primary:#facc15; --primary-foreground:#111;`, and map `bg-primary/90`, `bg-muted/40`, etc. to solid hex.
-- Normalize: `border-collapse:collapse`, cell padding, `font-family:'Inter',Arial,sans-serif`, `font-size:11px`, `line-height:1.35`.
-- `td,th,div{word-break:break-word; overflow-wrap:anywhere}` — Terms/Bank never overflow.
-- Kill web-only affordances: `.print\:hidden{display:none!important}`, `box-shadow:none`, `.animate-*{animation:none}`.
+2. **New read-only component** `src/components/boqs/BoqItemAttachmentsView.tsx`
+   - Small paperclip button + count badge (matches existing look).
+   - Popover lists files with name, type, size, uploaded-by (resolved from `profiles`), uploaded date/time.
+   - "View / Download" opens a signed URL (10-min TTL) via existing `boq-item-docs` bucket.
+   - No upload / delete controls.
 
-### 3. Smarter pagination
-- Expand boundaries to include: every `<tr>`, every `.pdf-keep`, direct children inside `.pdf-keep` (Terms paragraph, Bank grid, Signature row, footer strip), and every `<p>/<div>` line inside Terms.
-- If a keep-block is taller than a page, allow inner (line-level) boundaries so it flows across pages instead of being sliced mid-glyph.
-- Keep the "min 40% page advance" rule to prevent sliver pages.
+3. **Mount the read-only view** (icon in the row, no new logic):
+   - `src/pages/design/DesignBoqView.tsx` — items table row.
+   - `src/pages/modules/ApprovedBoqModule.tsx` — items table row.
+   - `src/pages/manufacturing/ManufacturingDetail.tsx` — items row.
+   - `src/pages/purchase/PurchaseDetail.tsx` — items row.
+   - `src/pages/requisitions/RequisitionDetail.tsx` — BOQ items row.
+   - `src/pages/requisitions/AnnexureFolder.tsx` — row detail.
+   - `src/pages/boqs/FamilyBoq.tsx` and `FinalBoq.tsx` — items row.
+   - BOQ Folder card list unchanged (header-level list, no items on that screen); opening a BOQ from there already shows attachments via `BoqEditor`.
 
-### 4. Stamp + signature grouping — `src/components/orders/OrderPreview.tsx`
-- Wrap the MR post-items block (Terms + Bank/Signature + M.R. label + yellow footer) in a single `<div class="pdf-keep-group">`; pagination prefers to keep it together but children remain individually keep-able.
-- On the stamp `<img>`: `loading="eager"`, replace tailwind `opacity-90` with an inline rgba filter that html2canvas composites correctly.
-- Symmetric grouping for the GMS T&C / Bank / Exclusions block so GMS behaves the same.
+4. **Revision-safe resolution**
+   - Reuse `boqSig` normalization from `src/lib/revisions/index.ts` (export it if not already exported).
+   - Ancestor walk: query `boqs` for `id, revised_from_id, line_items` up the chain from current BOQ; collect ancestor `boq_item_id`s that share the signature; union attachments.
 
-### 5. No behaviour changes
-- `downloadPDF()` in `src/pages/orders/OrderEditor.tsx` unchanged — still calls `capturePreviewToPdf` first, falls back to legacy `generateOrderPDF`.
-- Legacy `src/lib/orders/pdf.ts` untouched.
-- Save Draft, Finalize, Convert to PI, revisions, approvals, notifications, numbering — untouched.
+## Explicitly out of scope (unchanged)
 
-## Files touched
-- `src/lib/orders/previewPdf.ts` — clone + decode + smarter pagination.
-- `src/styles/oa-pdf.css` — new scoped stylesheet.
-- `src/components/orders/OrderPreview.tsx` — `pdf-keep-group` wrappers + stamp opacity swap. No data/totals/logic touched.
+- No changes to approval, Design review, Manufacturing, Purchase, Requisition, Annexure, OA, PI, notifications, costing, GST, totals, quantity/rate/amount, numbering, revision numbering, Save Draft, Finalize, Convert to PI, access rules, or any workflow.
+- No changes to the upload path, storage bucket, or `boq_item_attachments` schema/RLS.
+- No new columns in DB. No migration.
 
-## Verification (must pass before "done")
-Via Playwright against `http://localhost:8080`:
-1. Open MR OA `MROA/2026-27/0007/R7` preview → screenshot `preview-mr.png`.
-2. Trigger Download PDF → rasterize with `pdftoppm -r 150` → `pdf-mr-p*.png`.
-3. Visual checklist:
-   - Terms cell auto-heights; no text outside borders.
-   - Bank Details + "Yours faithfully / M.R. ENGINEERS" + stamp on same page.
-   - Yellow footer address strip full width, present.
-   - Mohar visible next to signature block.
-   - Column widths, row heights, font sizes match preview.
-4. Repeat for a GMS OA (e.g. `2026-27/GMS/0002/R9`) → `preview-gms.png` vs `pdf-gms-p*.png`.
-5. `git diff --stat` lists only the 3 files above — proof no other logic changed.
+## Files to change / add
 
-Preview vs PDF screenshots delivered inline in the completion message.
+- Add: `src/lib/boq/itemAttachments.ts`
+- Add: `src/components/boqs/BoqItemAttachmentsView.tsx`
+- Edit (single new icon cell per row, no other changes):
+  - `src/pages/design/DesignBoqView.tsx`
+  - `src/pages/modules/ApprovedBoqModule.tsx`
+  - `src/pages/manufacturing/ManufacturingDetail.tsx`
+  - `src/pages/purchase/PurchaseDetail.tsx`
+  - `src/pages/requisitions/RequisitionDetail.tsx`
+  - `src/pages/requisitions/AnnexureFolder.tsx`
+  - `src/pages/boqs/FamilyBoq.tsx`
+  - `src/pages/boqs/FinalBoq.tsx`
+- Add test: `src/test/itemAttachmentsVisibility.test.ts` — verifies signature-based resolution across a revision chain and that the helper never writes.
+
+## Verification
+
+- Upload PDF to item A and XLSX to item B in the BOQ editor, then open each linked module and confirm the paperclip badge + list appears on the correct row.
+- Revise the BOQ; confirm the same attachments follow the same item (matched by description+model).
+- Confirm quantity/rate/amount/GST/totals/numbering/approval badges are byte-identical before/after (screenshot diff of the items table).
+- Vitest suite passes; no edits to approval, revision, notification, or workflow modules.
