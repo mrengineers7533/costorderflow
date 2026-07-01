@@ -128,6 +128,8 @@ export default function GrnList() {
 
   const [commentRow, setCommentRow] = useState<Joined | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [uploadingRow, setUploadingRow] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const load = async () => {
     setLoading(true);
