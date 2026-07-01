@@ -137,6 +137,7 @@ export default function DesignBoqView() {
     () => sortByItemNo((boq?.line_items as BoqLineItem[]) || []),
     [boq],
   );
+  const itemAttachments = useItemAttachments(boq?.id ?? null, items as never);
 
   const otherCommentsByCell = useMemo(() => {
     const m: Record<string, DesignComment[]> = {};
