@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Download, XCircle, Send, Eye, Search, Trash2 } from "lucide-react";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { fmtQty2 } from "@/lib/utils";
+import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -429,6 +430,7 @@ export default function PoFolder() {
           <DialogHeader><DialogTitle className="text-base">{viewPo?.po_number}</DialogTitle></DialogHeader>
           {viewPo && (
             <div className="space-y-3 text-xs">
+              <ModuleNotifications links={{ poId: viewPo.id }} />
               <div className="grid grid-cols-2 gap-3">
                 <div><b>Vendor:</b> {viewPo.vendor_name}<br />{viewPo.vendor_contact}</div>
                 <div><b>Category:</b> {catLabel[viewPo.category]}<br /><b>Lots:</b> {viewPo.lot_numbers.join(", ") || "—"}</div>
