@@ -28,6 +28,7 @@ import {
 } from "@/lib/design/itemApprovals";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
 import { BoqRevisionHistory } from "@/components/boqs/BoqRevisionHistory";
+import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 
 type ColKey = "model_number" | "description" | "quantity" | "unit" | "motor" | "motor_quantity" | "remarks";
 const COLS: { key: ColKey; label: string }[] = [
@@ -136,6 +137,7 @@ export default function DesignBoqView() {
     () => sortByItemNo((boq?.line_items as BoqLineItem[]) || []),
     [boq],
   );
+  const itemAttachments = useItemAttachments(boq?.id ?? null, items as never);
 
   const otherCommentsByCell = useMemo(() => {
     const m: Record<string, DesignComment[]> = {};
@@ -672,6 +674,7 @@ export default function DesignBoqView() {
                             ) : (
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Pending</Badge>
                             )}
+                            <BoqItemAttachmentsView files={itemAttachments.get(it.id)} />
                           </div>
                         </div>
                       </TableCell>

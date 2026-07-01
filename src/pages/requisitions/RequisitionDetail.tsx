@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
 import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
+import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -98,6 +99,12 @@ export default function RequisitionDetail() {
   const familyLink = useMemo(
     () => req?.family_token ? `${window.location.origin}/boq/family/${req.family_token}` : "",
     [req],
+  );
+  // Attachments live on the source BOQ; match req items back to BOQ items by
+  // description + model_number signature.
+  const attMap = useItemAttachments(
+    req?.boq_id ?? null,
+    items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })) as never,
   );
   const stale = latestRev != null && req != null && latestRev > req.boq_revision;
 
@@ -414,11 +421,12 @@ export default function RequisitionDetail() {
                       <th className="text-right py-2 pr-3 w-20">Qty</th>
                       <th className="text-left py-2 pr-3 w-20">Unit</th>
                       <th className="text-left py-2 pr-3">Remarks</th>
+                      <th className="text-left py-2 pr-3 w-14">Files</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.length === 0 ? (
-                      <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
+                      <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No items parsed from the uploaded file.</td></tr>
                     ) : items.map((it) => (
                       <tr key={it.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">{it.item_no}</td>
@@ -426,6 +434,7 @@ export default function RequisitionDetail() {
                         <td className="py-2 pr-3 text-right">{it.quantity ?? "—"}</td>
                         <td className="py-2 pr-3">{it.unit || "—"}</td>
                         <td className="py-2 pr-3 text-xs text-muted-foreground">{it.remarks || "—"}</td>
+                        <td className="py-2 pr-3"><BoqItemAttachmentsView files={attMap.get(it.id)} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -639,11 +648,12 @@ export default function RequisitionDetail() {
                     <th className="text-left py-2 pr-3">Unit</th>
                     <th className="text-left py-2 pr-3">Lot</th>
                     <th className="text-left py-2 pr-3">Category</th>
+                    <th className="text-left py-2 pr-3 w-14">Files</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
-                    <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No items.</td></tr>
+                    <tr><td colSpan={showMake ? 10 : 9} className="py-4 text-center text-muted-foreground">No items.</td></tr>
                   ) : items.map((it) => (
                     <tr key={it.id} className="border-b last:border-0">
                       <td className="py-2 pr-3">
@@ -679,6 +689,7 @@ export default function RequisitionDetail() {
                           </SelectContent>
                         </Select>
                       </td>
+                      <td className="py-2 pr-3"><BoqItemAttachmentsView files={attMap.get(it.id)} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -723,11 +734,12 @@ export default function RequisitionDetail() {
                       <th className="text-right py-2 pr-3">Qty</th>
                       <th className="text-left py-2 pr-3">Unit</th>
                       <th className="text-left py-2 pr-3">Lot</th>
+                      <th className="text-left py-2 pr-3 w-14">Files</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.filter((i) => i.purchase_category === cat).length === 0 ? (
-                      <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
+                      <tr><td colSpan={showMake ? 8 : 7} className="py-4 text-center text-muted-foreground">No items assigned.</td></tr>
                     ) : items.filter((i) => i.purchase_category === cat).map((it) => (
                       <tr key={it.id} className="border-b last:border-0">
                         <td className="py-2 pr-3">{it.item_no}</td>
@@ -739,6 +751,7 @@ export default function RequisitionDetail() {
                         <td className="py-2 pr-3 text-right">{it.quantity}</td>
                         <td className="py-2 pr-3">{it.unit}</td>
                         <td className="py-2 pr-3">{it.lot_no || "—"}</td>
+                        <td className="py-2 pr-3"><BoqItemAttachmentsView files={attMap.get(it.id)} /></td>
                       </tr>
                     ))}
                   </tbody>
