@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Search, PackageCheck, MessageSquare, RotateCcw } from "lucide-react";
+import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, RefreshCw } from "lucide-react";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -50,6 +50,12 @@ type Grn = {
   gate_entry_at: string | null;
   gate_entry_by: string | null;
   status: string;
+  invoice_path?: string | null;
+  invoice_file_name?: string | null;
+  invoice_mime?: string | null;
+  invoice_size?: number | null;
+  invoice_uploaded_by?: string | null;
+  invoice_uploaded_at?: string | null;
 };
 type Requisition = {
   id: string;
