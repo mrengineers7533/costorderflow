@@ -828,7 +828,7 @@ function GMSTermsBlock({
     </div>
   );
   return (
-    <div className="border-t-2 border-foreground mt-3 pt-3 text-[11px] space-y-3 page-break-before">
+    <div className="border-t-2 border-foreground mt-3 pt-3 text-[11px] space-y-3 page-break-before pdf-keep-group">
       <div className="text-center font-bold text-base tracking-wide">TERMS &amp; CONDITIONS</div>
       <div className="font-bold underline uppercase">Commercial Condition :</div>
       <Row label="Taxation :" value={t.taxation} />
@@ -856,7 +856,7 @@ function GMSTermsBlock({
 
 function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankDetails; preparedBy?: string }) {
   return (
-    <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2 pdf-keep">
+    <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2 pdf-keep-group">
       {/* Amount in words band */}
       {/* Terms & Conditions */}
       <div className="border border-foreground border-t-0 px-2 py-1.5 pdf-keep">
@@ -882,8 +882,9 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
           <img
             src={mrStamp}
             alt="M.R. Engineers stamp"
-            className="absolute right-3 top-6 h-16 w-16 object-contain opacity-90 pointer-events-none select-none"
+            className="oa-pdf-stamp absolute right-3 top-6 h-16 w-16 object-contain opacity-90 pointer-events-none select-none"
             crossOrigin="anonymous"
+            loading="eager"
           />
           <div className="text-right">
             <div className="font-bold tracking-wide">M.R. ENGINEERS</div>
