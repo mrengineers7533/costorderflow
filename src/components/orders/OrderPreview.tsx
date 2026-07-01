@@ -194,7 +194,10 @@ export function OrderPreview(p: Props) {
         </div>
       )}
 
-      <div className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body">
+      <div
+        data-oa-preview-root
+        className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body"
+      >
         {/* Header */}
         {p.format === "MR" ? (
           <>

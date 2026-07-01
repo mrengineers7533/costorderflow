@@ -16,6 +16,7 @@ import type { Address, Charges, LineItem, OrderFormat, OrderRecord } from "@/lib
 import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, getFinancialYear, inferItemMake, splitItemsByMake } from "@/lib/orders/calc";
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { capturePreviewToPdf, findOaPreviewRoot } from "@/lib/orders/previewPdf";
 import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -709,6 +710,17 @@ export default function OrderEditor() {
     const baseName = (oaNumber || "OA").replace(/[/\\]/g, "_");
     const ship = sameAsBill ? billTo : shipTo;
 
+    // Preferred path: rasterise the on-screen Live Preview so the exported
+    // PDF is a pixel-for-pixel match. Falls back to the legacy renderer if
+    // the preview element isn't mounted (e.g. programmatic download).
+    const tryPreviewCapture = async (suffix: string) => {
+      const root = findOaPreviewRoot();
+      if (!root) return false;
+      const filename = `${baseName}${suffix}.pdf`;
+      const res = await capturePreviewToPdf(root, filename);
+      return res.ok;
+    };
+
     // Render one PDF for a given format + item subset.
     const renderOne = async (fmt: OrderFormat, subsetItems: LineItem[], suffix: string, sideCharges: Charges) => {
       const subTotals = calcTotals(subsetItems, sideCharges);
@@ -734,12 +746,16 @@ export default function OrderEditor() {
       const { mr, gms } = splitItemsByMake(allItemsWithAmounts);
       const subset = format === "MR" ? mr : gms;
       const sideCharges = format === "MR" ? chargesMr : chargesGms;
-      await renderOne(format, subset, `-${format}`, sideCharges);
+      const captured = await tryPreviewCapture(`-${format}`);
+      if (!captured) await renderOne(format, subset, `-${format}`, sideCharges);
       toast({ title: "PDF generated", description: `${format} PDF downloaded` });
       return;
     }
 
-    await renderOne(format, itemsWithAmounts, "", format === "GMS" ? chargesGms : chargesMr);
+    const captured = await tryPreviewCapture("");
+    if (!captured) {
+      await renderOne(format, itemsWithAmounts, "", format === "GMS" ? chargesGms : chargesMr);
+    }
     toast({ title: "PDF generated", description: `${format} PDF downloaded` });
   }
 
