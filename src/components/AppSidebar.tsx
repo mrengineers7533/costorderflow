@@ -232,7 +232,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             <SidebarMenuButton
               onClick={toggleSidebar}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className={`h-11 rounded-full transition-colors duration-200 text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "!w-11 !h-11 !p-2 justify-center px-0 mx-auto" : "px-4"}`}
+              className={`h-11 rounded-full transition-colors duration-200 text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "!w-11 !h-11 !p-0 justify-center items-center" : "px-4"}`}
             >
               {collapsed ? (
                 <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.8} />
