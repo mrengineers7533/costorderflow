@@ -62,6 +62,47 @@ export async function capturePreviewToPdf(
   // Also allow layout/fonts to settle.
   await new Promise((r) => requestAnimationFrame(() => r(null)));
 
+  // Export-only guardrail: guarantee no total / tax / amount value ever
+  // overflows its cell in the exported PDF. When Rate/Amount columns are
+  // hidden (5- or 6-column layouts) the totals amount lands in a narrow
+  // trailing column (e.g. Unit at ~6% width). The `.oa-cell-nowrap` value
+  // then paints past the right border in the rasterised canvas even though
+  // the DOM cell technically ends earlier. Widen the last `<col>` of each
+  // items table in the CLONE (Live Preview untouched) so the longest totals
+  // value fits inside its cell with a small padding buffer. Other columns
+  // re-flow via table-fixed's percentage weights on the remaining space.
+  clone.querySelectorAll<HTMLTableElement>("table.oa-items").forEach((tbl) => {
+    const cols = tbl.querySelectorAll<HTMLTableColElement>("colgroup > col");
+    if (!cols.length) return;
+    const lastCol = cols[cols.length - 1];
+    // Measure the widest no-wrap value cell that lands in the last column.
+    // Totals rows always render their value cell as `.oa-cell-nowrap`; item
+    // rows use it for the Amount column when visible. Either way we want
+    // the last-column width to accommodate every nowrap value.
+    let needed = 0;
+    tbl.querySelectorAll<HTMLElement>("tr").forEach((tr) => {
+      const cells = tr.children;
+      if (!cells.length) return;
+      const last = cells[cells.length - 1] as HTMLElement;
+      if (!last.classList.contains("oa-cell-nowrap")) return;
+      const inner = last.querySelector<HTMLElement>(".oa-cell-inner") || last;
+      // scrollWidth reflects the real text width even when the cell is
+      // narrower than the content.
+      const w = Math.max(inner.scrollWidth, last.scrollWidth);
+      if (w > needed) needed = w;
+    });
+    if (!needed) return;
+    // Add horizontal padding buffer (~10px covers 5px l/r padding + border).
+    const targetPx = Math.ceil(needed + 12);
+    const currentPx = (lastCol as HTMLElement).getBoundingClientRect
+      ? lastCol.getBoundingClientRect().width
+      : 0;
+    if (targetPx > currentPx) {
+      lastCol.style.width = `${targetPx}px`;
+    }
+  });
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+
   // Overflow-safe capture width. Some column configurations (e.g. 5-col MR
   // with Rate/Amount hidden and long no-wrap totals like "1,88,59,552.00")
   // push content past the nominal 794px template width. If we rasterise at
