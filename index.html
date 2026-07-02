@@ -28,7 +28,19 @@
 </head>
 
   <body>
-      <div id="root"></div>
+      <div id="root">
+        <style>
+          .l49-boot{height:18px;aspect-ratio:4;color:#059669;--_g:no-repeat radial-gradient(farthest-side,currentColor 90%,transparent);background:var(--_g) left center,var(--_g) right center;background-size:25% 100%;display:grid;position:relative}
+          .l49-boot::before,.l49-boot::after{content:"";height:inherit;aspect-ratio:1;grid-area:1/1;margin:auto;border-radius:50%;transform-origin:-100% 50%;background:rgba(5,150,105,.55);animation:l49b 1s infinite linear}
+          .l49-boot::after{transform-origin:200% 50%;--s:-1;animation-delay:-.5s}
+          @keyframes l49b{58%,100%{transform:rotate(calc(var(--s,1) * 1turn))}}
+          .l49-boot-wrap{min-height:100vh;display:grid;place-items:center;gap:1rem;background:#f7f5ef;font-family:Inter,system-ui,sans-serif;color:#6b7280}
+        </style>
+        <div class="l49-boot-wrap" id="app-boot-splash">
+          <div class="l49-boot" role="status" aria-label="Loading"></div>
+          <p style="font-size:.875rem;font-weight:500;margin:0">Loading</p>
+        </div>
+      </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
