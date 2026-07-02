@@ -1,39 +1,54 @@
+# Remove trailing `.00` from amounts (OA + PI, Live Preview + PDF)
+
 ## Goal
-Exported OA/PI PDF must match the on-screen Live Preview exactly — no clipped totals, amounts, borders, item text, or bottom rows — for 5-, 6-, and 7-column layouts. No changes to Live Preview design, calculations, data, numbering, GST/P&F/Insurance, or workflow.
+Display amounts like `1,88,59,552` instead of `1,88,59,552.00` when the fractional part is zero. Keep 2-decimal display for amounts with real decimals (e.g. `1,234.50` stays). Indian grouping (en-IN) remains for INR; US grouping remains for USD. No calculation, DB, or logic changes — display only.
 
-## Root cause
-`capturePreviewToPdf` clones the Live Preview into a **fixed 794px-wide** off-screen host and rasterises with `html2canvas` at that exact width. In 5/6-column layouts (Rate/Amount hidden), the totals column becomes narrow and its no-wrap amounts (e.g. "1,88,59,552.00") overflow past 794px. Anything past that boundary is silently cut from the canvas, so the exported PDF loses the right-most totals, borders, or GST rows even though the on-screen preview shows them fine.
+## Scope
+Both OA and PI PDF exports render the shared `OrderPreview` component, so a single formatting change flows through Live Preview and PDF for both.
 
-Vertical clipping can happen the same way if the cloned content's real `scrollHeight` exceeds what we measured before slicing pages.
+Applies to:
+- Item Amount cells
+- Basic Total, P&F, Insurance, Freight, Discount
+- Subtotal, GST, Grand Total / Net Payable
+- CIF panel amounts, INR/Advance panels, Ex-works/EXW FX lines
+- All numeric cells rendered via the shared `NumCell` in `OrderPreview.tsx`
 
-## Fix (export-only, single file)
+Out of scope (unchanged):
+- `amount_in_words` text (already integer words)
+- Rate/Unit-Rate columns (rates typically have real decimals; keep 2-dp for consistency — matches current behavior)
+- List-page currency badges (`OrdersList`, `PiList`, `GlobalSearch`) — not part of preview/PDF
+- Any calculation, GST/P&F/Insurance/discount formula, saved data, numbering, approvals, workflow
 
-**File:** `src/lib/orders/previewPdf.ts`
+## Implementation
 
-1. Render the clone into the off-screen host at the nominal 794px width (unchanged — this preserves the exact Live Preview layout: fonts, spacing, column proportions, totals position).
-2. After images/fonts settle, measure the **real content extent**:
-   - `capW = max(794, host.scrollWidth, max(el.getBoundingClientRect().right) across descendants)`
-   - `capH = max(host.scrollHeight, max(el.getBoundingClientRect().bottom))`
-   This catches no-wrap totals that overflow their parent cell.
-3. If `capW > 794`, expand the host width to `capW` and wait one animation frame. This does **not** re-flow the preview design — it only widens the invisible off-screen capture container so overflowing content lands inside the canvas.
-4. Pass `windowWidth: capW` **and** `width: capW` to `html2canvas` so the rasterised canvas actually includes the overflow region (currently only `windowWidth` is set, which is why content past 794px is dropped).
-5. Update the CSS-px → mm mapping used for A4 pagination:
-   - `cssPxToMm = printableW / capW` (was `/ 794`).
-   - `pageCssPx = printableH / cssPxToMm` — recomputed from the new mapping so page slicing uses the true content width.
-6. Keep the existing safe-break logic (never slice across `<tr>` or `.pdf-keep`) and multi-page loop. Because pagination is driven by `pageCssPx` derived from the measured width, tall documents continue to paginate safely — the bottom is never cut.
-7. Readability guardrail: content is only widened by the actual overflow ratio (typically <5%), so the A4 scale-down is minor and text stays readable. No forced shrink-to-fit.
+1. Add a shared display helper `fmtMoney(n, locale)` in a small util (e.g. extend `src/lib/utils.ts`):
+   - Format with `toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })` first (preserves current rounding), then strip a trailing `.00` suffix only.
+   - This keeps Indian/US grouping intact and only removes `.00` — never `.50`, `.25`, etc.
 
-## Scope guarantees
-- **Both OA and PI** go through `capturePreviewToPdf` from their Review & Export screens (`OrderEditor.downloadPDF`, `PiEditor.downloadPdf`) and OA list/revision downloads via `exportOrderPreviewPdf` — all fixed by this single change.
-- **PI list download** still uses the legacy `generatePiPDF` path; not touched here to avoid altering PI totals/docMeta assembly (out of scope for this fix, and the primary export path users hit is Review & Export).
-- **Live Preview UI is not touched.** Only the off-screen capture container's width and the html2canvas parameters change. `OrderPreview.tsx`, CSS, columns, fonts, and totals layout are unchanged.
-- No calculation, GST/P&F/Insurance, data, numbering, approval, or workflow changes.
+   ```ts
+   export function fmtMoney(n: number, locale: "en-IN" | "en-US" = "en-IN") {
+     const s = (Number(n) || 0).toLocaleString(locale, {
+       minimumFractionDigits: 2, maximumFractionDigits: 2,
+     });
+     return s.endsWith(".00") ? s.slice(0, -3) : s;
+   }
+   ```
 
-## Files changed
-- `src/lib/orders/previewPdf.ts` — overflow-safe measured capture width + width mapping.
+2. Update `src/components/orders/OrderPreview.tsx` to replace the inline `toLocaleString(..., { minimumFractionDigits: 2, maximumFractionDigits: 2 })` calls used for amount fields with `fmtMoney(value, locale)`:
+   - `fmtINR`, `fmtUSD`, `fmtCIF`, `fmtItem` helpers at top of file
+   - CIF panel rows (basic/sea/grand)
+   - USD/INR/Advance panel rows
+   - `NumCell` default formatter
+   - Ex-works / EXW Turkey / EXW Murthal FX display lines
+   - Keep rate cell formatting (rates) as-is so rate decimals stay visible
+
+3. No changes to:
+   - `previewPdf.ts` / `previewExport.tsx` (PDF still captures the same preview DOM)
+   - Any calc file (`lib/orders/calc.ts`, `lib/pi/calc.ts`)
+   - Legacy `lib/orders/pdf.ts` (unused for preview-based export path; leave untouched)
 
 ## Verification
-- OA in a 5-column layout (screenshot): download PDF, confirm Basic Total, P&F, Insurance, GST, Grand Total, and the right border are fully visible and not clipped.
-- Repeat with 6-column and 7-column layouts.
-- Long OA (>1 page): confirm rows and totals blocks are not cut mid-row and paginate onto page 2 cleanly.
-- PI Review & Export download: confirm output matches on-screen preview exactly.
+- OA Review & Export: item amounts, totals, taxes show without `.00` when integer; `.50` etc. still shown.
+- Download OA PDF: matches Live Preview.
+- Same checks on PI Review & Export + PDF.
+- 5-, 6-, and 7-column layouts unaffected (formatting change only).
