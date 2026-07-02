@@ -105,8 +105,8 @@ export function AppSidebar({ user }: { user?: User | null }) {
             end={item.url === "/"}
             className={
               active
-                ? `font-semibold ${collapsed ? "justify-center w-full h-full" : ""}`
-                : `text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "justify-center w-full h-full" : ""}`
+                ? `font-semibold ${collapsed ? "flex justify-center items-center w-full h-full" : ""}`
+                : `text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "flex justify-center items-center w-full h-full" : ""}`
             }
           >
             <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active ? 2.4 : 1.8} />
