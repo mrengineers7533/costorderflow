@@ -5,6 +5,7 @@ import { resolveLatestApprovalStatuses } from "./approvalSync";
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 interface LoadedLogo { dataUrl: string; w: number; h: number }
 const logoCache: Record<string, LoadedLogo> = {};
@@ -252,7 +253,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
   // Approved by Design (optional)
   if (showApproval) columnStyles[ci++] = { cellWidth: "auto", halign: "center", fontStyle: "bold" };
 
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: y,
     head: [headRow],
     body: rows.length ? rows : [emptyRow],
@@ -270,7 +271,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
       }
     },
     margin: { left: M, right: M },
-  });
+  }));
 
   // @ts-expect-error lastAutoTable runtime
   y = doc.lastAutoTable.finalY + 6;

@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { sortByItemNo } from "@/lib/boq/types";
 import {
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
   parseColumnComments,
   signedDocUrl,
   type DesignReviewRow,
@@ -143,7 +144,7 @@ export async function exportDesignReviewRoundPDF(
     r.files,
   ]);
 
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     head,
     body,
     startY: 54 + metaLines.length * 12 + 8,
@@ -152,7 +153,7 @@ export async function exportDesignReviewRoundPDF(
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: 24, right: 24 },
     tableWidth: pageW - 48,
-  });
+  }));
 
   // Attach the general (non-item) file links at the bottom, if any.
   const general = docs.filter((d) => !d.boq_item_id);
