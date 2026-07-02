@@ -1,43 +1,26 @@
 ## Problem
 
-In the exported GMS OA/PI PDF, the items table has misaligned columns:
+In the OA Live Preview and exported PDF, when the Description wraps to 2 lines, the other columns (Item No, Make, Qty, Unit, Unit Price, Amount) stick to the top of the row instead of sitting in the vertical middle. The Bill To / Ship To header labels also read as top-aligned.
 
-- Header labels **"ITEM NO"** and **"MODEL NUMBER"** collide and render as `ITEM NOMODEL NUMBER` because their fixed widths (14mm / 24mm) are narrower than the label text at the current font size / padding.
-- **MODEL NUMBER** column is always empty in current data (it isn't stored separately), yet it still reserves 24mm of width and squeezes every other column.
-- The table doesn't auto-fit the page width — remaining columns don't reflow when a column is hidden or empty.
-- Numeric cells (Qty, Unit, Rate, Amount) are vertically centered but sometimes drift because `valign` mixes with `top` inheritance from shared defaults.
+The cells already use Tailwind's `align-middle`, but html2canvas / print sometimes drops it on wrapping rows, and the `<th>` cells never had a vertical-align rule at all.
 
-## Fix (GMS PDF layout only — no data / logic changes)
+## Fix (CSS + minimal markup only, no logic changes)
 
-Edit **`src/lib/orders/pdf.ts`** inside `renderGmsPdf`:
+Scope: `src/styles/oa-pdf.css` and one small className adjustment in `src/components/orders/OrderPreview.tsx`. No calculations, numbering, approval or data logic is touched.
 
-1. **Auto-hide the Model Number column when every row is empty.** Since GMS line items don't store a separate model number, drop the column from `gmsCols` when all resolved cells are blank. This alone eliminates the header collision in the attached PDF.
-2. **Widen minimum column widths** so header labels never overlap even when Model Number is present:
-   - `item_no`: 14 → 16mm
-   - `model_number`: 24 → 30mm
-   - `make`: 30 → 26mm
-   - Keep `description: "auto"` so it absorbs remaining width.
-3. **Force table to fill page width** by adding `tableWidth: W - M * 2` to the autoTable call, so remaining columns reflow proportionally when any column is hidden.
-4. **Consistent vertical + horizontal alignment**:
-   - Base `styles.valign: "middle"` (already set) — explicitly re-apply on `columnStyles` so shared defaults don't override to `top`.
-   - Numeric columns (`qty`, `unit`, `item_no`) center-aligned; `rate`, `amount` right-aligned; `description` left + middle.
-5. **Header cell padding**: bump `headStyles.cellPadding` to `{ top: 2, right: 2, bottom: 2, left: 2 }` and set `minCellHeight: 8` so two-line headers like `UNIT PRICE\n(INR)` render cleanly without clipping.
-6. **Totals rows**: keep existing `colSpan` logic; ensure the label cell uses `valign: "middle"` for vertical alignment with the value.
-
-## Files changed
-
-- `src/lib/orders/pdf.ts` — `renderGmsPdf` only (column widths, auto-hide empty Model Number, `tableWidth`, alignment styles, header padding).
-
-## Not changed
-
-- No changes to MR PDF, PI PDF, BOQ PDF, calculations, totals logic, currency handling, or Live Preview.
-- No DB / schema changes.
+1. `src/styles/oa-pdf.css` — add hard vertical-align rules that apply both to the PDF capture container and to the on-screen `.order-preview-body` so Live Preview and PDF match:
+   - `.oa-pdf-capture table.oa-items th`, `.oa-pdf-capture table.oa-items td` → `vertical-align: middle !important;`
+   - Same rule mirrored under `.order-preview-body table.oa-items th/td` (outside `@media print` so it also applies in the on-screen preview).
+   - Keep existing padding, wrapping and `page-break-inside: avoid` rules.
+   - Add `line-height: 1.35` on items table cells so multi-line descriptions breathe evenly and the centered single-line cells sit visually on the same baseline.
+2. `src/components/orders/OrderPreview.tsx` — change the `BILL TO` / `SHIP TO` header row from `align-top` to `align-middle` (labels only). The address cells below keep `align-top` so multi-line addresses still start from the top, which is the expected invoice convention.
+3. Keep every column's horizontal alignment as it is today (Description left, numeric right, small columns center) per the earlier requirement.
 
 ## Verification
 
-- Regenerate the same OA (`2026-27/GMS/0003`) as PDF, convert to image via `pdftoppm`, and visually confirm:
-  - Header labels are fully readable and non-overlapping.
-  - Table fills page width with description expanding.
-  - Numeric cells are centered / right-aligned as expected.
-  - Totals rows align with the Amount column.
-- Also test one GMS OA that *does* have Make + long descriptions to confirm reflow still works.
+- Open the OA Live Preview for the same order in the screenshot and confirm Item 1/2/3 rows show Item No / Make / Qty / Unit / Prices centered vertically against the 2-line Description.
+- Export the PDF and confirm the same alignment; also confirm nothing else (page breaks, totals row, stamp clip) regresses.
+
+## Out of scope
+
+No changes to column widths, hidden-column reflow, currency formatting, totals, page size, margins, or any business logic.

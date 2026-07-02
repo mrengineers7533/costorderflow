@@ -66,6 +66,7 @@
 .oa-pdf-capture th,
 .oa-pdf-capture td {
   page-break-inside: avoid;
+  vertical-align: middle !important;
 }
 /* Text cells wrap; numeric cells never wrap mid-number. */
 .oa-pdf-capture td.oa-cell-wrap,
@@ -85,6 +86,23 @@
 }
 .oa-pdf-capture table.oa-items tr {
   page-break-inside: avoid;
+}
+.oa-pdf-capture table.oa-items th,
+.oa-pdf-capture table.oa-items td {
+  vertical-align: middle !important;
+  line-height: 1.35 !important;
+}
+/* Keep address cells top-aligned (invoice convention). */
+.oa-pdf-capture td.oa-cell-top,
+.order-preview-body td.oa-cell-top {
+  vertical-align: top !important;
+}
+
+/* On-screen Live Preview: match PDF vertical centering. */
+.order-preview-body table.oa-items th,
+.order-preview-body table.oa-items td {
+  vertical-align: middle !important;
+  line-height: 1.35;
 }
 .oa-pdf-capture div,
 .oa-pdf-capture p,
@@ -137,6 +155,7 @@
   .order-preview-body table.oa-items td {
     padding: 4px 6px !important;
     page-break-inside: avoid;
+    vertical-align: middle !important;
   }
   .order-preview-body .oa-cell-nowrap,
   .order-preview-body th.oa-cell-num {

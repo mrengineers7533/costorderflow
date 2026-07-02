@@ -250,14 +250,14 @@ export function OrderPreview(p: Props) {
         <table className="w-full border-collapse text-[11px] border border-foreground">
           <tbody>
             <tr>
-              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Bill To</td>
-              <td className="border border-foreground px-2 py-1 w-1/2 align-top bg-muted/40 font-bold uppercase">Ship To</td>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-middle bg-muted/40 font-bold uppercase">Bill To</td>
+              <td className="border border-foreground px-2 py-1 w-1/2 align-middle bg-muted/40 font-bold uppercase">Ship To</td>
             </tr>
             <tr>
-              <td className="border border-foreground px-2 py-1 align-top">
+              <td className="border border-foreground px-2 py-1 align-top oa-cell-top">
                 <AddressCellContent addr={p.billTo} fallbackName={p.companyName} />
               </td>
-              <td className="border border-foreground px-2 py-1 align-top">
+              <td className="border border-foreground px-2 py-1 align-top oa-cell-top">
                 <AddressCellContent addr={ship} fallbackName={p.companyName} />
               </td>
             </tr>
