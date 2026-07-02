@@ -267,7 +267,17 @@ export function OrderPreview(p: Props) {
         {/* Items + Totals — unified bordered table; column set differs MR vs GMS */}
         {(() => {
           const isGMS = p.format === "GMS";
-          const visCols = visibleColumns(p.format, p.hiddenColumns);
+          let visCols = visibleColumns(p.format, p.hiddenColumns);
+          // Auto-hide MODEL NUMBER when no item carries a model number value.
+          // GMS OA/PI does not store a separate model number, so the column
+          // otherwise reserves width and collides with the ITEM NO header.
+          if (visCols.includes("model_number")) {
+            const hasModel = p.items.some((it) => {
+              const v = (it as unknown as { model_number?: string }).model_number;
+              return typeof v === "string" && v.trim() !== "";
+            });
+            if (!hasModel) visCols = visCols.filter((k) => k !== "model_number");
+          }
           const showCol = (k: PdfColumnKey) => visCols.includes(k);
           // Totals label cell spans every column except the trailing amount column.
           const totalsColSpan = Math.max(1, visCols.length - 1);
@@ -275,12 +285,12 @@ export function OrderPreview(p: Props) {
           // Proportional column widths — recomputed from the visible set so the
           // table always fills 100% regardless of how many columns are hidden.
           const COL_WEIGHTS: Record<PdfColumnKey, number> = {
-            item_no: 6,
+            item_no: 8,
             model_number: 14,
             description: 0, // description absorbs the remainder
-            make: 12,
-            qty: 7,
-            unit: 7,
+            make: 11,
+            qty: 8,
+            unit: 8,
             rate: 13,
             amount: 15,
           };
