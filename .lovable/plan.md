@@ -1,30 +1,74 @@
-## Problem
+I agree with you. The failure is that the PDF work drifted into repeated CSS/display patches instead of locking the MR and GMS exports to the original template structure you provided. The next fix should be template-format based, not another small alignment tweak.
 
-In the GMS OA Live Preview / exported PDF, the right-side header block ("UGUR MACHINE, TURKEY" + tagline under the Uğur logo) grows tall enough to overflow into the grey "ORDER ACCEPTANCE" title bar sitting directly below it. When exported, the same overlap is captured into the PDF, and on long OAs the overlap area also gets pushed near a page break.
+## Plan
 
-## Root cause
+1. **Re-check the original MR and GMS samples**
+   - Use the uploaded MR/GMS sample PDFs as the source of truth.
+   - Compare them against the current Live Preview and exported PDFs for:
+     - Header/logo position
+     - Title bar spacing
+     - Item table column widths
+     - Row height and vertical centering
+     - Wrapped description behavior
+     - Totals alignment
+     - Terms/bank/signature/footer placement
+     - Page break behavior
 
-In `src/components/orders/OrderPreview.tsx` (`GMSHeader`):
-- The right column contains a `h-14` Uğur logo plus two caption lines, but the row wrapping the two logo columns has no minimum bottom clearance before the grey title bar.
-- The grey "ORDER ACCEPTANCE" bar uses only `mt-2`, so when the right column's caption lines render at their natural height, they visually collide with the bar.
-- The pagination logic in `src/lib/orders/previewPdf.ts` treats the header block as one big node and only snaps to `tr / .pdf-keep` boundaries, so a page break can land inside the header/meta block.
+2. **Fix the shared OA/PI PDF structure, not business data**
+   - Work only in OA/PI preview/export layout files.
+   - Do not touch calculations, numbering, approval logic, BOQ, workflow, database rules, or saved order data.
+   - Keep the existing MR/GMS format selection and hidden-column behavior.
 
-## Changes (UI/PDF layout only — no data or business logic)
+3. **Create stable MR and GMS table layout rules**
+   - Define fixed professional column proportions per template.
+   - Hidden columns will be fully removed, then remaining columns will reflow predictably.
+   - Description stays left-aligned and vertically centered.
+   - Item No, Make, Qty, Unit stay centered.
+   - Rate/Amount stay right-aligned.
+   - Long text wraps inside cells only; it must not cross borders.
 
-1. `src/components/orders/OrderPreview.tsx` — `GMSHeader`
-   - Wrap the dual-logo row with `pdf-keep` and add explicit bottom spacing so the caption lines can never touch the grey bar.
-   - Reduce the Uğur logo to `h-12` (matching GMS visual weight) and tighten the caption stack (`leading-tight`, small `mt-1`).
-   - Align both columns with `items-end` so the caption baseline sits above the bar consistently regardless of logo aspect ratio.
-   - Give the grey "ORDER ACCEPTANCE" bar `mt-3` and mark it `pdf-keep` so it's treated as an atomic break boundary.
-   - Wrap the customer/OA meta grid in `pdf-keep` so the header + meta block is preserved as one unit at page top.
+4. **Replace fragile vertical-centering behavior**
+   - Remove any ineffective centering tricks that do not work reliably in html2canvas/PDF capture.
+   - Use a more reliable table-cell layout so every cell’s content centers vertically against multi-line descriptions.
+   - Ensure row height grows automatically with wrapped descriptions.
 
-2. `src/styles/oa-pdf.css`
-   - Add scoped rules under `.oa-pdf-capture` to enforce the same clearance during html2canvas capture (fixed min-height on the logo row, guaranteed margin above the grey bar) so the printed layout matches the on-screen fix even if fonts render slightly larger during capture.
+5. **Fix pagination properly**
+   - Prevent table rows, totals, terms blocks, bank/signature blocks, and headers from being sliced incorrectly.
+   - Allow the export to add pages automatically as needed.
+   - Repeat/retain enough header structure on new pages where appropriate.
 
-3. `src/lib/orders/previewPdf.ts`
-   - Add the header/meta wrappers to the boundary collection so page breaks never land inside them.
-   - Keep the existing auto-pagination loop (already adds pages as needed) but ensure the first page always starts at boundary 0 with the full header intact, and subsequent pages resume after a safe boundary.
+6. **Keep Live Preview and PDF identical**
+   - The PDF export should capture the same DOM/layout as Live Preview.
+   - Any PDF-only rules should only correct browser/PDF rendering differences, not change the visible format.
 
-## Out of scope
+7. **Add visual QA before completion**
+   - Export/check both formats:
+     - GMS sample-style order
+     - MR sample-style order
+     - Long wrapped descriptions
+     - Hidden 0/1/2 columns
+     - Multi-page item list
+   - Convert generated PDFs to images and inspect alignment, wrapping, and page breaks before saying fixed.
 
-No changes to totals, terms, calculations, workflow, MR template, or any non-GMS export path.
+## Files expected to change
+
+- `src/components/orders/OrderPreview.tsx`
+- `src/styles/oa-pdf.css`
+- `src/lib/orders/previewPdf.ts` only if pagination slicing needs adjustment
+
+## What will not change
+
+- No data changes
+- No approval/workflow changes
+- No calculation/formula changes
+- No database changes
+- No BOQ/Purchase/Manufacturing logic changes
+
+## Completion proof I will provide
+
+- What was wrong
+- What files changed
+- GMS PDF visual QA result
+- MR PDF visual QA result
+- Multi-page/page-break QA result
+- Hidden-column QA result
