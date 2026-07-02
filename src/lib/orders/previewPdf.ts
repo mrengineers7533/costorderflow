@@ -104,13 +104,16 @@ export async function capturePreviewToPdf(
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const pdfW = pdf.internal.pageSize.getWidth();
   const pdfH = pdf.internal.pageSize.getHeight();
+  const pdfMargin = 4;
+  const printableW = pdfW - pdfMargin * 2;
+  const printableH = pdfH - pdfMargin * 2;
 
   // px/mm conversion factors — canvas is rendered at scale=2 so canvas.width
   // corresponds to CAPTURE_WIDTH_PX * 2. We map canvas Y coords (in CSS px
   // × 2) into mm on the PDF via cssPxToMm.
   const scale = 2;
-  const cssPxToMm = pdfW / CAPTURE_WIDTH_PX; // width mapping (canvas covers full pdf width)
-  const pageCssPx = pdfH / cssPxToMm;         // CSS px per PDF page
+  const cssPxToMm = printableW / CAPTURE_WIDTH_PX; // width mapping inside consistent PDF margins
+  const pageCssPx = printableH / cssPxToMm;         // CSS px per PDF page
 
   // Pick page breaks that snap to the nearest safe boundary BEFORE the
   // theoretical page cutoff. Prefer not to cut rows/sections, even if that
@@ -138,7 +141,7 @@ export async function capturePreviewToPdf(
     breaks.push(snap);
   }
 
-  const imgW = pdfW;
+  const imgW = printableW;
   for (let i = 0; i < breaks.length - 1; i++) {
     const startCssPx = breaks[i];
     const endCssPx = breaks[i + 1];
@@ -160,7 +163,7 @@ export async function capturePreviewToPdf(
     const sliceImg = slice.toDataURL("image/png");
     const sliceMmH = (endCssPx - startCssPx) * cssPxToMm;
     if (i > 0) pdf.addPage();
-    pdf.addImage(sliceImg, "PNG", 0, 0, imgW, sliceMmH);
+    pdf.addImage(sliceImg, "PNG", pdfMargin, pdfMargin, imgW, sliceMmH);
   }
 
   const blob = pdf.output("blob");
