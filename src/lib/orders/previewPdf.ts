@@ -81,6 +81,12 @@ export async function capturePreviewToPdf(
     .querySelectorAll<HTMLElement>(".pdf-keep p, .pdf-keep div, .pdf-keep li")
     .forEach(addBounds);
   const boundaries = Array.from(boundarySet).sort((a, b) => a - b);
+  const forcedBreaks = Array.from(
+    clone.querySelectorAll<HTMLElement>(".page-break-before, [data-pdf-page-break-before='true']"),
+  )
+    .map((el) => el.getBoundingClientRect().top - hostTop)
+    .filter((y) => y > 0.5)
+    .sort((a, b) => a - b);
 
   let canvas: HTMLCanvasElement;
   try {
@@ -116,6 +122,11 @@ export async function capturePreviewToPdf(
     const start = breaks[breaks.length - 1];
     const maxEnd = start + pageCssPx;
     if (maxEnd >= totalCssPx) { breaks.push(totalCssPx); break; }
+    const nextForced = forcedBreaks.find((b) => b > start + 1 && b <= maxEnd);
+    if (nextForced && nextForced - start > pageCssPx * 0.12) {
+      breaks.push(nextForced);
+      continue;
+    }
     const minEnd = start + pageCssPx * 0.12;
     let snap = maxEnd;
     for (let i = boundaries.length - 1; i >= 0; i--) {
