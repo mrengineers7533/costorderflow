@@ -17,6 +17,7 @@ import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, g
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { capturePreviewToPdf, findOaPreviewRoot } from "@/lib/orders/previewPdf";
+import { exportPreviewAsPdf } from "@/lib/orders/previewPrint";
 import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -717,6 +718,11 @@ export default function OrderEditor() {
       const root = findOaPreviewRoot();
       if (!root) return false;
       const filename = `${baseName}${suffix}.pdf`;
+      // Prefer browser-native print → PDF so the exported file is a pixel
+      // match of the on-screen Live Preview. Fall back to the rasterised
+      // capture if the print pipeline is unavailable (very old browser).
+      const printed = await exportPreviewAsPdf(root, filename);
+      if (printed) return true;
       const res = await capturePreviewToPdf(root, filename);
       return res.ok;
     };
