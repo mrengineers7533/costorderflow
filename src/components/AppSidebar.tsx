@@ -98,7 +98,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
         <SidebarMenuButton
           asChild
           isActive={active}
-          className={`h-11 rounded-full data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : `px-4 ${indent ? "pl-8" : ""}`}`}
+          className={`h-11 rounded-full transition-colors duration-200 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : `px-4 ${indent ? "pl-8" : ""}`}`}
         >
           <NavLink
             to={item.url}
@@ -106,7 +106,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             className={
               active
                 ? `font-semibold ${collapsed ? "justify-center" : ""}`
-                : `text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center" : ""}`
+                : `text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "justify-center" : ""}`
             }
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
