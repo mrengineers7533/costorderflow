@@ -9,6 +9,7 @@ import { fetchOrderFamily, fetchBoqsForFamily } from "@/lib/revisions";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { exportOrderPreviewPdf } from "@/lib/orders/previewExport";
 import { buildOrderXlsx } from "@/lib/orders/excel";
 import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
@@ -131,17 +132,23 @@ export function RevisionsPanel({ rootOrderId, reloadKey }: Props) {
 
   async function downloadOaPdf(o: OrderRecord) {
     try {
-      const doc = await generateOrderPDF(o);
       const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
-      doc.save(`${safe}.pdf`);
+      const captured = await exportOrderPreviewPdf(o, `${safe}.pdf`);
+      if (!captured.ok) {
+        const doc = await generateOrderPDF(o);
+        doc.save(`${safe}.pdf`);
+      }
     } catch (e) {
       toast({ title: "Download failed", description: (e as Error).message, variant: "destructive" });
     }
   }
   async function printOa(o: OrderRecord) {
     try {
-      const doc = await generateOrderPDF(o);
-      const url = doc.output("bloburl") as unknown as string;
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      const captured = await exportOrderPreviewPdf(o, `${safe}.pdf`, { save: false });
+      const url = captured.ok
+        ? URL.createObjectURL(captured.blob)
+        : (await generateOrderPDF(o)).output("bloburl") as unknown as string;
       const w = window.open(url, "_blank", "noopener");
       if (w) setTimeout(() => { try { w.print(); } catch { /* */ } }, 1000);
     } catch (e) {
