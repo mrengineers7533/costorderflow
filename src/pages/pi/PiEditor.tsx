@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { PiRecord } from "@/lib/pi/types";
 import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
+import { exportPreviewAsPdf, findOaPreviewRoot } from "@/lib/orders/previewPrint";
 import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
@@ -219,6 +220,15 @@ export default function PiEditor() {
   async function downloadPdf() {
     if (!pi) return;
     try {
+      // Prefer browser-native print → PDF so the exported file matches the
+      // on-screen Live Preview pixel-for-pixel. Falls back to the legacy
+      // jsPDF renderer if the preview DOM isn't mounted (e.g. programmatic).
+      const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
+      const root = findOaPreviewRoot();
+      if (root) {
+        const printed = await exportPreviewAsPdf(root, `${safe}.pdf`);
+        if (printed) return;
+      }
       const doc = await generatePiPDF({
         ...pi,
         totals: {
@@ -229,7 +239,6 @@ export default function PiEditor() {
         },
         amount_in_words: amountInWords(effectiveNet),
       }, { terms, gmsTerms, bank: pi.format === "GMS" ? gmsBank : bank, currencyMode, hiddenColumns: hiddenPdfColumns });
-      const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
       doc.save(`${safe}.pdf`);
     } catch (e: any) {
       toast({ title: "Download failed", description: e?.message || String(e), variant: "destructive" });
