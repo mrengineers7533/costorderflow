@@ -100,7 +100,11 @@
 /* Signature block: html2canvas mis-composites tailwind `opacity-90`, so we
    render the stamp at full opacity and rely on the source image for tone. */
 .oa-pdf-capture img { image-rendering: -webkit-optimize-contrast; }
-.oa-pdf-capture .oa-pdf-stamp { opacity: 1 !important; filter: none !important; }
+.oa-pdf-capture .oa-pdf-stamp {
+  opacity: 1 !important;
+  filter: none !important;
+  clip-path: inset(22% 0 0 0) !important;
+}
 
 /* Root preview padding — mirror `p-5 space-y-4` from OrderPreview. */
 .oa-pdf-capture [data-oa-preview-root] {
