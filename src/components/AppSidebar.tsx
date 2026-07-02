@@ -191,8 +191,8 @@ export function AppSidebar({ user }: { user?: User | null }) {
                       onClick={() => setCostingOpen((o) => !o)}
                       className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-colors duration-200 hover:bg-primary/10 hover:text-primary h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
-                      <span className="flex items-center gap-2">
-                        <IndianRupee className="h-[18px] w-[18px]" strokeWidth={1.8} />
+                      <span className={`flex items-center gap-2 ${collapsed ? "w-full justify-center" : ""}`}>
+                        <IndianRupee className="h-[18px] w-[18px] shrink-0" strokeWidth={1.8} />
                         {!collapsed && <span className="text-sm">Costing</span>}
                       </span>
                       {!collapsed && (
