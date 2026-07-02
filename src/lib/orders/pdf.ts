@@ -599,7 +599,7 @@ async function renderGmsPdf(
   const showUsdLabel = usdDisplay || forcedUsd;
 
   // Dynamic columns — user may hide non-required cells in the PDF.
-  const gmsCols = visibleColumns("GMS", opts?.hiddenColumns);
+  let gmsCols = visibleColumns("GMS", opts?.hiddenColumns);
   const gmsCellFor = (k: PdfColumnKey, it: OrderRecord["line_items"][number], idx: number): string => {
     switch (k) {
       case "item_no":      return String(idx + 1);
@@ -626,15 +626,21 @@ async function renderGmsPdf(
     }
   };
   const gmsColWidthStyle: Record<PdfColumnKey, { cellWidth: number | "auto"; halign: "left" | "right" | "center" }> = {
-    item_no:      { cellWidth: 14, halign: "center" },
-    model_number: { cellWidth: 24, halign: "left" },
+    item_no:      { cellWidth: 16, halign: "center" },
+    model_number: { cellWidth: 30, halign: "left" },
     description:  { cellWidth: "auto", halign: "left" },
-    make:         { cellWidth: 30, halign: "center" },
-    qty:          { cellWidth: 12, halign: "center" },
-    unit:         { cellWidth: 12, halign: "center" },
-    rate:         { cellWidth: 24, halign: "right" },
-    amount:       { cellWidth: 26, halign: "right" },
+    make:         { cellWidth: 22, halign: "center" },
+    qty:          { cellWidth: 14, halign: "center" },
+    unit:         { cellWidth: 14, halign: "center" },
+    rate:         { cellWidth: 26, halign: "right" },
+    amount:       { cellWidth: 28, halign: "right" },
   };
+  // Auto-hide MODEL NUMBER when every row is empty (GMS doesn't store it
+  // separately, so it otherwise reserves width and collides with ITEM NO).
+  if (gmsCols.includes("model_number")) {
+    const anyModel = order.line_items.some((it, i) => (gmsCellFor("model_number", it, i) || "").trim() !== "");
+    if (!anyModel) gmsCols = gmsCols.filter((k) => k !== "model_number");
+  }
   const itemRows = order.line_items.map((it, i) => gmsCols.map((k) => gmsCellFor(k, it, i)));
 
   const totalsRows: Array<{ label: string; value: number; bold?: boolean; inr?: boolean }> = [];
@@ -764,6 +770,7 @@ async function renderGmsPdf(
     head: [gmsCols.map(gmsHeadFor)],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
+    tableWidth: W - M * 2,
     styles: {
       fontSize: 8, cellPadding: 2,
       lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle",
@@ -771,7 +778,8 @@ async function renderGmsPdf(
     },
     headStyles: {
       fillColor: [220, 220, 220], textColor: [0, 0, 0],
-      halign: "center", fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.3,
+      halign: "center", valign: "middle", fontStyle: "bold",
+      lineColor: [0, 0, 0], lineWidth: 0.3, cellPadding: 2, minCellHeight: 8,
     },
     columnStyles: gmsColumnStyles,
     margin: { left: M, right: M, top: GMS_HEADER_H + GMS_TITLE_BAR_H + 4, bottom: GMS_FOOTER_RESERVED },

@@ -1,42 +1,43 @@
+## Problem
 
-## Goal
-Make the OA Live Preview, PDF Download, and Print output render an identical, professional table that reflows correctly whether 0, 1, or 2 columns are hidden. No data, calculation, or workflow changes.
+In the exported GMS OA/PI PDF, the items table has misaligned columns:
 
-## Root causes observed
-1. `OrderPreview.tsx` uses per-column fixed Tailwind widths (`w-10`, `w-24`, etc.) on `<th>` cells. When columns are hidden, the remaining fixed widths don't expand to fill the row, and narrow amount/qty cells force number strings like `1,57,35,487.00` to wrap mid-number, causing the ugly split shown in the screenshot.
-2. `oa-pdf.css` sets `word-break: break-word; overflow-wrap: anywhere;` globally on every `td/th`, which is what actually breaks the numeric totals into stacked fragments.
-3. Cell alignment is inconsistent: description is top-aligned even for single-line rows, small columns aren't consistently center-aligned, and totals label cells span the whole row minus one — but the resulting label cell is not right-aligned in all branches.
-4. There's no `table-layout` hint, so when hidden columns are removed the browser can't rebalance.
+- Header labels **"ITEM NO"** and **"MODEL NUMBER"** collide and render as `ITEM NOMODEL NUMBER` because their fixed widths (14mm / 24mm) are narrower than the label text at the current font size / padding.
+- **MODEL NUMBER** column is always empty in current data (it isn't stored separately), yet it still reserves 24mm of width and squeezes every other column.
+- The table doesn't auto-fit the page width — remaining columns don't reflow when a column is hidden or empty.
+- Numeric cells (Qty, Unit, Rate, Amount) are vertically centered but sometimes drift because `valign` mixes with `top` inheritance from shared defaults.
 
-## Changes (presentation only)
+## Fix (GMS PDF layout only — no data / logic changes)
 
-### 1. `src/components/orders/OrderPreview.tsx`
-- Replace fixed `w-*` classes on the item table `<th>` with proportional widths via a small helper that computes column widths from `visCols` (item_no ~6%, model ~14%, make ~12%, qty ~7%, unit ~7%, rate ~13%, amount ~15%, description = remainder). This guarantees the row always fills 100% regardless of which columns are hidden.
-- Set the items table to `table-fixed` so widths are honoured and hidden columns don't leave gaps.
-- Standardise cell alignment classes:
-  - Header cells: `text-center` for item_no / make / qty / unit; `text-left` for model / description; `text-right` for rate / amount.
-  - Body cells: same as header except description = `text-left align-middle`; numeric cells add `whitespace-nowrap tabular-nums` so amounts never wrap.
-- Ensure all totals-row label cells use `text-right font-semibold pr-2` and their value cells use `text-right whitespace-nowrap tabular-nums`. Confirm every `colSpan` matches `visCols.length - 1` (already true) and the value cell aligns under the amount column.
-- Add `align-middle` to numeric body cells so short rows look centred while long descriptions still top-align via a `align-top` class on the description cell only.
+Edit **`src/lib/orders/pdf.ts`** inside `renderGmsPdf`:
 
-### 2. `src/styles/oa-pdf.css`
-- Scope the aggressive wrapping rules so numeric cells are exempt:
-  - Keep `word-break: break-word` for description/text cells only (`.oa-pdf-capture td.oa-cell-wrap`).
-  - Add `.oa-pdf-capture td.oa-cell-nowrap, .oa-pdf-capture th.oa-cell-num { white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }`.
-- Add `.oa-pdf-capture table.oa-items { table-layout: fixed; }` and consistent `padding: 4px 6px` on all th/td for uniform breathing room.
-- Add print rules mirroring the same table-fixed + nowrap behaviour under `@media print` so the browser Print dialog matches the PDF.
-- Keep existing page size / margin behaviour unchanged.
+1. **Auto-hide the Model Number column when every row is empty.** Since GMS line items don't store a separate model number, drop the column from `gmsCols` when all resolved cells are blank. This alone eliminates the header collision in the attached PDF.
+2. **Widen minimum column widths** so header labels never overlap even when Model Number is present:
+   - `item_no`: 14 → 16mm
+   - `model_number`: 24 → 30mm
+   - `make`: 30 → 26mm
+   - Keep `description: "auto"` so it absorbs remaining width.
+3. **Force table to fill page width** by adding `tableWidth: W - M * 2` to the autoTable call, so remaining columns reflow proportionally when any column is hidden.
+4. **Consistent vertical + horizontal alignment**:
+   - Base `styles.valign: "middle"` (already set) — explicitly re-apply on `columnStyles` so shared defaults don't override to `top`.
+   - Numeric columns (`qty`, `unit`, `item_no`) center-aligned; `rate`, `amount` right-aligned; `description` left + middle.
+5. **Header cell padding**: bump `headStyles.cellPadding` to `{ top: 2, right: 2, bottom: 2, left: 2 }` and set `minCellHeight: 8` so two-line headers like `UNIT PRICE\n(INR)` render cleanly without clipping.
+6. **Totals rows**: keep existing `colSpan` logic; ensure the label cell uses `valign: "middle"` for vertical alignment with the value.
 
-### 3. Class hooks
-- In `OrderPreview.tsx`, tag the item table with `className="oa-items"`, tag numeric cells with `oa-cell-num` (headers) and `oa-cell-nowrap` (body), and tag description cells with `oa-cell-wrap`. These classes are only consumed by `oa-pdf.css` and print CSS — screen appearance stays visually identical apart from the fixes above.
+## Files changed
 
-## Out of scope
-- `src/lib/orders/pdf.ts`, `previewPdf.ts` capture pipeline, page size, margins, column visibility logic, calc/formulas, approval/revision logic, and every other module.
+- `src/lib/orders/pdf.ts` — `renderGmsPdf` only (column widths, auto-hide empty Model Number, `tableWidth`, alignment styles, header padding).
+
+## Not changed
+
+- No changes to MR PDF, PI PDF, BOQ PDF, calculations, totals logic, currency handling, or Live Preview.
+- No DB / schema changes.
 
 ## Verification
-- Manually render the OA preview at `/orders/:id` with:
-  - All columns visible
-  - Make hidden
-  - Make + Unit hidden
-  - Model + Make hidden (GMS)
-- Confirm: table always fills row width, Description expands, Qty/Rate/Amount stay on one line, totals grand row aligns under Amount, no cell overflow, Print Preview matches, downloaded PDF matches.
+
+- Regenerate the same OA (`2026-27/GMS/0003`) as PDF, convert to image via `pdftoppm`, and visually confirm:
+  - Header labels are fully readable and non-overlapping.
+  - Table fills page width with description expanding.
+  - Numeric cells are centered / right-aligned as expected.
+  - Totals rows align with the Amount column.
+- Also test one GMS OA that *does* have Make + long descriptions to confirm reflow still works.
