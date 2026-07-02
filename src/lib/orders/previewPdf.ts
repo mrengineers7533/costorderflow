@@ -62,6 +62,32 @@ export async function capturePreviewToPdf(
   // Also allow layout/fonts to settle.
   await new Promise((r) => requestAnimationFrame(() => r(null)));
 
+  // Overflow-safe capture width. Some column configurations (e.g. 5-col MR
+  // with Rate/Amount hidden and long no-wrap totals like "1,88,59,552.00")
+  // push content past the nominal 794px template width. If we rasterise at
+  // exactly CAPTURE_WIDTH_PX, html2canvas silently crops anything past that
+  // boundary — losing right-side totals, GST rows, or borders even though
+  // the on-screen preview shows them. Measure the real content extent and
+  // widen the capture window when needed so nothing is ever clipped. The
+  // Live Preview UI is not touched (this is an invisible off-screen clone).
+  const cloneLeft = clone.getBoundingClientRect().left;
+  let measuredRight = clone.scrollWidth;
+  let measuredBottom = clone.scrollHeight;
+  clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    const right = r.right - cloneLeft;
+    const bottom = r.bottom - clone.getBoundingClientRect().top;
+    if (right > measuredRight) measuredRight = right;
+    if (bottom > measuredBottom) measuredBottom = bottom;
+  });
+  const effectiveCaptureWidth = Math.max(CAPTURE_WIDTH_PX, Math.ceil(measuredRight));
+  if (effectiveCaptureWidth > CAPTURE_WIDTH_PX) {
+    host.style.width = `${effectiveCaptureWidth}px`;
+    // let layout settle at the new width so overflow content lands inside
+    // the canvas rather than being clipped at the old boundary.
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+  }
+
   // Collect safe break boundaries from the CLONE (post-normalization). We
   // never want to slice across a `<tr>` or `.pdf-keep`, and inside a
   // `.pdf-keep-group` we still allow the group's direct children to break.
@@ -100,7 +126,8 @@ export async function capturePreviewToPdf(
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
-      windowWidth: CAPTURE_WIDTH_PX,
+      windowWidth: effectiveCaptureWidth,
+      width: effectiveCaptureWidth,
     });
   } finally {
     document.body.removeChild(host);
@@ -117,7 +144,11 @@ export async function capturePreviewToPdf(
   // corresponds to CAPTURE_WIDTH_PX * 2. We map canvas Y coords (in CSS px
   // × 2) into mm on the PDF via cssPxToMm.
   const scale = 2;
-  const cssPxToMm = printableW / CAPTURE_WIDTH_PX; // width mapping inside consistent PDF margins
+  // Map the actual measured capture width (not the nominal template width)
+  // to the A4 printable area so any overflow content ends up inside the
+  // page instead of past the right margin. Overflow is typically <5%, so
+  // the resulting A4 scale-down is minor and text stays readable.
+  const cssPxToMm = printableW / effectiveCaptureWidth;
   const pageCssPx = printableH / cssPxToMm;         // CSS px per PDF page
 
   // Pick page breaks that snap to the nearest safe boundary BEFORE the
