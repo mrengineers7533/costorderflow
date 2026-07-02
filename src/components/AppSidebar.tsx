@@ -98,7 +98,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
         <SidebarMenuButton
           asChild
           isActive={active}
-          className={`h-11 rounded-full data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : `px-4 ${indent ? "pl-8" : ""}`}`}
+          className={`h-11 rounded-full transition-colors duration-200 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : `px-4 ${indent ? "pl-8" : ""}`}`}
         >
           <NavLink
             to={item.url}
@@ -106,7 +106,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             className={
               active
                 ? `font-semibold ${collapsed ? "justify-center" : ""}`
-                : `text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center" : ""}`
+                : `text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "justify-center" : ""}`
             }
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
@@ -136,7 +136,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
           <button
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
-            className="text-sidebar-foreground/80 hover:text-sidebar-foreground transition-colors"
+            className="h-9 w-9 flex items-center justify-center rounded-full text-sidebar-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -155,7 +155,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                   <SidebarMenuItem>
                     <button
                       onClick={() => setReportOpen((o) => !o)}
-                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isReportActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-colors duration-200 hover:bg-primary/10 hover:text-primary h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isReportActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
                       <span className="flex items-center gap-2">
                         <BarChart3 className="h-[18px] w-[18px]" strokeWidth={1.8} />
@@ -189,7 +189,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                   <SidebarMenuItem>
                     <button
                       onClick={() => setCostingOpen((o) => !o)}
-                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-colors duration-200 hover:bg-primary/10 hover:text-primary h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
                       <span className="flex items-center gap-2">
                         <IndianRupee className="h-[18px] w-[18px]" strokeWidth={1.8} />
@@ -232,7 +232,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             <SidebarMenuButton
               onClick={toggleSidebar}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className={`h-11 rounded-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : "px-4"}`}
+              className={`h-11 rounded-full transition-colors duration-200 text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary ${collapsed ? "w-11 justify-center px-0 mx-auto" : "px-4"}`}
             >
               {collapsed ? (
                 <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.8} />
