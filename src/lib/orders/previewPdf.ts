@@ -13,12 +13,15 @@ import "@/styles/oa-pdf.css";
 export async function capturePreviewToPdf(
   element: HTMLElement | null,
   filename: string,
+  options: { save?: boolean } = {},
 ): Promise<{ ok: true; blob: Blob } | { ok: false }> {
   if (!element) return { ok: false };
 
-  // A4 @ 96dpi minus 8mm margins ≈ 794px. Matches the width used by
-  // `oa-pdf.css` so wrapping in the PDF equals wrapping in the clone.
-  const CAPTURE_WIDTH_PX = 794;
+  // Capture at the same CSS width the user is seeing in Live Preview. The
+  // generated PDF scales that exact bitmap to A4, so the export does not
+  // reflow columns differently than the preview.
+  const measuredWidth = Math.ceil(element.getBoundingClientRect().width || 0);
+  const CAPTURE_WIDTH_PX = Math.max(720, measuredWidth || 794);
 
   // Build an off-screen clone so the live UI is never mutated and the
   // capture is deterministic (no scrollbars / sticky headers / Card
@@ -70,7 +73,7 @@ export async function capturePreviewToPdf(
   };
   clone
     .querySelectorAll<HTMLElement>(
-      "tr, .pdf-keep, .pdf-keep-group > *, [data-pdf-keep]",
+      "thead tr, tbody tr, tfoot tr, table.oa-items, .pdf-keep, .pdf-keep-group, .pdf-keep-group > *, [data-pdf-keep]",
     )
     .forEach(addBounds);
   // Line-level fallbacks inside Terms so a very tall Terms block can flow
@@ -79,6 +82,12 @@ export async function capturePreviewToPdf(
     .querySelectorAll<HTMLElement>(".pdf-keep p, .pdf-keep div, .pdf-keep li")
     .forEach(addBounds);
   const boundaries = Array.from(boundarySet).sort((a, b) => a - b);
+  const forcedBreaks = Array.from(
+    clone.querySelectorAll<HTMLElement>(".page-break-before, [data-pdf-page-break-before='true']"),
+  )
+    .map((el) => el.getBoundingClientRect().top - hostTop)
+    .filter((y) => y > 0.5)
+    .sort((a, b) => a - b);
 
   let canvas: HTMLCanvasElement;
   try {
@@ -96,25 +105,33 @@ export async function capturePreviewToPdf(
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const pdfW = pdf.internal.pageSize.getWidth();
   const pdfH = pdf.internal.pageSize.getHeight();
+  const pdfMargin = 4;
+  const printableW = pdfW - pdfMargin * 2;
+  const printableH = pdfH - pdfMargin * 2;
 
   // px/mm conversion factors — canvas is rendered at scale=2 so canvas.width
   // corresponds to CAPTURE_WIDTH_PX * 2. We map canvas Y coords (in CSS px
   // × 2) into mm on the PDF via cssPxToMm.
   const scale = 2;
-  const cssPxToMm = pdfW / CAPTURE_WIDTH_PX; // width mapping (canvas covers full pdf width)
-  const pageCssPx = pdfH / cssPxToMm;         // CSS px per PDF page
+  const cssPxToMm = printableW / CAPTURE_WIDTH_PX; // width mapping inside consistent PDF margins
+  const pageCssPx = printableH / cssPxToMm;         // CSS px per PDF page
 
   // Pick page breaks that snap to the nearest safe boundary BEFORE the
-  // theoretical page cutoff. Never advance less than 40% of a page. If no
-  // safe boundary exists in-window we accept the hard cutoff so the flow
-  // still progresses (better than an infinite loop).
+  // theoretical page cutoff. Prefer not to cut rows/sections, even if that
+  // leaves a shorter page. If no safe boundary exists in-window we accept
+  // the hard cutoff so the flow still progresses.
   const totalCssPx = canvas.height / scale;
   const breaks: number[] = [0];
   while (breaks[breaks.length - 1] < totalCssPx - 0.5) {
     const start = breaks[breaks.length - 1];
     const maxEnd = start + pageCssPx;
     if (maxEnd >= totalCssPx) { breaks.push(totalCssPx); break; }
-    const minEnd = start + pageCssPx * 0.4;
+    const nextForced = forcedBreaks.find((b) => b > start + 1 && b <= maxEnd);
+    if (nextForced && nextForced - start > pageCssPx * 0.12) {
+      breaks.push(nextForced);
+      continue;
+    }
+    const minEnd = start + pageCssPx * 0.12;
     let snap = maxEnd;
     for (let i = boundaries.length - 1; i >= 0; i--) {
       const b = boundaries[i];
@@ -125,7 +142,7 @@ export async function capturePreviewToPdf(
     breaks.push(snap);
   }
 
-  const imgW = pdfW;
+  const imgW = printableW;
   for (let i = 0; i < breaks.length - 1; i++) {
     const startCssPx = breaks[i];
     const endCssPx = breaks[i + 1];
@@ -147,11 +164,11 @@ export async function capturePreviewToPdf(
     const sliceImg = slice.toDataURL("image/png");
     const sliceMmH = (endCssPx - startCssPx) * cssPxToMm;
     if (i > 0) pdf.addPage();
-    pdf.addImage(sliceImg, "PNG", 0, 0, imgW, sliceMmH);
+    pdf.addImage(sliceImg, "PNG", pdfMargin, pdfMargin, imgW, sliceMmH);
   }
 
   const blob = pdf.output("blob");
-  pdf.save(filename);
+  if (options.save !== false) pdf.save(filename);
   return { ok: true, blob };
 }
 
