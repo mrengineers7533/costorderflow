@@ -1,53 +1,25 @@
-## Plan: make exported OA/PI PDFs match Live Preview exactly
+## Goal
+Fix the OA/PI PDF export so it does not shrink everything to fit on one page. The exported PDF should keep standard readable text size, keep the same Live Preview proportions, and naturally continue onto additional A4 pages when content is long.
 
-### Goal
-Fix the recurring exported PDF alignment/wrapping problem for MR and GMS templates without changing calculations, numbering, approval logic, workflows, or stored data.
+## Planned changes
+1. **Stop page-fit shrinking**
+   - Update the Live Preview capture PDF logic so it preserves the preview’s normal readable scale instead of compressing all content onto one page.
+   - Keep fixed A4 margins, but allow content height to paginate normally.
 
-### Root-cause direction
-The app currently has two PDF paths:
-- **Live Preview capture path** in `src/lib/orders/previewPdf.ts`
-- **Legacy jsPDF/autoTable path** in `src/lib/orders/pdf.ts`, still used by PI and fallback downloads
+2. **Set standard PDF capture width/text sizing**
+   - Use a stable template width for OA/PI capture instead of over-scaling based on available screen width.
+   - Keep table text at the current preview/template size, not tiny export-only text.
 
-Because these paths render tables differently, fixes applied to one path can still leave exported PDFs misaligned in another path.
+3. **Improve page slicing without shrinking text**
+   - Keep rows, totals, terms, and signature/stamp sections from being cut mid-section.
+   - If content does not fit, create page 2/page 3 instead of reducing font size.
 
-### Implementation steps
-1. **Make OA and PI downloads use the Live Preview as the primary export source**
-   - Keep the same preview UI.
-   - Export the exact rendered preview DOM wherever possible.
-   - Apply this to both OA and PI download buttons.
+4. **Keep scope limited**
+   - No data changes.
+   - No calculation changes.
+   - No approval/workflow/numbering changes.
+   - Only OA/PI Live Preview PDF export layout behavior.
 
-2. **Fix the preview-capture layout, not business logic**
-   - Stabilize item table widths for MR and GMS.
-   - Ensure hidden columns are fully removed and remaining columns reflow.
-   - Ensure header/small columns stay center-aligned.
-   - Ensure description wraps cleanly and stays vertically centered.
-   - Ensure rate/amount stay right-aligned and do not drift outside borders.
-
-3. **Improve PDF page slicing**
-   - Prevent rows, terms blocks, totals rows, and signature/footer sections from being cut mid-section.
-   - Keep page size and margins professional and consistent.
-
-4. **Keep legacy renderer only as a fallback**
-   - Do not remove existing `generateOrderPDF` logic.
-   - If preview capture is unavailable, fallback remains.
-   - But normal user-initiated OA/PI exports should come from the same Live Preview layout.
-
-5. **Visual QA before completion**
-   - Export a GMS PDF from the current order page.
-   - Convert the generated PDF pages to images.
-   - Inspect alignment, wrapping, row heights, column borders, totals, and page breaks.
-   - Repeat for MR if available from the same flow or a known MR record.
-   - Report any issues found and how they were fixed.
-
-### Files likely changed
-- `src/lib/orders/previewPdf.ts`
-- `src/styles/oa-pdf.css`
-- `src/pages/pi/PiEditor.tsx`
-- Possibly small scoped changes in `src/components/orders/OrderPreview.tsx`
-
-### What will not change
-- No calculation changes
-- No approval/workflow changes
-- No database changes
-- No numbering changes
-- No BOQ/Purchase/Manufacturing logic changes
+5. **Verify visually**
+   - Export/check the current OA PDF route.
+   - Confirm text size is readable, table cells stay aligned, and long content flows to next pages instead of being squeezed.

@@ -2,6 +2,9 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import "@/styles/oa-pdf.css";
 
+export const ORDER_PREVIEW_PDF_WIDTH_PX = 794;
+const PDF_MARGIN_MM = 4;
+
 /**
  * Capture a live-preview DOM element and export it as a paginated A4 PDF.
  * Guarantees the generated PDF matches the on-screen preview exactly,
@@ -17,11 +20,12 @@ export async function capturePreviewToPdf(
 ): Promise<{ ok: true; blob: Blob } | { ok: false }> {
   if (!element) return { ok: false };
 
-  // Capture at the same CSS width the user is seeing in Live Preview. The
-  // generated PDF scales that exact bitmap to A4, so the export does not
-  // reflow columns differently than the preview.
-  const measuredWidth = Math.ceil(element.getBoundingClientRect().width || 0);
-  const CAPTURE_WIDTH_PX = Math.max(720, measuredWidth || 794);
+  // Capture at an A4-template CSS width instead of the current screen/card
+  // width. Using a very wide desktop preview as the capture width makes the
+  // PDF scale everything down to fit A4, which is why text became tiny and too
+  // much content appeared on one page. A fixed 794px width matches A4 at 96dpi
+  // and lets long documents paginate naturally at a readable size.
+  const CAPTURE_WIDTH_PX = ORDER_PREVIEW_PDF_WIDTH_PX;
 
   // Build an off-screen clone so the live UI is never mutated and the
   // capture is deterministic (no scrollbars / sticky headers / Card
@@ -105,7 +109,7 @@ export async function capturePreviewToPdf(
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const pdfW = pdf.internal.pageSize.getWidth();
   const pdfH = pdf.internal.pageSize.getHeight();
-  const pdfMargin = 4;
+  const pdfMargin = PDF_MARGIN_MM;
   const printableW = pdfW - pdfMargin * 2;
   const printableH = pdfH - pdfMargin * 2;
 
