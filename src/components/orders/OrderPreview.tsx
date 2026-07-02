@@ -272,6 +272,24 @@ export function OrderPreview(p: Props) {
           // Totals label cell spans every column except the trailing amount column.
           const totalsColSpan = Math.max(1, visCols.length - 1);
           const emptyColSpan = visCols.length;
+          // Proportional column widths — recomputed from the visible set so the
+          // table always fills 100% regardless of how many columns are hidden.
+          const COL_WEIGHTS: Record<PdfColumnKey, number> = {
+            item_no: 6,
+            model_number: 14,
+            description: 0, // description absorbs the remainder
+            make: 12,
+            qty: 7,
+            unit: 7,
+            rate: 13,
+            amount: 15,
+          };
+          const fixedSum = visCols
+            .filter((k) => k !== "description")
+            .reduce((s, k) => s + COL_WEIGHTS[k], 0);
+          const descWeight = Math.max(20, 100 - fixedSum);
+          const colWidth = (k: PdfColumnKey): string =>
+            k === "description" ? `${descWeight}%` : `${COL_WEIGHTS[k]}%`;
           const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
           // When discount applied, % charges resolve against the discounted basic.
           const baseForCharges = showDiscount ? afterDiscount : p.totals.basic_total;
@@ -286,34 +304,39 @@ export function OrderPreview(p: Props) {
           const gstShown = (taxableShown * (p.charges.gst_percent || 0)) / 100;
           const grandShown = showDiscount ? (taxableShown + gstShown) : p.totals.net_payable;
           return (
-            <table className="w-full border-collapse text-[11px] border border-foreground">
+            <table className="w-full border-collapse text-[11px] border border-foreground oa-items table-fixed">
+              <colgroup>
+                {visCols.map((k) => (
+                  <col key={k} style={{ width: colWidth(k) }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr className={isGMS ? "" : "bg-muted/60"} style={isGMS ? { backgroundColor: "rgb(220,220,220)" } : undefined}>
                   {showCol("item_no") && (
-                    <th className="border border-foreground px-1.5 py-1 w-10 text-center">{isGMS ? "ITEM NO" : "S. No."}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "ITEM NO" : "S. No."}</th>
                   )}
                   {showCol("model_number") && (
-                    <th className="border border-foreground px-1.5 py-1 w-24 text-left">MODEL NUMBER</th>
+                    <th className="border border-foreground px-1.5 py-1 text-left">MODEL NUMBER</th>
                   )}
                   {showCol("description") && (
                     <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
                   )}
                   {showCol("make") && (
-                    <th className="border border-foreground px-1.5 py-1 w-24 text-center">{isGMS ? "MAKE" : "Make"}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center">{isGMS ? "MAKE" : "Make"}</th>
                   )}
                   {showCol("qty") && (
-                    <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "QTY" : "Qty."}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "QTY" : "Qty."}</th>
                   )}
                   {showCol("unit") && (
-                    <th className="border border-foreground px-1.5 py-1 w-12 text-center">{isGMS ? "UNIT" : "Unit"}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "UNIT" : "Unit"}</th>
                   )}
                   {showCol("rate") && (
-                    <th className="border border-foreground px-1.5 py-1 w-24 text-right">
+                    <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
                       {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
                     </th>
                   )}
                   {showCol("amount") && (
-                    <th className="border border-foreground px-1.5 py-1 w-28 text-right">
+                    <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
                       {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
                     </th>
                   )}
@@ -326,34 +349,34 @@ export function OrderPreview(p: Props) {
                   </tr>
                 ) : (
                   p.items.map((it, idx) => (
-                    <tr key={it.id || idx} className="align-top">
+                    <tr key={it.id || idx}>
                       {showCol("item_no") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{idx + 1}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap">{idx + 1}</td>
                       )}
                       {showCol("model_number") && (
-                        <td className="border border-foreground px-1.5 py-1"></td>
+                        <td className="border border-foreground px-1.5 py-1 align-middle oa-cell-wrap"></td>
                       )}
                       {showCol("description") && (
-                        <td className="border border-foreground px-1.5 py-1">
+                        <td className="border border-foreground px-1.5 py-1 align-middle text-left oa-cell-wrap">
                           {it.description || <Placeholder text="(blank)" />}
                         </td>
                       )}
                       {showCol("make") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center">{displayMake(it)}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-wrap">{displayMake(it)}</td>
                       )}
                       {showCol("qty") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center tabular-nums">{it.quantity || 0}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap">{it.quantity || 0}</td>
                       )}
                       {showCol("unit") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center">{it.unit || "Nos"}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-nowrap">{it.unit || "Nos"}</td>
                       )}
                       {showCol("rate") && (
-                        <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        <td className="border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap">
                           {itemFmt(it.unit_rate || 0)}
                         </td>
                       )}
                       {showCol("amount") && (
-                        <td className="border border-foreground px-1.5 py-1 text-right tabular-nums">
+                        <td className="border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap">
                           {itemFmt(it.amount || 0)}
                         </td>
                       )}
@@ -950,10 +973,10 @@ function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
 function TotalsRow({ label, value, highlight, colSpan = 6, format }: { label: string; value: number; highlight?: boolean; colSpan?: number; format?: (n: number) => string }) {
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
-      <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right ${highlight ? "font-bold" : "font-semibold"}`}>
+      <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right align-middle oa-cell-wrap ${highlight ? "font-bold" : "font-semibold"}`}>
         {label}
       </td>
-      <td className={`border border-foreground px-1.5 py-1 text-right tabular-nums ${highlight ? "font-bold" : ""}`}>
+      <td className={`border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap ${highlight ? "font-bold" : ""}`}>
         {format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </td>
     </tr>
