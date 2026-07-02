@@ -67,6 +67,35 @@ const fmt = (n: number) =>
 const fmtFX = (n: number, symbol: string) =>
   `${symbol} ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const TEMPLATE_COL_WEIGHTS: Record<OrderFormat, Record<PdfColumnKey, number>> = {
+  MR: {
+    item_no: 5.3,
+    model_number: 0,
+    description: 41.6,
+    make: 12.8,
+    qty: 6.4,
+    unit: 6.4,
+    rate: 12.8,
+    amount: 14.7,
+  },
+  GMS: {
+    item_no: 5.8,
+    model_number: 14,
+    description: 26,
+    make: 7,
+    qty: 12,
+    unit: 7,
+    rate: 13.1,
+    amount: 15.1,
+  },
+};
+
+function templateColumnWidth(format: OrderFormat, visible: PdfColumnKey[], key: PdfColumnKey): string {
+  const weights = TEMPLATE_COL_WEIGHTS[format];
+  const total = visible.reduce((sum, col) => sum + Math.max(0, weights[col] || 0), 0) || 1;
+  return `${((Math.max(0, weights[key] || 0) / total) * 100).toFixed(4)}%`;
+}
+
 export function OrderPreview(p: Props) {
   const ship = p.sameAsBill ? p.billTo : p.shipTo;
   const isFX = !!p.charges.currency && p.charges.currency !== "INR" && (p.charges.fx_rate || 0) > 0;
@@ -197,6 +226,7 @@ export function OrderPreview(p: Props) {
 
       <div
         data-oa-preview-root
+        data-oa-format={p.format.toLowerCase()}
         className="bg-background p-5 space-y-4 text-[13px] leading-snug order-preview-body"
       >
         {/* Header */}
@@ -268,38 +298,12 @@ export function OrderPreview(p: Props) {
         {(() => {
           const isGMS = p.format === "GMS";
           let visCols = visibleColumns(p.format, p.hiddenColumns);
-          // Auto-hide MODEL NUMBER when no item carries a model number value.
-          // GMS OA/PI does not store a separate model number, so the column
-          // otherwise reserves width and collides with the ITEM NO header.
-          if (visCols.includes("model_number")) {
-            const hasModel = p.items.some((it) => {
-              const v = (it as unknown as { model_number?: string }).model_number;
-              return typeof v === "string" && v.trim() !== "";
-            });
-            if (!hasModel) visCols = visCols.filter((k) => k !== "model_number");
-          }
           const showCol = (k: PdfColumnKey) => visCols.includes(k);
           // Totals label cell spans every column except the trailing amount column.
           const totalsColSpan = Math.max(1, visCols.length - 1);
           const emptyColSpan = visCols.length;
-          // Proportional column widths — recomputed from the visible set so the
-          // table always fills 100% regardless of how many columns are hidden.
-          const COL_WEIGHTS: Record<PdfColumnKey, number> = {
-            item_no: 8,
-            model_number: 14,
-            description: 0, // description absorbs the remainder
-            make: 11,
-            qty: 8,
-            unit: 8,
-            rate: 13,
-            amount: 15,
-          };
-          const fixedSum = visCols
-            .filter((k) => k !== "description")
-            .reduce((s, k) => s + COL_WEIGHTS[k], 0);
-          const descWeight = Math.max(20, 100 - fixedSum);
           const colWidth = (k: PdfColumnKey): string =>
-            k === "description" ? `${descWeight}%` : `${COL_WEIGHTS[k]}%`;
+            templateColumnWidth(p.format, visCols, k);
           const afterDiscount = Math.max(0, p.totals.basic_total - discountAmount);
           // When discount applied, % charges resolve against the discounted basic.
           const baseForCharges = showDiscount ? afterDiscount : p.totals.basic_total;
@@ -314,7 +318,7 @@ export function OrderPreview(p: Props) {
           const gstShown = (taxableShown * (p.charges.gst_percent || 0)) / 100;
           const grandShown = showDiscount ? (taxableShown + gstShown) : p.totals.net_payable;
           return (
-            <table className="w-full border-collapse text-[11px] border border-foreground oa-items table-fixed">
+            <table className={`w-full border-collapse text-[11px] border border-foreground oa-items oa-items-${p.format.toLowerCase()} table-fixed`}>
               <colgroup>
                 {visCols.map((k) => (
                   <col key={k} style={{ width: colWidth(k) }} />
@@ -326,10 +330,10 @@ export function OrderPreview(p: Props) {
                     <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num"><div className="oa-cell-inner">{isGMS ? "ITEM NO" : "S. No."}</div></th>
                   )}
                   {showCol("model_number") && (
-                    <th className="border border-foreground px-1.5 py-1 text-left"><div className="oa-cell-inner">MODEL NUMBER</div></th>
+                    <th className="border border-foreground px-1.5 py-1 text-center"><div className="oa-cell-inner">MODEL NUMBER</div></th>
                   )}
                   {showCol("description") && (
-                    <th className="border border-foreground px-1.5 py-1 text-left"><div className="oa-cell-inner">{isGMS ? "DESCRIPTION" : "Item Description"}</div></th>
+                    <th className="border border-foreground px-1.5 py-1 text-center"><div className="oa-cell-inner">{isGMS ? "DESCRIPTION" : "Item Description"}</div></th>
                   )}
                   {showCol("make") && (
                     <th className="border border-foreground px-1.5 py-1 text-center"><div className="oa-cell-inner">{isGMS ? "MAKE" : "Make"}</div></th>
@@ -341,12 +345,12 @@ export function OrderPreview(p: Props) {
                     <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num"><div className="oa-cell-inner">{isGMS ? "UNIT" : "Unit"}</div></th>
                   )}
                   {showCol("rate") && (
-                    <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">
                       <div className="oa-cell-inner">{isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}</div>
                     </th>
                   )}
                   {showCol("amount") && (
-                    <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">
                       <div className="oa-cell-inner">{isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}</div>
                     </th>
                   )}
@@ -364,7 +368,7 @@ export function OrderPreview(p: Props) {
                         <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap"><div className="oa-cell-inner">{idx + 1}</div></td>
                       )}
                       {showCol("model_number") && (
-                        <td className="border border-foreground px-1.5 py-1 align-middle oa-cell-wrap"><div className="oa-cell-inner">&nbsp;</div></td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-wrap"><div className="oa-cell-inner">{((it as unknown as { model_number?: string }).model_number || "").trim() || "\u00a0"}</div></td>
                       )}
                       {showCol("description") && (
                         <td className="border border-foreground px-1.5 py-1 align-middle text-left oa-cell-wrap">
@@ -1055,7 +1059,7 @@ function GMSHeader({
   return (
     <div className="space-y-0">
       {/* Dual-logo banner */}
-      <div className="pdf-keep flex items-end justify-between gap-4 pb-2">
+      <div className="pdf-keep oa-gms-logo-row flex items-end justify-between gap-4 pb-2">
         <div className="flex flex-col items-start">
           <img
             src={gmsLogo}
@@ -1085,11 +1089,11 @@ function GMSHeader({
         </div>
       </div>
       {/* Grey ORDER ACCEPTANCE bar */}
-      <div className="pdf-keep mt-3 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
+      <div className="pdf-keep oa-gms-title-bar mt-3 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
         <div className="text-sm font-bold tracking-[0.2em] text-black">{title || "ORDER ACCEPTANCE"}</div>
       </div>
       {/* Customer / OA meta — borderless two-column block */}
-      <div className="pdf-keep grid grid-cols-2 gap-4 mt-3 text-[11px]">
+      <div className="pdf-keep oa-gms-meta grid grid-cols-2 gap-4 mt-3 text-[11px]">
         <div className="space-y-0.5">
           <div className="font-bold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
           {billTo?.address && <div className="whitespace-pre-wrap">{billTo.address}</div>}

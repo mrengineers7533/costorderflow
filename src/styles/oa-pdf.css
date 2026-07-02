@@ -90,7 +90,7 @@
 .oa-pdf-capture table.oa-items th,
 .oa-pdf-capture table.oa-items td {
   vertical-align: middle !important;
-  line-height: 1.35 !important;
+  line-height: 1.25 !important;
 }
 /* Keep address cells top-aligned (invoice convention). */
 .oa-pdf-capture td.oa-cell-top,
@@ -102,50 +102,103 @@
 .order-preview-body table.oa-items th,
 .order-preview-body table.oa-items td {
   vertical-align: middle !important;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
-/* Flex-inner cell centering — guarantees vertical centering regardless
-   of how many lines the description wraps to. `height:1px` on the cell
-   lets `.oa-cell-inner { min-height:100% }` stretch to the row's real
-   height, and the flex box centers the actual content. */
+/* Template-faithful OA item table rules. Keep a real HTML table so row
+   height is calculated by the browser, then let table-cell vertical-align
+   center direct inline-block content. This is more reliable in html2canvas
+   than trying to stretch flex children inside percentage-height table cells. */
 .oa-pdf-capture table.oa-items th,
 .oa-pdf-capture table.oa-items td,
 .order-preview-body table.oa-items th,
 .order-preview-body table.oa-items td {
-  height: 1px;
-  padding: 6px 6px !important;
+  height: auto !important;
+  padding: 4px 5px !important;
+  vertical-align: middle !important;
 }
 .oa-pdf-capture table.oa-items .oa-cell-inner,
 .order-preview-body table.oa-items .oa-cell-inner {
-  min-height: 100%;
-  display: flex;
-  align-items: center;
-  line-height: 1.35;
+  display: inline-block;
+  width: 100%;
+  line-height: 1.25;
   word-break: inherit;
   overflow-wrap: inherit;
   white-space: inherit;
+  vertical-align: middle;
 }
 .oa-pdf-capture table.oa-items td.text-left .oa-cell-inner,
 .oa-pdf-capture table.oa-items th.text-left .oa-cell-inner,
 .order-preview-body table.oa-items td.text-left .oa-cell-inner,
 .order-preview-body table.oa-items th.text-left .oa-cell-inner {
-  justify-content: flex-start;
   text-align: left;
 }
 .oa-pdf-capture table.oa-items td.text-center .oa-cell-inner,
 .oa-pdf-capture table.oa-items th.text-center .oa-cell-inner,
 .order-preview-body table.oa-items td.text-center .oa-cell-inner,
 .order-preview-body table.oa-items th.text-center .oa-cell-inner {
-  justify-content: center;
   text-align: center;
 }
 .oa-pdf-capture table.oa-items td.text-right .oa-cell-inner,
 .oa-pdf-capture table.oa-items th.text-right .oa-cell-inner,
 .order-preview-body table.oa-items td.text-right .oa-cell-inner,
 .order-preview-body table.oa-items th.text-right .oa-cell-inner {
-  justify-content: flex-end;
   text-align: right;
+}
+
+.oa-pdf-capture table.oa-items th,
+.order-preview-body table.oa-items th {
+  font-weight: 700;
+  text-align: center !important;
+}
+
+.oa-pdf-capture table.oa-items .oa-cell-wrap,
+.order-preview-body table.oa-items .oa-cell-wrap {
+  white-space: normal !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.oa-pdf-capture table.oa-items .oa-cell-nowrap,
+.order-preview-body table.oa-items .oa-cell-nowrap {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+.oa-pdf-capture table.oa-items-gms,
+.order-preview-body table.oa-items-gms {
+  font-size: 10.25px;
+}
+
+.oa-pdf-capture table.oa-items-mr,
+.order-preview-body table.oa-items-mr {
+  font-size: 10.25px;
+}
+
+.oa-pdf-capture table.oa-items-gms th,
+.oa-pdf-capture table.oa-items-gms td,
+.order-preview-body table.oa-items-gms th,
+.order-preview-body table.oa-items-gms td {
+  padding: 5px 6px !important;
+}
+
+.oa-pdf-capture table.oa-items-gms th,
+.order-preview-body table.oa-items-gms th {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  letter-spacing: -0.02em;
+  padding-left: 3px !important;
+  padding-right: 3px !important;
+}
+
+.oa-pdf-capture table.oa-items-mr th,
+.oa-pdf-capture table.oa-items-mr td,
+.order-preview-body table.oa-items-mr th,
+.order-preview-body table.oa-items-mr td {
+  padding: 4px 5px !important;
 }
 .oa-pdf-capture div,
 .oa-pdf-capture p,
@@ -198,6 +251,28 @@
   margin-top: 12px !important;
 }
 
+.oa-pdf-capture .oa-gms-logo-row,
+.order-preview-body .oa-gms-logo-row {
+  align-items: flex-end !important;
+  min-height: 58px;
+  padding-bottom: 10px !important;
+}
+
+.oa-pdf-capture .oa-gms-title-bar,
+.order-preview-body .oa-gms-title-bar {
+  clear: both;
+  margin-top: 10px !important;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.oa-pdf-capture .oa-gms-meta,
+.order-preview-body .oa-gms-meta {
+  margin-top: 10px !important;
+}
+
 /* Print output should match the exported PDF: honour fixed layout and
    prevent numeric cells from wrapping across lines. */
 @media print {
@@ -208,7 +283,7 @@
   }
   .order-preview-body table.oa-items th,
   .order-preview-body table.oa-items td {
-    padding: 4px 6px !important;
+    padding: 4px 5px !important;
     page-break-inside: avoid;
     vertical-align: middle !important;
   }
