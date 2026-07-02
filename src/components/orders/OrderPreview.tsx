@@ -62,10 +62,10 @@ interface Props {
 }
 
 const fmt = (n: number) =>
-  `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 
 const fmtFX = (n: number, symbol: string) =>
-  `${symbol} ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `${symbol} ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 
 const TEMPLATE_COL_WEIGHTS: Record<OrderFormat, Record<PdfColumnKey, number>> = {
   MR: {
@@ -144,16 +144,16 @@ export function OrderPreview(p: Props) {
   // Currency-aware totals formatter for the unified items+totals table.
   const totalFmt = (n: number) =>
     gmsUsd
-      ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`
       : forcedUsd
-        ? `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        : (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        ? `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`
+        : (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "");
   const itemFmt = (n: number) =>
     (turkeyAlwaysUSD || gmsUsd)
-      ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")
       : forcedUsd
-        ? (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        ? (n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")
+        : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "");
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -483,7 +483,7 @@ export function OrderPreview(p: Props) {
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Basic Total</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifBasic.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifBasic.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
@@ -493,13 +493,13 @@ export function OrderPreview(p: Props) {
                   : ""}
               </div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifSea.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifSea.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
               <div className="px-2 py-1.5 text-right font-bold">EX Work CIF Port</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifGrand.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {cifSym} {cifGrand.toLocaleString(cifLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
             {cifRate > 0 && (
@@ -571,21 +571,21 @@ export function OrderPreview(p: Props) {
               <div className="px-2 py-1.5 text-right font-bold">Price Ex-works {p.charges.currency}</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">{fxSymbol}</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {(p.totals.basic_total || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {(p.totals.basic_total || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Amount in INR @{fxRate}</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {inrAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {inrAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto_auto] items-center">
               <div className="px-2 py-1.5 text-right font-bold">Advance Required @ {advancePct}%</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {advanceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {advanceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}
               </div>
             </div>
           </div>
@@ -645,12 +645,12 @@ function ExMurthalBlock({
   const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
   const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
   const inr = (n: number) =>
-    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
   const usd = (n: number) =>
-    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
   // When toolbar-forced USD: state values are already in USD — show "$ n" without re-dividing.
   const usdDirect = (n: number) =>
-    `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `$ ${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
   const fmtAmt = (n: number) =>
     forcedUsd ? usdDirect(n) : displayUSD ? usd(n) : inr(n);
   // EXW Murthal — when "Amount in INR" rate is set, values up to Landed
@@ -675,7 +675,7 @@ function ExMurthalBlock({
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
-          <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")} @ ₹{fxRate}</div>
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(m.base_amount)}</div>
         </div>
       )}
@@ -737,9 +737,9 @@ function ExTurkeyBlock({
   const usdRate = (fxRate || 0) > 0 ? fxRate : (forceUsdRate || 1);
   const usdSym = "$";
   const inr = (n: number) =>
-    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `₹ ${(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
   const usd = (n: number) =>
-    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
   const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
@@ -778,7 +778,7 @@ function ExTurkeyBlock({
       )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
-          <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")} @ ₹{fxRate}</div>
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{fmtAmt(t.base_amount)}</div>
         </div>
       )}
@@ -991,7 +991,7 @@ function TotalsRow({ label, value, highlight, colSpan = 6, format }: { label: st
         <div className="oa-cell-inner">{label}</div>
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap ${highlight ? "font-bold" : ""}`}>
-        <div className="oa-cell-inner">{format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <div className="oa-cell-inner">{format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}</div>
       </td>
     </tr>
   );
