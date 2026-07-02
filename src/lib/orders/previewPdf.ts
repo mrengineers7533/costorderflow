@@ -16,9 +16,11 @@ export async function capturePreviewToPdf(
 ): Promise<{ ok: true; blob: Blob } | { ok: false }> {
   if (!element) return { ok: false };
 
-  // A4 @ 96dpi minus 8mm margins ≈ 794px. Matches the width used by
-  // `oa-pdf.css` so wrapping in the PDF equals wrapping in the clone.
-  const CAPTURE_WIDTH_PX = 794;
+  // Capture at the same CSS width the user is seeing in Live Preview. The
+  // generated PDF scales that exact bitmap to A4, so the export does not
+  // reflow columns differently than the preview.
+  const measuredWidth = Math.ceil(element.getBoundingClientRect().width || 0);
+  const CAPTURE_WIDTH_PX = Math.max(720, measuredWidth || 794);
 
   // Build an off-screen clone so the live UI is never mutated and the
   // capture is deterministic (no scrollbars / sticky headers / Card
@@ -70,7 +72,7 @@ export async function capturePreviewToPdf(
   };
   clone
     .querySelectorAll<HTMLElement>(
-      "tr, .pdf-keep, .pdf-keep-group > *, [data-pdf-keep]",
+      "thead tr, tbody tr, tfoot tr, table.oa-items, .pdf-keep, .pdf-keep-group, .pdf-keep-group > *, [data-pdf-keep]",
     )
     .forEach(addBounds);
   // Line-level fallbacks inside Terms so a very tall Terms block can flow
@@ -105,16 +107,16 @@ export async function capturePreviewToPdf(
   const pageCssPx = pdfH / cssPxToMm;         // CSS px per PDF page
 
   // Pick page breaks that snap to the nearest safe boundary BEFORE the
-  // theoretical page cutoff. Never advance less than 40% of a page. If no
-  // safe boundary exists in-window we accept the hard cutoff so the flow
-  // still progresses (better than an infinite loop).
+  // theoretical page cutoff. Prefer not to cut rows/sections, even if that
+  // leaves a shorter page. If no safe boundary exists in-window we accept
+  // the hard cutoff so the flow still progresses.
   const totalCssPx = canvas.height / scale;
   const breaks: number[] = [0];
   while (breaks[breaks.length - 1] < totalCssPx - 0.5) {
     const start = breaks[breaks.length - 1];
     const maxEnd = start + pageCssPx;
     if (maxEnd >= totalCssPx) { breaks.push(totalCssPx); break; }
-    const minEnd = start + pageCssPx * 0.4;
+    const minEnd = start + pageCssPx * 0.12;
     let snap = maxEnd;
     for (let i = boundaries.length - 1; i >= 0; i--) {
       const b = boundaries[i];
