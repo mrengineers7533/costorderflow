@@ -33,9 +33,6 @@
 
   background: #ffffff !important;
   color: #000000 !important;
-  font-family: "Inter", "Arial", sans-serif !important;
-  font-size: 11px !important;
-  line-height: 1.35 !important;
   -webkit-font-smoothing: antialiased;
   box-sizing: border-box;
   width: 794px;
@@ -69,7 +66,6 @@
 .oa-pdf-capture th,
 .oa-pdf-capture td {
   page-break-inside: avoid;
-  padding: 4px 6px !important;
 }
 /* Text cells wrap; numeric cells never wrap mid-number. */
 .oa-pdf-capture td.oa-cell-wrap,
