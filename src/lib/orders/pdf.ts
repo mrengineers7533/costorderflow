@@ -339,7 +339,7 @@ export async function generateOrderPDF(
     head: [mrCols.map((k) => mrColLabel[k])],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
-    styles: { fontSize: 8, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
+    styles: { fontSize: 7.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles: mrColumnStyles,
     margin: { left: M, right: M },
@@ -369,7 +369,7 @@ export async function generateOrderPDF(
       startY: y,
       body: [[{
         content: `TERMS & CONDITIONS\n${terms}${tcNote ? `\n\nNote: ${tcNote}` : ""}`,
-        styles: { fontStyle: "normal", fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
+        styles: { fontStyle: "normal", fontSize: 7.5, cellPadding: 1.6, lineWidth: 0.3, lineColor: [0, 0, 0] },
       }]],
       theme: "plain",
       margin: { left: M, right: M },
@@ -390,8 +390,8 @@ export async function generateOrderPDF(
     autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[
-        { content: bankBody, styles: { fontSize: 8, cellPadding: 2, valign: "top" } },
-        { content: sigBody, styles: { fontSize: 8, cellPadding: 2, halign: "right", valign: "top", fontStyle: "bold" } },
+        { content: bankBody, styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" } },
+        { content: sigBody, styles: { fontSize: 7.5, cellPadding: 1.6, halign: "right", valign: "top", fontStyle: "bold" } },
       ]],
       theme: "grid",
       margin: { left: M, right: M },
@@ -772,7 +772,7 @@ async function renderGmsPdf(
     theme: "grid",
     tableWidth: W - M * 2,
     styles: {
-      fontSize: 8, cellPadding: 2,
+      fontSize: 7.5, cellPadding: 1.6,
       lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle",
       textColor: [0, 0, 0],
     },

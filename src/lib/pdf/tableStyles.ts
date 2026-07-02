@@ -19,8 +19,8 @@ import type { UserOptions, Styles } from "jspdf-autotable";
  */
 
 export const PDF_BASE_STYLES: Partial<Styles> = {
-  fontSize: 8.5,
-  cellPadding: 2.2,
+  fontSize: 7.5,
+  cellPadding: 1.6,
   valign: "top",
   overflow: "linebreak",
   lineColor: [0, 0, 0],
