@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { OrderRecord } from "@/lib/orders/types";
 import { generateOrderPDF } from "@/lib/orders/pdf";
+import { exportOrderPreviewPdf } from "@/lib/orders/previewExport";
 import { buildOrderXlsx } from "@/lib/orders/excel";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 
@@ -118,9 +119,12 @@ export default function OrdersList() {
 
   async function downloadOrderPdf(o: OrderRecord) {
     try {
-      const doc = await generateOrderPDF(o);
       const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
-      doc.save(`${safe}.pdf`);
+      const captured = await exportOrderPreviewPdf(o, `${safe}.pdf`);
+      if (!captured.ok) {
+        const doc = await generateOrderPDF(o);
+        doc.save(`${safe}.pdf`);
+      }
       toast({ title: "OA PDF downloaded", description: o.oa_number });
     } catch (err) {
       toast({ title: "Download failed", description: (err as Error).message, variant: "destructive" });
@@ -129,8 +133,11 @@ export default function OrdersList() {
 
   async function printOrderPdf(o: OrderRecord) {
     try {
-      const doc = await generateOrderPDF(o);
-      const blobUrl = doc.output("bloburl") as unknown as string;
+      const safe = (o.oa_number || "OA").replace(/[/\\]/g, "_");
+      const captured = await exportOrderPreviewPdf(o, `${safe}.pdf`, { save: false });
+      const blobUrl = captured.ok
+        ? URL.createObjectURL(captured.blob)
+        : (await generateOrderPDF(o)).output("bloburl") as unknown as string;
       const w = window.open(blobUrl, "_blank", "noopener");
       if (w) setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 1000);
     } catch (err) {
