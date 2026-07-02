@@ -323,31 +323,31 @@ export function OrderPreview(p: Props) {
               <thead>
                 <tr className={isGMS ? "" : "bg-muted/60"} style={isGMS ? { backgroundColor: "rgb(220,220,220)" } : undefined}>
                   {showCol("item_no") && (
-                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "ITEM NO" : "S. No."}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num"><div className="oa-cell-inner">{isGMS ? "ITEM NO" : "S. No."}</div></th>
                   )}
                   {showCol("model_number") && (
-                    <th className="border border-foreground px-1.5 py-1 text-left">MODEL NUMBER</th>
+                    <th className="border border-foreground px-1.5 py-1 text-left"><div className="oa-cell-inner">MODEL NUMBER</div></th>
                   )}
                   {showCol("description") && (
-                    <th className="border border-foreground px-1.5 py-1 text-left">{isGMS ? "DESCRIPTION" : "Item Description"}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-left"><div className="oa-cell-inner">{isGMS ? "DESCRIPTION" : "Item Description"}</div></th>
                   )}
                   {showCol("make") && (
-                    <th className="border border-foreground px-1.5 py-1 text-center">{isGMS ? "MAKE" : "Make"}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center"><div className="oa-cell-inner">{isGMS ? "MAKE" : "Make"}</div></th>
                   )}
                   {showCol("qty") && (
-                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "QTY" : "Qty."}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num"><div className="oa-cell-inner">{isGMS ? "QTY" : "Qty."}</div></th>
                   )}
                   {showCol("unit") && (
-                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num">{isGMS ? "UNIT" : "Unit"}</th>
+                    <th className="border border-foreground px-1.5 py-1 text-center oa-cell-num"><div className="oa-cell-inner">{isGMS ? "UNIT" : "Unit"}</div></th>
                   )}
                   {showCol("rate") && (
                     <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
-                      {isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}
+                      <div className="oa-cell-inner">{isGMS ? `UNIT PRICE (${itemCurLabel})` : `Rate${isFX ? ` (${fxSymbol})` : ""}`}</div>
                     </th>
                   )}
                   {showCol("amount") && (
                     <th className="border border-foreground px-1.5 py-1 text-right oa-cell-num">
-                      {isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}
+                      <div className="oa-cell-inner">{isGMS ? `AMOUNT (${itemCurLabel})` : `Amount${isFX ? ` (${fxSymbol})` : ""}`}</div>
                     </th>
                   )}
                 </tr>
@@ -355,39 +355,39 @@ export function OrderPreview(p: Props) {
               <tbody>
                 {p.items.length === 0 || p.items.every((i) => !i.description && !i.amount) ? (
                   <tr>
-                    <td colSpan={emptyColSpan} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground">No line items yet</td>
+                    <td colSpan={emptyColSpan} className="border border-foreground px-2 py-3 text-center italic text-muted-foreground"><div className="oa-cell-inner">No line items yet</div></td>
                   </tr>
                 ) : (
                   p.items.map((it, idx) => (
                     <tr key={it.id || idx}>
                       {showCol("item_no") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap">{idx + 1}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap"><div className="oa-cell-inner">{idx + 1}</div></td>
                       )}
                       {showCol("model_number") && (
-                        <td className="border border-foreground px-1.5 py-1 align-middle oa-cell-wrap"></td>
+                        <td className="border border-foreground px-1.5 py-1 align-middle oa-cell-wrap"><div className="oa-cell-inner">&nbsp;</div></td>
                       )}
                       {showCol("description") && (
                         <td className="border border-foreground px-1.5 py-1 align-middle text-left oa-cell-wrap">
-                          {it.description || <Placeholder text="(blank)" />}
+                          <div className="oa-cell-inner">{it.description || <Placeholder text="(blank)" />}</div>
                         </td>
                       )}
                       {showCol("make") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-wrap">{displayMake(it)}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-wrap"><div className="oa-cell-inner">{displayMake(it)}</div></td>
                       )}
                       {showCol("qty") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap">{it.quantity || 0}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle tabular-nums oa-cell-nowrap"><div className="oa-cell-inner">{it.quantity || 0}</div></td>
                       )}
                       {showCol("unit") && (
-                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-nowrap">{it.unit || "Nos"}</td>
+                        <td className="border border-foreground px-1.5 py-1 text-center align-middle oa-cell-nowrap"><div className="oa-cell-inner">{it.unit || "Nos"}</div></td>
                       )}
                       {showCol("rate") && (
                         <td className="border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap">
-                          {itemFmt(it.unit_rate || 0)}
+                          <div className="oa-cell-inner">{itemFmt(it.unit_rate || 0)}</div>
                         </td>
                       )}
                       {showCol("amount") && (
                         <td className="border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap">
-                          {itemFmt(it.amount || 0)}
+                          <div className="oa-cell-inner">{itemFmt(it.amount || 0)}</div>
                         </td>
                       )}
                     </tr>
@@ -984,10 +984,10 @@ function TotalsRow({ label, value, highlight, colSpan = 6, format }: { label: st
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
       <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right align-middle oa-cell-wrap ${highlight ? "font-bold" : "font-semibold"}`}>
-        {label}
+        <div className="oa-cell-inner">{label}</div>
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap ${highlight ? "font-bold" : ""}`}>
-        {format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="oa-cell-inner">{format ? format(value) : value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
       </td>
     </tr>
   );
