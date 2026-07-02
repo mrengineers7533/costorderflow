@@ -11,17 +11,34 @@ export function LoadingScreen({ label = "Loading…" }: { label?: string }) {
           </div>
         </div>
         <div className="flex flex-col items-center gap-3">
-          <div className="relative h-1 w-40 overflow-hidden rounded-full bg-muted">
-            <div className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-primary animate-[loading-bar_1.4s_ease-in-out_infinite]" />
-          </div>
+          <svg
+            viewBox="0 0 100 40"
+            className="h-10 w-24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M20,20 C20,8 35,8 50,20 C65,32 80,32 80,20 C80,8 65,8 50,20 C35,32 20,32 20,20 Z"
+              stroke="hsl(var(--muted))"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M20,20 C20,8 35,8 50,20 C65,32 80,32 80,20 C80,8 65,8 50,20 C35,32 20,32 20,20 Z"
+              stroke="hsl(var(--primary))"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="40 160"
+              className="animate-[infinity-dash_1.6s_linear_infinite]"
+            />
+          </svg>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
         </div>
       </div>
       <style>{`
-        @keyframes loading-bar {
-          0% { transform: translateX(-100%); }
-          50% { transform: translateX(150%); }
-          100% { transform: translateX(400%); }
+        @keyframes infinity-dash {
+          0%   { stroke-dashoffset: 200; }
+          100% { stroke-dashoffset: 0; }
         }
       `}</style>
     </div>
