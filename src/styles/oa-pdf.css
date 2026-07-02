@@ -35,7 +35,7 @@
   color: #000000 !important;
   -webkit-font-smoothing: antialiased;
   box-sizing: border-box;
-  width: 794px;
+  width: auto;
   padding: 0;
   margin: 0;
 }
@@ -116,11 +116,14 @@
   height: auto !important;
   padding: 4px 5px !important;
   vertical-align: middle !important;
+  overflow: visible !important;
 }
 .oa-pdf-capture table.oa-items .oa-cell-inner,
 .order-preview-body table.oa-items .oa-cell-inner {
   display: inline-block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   line-height: 1.25;
   word-break: inherit;
   overflow-wrap: inherit;
@@ -165,6 +168,8 @@
   white-space: nowrap !important;
   word-break: keep-all !important;
   overflow-wrap: normal !important;
+  hyphens: none !important;
+  font-variant-numeric: tabular-nums;
 }
 
 .oa-pdf-capture table.oa-items-gms,
@@ -189,7 +194,7 @@
   white-space: nowrap !important;
   word-break: keep-all !important;
   overflow-wrap: normal !important;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   padding-left: 3px !important;
   padding-right: 3px !important;
 }
@@ -200,11 +205,16 @@
 .order-preview-body table.oa-items-mr td {
   padding: 4px 5px !important;
 }
-.oa-pdf-capture div,
-.oa-pdf-capture p,
-.oa-pdf-capture span {
+.oa-pdf-capture :where(div, p, span):not(.oa-cell-inner) {
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.oa-pdf-capture table.oa-items :where(div, p, span),
+.order-preview-body table.oa-items :where(div, p, span) {
+  overflow-wrap: inherit;
+  word-break: inherit;
+  white-space: inherit;
 }
 
 /* Pin the specific tailwind opacity/token classes that html2canvas
