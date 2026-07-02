@@ -136,7 +136,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
           <button
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
-            className="text-sidebar-foreground/80 hover:text-sidebar-foreground transition-colors"
+            className="h-9 w-9 flex items-center justify-center rounded-full text-sidebar-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
           >
             <Menu className="h-5 w-5" />
           </button>
