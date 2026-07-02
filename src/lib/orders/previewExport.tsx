@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { amountInWords } from "./calc";
 import { DEFAULT_GMS_BANK, DEFAULT_GMS_TERMS, DEFAULT_MR_BANK, DEFAULT_MR_TERMS } from "./defaults";
-import { capturePreviewToPdf } from "./previewPdf";
+import { capturePreviewToPdf, ORDER_PREVIEW_PDF_WIDTH_PX } from "./previewPdf";
 import type { BankDetails, GMSTerms } from "./defaults";
 import type { OrderRecord } from "./types";
 import type { PdfColumnKey } from "./pdfColumns";
@@ -34,7 +34,7 @@ export async function exportOrderPreviewPdf(
     "position:fixed",
     "left:-12000px",
     "top:0",
-    "width:958px",
+    `width:${ORDER_PREVIEW_PDF_WIDTH_PX}px`,
     "background:#fff",
     "z-index:-1",
     "pointer-events:none",
