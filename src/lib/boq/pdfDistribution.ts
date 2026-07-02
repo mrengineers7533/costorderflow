@@ -4,6 +4,7 @@ import { generateBoqPDF } from "@/lib/boq/pdf";
 import { sortByItemNo, type BoqLineItem, type BoqRecord } from "@/lib/boq/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseColumnComments, type DesignReviewItemRow, type DesignReviewRow } from "@/lib/boq/designReview";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 interface PrevRevision {
   revision_no: number;
@@ -109,17 +110,17 @@ export async function generateBoqDistributionPDF(
     .filter((it) => (it.remarks || "").trim())
     .map((it) => [it.item_no || "", it.model_number || "", it.description || "", it.remarks || ""]);
 
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: 33,
     head: [["Remarks Summary", "", "", ""]],
     body: [],
     theme: "plain",
     styles: { fontStyle: "bold", fontSize: 11 },
     margin: { left: M, right: M },
-  });
+  }));
 
   if (remarkRows.length) {
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       head: [["#", "Model", "Description", "Remarks"]],
       body: remarkRows,
       theme: "grid",
@@ -127,7 +128,7 @@ export async function generateBoqDistributionPDF(
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       columnStyles: { 0: { cellWidth: 14, halign: "center" }, 1: { cellWidth: 30 }, 2: { cellWidth: "auto" }, 3: { cellWidth: 60 } },
       margin: { left: M, right: M },
-    });
+    }));
   } else {
     doc.setFont("helvetica", "italic").setFontSize(9);
     // @ts-expect-error lastAutoTable runtime
@@ -171,7 +172,7 @@ export async function generateBoqDistributionPDF(
       doc.setFont("helvetica", "italic").setFontSize(9);
       doc.text("No per-item comments recorded.", M, y + 4);
     } else {
-      autoTable(doc, {
+      autoTable(doc, withPdfTableDefaults({
         startY: y + 2,
         head: [["#", "Model", "Decision", "Comment"]],
         body: commentRows.map((r) => [r.item_no, r.model, r.decision, r.comment]),
@@ -180,7 +181,7 @@ export async function generateBoqDistributionPDF(
         headStyles: { fillColor: [55, 65, 81], textColor: 255 },
         columnStyles: { 0: { cellWidth: 14, halign: "center" }, 1: { cellWidth: 30 }, 2: { cellWidth: 24 }, 3: { cellWidth: "auto" } },
         margin: { left: M, right: M },
-      });
+      }));
     }
   }
 
@@ -198,7 +199,7 @@ export async function generateBoqDistributionPDF(
     doc.setFont("helvetica", "italic").setFontSize(9);
     doc.text(prev ? "No item changes from the previous revision." : "First revision — no prior revision to compare.", M, y + 4);
   } else {
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y + 2,
       head: [["#", "Field", "Before", "After"]],
       body: changes.map((c) => [c.item_no, c.field, c.before, c.after]),
@@ -207,7 +208,7 @@ export async function generateBoqDistributionPDF(
       headStyles: { fillColor: [200, 30, 30], textColor: 255 },
       columnStyles: { 0: { cellWidth: 14, halign: "center" }, 1: { cellWidth: 26 }, 2: { cellWidth: "auto" }, 3: { cellWidth: "auto" } },
       margin: { left: M, right: M },
-    });
+    }));
   }
 
   return doc;

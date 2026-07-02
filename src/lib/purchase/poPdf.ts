@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { amountInWords } from "./amountInWords";
 import { fmtQty2 } from "@/lib/utils";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 export interface PoPdfPartyBlock {
   name: string;
@@ -166,7 +167,7 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
     r.lineAmount != null ? fmtINR(r.lineAmount) : "",
   ]);
 
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: y,
     head: [["S.NO.", "DESCRIPTION", "DUE ON", "QUANTITY", "RATE/UNIT", "DISCOUNT", "GST %", "GST AMOUNT", "AMOUNT"]],
     body,
@@ -183,7 +184,7 @@ export function generatePoPDF(ctx: PoPdfContext): jsPDF {
       8: { halign: "right", cellWidth: 22 },
     },
     margin: { left: M, right: M },
-  });
+  }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let fy = (doc as any).lastAutoTable?.finalY ?? y + 30;

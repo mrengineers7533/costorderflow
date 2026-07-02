@@ -17,6 +17,7 @@ import {
 import mrLogoUrl from "@/assets/mr-logo.png";
 import gmsLogoUrl from "@/assets/gms-logo.png";
 import ugurLogoUrl from "@/assets/ugur-logo.png";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 interface LoadedLogo { dataUrl: string; w: number; h: number }
 const logoCache: Record<string, LoadedLogo> = {};
@@ -333,7 +334,7 @@ export async function generateOrderPDF(
     const s = mrColWidthStyle[k];
     if (s) mrColumnStyles[i] = s;
   });
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: y,
     head: [mrCols.map((k) => mrColLabel[k])],
     body: [...itemRows, ...totalsAsBody as never[]],
@@ -342,7 +343,7 @@ export async function generateOrderPDF(
     headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles: mrColumnStyles,
     margin: { left: M, right: M },
-  });
+  }));
 
   // @ts-expect-error lastAutoTable runtime
   y = doc.lastAutoTable.finalY + 4;
@@ -364,7 +365,7 @@ export async function generateOrderPDF(
     const tableW = W - M * 2;
 
     // Terms & Conditions row
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[{
         content: `TERMS & CONDITIONS\n${terms}${tcNote ? `\n\nNote: ${tcNote}` : ""}`,
@@ -378,7 +379,7 @@ export async function generateOrderPDF(
         data.cell.styles.lineColor = [0, 0, 0];
         data.cell.styles.lineWidth = 0.3;
       },
-    });
+    }));
     // @ts-expect-error lastAutoTable runtime
     y = doc.lastAutoTable.finalY;
 
@@ -386,7 +387,7 @@ export async function generateOrderPDF(
     const bankBody =
       `OUR BANK DETAILS :-\n${bank.bank_name}\nBRANCH: ${bank.branch}\nC/A A/C NO. ${bank.account_no}\nIFSC CODE: ${bank.ifsc}`;
     const sigBody = `Yours faithfully\n\n\nM.R. ENGINEERS${order.prepared_by ? `\n${order.prepared_by}` : ""}`;
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[
         { content: bankBody, styles: { fontSize: 8, cellPadding: 2, valign: "top" } },
@@ -397,13 +398,13 @@ export async function generateOrderPDF(
       tableWidth: tableW,
       columnStyles: { 0: { cellWidth: tableW / 2 }, 1: { cellWidth: tableW / 2 } },
       styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
-    });
+    }));
     // @ts-expect-error lastAutoTable runtime
     y = doc.lastAutoTable.finalY;
 
     // Footer address band (yellow strip)
     // Small right-aligned "M.R. ENGINEERS" label sitting just above the yellow strip
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[{
         content: "M.R. ENGINEERS",
@@ -415,11 +416,11 @@ export async function generateOrderPDF(
       theme: "plain",
       margin: { left: M, right: M },
       tableWidth: tableW,
-    });
+    }));
     // @ts-expect-error lastAutoTable runtime
     y = doc.lastAutoTable.finalY;
 
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[MR_FOOTER_ADDRESS]],
       theme: "plain",
@@ -430,7 +431,7 @@ export async function generateOrderPDF(
         fillColor: [255, 192, 0], textColor: [0, 0, 0],
         lineColor: [0, 0, 0], lineWidth: 0.3,
       },
-    });
+    }));
   }
 
   return doc;
@@ -758,7 +759,7 @@ async function renderGmsPdf(
 
   const gmsColumnStyles: Record<number, { cellWidth: number | "auto"; halign?: "left" | "right" | "center" }> = {};
   gmsCols.forEach((k, i) => { gmsColumnStyles[i] = gmsColWidthStyle[k]; });
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: y,
     head: [gmsCols.map(gmsHeadFor)],
     body: [...itemRows, ...totalsAsBody as never[]],
@@ -775,7 +776,7 @@ async function renderGmsPdf(
     columnStyles: gmsColumnStyles,
     margin: { left: M, right: M, top: GMS_HEADER_H + GMS_TITLE_BAR_H + 4, bottom: GMS_FOOTER_RESERVED },
     didDrawPage: () => { drawHeader(); },
-  });
+  }));
 
   // @ts-expect-error lastAutoTable runtime
   let yEnd = doc.lastAutoTable.finalY + 6;

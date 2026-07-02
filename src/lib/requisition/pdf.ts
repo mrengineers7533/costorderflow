@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { RequisitionRecord, RequisitionItemRecord, RequisitionRawMaterialRecord } from "./types";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 export interface RequisitionPdfContext {
   requisition: RequisitionRecord;
@@ -64,7 +65,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       row.push(r.status);
       body.push(row);
     });
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: 24 + headerLines.length * 4.5 + 4,
       head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Status"]],
       body,
@@ -72,11 +73,11 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       margin: { left: M, right: M },
-    });
+    }));
     return doc;
   }
 
-  autoTable(doc, {
+  autoTable(doc, withPdfTableDefaults({
     startY: 24 + headerLines.length * 4.5 + 4,
     head: [["#", "Model", "Description", "Qty", "Unit", "Remarks"]],
     body: ctx.items.map((it) => [
@@ -99,7 +100,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       5: { cellWidth: 40 },
     },
     margin: { left: M, right: M },
-  });
+  }));
 
   // @ts-expect-error lastAutoTable runtime
   const y = (doc.lastAutoTable?.finalY ?? 40) + 10;
@@ -144,7 +145,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       });
     });
 
-    autoTable(doc, {
+    autoTable(doc, withPdfTableDefaults({
       startY: y + 2,
       head: [
         showMake
@@ -172,7 +173,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
             4: { cellWidth: 16 },
           },
       margin: { left: M, right: M },
-    });
+    }));
   }
 
   // @ts-expect-error lastAutoTable runtime
