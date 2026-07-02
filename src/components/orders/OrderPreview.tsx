@@ -1055,7 +1055,7 @@ function GMSHeader({
   return (
     <div className="space-y-0">
       {/* Dual-logo banner */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="pdf-keep flex items-end justify-between gap-4 pb-2">
         <div className="flex flex-col items-start">
           <img
             src={gmsLogo}
@@ -1073,23 +1073,23 @@ function GMSHeader({
           <img
             src={ugurLogo}
             alt="Uğur Machine Turkey logo"
-            width={140}
-            height={56}
+            width={120}
+            height={48}
             loading="lazy"
-            className="h-14 w-auto object-contain"
+            className="h-12 w-auto object-contain"
           />
-          <div className="text-[11px] font-bold mt-1">UGUR MACHINE, TURKEY</div>
-          <div className="text-[9px] italic text-muted-foreground">
+          <div className="text-[11px] font-bold mt-1 leading-tight">UGUR MACHINE, TURKEY</div>
+          <div className="text-[9px] italic text-muted-foreground leading-tight">
             Quality Standard is an Assurance of UGUR at all parts
           </div>
         </div>
       </div>
       {/* Grey ORDER ACCEPTANCE bar */}
-      <div className="mt-2 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
+      <div className="pdf-keep mt-3 py-1 text-center" style={{ backgroundColor: "rgb(200,200,200)" }}>
         <div className="text-sm font-bold tracking-[0.2em] text-black">{title || "ORDER ACCEPTANCE"}</div>
       </div>
       {/* Customer / OA meta — borderless two-column block */}
-      <div className="grid grid-cols-2 gap-4 mt-3 text-[11px]">
+      <div className="pdf-keep grid grid-cols-2 gap-4 mt-3 text-[11px]">
         <div className="space-y-0.5">
           <div className="font-bold">{customerName ? `M/s ${customerName}` : <Placeholder text="customer" />}</div>
           {billTo?.address && <div className="whitespace-pre-wrap">{billTo.address}</div>}
