@@ -68,9 +68,26 @@
 }
 .oa-pdf-capture th,
 .oa-pdf-capture td {
-  vertical-align: top;
+  page-break-inside: avoid;
+  padding: 4px 6px !important;
+}
+/* Text cells wrap; numeric cells never wrap mid-number. */
+.oa-pdf-capture td.oa-cell-wrap,
+.oa-pdf-capture th:not(.oa-cell-num) {
   word-break: break-word;
   overflow-wrap: anywhere;
+  white-space: normal;
+}
+.oa-pdf-capture td.oa-cell-nowrap,
+.oa-pdf-capture th.oa-cell-num {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+.oa-pdf-capture table.oa-items {
+  table-layout: fixed !important;
+}
+.oa-pdf-capture table.oa-items tr {
   page-break-inside: avoid;
 }
 .oa-pdf-capture div,
@@ -110,4 +127,29 @@
 .oa-pdf-capture [data-oa-preview-root] {
   padding: 20px !important;
   background: #ffffff !important;
+}
+
+/* Print output should match the exported PDF: honour fixed layout and
+   prevent numeric cells from wrapping across lines. */
+@media print {
+  .order-preview-body table.oa-items {
+    table-layout: fixed !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  .order-preview-body table.oa-items th,
+  .order-preview-body table.oa-items td {
+    padding: 4px 6px !important;
+    page-break-inside: avoid;
+  }
+  .order-preview-body .oa-cell-nowrap,
+  .order-preview-body th.oa-cell-num {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+  }
+  .order-preview-body .oa-cell-wrap {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
 }
