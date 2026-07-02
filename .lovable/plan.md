@@ -1,45 +1,66 @@
-## Goal
-Fix PDF text alignment, wrapping, row height, and page-break issues consistently across every PDF export (OA, PI, BOQ, Requisition, PO, Design Review, BOQ Distribution) by introducing one shared jsPDF/autoTable configuration and applying it in every existing PDF generator.
+# Global UI Cleanup — Soft Modern
 
-## Root cause
-Every PDF module (`src/lib/orders/pdf.ts`, `src/lib/pi/pdf.ts` via OA, `src/lib/boq/pdf.ts`, `src/lib/boq/pdfDistribution.ts`, `src/lib/boq/designReviewExport.ts`, `src/lib/requisition/pdf.ts`, `src/lib/purchase/poPdf.ts`) builds its own `autoTable` call with different `cellPadding`, missing `overflow: 'linebreak'`, missing `rowPageBreak: 'avoid'`, and inconsistent `valign`/`halign`. Result: text touches borders, wraps oddly, and rows get cut across pages.
+Presentation-only refresh across the entire app. No changes to business logic, data, calculations, numbering, approval, workflow, routes, or component behavior. Only tokens, spacing, typography, and shell styling.
 
-Note: `src/lib/orders/previewPdf.ts` is DOM-capture (html2canvas) and is only used for OA Live-Preview mode. It has its own layout system (`src/styles/oa-pdf.css`, pagination in code) — it will NOT be changed to keep OA Live-Preview parity intact. This fix targets the autoTable pipeline used by every other PDF (and the fallback OA path).
+## Design direction
 
-## New shared module
-Add `src/lib/pdf/tableStyles.ts` exporting:
+**Soft Modern** — warm neutral base, emerald accent, gentle rounded surfaces.
 
-- `PDF_BASE_STYLES` — `{ fontSize: 8.5, cellPadding: 2.2, lineHeightFactor: 1.25, valign: 'top', overflow: 'linebreak', lineColor: [0,0,0], lineWidth: 0.2 }`
-- `PDF_HEAD_STYLES` — `{ fontStyle: 'bold', halign: 'center', fillColor: [55,65,81], textColor: 255 }` (callers can override `fillColor` to preserve existing accent colors)
-- `PDF_TABLE_DEFAULTS` — `{ theme: 'grid', styles: PDF_BASE_STYLES, headStyles: PDF_HEAD_STYLES, rowPageBreak: 'avoid', showHead: 'everyPage' }`
-- `alignFor(key)` — returns `{ halign, overflow }` for common column semantic keys: `sno/qty/unit → center`, `rate/amount/tax/gst/total → right (nowrap via overflow: 'ellipsize' only when width tight, else linebreak)`, `description/model/remarks/scope → left linebreak`, default left.
-- `applyAutoTable(doc, options)` — thin wrapper that deep-merges `PDF_TABLE_DEFAULTS` with the caller's options so callers don't accidentally lose the shared defaults.
+- Base bg: `#FAFAF9` (warm off-white)
+- Surface / card: `#FFFFFF` on `#F5F5F4` muted
+- Ink / foreground: `#1F2937`
+- Accent (primary): `#059669` emerald
+- Border: `#E7E5E4` (stone-200)
+- Radius: `--radius: 0.75rem`
+- Shadow: soft, low-spread (`0 1px 2px + 0 8px 24px -12px`)
+- Typography: Inter for body, Plus Jakarta Sans for headings (via `@fontsource`)
 
-## Files to update (apply shared defaults, no business-logic changes)
-1. `src/lib/orders/pdf.ts` — every `autoTable(doc, …)` call (MR items table + totals, GMS items table, terms/bank/signature blocks) uses `applyAutoTable`. Keep existing column widths, colors, colSpans, and totals rows unchanged; only merge in `overflow: 'linebreak'`, `valign: 'top'`, `cellPadding: 2.2`, `rowPageBreak: 'avoid'`, and normalize `halign` per column semantics (Description left, Qty/Unit center, Rate/Amount right, S.No center).
-2. `src/lib/boq/pdf.ts` — BOQ items table: same treatment; ensure Description is left+linebreak, Qty/Unit centered, S.No centered.
-3. `src/lib/boq/pdfDistribution.ts` — Remarks Summary, Design Comments, Change Log tables.
-4. `src/lib/boq/designReviewExport.ts` — Design review items table.
-5. `src/lib/requisition/pdf.ts` — Requisition items table + header/footer blocks.
-6. `src/lib/purchase/poPdf.ts` — PO items table + totals.
-7. `src/lib/pi/pdf.ts` — no direct table code (delegates to `orders/pdf.ts`), so it inherits the fix automatically.
+All colors defined as HSL semantic tokens in `src/index.css`; Tailwind stays token-based. No hardcoded `bg-white`/`text-black` in components — we swap only where such hardcoding already exists in shell/layout files.
 
-## What is NOT touched
-- No changes to totals math, GST, discount/advance logic, amount-in-words, numbering, approval, notification, DB schema, storage, or UI pages.
-- No changes to OA Live-Preview DOM-capture (`previewPdf.ts`, `oa-pdf.css`) — behavior stays identical there.
-- Column widths, colors, and section ordering preserved exactly.
+## What changes
 
-## Technical details
-- `rowPageBreak: 'avoid'` prevents mid-row splits; `showHead: 'everyPage'` repeats the header on new pages.
-- `overflow: 'linebreak'` + `valign: 'top'` + higher `cellPadding` gives clean wrapping without borders touching text; autoTable already recomputes row height from wrapped content.
-- Column-level overrides continue to work because `columnStyles` is passed through unchanged; `applyAutoTable` merges but does not overwrite explicit caller keys.
+1. **Design tokens** — `src/index.css` and `tailwind.config.ts`
+   - Rewrite `:root` and `.dark` HSL variables to the Soft Modern palette
+   - Update `--radius`, add `--shadow-soft`, `--shadow-elevated`
+   - Register Jakarta/Inter font families
+
+2. **Fonts** — install `@fontsource/plus-jakarta-sans` and `@fontsource/inter`, import in `src/main.tsx`
+
+3. **App shell polish** (visual only, no behavior)
+   - `src/components/layout/*` (Sidebar, Header/Topbar, PageContainer if present): tighter spacing scale, softer dividers, consistent section padding, sticky header shadow-on-scroll class
+   - Replace any hardcoded gray/white utilities with semantic tokens
+
+4. **Reusable primitives** (shadcn variants — visual tweaks only)
+   - `button.tsx`: refined default/secondary/ghost, subtle hover, focus ring in emerald
+   - `card.tsx`: softer border, `shadow-soft`, consistent padding
+   - `badge.tsx`: quieter neutral, emerald for approved, amber for pending, rose for rejected
+   - `input.tsx`, `select.tsx`, `textarea.tsx`: unified height, border, focus ring
+   - `table.tsx`: zebra off, tighter header, muted borders, sticky header class
+   - `tabs.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `tooltip.tsx`: aligned radius/shadow
+
+5. **Page-level de-clutter (CSS only)**
+   - Standardize page header pattern (title, subtitle, actions right) via existing shared components
+   - Consistent gap between filter bar / table / pagination
+   - Empty states get a light neutral panel treatment
+
+## Explicit non-goals (guardrails)
+
+- No changes to: OA, BOQ, Design, Manufacturing, Purchase, GRN, PI, Costing, Requisition, Annexure logic
+- No changes to: approval sync, revision carry-forward, snapshots, notifications, PDF exports, calculations, GST, numbering, access control, Save Draft / Finalize / Convert to PI
+- No route, prop, or API signature changes
+- No component removed or renamed; only styling and token usage adjusted
+
+## Files touched (estimated)
+
+- `src/index.css` (tokens)
+- `tailwind.config.ts` (fonts, radius extensions)
+- `src/main.tsx` (font imports)
+- `src/components/layout/**` (shell)
+- `src/components/ui/{button,card,badge,input,select,textarea,table,tabs,dialog,dropdown-menu,tooltip}.tsx` (variant styling)
+- Grep-and-swap hardcoded `bg-white|text-black|bg-gray-*|text-gray-*` occurrences in layout/shared components only
 
 ## Verification
-1. `tsgo` typecheck on updated files.
-2. Manual PDF checks: OA with long descriptions (MROA sample), MR PI, GMS OA, BOQ multi-page, PO with many rows, Requisition PDF — confirm no text overlaps borders, no rows split across pages, header repeats, alignment matches column type.
-3. Confirm OA Live-Preview PDF path (html2canvas) still produces the same output (unchanged code path).
 
-## Deliverables
-- New file: `src/lib/pdf/tableStyles.ts`
-- Edits: the 6 PDF generators listed above (autoTable calls only)
-- No migrations, no route changes, no UI changes.
+- Build passes
+- Spot-check: `/orders/:id` (current view), OA list, BOQ list, Design BOQ, Manufacturing, Purchase folder, GRN — visually cleaner, no functional regressions
+- No changes to any test file behavior
