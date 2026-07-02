@@ -1,66 +1,33 @@
-# Global UI Cleanup — Soft Modern
+# Sidebar icon + alignment fix (UI only)
 
-Presentation-only refresh across the entire app. No changes to business logic, data, calculations, numbering, approval, workflow, routes, or component behavior. Only tokens, spacing, typography, and shell styling.
+Presentation-only tweaks to `src/components/AppSidebar.tsx`. No behavior, routing, access, or notification-count logic changes.
 
-## Design direction
+## Issues seen in current build
 
-**Soft Modern** — warm neutral base, emerald accent, gentle rounded surfaces.
+1. **Collapsed sidebar** — icons are left-shifted instead of centered. Both `MenuItem` and the group-toggle buttons (Report & Dashboard, Costing) use a hard-coded `px-4`, which pushes the 18px icon against the left edge of the 3rem-wide collapsed rail.
+2. **Collapsed notification badge** — the unread pill on the Notifications item renders large ("30" bubble covering the icon) because it uses `min-w-5 h-5` with absolute top-1/right-1. Needs a compact dot / small badge in collapsed mode.
+3. **Costing group** uses a text `₹` glyph instead of a real Lucide icon, so it looks inconsistent with the rest of the rail.
+4. **Group toggle buttons** (Report & Dashboard, Costing) show the chevron in collapsed mode via layout that assumes expanded width, causing overflow / off-center icon.
 
-- Base bg: `#FAFAF9` (warm off-white)
-- Surface / card: `#FFFFFF` on `#F5F5F4` muted
-- Ink / foreground: `#1F2937`
-- Accent (primary): `#059669` emerald
-- Border: `#E7E5E4` (stone-200)
-- Radius: `--radius: 0.75rem`
-- Shadow: soft, low-spread (`0 1px 2px + 0 8px 24px -12px`)
-- Typography: Inter for body, Plus Jakarta Sans for headings (via `@fontsource`)
+## Fix
 
-All colors defined as HSL semantic tokens in `src/index.css`; Tailwind stays token-based. No hardcoded `bg-white`/`text-black` in components — we swap only where such hardcoding already exists in shell/layout files.
+In `src/components/AppSidebar.tsx` only:
 
-## What changes
+- `MenuItem`: conditional padding — `px-4` when expanded, `justify-center px-0` when collapsed. Keep pill shape.
+- Group toggle buttons (Report, Costing): same conditional centering; hide the chevron entirely when collapsed (it's meaningless without a label). Never render `justify-between` in collapsed mode.
+- Replace the `₹` span with `IndianRupee` from `lucide-react` (same 18px sizing as siblings) for the Costing group icon.
+- Unread notification badge:
+  - Expanded: keep current `ml-auto` pill.
+  - Collapsed: render a small dot (`h-2 w-2 rounded-full bg-destructive`) positioned `absolute top-1.5 right-1.5` — no number, so it can't overflow the icon.
+- Sidebar header row: when collapsed, keep just the centered Menu toggle (already ok, verify no stray padding).
+- Footer Collapse button: apply same conditional centering so the chevron sits in the middle of the rail.
 
-1. **Design tokens** — `src/index.css` and `tailwind.config.ts`
-   - Rewrite `:root` and `.dark` HSL variables to the Soft Modern palette
-   - Update `--radius`, add `--shadow-soft`, `--shadow-elevated`
-   - Register Jakarta/Inter font families
+## Non-goals
 
-2. **Fonts** — install `@fontsource/plus-jakarta-sans` and `@fontsource/inter`, import in `src/main.tsx`
+- No changes to menu structure, access filtering, routes, unread count query, or notification navigation.
+- No token / theme changes.
+- No changes outside `AppSidebar.tsx`.
 
-3. **App shell polish** (visual only, no behavior)
-   - `src/components/layout/*` (Sidebar, Header/Topbar, PageContainer if present): tighter spacing scale, softer dividers, consistent section padding, sticky header shadow-on-scroll class
-   - Replace any hardcoded gray/white utilities with semantic tokens
+## Verify
 
-4. **Reusable primitives** (shadcn variants — visual tweaks only)
-   - `button.tsx`: refined default/secondary/ghost, subtle hover, focus ring in emerald
-   - `card.tsx`: softer border, `shadow-soft`, consistent padding
-   - `badge.tsx`: quieter neutral, emerald for approved, amber for pending, rose for rejected
-   - `input.tsx`, `select.tsx`, `textarea.tsx`: unified height, border, focus ring
-   - `table.tsx`: zebra off, tighter header, muted borders, sticky header class
-   - `tabs.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `tooltip.tsx`: aligned radius/shadow
-
-5. **Page-level de-clutter (CSS only)**
-   - Standardize page header pattern (title, subtitle, actions right) via existing shared components
-   - Consistent gap between filter bar / table / pagination
-   - Empty states get a light neutral panel treatment
-
-## Explicit non-goals (guardrails)
-
-- No changes to: OA, BOQ, Design, Manufacturing, Purchase, GRN, PI, Costing, Requisition, Annexure logic
-- No changes to: approval sync, revision carry-forward, snapshots, notifications, PDF exports, calculations, GST, numbering, access control, Save Draft / Finalize / Convert to PI
-- No route, prop, or API signature changes
-- No component removed or renamed; only styling and token usage adjusted
-
-## Files touched (estimated)
-
-- `src/index.css` (tokens)
-- `tailwind.config.ts` (fonts, radius extensions)
-- `src/main.tsx` (font imports)
-- `src/components/layout/**` (shell)
-- `src/components/ui/{button,card,badge,input,select,textarea,table,tabs,dialog,dropdown-menu,tooltip}.tsx` (variant styling)
-- Grep-and-swap hardcoded `bg-white|text-black|bg-gray-*|text-gray-*` occurrences in layout/shared components only
-
-## Verification
-
-- Build passes
-- Spot-check: `/orders/:id` (current view), OA list, BOQ list, Design BOQ, Manufacturing, Purchase folder, GRN — visually cleaner, no functional regressions
-- No changes to any test file behavior
+Screenshot expanded + collapsed states via Playwright; icons centered on the rail, badge no longer covering the notifications icon, Costing shows the rupee icon.

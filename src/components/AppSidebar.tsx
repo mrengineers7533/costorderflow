@@ -1,4 +1,4 @@
-import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet, PencilRuler, Bell, ChevronDown } from "lucide-react";
+import { LayoutGrid, FileText, Menu, ClipboardList, Receipt, ChevronLeft, ChevronRight, BarChart3, Workflow, ShoppingCart, Factory, ClipboardCheck, Boxes, PackageCheck, FileSpreadsheet, PencilRuler, Bell, ChevronDown, IndianRupee } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { useState, useEffect } from "react";
@@ -98,23 +98,30 @@ export function AppSidebar({ user }: { user?: User | null }) {
         <SidebarMenuButton
           asChild
           isActive={active}
-          className={`h-11 rounded-full px-4 data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${indent ? "pl-8" : ""}`}
+          className={`h-11 rounded-full data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-md data-[active=true]:hover:bg-primary data-[active=true]:hover:text-primary-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : `px-4 ${indent ? "pl-8" : ""}`}`}
         >
           <NavLink
             to={item.url}
             end={item.url === "/"}
             className={
               active
-                ? "font-semibold"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                ? `font-semibold ${collapsed ? "justify-center" : ""}`
+                : `text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center" : ""}`
             }
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.4 : 1.8} />
             {!collapsed && <span className="text-sm">{item.title}</span>}
             {item.module === "notifications" && unread > 0 && (
-              <span className={`ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold ${collapsed ? "absolute top-1 right-1" : ""}`}>
-                {unread > 99 ? "99+" : unread}
-              </span>
+              collapsed ? (
+                <span
+                  aria-label={`${unread} unread notifications`}
+                  className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive ring-2 ring-sidebar"
+                />
+              ) : (
+                <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )
             )}
           </NavLink>
         </SidebarMenuButton>
@@ -148,7 +155,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                   <SidebarMenuItem>
                     <button
                       onClick={() => setReportOpen((o) => !o)}
-                      className={`peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 rounded-full px-4 ${collapsed ? "" : "justify-between"} ${isReportActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isReportActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
                       <span className="flex items-center gap-2">
                         <BarChart3 className="h-[18px] w-[18px]" strokeWidth={1.8} />
@@ -182,12 +189,10 @@ export function AppSidebar({ user }: { user?: User | null }) {
                   <SidebarMenuItem>
                     <button
                       onClick={() => setCostingOpen((o) => !o)}
-                      className={`peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 rounded-full px-4 ${collapsed ? "" : "justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isCostingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
                     >
                       <span className="flex items-center gap-2">
-                        <span className="flex items-center justify-center w-[18px]">
-                          <span className="text-[10px] font-bold">₹</span>
-                        </span>
+                        <IndianRupee className="h-[18px] w-[18px]" strokeWidth={1.8} />
                         {!collapsed && <span className="text-sm">Costing</span>}
                       </span>
                       {!collapsed && (
@@ -227,7 +232,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             <SidebarMenuButton
               onClick={toggleSidebar}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className="h-11 rounded-full px-4 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              className={`h-11 rounded-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "w-11 justify-center px-0 mx-auto" : "px-4"}`}
             >
               {collapsed ? (
                 <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.8} />
