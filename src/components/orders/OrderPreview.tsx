@@ -882,7 +882,8 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
           <img
             src={mrStamp}
             alt="M.R. Engineers stamp"
-            className="oa-pdf-stamp absolute right-3 top-6 h-16 w-16 object-contain opacity-90 pointer-events-none select-none"
+            className="oa-pdf-stamp absolute right-3 top-4 h-16 w-16 object-contain opacity-90 pointer-events-none select-none"
+            style={{ clipPath: "inset(22% 0 0 0)" }}
             crossOrigin="anonymous"
             loading="eager"
           />
