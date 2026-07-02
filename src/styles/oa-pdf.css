@@ -186,6 +186,18 @@
   background: #ffffff !important;
 }
 
+/* GMS header: guarantee the dual-logo row never overlaps the grey
+   "ORDER ACCEPTANCE" title bar in either the on-screen preview or the
+   rasterised PDF. */
+.oa-pdf-capture .pdf-keep,
+.order-preview-body .pdf-keep {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.oa-pdf-capture .pdf-keep + .pdf-keep {
+  margin-top: 12px !important;
+}
+
 /* Print output should match the exported PDF: honour fixed layout and
    prevent numeric cells from wrapping across lines. */
 @media print {
