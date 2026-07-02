@@ -3,13 +3,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { sortByItemNo } from "@/lib/boq/types";
 import {
-import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
   parseColumnComments,
   signedDocUrl,
   type DesignReviewRow,
   type DesignReviewItemRow,
   type DesignReviewDocRow,
 } from "@/lib/boq/designReview";
+import { withPdfTableDefaults } from "@/lib/pdf/tableStyles";
 
 export interface ExportBoqMeta {
   boq_number: string;
