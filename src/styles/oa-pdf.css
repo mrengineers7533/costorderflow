@@ -104,6 +104,49 @@
   vertical-align: middle !important;
   line-height: 1.35;
 }
+
+/* Flex-inner cell centering — guarantees vertical centering regardless
+   of how many lines the description wraps to. `height:1px` on the cell
+   lets `.oa-cell-inner { min-height:100% }` stretch to the row's real
+   height, and the flex box centers the actual content. */
+.oa-pdf-capture table.oa-items th,
+.oa-pdf-capture table.oa-items td,
+.order-preview-body table.oa-items th,
+.order-preview-body table.oa-items td {
+  height: 1px;
+  padding: 6px 6px !important;
+}
+.oa-pdf-capture table.oa-items .oa-cell-inner,
+.order-preview-body table.oa-items .oa-cell-inner {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  line-height: 1.35;
+  word-break: inherit;
+  overflow-wrap: inherit;
+  white-space: inherit;
+}
+.oa-pdf-capture table.oa-items td.text-left .oa-cell-inner,
+.oa-pdf-capture table.oa-items th.text-left .oa-cell-inner,
+.order-preview-body table.oa-items td.text-left .oa-cell-inner,
+.order-preview-body table.oa-items th.text-left .oa-cell-inner {
+  justify-content: flex-start;
+  text-align: left;
+}
+.oa-pdf-capture table.oa-items td.text-center .oa-cell-inner,
+.oa-pdf-capture table.oa-items th.text-center .oa-cell-inner,
+.order-preview-body table.oa-items td.text-center .oa-cell-inner,
+.order-preview-body table.oa-items th.text-center .oa-cell-inner {
+  justify-content: center;
+  text-align: center;
+}
+.oa-pdf-capture table.oa-items td.text-right .oa-cell-inner,
+.oa-pdf-capture table.oa-items th.text-right .oa-cell-inner,
+.order-preview-body table.oa-items td.text-right .oa-cell-inner,
+.order-preview-body table.oa-items th.text-right .oa-cell-inner {
+  justify-content: flex-end;
+  text-align: right;
+}
 .oa-pdf-capture div,
 .oa-pdf-capture p,
 .oa-pdf-capture span {
