@@ -1,16 +1,16 @@
-# Infinity loading animation
+Change the sidebar header text from "MR Engineers" to "Cost Order Flow" and refine the header alignment so it visually matches the sticky page header. Also ensure the collapsed sidebar icons and toggle stay clean and centered.
 
-Replace the current loading bar/pulse with an SVG infinity (∞) path animation, colored with the app's emerald primary token. UI-only change in `src/components/LoadingScreen.tsx`.
+### What will change
+- **Text:** Replace the sidebar brand text with "Cost Order Flow".
+- **Alignment:** Make the sidebar header use the same height (`h-14`) and left/right padding as the top page header (`px-5`), so the text baselines line up when the sidebar is expanded.
+- **Collapsed state:** Keep the hamburger toggle centered when the sidebar is collapsed; hide the text label as today.
+- **Icons:** No icon list changes, only minor spacing tweaks in the header so the menu button and brand text sit on the same optical line.
 
-## Change
+### Files to change
+- `src/components/AppSidebar.tsx` — header text and alignment/padding.
+- No changes to business logic, routing, access, notifications, sidebar menu items, or icon imports.
 
-- Swap the horizontal loading bar for an inline SVG infinity curve.
-- Animate a dash traveling along the path using `stroke-dasharray` + `stroke-dashoffset` keyframes (smooth continuous loop).
-- Stroke color: `hsl(var(--primary))` (emerald). Track underlay: `hsl(var(--muted))`.
-- Keep the logo card, fade-in wrapper, and label — just replace the bar block.
-- Add the `infinity-dash` keyframe inline (same pattern as the existing `loading-bar` keyframe).
-
-## Non-goals
-
-- No other files touched.
-- No token, layout, or logo changes.
+### Verification
+- Preview the sidebar in both expanded and collapsed states.
+- Confirm "Cost Order Flow" is visible and aligned with the page header title.
+- Confirm no icon overlap or label truncation in collapsed mode.

@@ -141,8 +141,8 @@ export function AppSidebar({ user }: { user?: User | null }) {
             <Menu className="h-5 w-5" />
           </button>
           {!collapsed && (
-            <span className="text-base font-bold tracking-tight text-sidebar-foreground">
-              MR&nbsp;Engineers
+            <span className="text-[15px] font-semibold tracking-tight font-display text-sidebar-foreground">
+              Cost Order Flow
             </span>
           )}
         </div>
