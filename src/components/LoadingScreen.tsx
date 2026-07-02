@@ -1,36 +1,11 @@
 export function LoadingScreen({ label = "Loading" }: { label?: string }) {
   return (
     <div className="min-h-screen w-full grid place-items-center bg-background">
-      <div className="flex flex-col items-center gap-6 animate-fade-in">
+      <div className="flex flex-col items-center gap-8 animate-fade-in">
         <div className="relative">
           <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-2xl animate-pulse" />
-          <div className="relative h-24 w-24 rounded-3xl bg-card border border-border/60 shadow-elevated grid place-items-center overflow-hidden">
-            <svg
-              viewBox="0 0 40 40"
-              className="h-12 w-12"
-              fill="none"
-              aria-hidden="true"
-            >
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                stroke="hsl(var(--muted))"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                stroke="hsl(var(--primary))"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeDasharray="60 100"
-                className="animate-[infinity-spin_1.2s_linear_infinite]"
-                style={{ transformOrigin: "center" }}
-              />
-            </svg>
+          <div className="relative h-28 w-28 rounded-3xl bg-card border border-border/60 shadow-elevated grid place-items-center overflow-hidden">
+            <div className="loader" />
           </div>
         </div>
 
@@ -45,9 +20,31 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
       </div>
 
       <style>{`
-        @keyframes infinity-spin {
-          0%   { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        .loader {
+          height: 30px;
+          aspect-ratio: 5;
+          display: grid;
+          --_g: no-repeat radial-gradient(farthest-side, hsl(var(--primary)) 94%, #0000);
+        }
+        .loader:before,
+        .loader:after {
+          content: "";
+          grid-area: 1/1;
+          background:
+            var(--_g) left,
+            var(--_g) right;
+          background-size: 20% 100%;
+          animation: l32 1s infinite;
+        }
+        .loader:after {
+          background:
+            var(--_g) calc(1 * 100% / 3),
+            var(--_g) calc(2 * 100% / 3);
+          background-size: 20% 100%;
+          animation-direction: reverse;
+        }
+        @keyframes l32 {
+          80%, 100% { transform: rotate(0.5turn); }
         }
         @keyframes infinity-slide {
           0%   { transform: translateX(-100%); width: 25%; }
