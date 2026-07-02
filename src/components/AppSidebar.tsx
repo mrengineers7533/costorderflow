@@ -132,11 +132,11 @@ export function AppSidebar({ user }: { user?: User | null }) {
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarContent className="bg-sidebar gap-0">
-        <div className={`flex items-center gap-3 h-14 border-b border-sidebar-border/60 ${collapsed ? "justify-center px-3" : "px-5"}`}>
+        <div className={`flex items-center gap-3 h-14 border-b border-sidebar-border/60 ${collapsed ? "justify-center px-1" : "px-5"}`}>
           <button
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
-            className="h-9 w-9 flex items-center justify-center rounded-full text-sidebar-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
+            className="h-11 w-11 flex items-center justify-center rounded-full text-sidebar-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors duration-200"
           >
             <Menu className="h-5 w-5" />
           </button>
