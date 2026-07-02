@@ -156,7 +156,7 @@
 .order-preview-body table.oa-items .oa-cell-wrap {
   white-space: normal !important;
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   hyphens: auto;
 }
 
@@ -169,19 +169,29 @@
 
 .oa-pdf-capture table.oa-items-gms,
 .order-preview-body table.oa-items-gms {
-  font-size: 10.5px;
+  font-size: 10.25px;
 }
 
 .oa-pdf-capture table.oa-items-mr,
 .order-preview-body table.oa-items-mr {
-  font-size: 10.75px;
+  font-size: 10.25px;
 }
 
 .oa-pdf-capture table.oa-items-gms th,
 .oa-pdf-capture table.oa-items-gms td,
 .order-preview-body table.oa-items-gms th,
 .order-preview-body table.oa-items-gms td {
-  padding: 4px 4px !important;
+  padding: 5px 6px !important;
+}
+
+.oa-pdf-capture table.oa-items-gms th,
+.order-preview-body table.oa-items-gms th {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  letter-spacing: -0.02em;
+  padding-left: 3px !important;
+  padding-right: 3px !important;
 }
 
 .oa-pdf-capture table.oa-items-mr th,
