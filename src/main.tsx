@@ -11,7 +11,5 @@ import "@fontsource/plus-jakarta-sans/700.css";
 import { installTruncationTooltips } from "./lib/ui/truncationTooltip";
 
 const rootEl = document.getElementById("root")!;
-const initial = document.getElementById("app-initial-loader");
-if (initial) initial.remove();
 installTruncationTooltips();
 createRoot(rootEl).render(<App />);
