@@ -13,6 +13,7 @@ import "@/styles/oa-pdf.css";
 export async function capturePreviewToPdf(
   element: HTMLElement | null,
   filename: string,
+  options: { save?: boolean } = {},
 ): Promise<{ ok: true; blob: Blob } | { ok: false }> {
   if (!element) return { ok: false };
 
@@ -167,7 +168,7 @@ export async function capturePreviewToPdf(
   }
 
   const blob = pdf.output("blob");
-  pdf.save(filename);
+  if (options.save !== false) pdf.save(filename);
   return { ok: true, blob };
 }
 
