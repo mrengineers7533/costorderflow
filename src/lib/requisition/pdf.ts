@@ -70,7 +70,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Status"]],
       body,
       theme: "grid",
-      styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
+      styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       margin: { left: M, right: M },
     }));
@@ -89,7 +89,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       it.remarks ?? "",
     ]),
     theme: "grid",
-    styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
+    styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" },
     headStyles: { fillColor: [55, 65, 81], textColor: 255 },
     columnStyles: {
       0: { cellWidth: 12, halign: "center" },
@@ -154,7 +154,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       ],
       body,
       theme: "grid",
-      styles: { fontSize: 8.5, cellPadding: 2, valign: "top" },
+      styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" },
       headStyles: { fillColor: [55, 65, 81], textColor: 255 },
       columnStyles: showMake
         ? {

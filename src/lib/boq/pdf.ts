@@ -259,7 +259,7 @@ export async function generateBoqPDF(boq: BoqRecord, opts: BoqPdfOptions = {}): 
     body: rows.length ? rows : [emptyRow],
     theme: "grid",
     tableWidth: "auto",
-    styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
+    styles: { fontSize: 7.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
     headStyles: { fillColor: boq.format === "MR" ? [234, 88, 12] : [120, 120, 120], textColor: 255, halign: "center", fontStyle: "bold" },
     columnStyles,
     didParseCell: (data) => {
