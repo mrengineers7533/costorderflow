@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeDept, matchTargetDept } from "@/lib/notifications/dept";
+import {
+  getPersonalSeen,
+  onPersonalSeenChange,
+} from "@/lib/notifications/personalSeen";
 
 export type UnseenKind = "boq" | "oa" | "pi";
 
@@ -105,7 +109,8 @@ export function useUnseenNotifCount(opts: {
       return;
     }
     const seen = await readIdsFor(uid, notifs.map((n) => n.id));
-    setCount(notifs.filter((n) => !seen.has(n.id)).length);
+    const personal = getPersonalSeen(uid);
+    setCount(notifs.filter((n) => !seen.has(n.id) && !personal.has(n.id)).length);
     setLoading(false);
   }, [boqId, orderRootId, piId, hasAny]);
 
@@ -133,6 +138,8 @@ export function useUnseenNotifCount(opts: {
       supabase.removeChannel(channel);
     };
   }, [boqId, orderRootId, piId, hasAny, load]);
+
+  useEffect(() => onPersonalSeenChange(() => load()), [load]);
 
   return { count, loading };
 }
@@ -187,9 +194,12 @@ export function useUnseenNotifCountsMap(
       new Set(Object.values(perId).flat().map((n) => n.id)),
     );
     const seen = await readIdsFor(uid, allNotifIds);
+    const personal = getPersonalSeen(uid);
     const map: Record<string, number> = {};
     for (const id of ids) {
-      const unread = (perId[id] || []).filter((n) => !seen.has(n.id)).length;
+      const unread = (perId[id] || []).filter(
+        (n) => !seen.has(n.id) && !personal.has(n.id),
+      ).length;
       if (unread > 0) map[id] = unread;
     }
     setCounts(map);
@@ -220,6 +230,8 @@ export function useUnseenNotifCountsMap(
       supabase.removeChannel(channel);
     };
   }, [kind, idsKey, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => onPersonalSeenChange(() => load()), [load]);
 
   return { counts, loading };
 }

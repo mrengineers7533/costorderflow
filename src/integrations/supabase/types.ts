@@ -3343,6 +3343,10 @@ export type Database = {
         Args: { _oa_number: string; _revision: number; _root: string }
         Returns: string
       }
+      notif_module_to_perm_module: {
+        Args: { _notif_module: string }
+        Returns: string
+      }
       notif_source_module: {
         Args: { _event: string; _module: string }
         Returns: Database["public"]["Enums"]["notif_module"]

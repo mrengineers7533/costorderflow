@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Bell, Check, ChevronDown, ChevronUp, ExternalLink, Eye, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NotificationDetailDialog, type NotifFull } from "./NotificationDetailDialog";
-import { canAckClient, markNotificationSeen } from "@/lib/notifications/dept";
+import { canAckClient, canSeeOrAck, markNotificationSeen } from "@/lib/notifications/dept";
+import { useUserAccess } from "@/hooks/useUserAccess";
+import type { ModuleKey } from "@/lib/access/modules";
 import { notifDeepLink } from "@/lib/notifications/highlight";
 import { useNavigate } from "react-router-dom";
 import { NotificationTrackingDialog } from "./NotificationTrackingDialog";
@@ -98,6 +100,7 @@ export function ModuleNotifications({
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
+  const { canAccess, isAdmin: userIsAdmin } = useUserAccess(me?.id);
   const storageKey = `notif-open:${modsKey}:${linksKey}`;
   const [open, setOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -234,7 +237,7 @@ export function ModuleNotifications({
             ...(Array.isArray(existing.line_item_changes) ? existing.line_item_changes : []),
             ...(Array.isArray(n.line_item_changes) ? n.line_item_changes : []),
           ];
-          const preferN =
+    const preferN =
             (currentMe && canAckClient(n, currentMe) && !canAckClient(existing, currentMe)) ||
             (!currentMe && new Date(n.created_at) > new Date(existing.created_at));
           const base = preferN ? n : existing;
@@ -290,7 +293,7 @@ export function ModuleNotifications({
     markPersonalAck(me.id, n.id);
     setPersonalSeen((s) => new Set([...s, n.id]));
     setPersonalAck((s) => new Set([...s, n.id]));
-    if (canAckClient(n, me)) {
+    if (canSeeOrAck(n, me, { isAdmin: userIsAdmin || isAdmin, hasModuleAccess: (pm) => canAccess(pm as ModuleKey) })) {
       const { error } = await supabase.from("app_notification_reads" as never).insert({
         notification_id: n.id,
         user_id: me.id,
@@ -312,7 +315,13 @@ export function ModuleNotifications({
     markPersonalSeen(me.id, n.id);
     setPersonalSeen((s) => new Set([...s, n.id]));
     // Also try the backend RPC when eligible (target dept, non-actor).
-    if (canAckClient(n, me) && !seenIds.has(n.id)) {
+    if (
+      canSeeOrAck(n, me, {
+        isAdmin: userIsAdmin || isAdmin,
+        hasModuleAccess: (pm) => canAccess(pm as ModuleKey),
+      }) &&
+      !seenIds.has(n.id)
+    ) {
       const ok = await markNotificationSeen(n.id);
       if (ok) setSeenIds((s) => new Set([...s, n.id]));
     }
