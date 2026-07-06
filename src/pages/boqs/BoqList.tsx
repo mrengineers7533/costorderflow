@@ -313,11 +313,14 @@ export default function BoqList() {
             </Tabs>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
               visibleRows.length === 0 ? (
-                <p className="text-muted-foreground">
-                  {rows.length === 0
-                    ? <>No BOQs yet. Open an Order and click <span className="font-medium">Generate BOQ</span>.</>
-                    : `No ${folder} BOQs in this folder yet.`}
-                </p>
+                <div>
+                  <p className="text-muted-foreground">
+                    {rows.length === 0
+                      ? <>No BOQs yet. Open an Order and click <span className="font-medium">Generate BOQ</span>.</>
+                      : `No ${folder} BOQs in this folder yet.`}
+                  </p>
+                  <NoSharedDocsHint />
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
