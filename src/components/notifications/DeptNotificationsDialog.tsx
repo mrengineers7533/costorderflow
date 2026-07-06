@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
-import { canAckClient, markNotificationSeen } from "@/lib/notifications/dept";
+import { canSeeOrAck, markNotificationSeen } from "@/lib/notifications/dept";
+import { useUserAccess } from "@/hooks/useUserAccess";
+import type { ModuleKey } from "@/lib/access/modules";
+import { markPersonalSeen } from "@/lib/notifications/personalSeen";
 import { toast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -68,6 +71,7 @@ export function DeptNotificationsDialog({
   );
   const [detailId, setDetailId] = useState<string | null>(null);
   const [me, setMe] = useState<{ id: string; name: string; department: string } | null>(null);
+  const { canAccess, isAdmin } = useUserAccess(me?.id);
   const [localSeen, setLocalSeen] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -99,12 +103,13 @@ export function DeptNotificationsDialog({
     );
 
   async function handleMarkSeen(n: NotifRow) {
+    if (me) markPersonalSeen(me.id, n.id);
+    setLocalSeen((s) => new Set([...s, n.id]));
     const ok = await markNotificationSeen(n.id);
     if (!ok) {
-      toast({ title: "Could not mark seen", variant: "destructive" });
+      // Still counts as personally seen locally so the badge drops.
       return;
     }
-    setLocalSeen((s) => new Set([...s, n.id]));
   }
 
   const list = useMemo(() => {
@@ -197,7 +202,13 @@ export function DeptNotificationsDialog({
                 ) : (
                   list.map((n) => {
                     const seen = seenForDept(n.id);
-                    const canSeen = canAckClient(n, me) && !seen;
+                    const canSeen =
+                      !!me &&
+                      canSeeOrAck(n, me, {
+                        isAdmin,
+                        hasModuleAccess: (pm) => canAccess(pm as ModuleKey),
+                      }) &&
+                      !seen;
                     return (
                       <TableRow
                         key={n.id}
