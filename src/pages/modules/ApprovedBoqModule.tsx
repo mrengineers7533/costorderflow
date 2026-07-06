@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { NoSharedDocsHint } from "@/components/access/NoSharedDocsHint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +136,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No approved {tab} BOQs available yet. Once a BOQ is approved, it will appear here automatically.
+            <NoSharedDocsHint />
           </CardContent>
         </Card>
       ) : (
