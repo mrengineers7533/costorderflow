@@ -21,7 +21,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { KeyRound, Pencil, Search, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { UserDocAccessDialog } from "@/components/access/UserDocAccessDialog";
 
 type Profile = {
   id: string;
@@ -50,6 +51,7 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [resetting, setResetting] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
+  const [managingAccess, setManagingAccess] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -168,6 +170,15 @@ export default function AdminUsers() {
                       <Button size="sm" variant="ghost" onClick={() => setResetting(r)}>
                         <KeyRound className="h-4 w-4 mr-1" /> Reset
                       </Button>
+                      {r.role !== "admin" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setManagingAccess(r)}
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-1" /> Access
+                        </Button>
+                      )}
                       {r.id !== currentUserId && (
                         <Button
                           size="sm"
@@ -240,6 +251,14 @@ export default function AdminUsers() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+      {managingAccess && (
+        <UserDocAccessDialog
+          open
+          onOpenChange={(v) => { if (!v) setManagingAccess(null); }}
+          userId={managingAccess.id}
+          userLabel={managingAccess.full_name || managingAccess.email || managingAccess.id}
+        />
       )}
     </div>
   );
