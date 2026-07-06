@@ -74,6 +74,67 @@ export function canAckClient(
 }
 
 /**
+ * Maps an app_notifications.module value to the ModuleKey used by
+ * user_module_access. Mirrors public.notif_module_to_perm_module in SQL.
+ */
+export function notifModuleToPermModule(m: string | null | undefined): string {
+  const v = (m || "").toLowerCase();
+  switch (v) {
+    case "boq":
+    case "oa":
+    case "order":
+    case "pi":
+      return "costing";
+    case "design":
+    case "design_comment":
+      return "design";
+    case "purchase":
+      return "purchase";
+    case "grn":
+      return "grn";
+    case "requisition":
+      return "requisitions";
+    case "annexure":
+      return "annexures";
+    case "manufacturing":
+      return "manufacturing";
+    default:
+      return v;
+  }
+}
+
+/**
+ * Extended eligibility: a non-actor user can Seen/Ack when any of:
+ *  - admin, or
+ *  - has module permission on the notification's mapped module, or
+ *  - their department matches one of the target departments.
+ */
+export function canSeeOrAck(
+  notif: {
+    actor_user_id?: string | null;
+    target_departments?: string[] | null;
+    module?: string | null;
+  } | null | undefined,
+  me: { id: string; department: string } | null | undefined,
+  ctx?: {
+    isAdmin?: boolean;
+    hasModuleAccess?: (permModule: string) => boolean;
+  },
+): boolean {
+  if (!notif || !me) return false;
+  if (notif.actor_user_id && notif.actor_user_id === me.id) return false;
+  if (ctx?.isAdmin) return true;
+  if (ctx?.hasModuleAccess) {
+    const pm = notifModuleToPermModule(notif.module);
+    if (pm && ctx.hasModuleAccess(pm)) return true;
+  }
+  const targets = Array.isArray(notif.target_departments)
+    ? notif.target_departments
+    : [];
+  return !!matchTargetDept(me.department, targets);
+}
+
+/**
  * Mark a notification as Seen for the current user. Server-side RPC enforces
  * that the caller is in a target department and is not the actor.
  */
