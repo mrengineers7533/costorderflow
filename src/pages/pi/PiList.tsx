@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { NoSharedDocsHint } from "@/components/access/NoSharedDocsHint";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -244,11 +245,14 @@ export default function PiList() {
             </Tabs>
             {loading ? <p className="text-muted-foreground">Loading…</p> :
               visibleRows.length === 0 ? (
-                <p className="text-muted-foreground">
-                  {rows.length === 0
-                    ? <>No PIs yet. Click <span className="font-medium">Create PI from OA</span>.</>
-                    : `No ${folder} PIs in this folder yet.`}
-                </p>
+                <div>
+                  <p className="text-muted-foreground">
+                    {rows.length === 0
+                      ? <>No PIs yet. Click <span className="font-medium">Create PI from OA</span>.</>
+                      : `No ${folder} PIs in this folder yet.`}
+                  </p>
+                  <NoSharedDocsHint />
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
