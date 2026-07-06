@@ -1,73 +1,50 @@
-## Problem
+## What's actually happening
 
-In the published app, users who are granted access to a module/page (via module permissions only, without a matching `notification_recipients` department) see notifications on that page but:
+The database is behaving correctly, not hiding data by mistake. Every OA, BOQ, PI, Purchase Order and Requisition is protected by a per-document access rule:
 
-- The "Seen" / "Acknowledge" buttons are hidden or disabled because the client rule `canAckClient` requires the user's normalized department to match one of the notification's `target_departments`. Users without a recipients row default to `"Other"` and never match.
-- Even when Seen is recorded locally, several unseen counters read only the `app_notification_reads` table (or a server RPC) and ignore the local/personal seen fallback, so the badge stays at the old number.
-- The database RPC `mark_notification_seen` / the insert into `app_notification_reads` is gated so module-permitted-but-not-department-matched users cannot persist their Seen state, meaning the count never drops for them across pages/reloads.
+A signed-in user can only see a document if **one** of these is true:
+1. They are an **admin**.
+2. They are the **creator** of that document.
+3. They have been explicitly **granted access** to that specific document in **Admin → Document Access**.
 
-The admin/app-builder preview works because admin bypasses these checks.
+Giving a user "BOQs (view)" or "OA (edit)" module permission only unlocks the **page/menu** — it does not, by itself, reveal any documents. This matches the visibility rule you just confirmed: "Only documents shared with them."
 
-## Fix (scope: notification visibility + count only)
+I checked the data. Every non-admin user I saw (`design@…`, `office.*@…`, `purchase.1@…`, `project.1@…`, etc.) has:
+- `orders_created = 0`, `boqs_created = 0`, `pis_created = 0`
+- `docs_shared = 0` in `document_access` (one exception: `bhavesh@…` has 1)
 
-### 1. Show Seen/Acknowledge for the right users everywhere
+So their lists are empty because nothing has been shared with them yet — not because of a bug.
 
-Extend the client eligibility rule so a user can Seen/Ack a notification when ALL of the following are true (any one grants eligibility):
+## What I propose to build
 
-- They are NOT the actor (`actor_user_id !== me.id`), AND
-- Either
-  - their normalized department is in `target_departments` (existing rule), OR
-  - they have module permission for that notification's `module` (via `has_module_perm`/`useUserAccess`), OR
-  - they are admin.
+To make sharing practical (right now Admin → Document Access is one-doc-at-a-time), add bulk tools. No RLS changes, no change to who-can-see-what rules.
 
-Apply this rule in every place a Seen/Ack button is rendered:
+### 1. Bulk share in Admin → Document Access
+On the existing document list, add:
+- Checkboxes on each row + a "Select all on page" checkbox.
+- A "Share selected…" button that opens a dialog to pick one or more users and a permission (`view` / `edit`) and writes `document_access` rows for every selected doc × user.
+- A "Revoke selected…" action to remove those grants.
 
-- `src/components/notifications/ModuleNotifications.tsx` (in-page banner)
-- `src/components/notifications/DeptNotificationsDialog.tsx` (header bell dialog)
-- `src/components/notifications/NotificationDetailDialog.tsx` (detail dialog)
-- `src/pages/notifications/NotificationDashboard.tsx` (dashboard rows)
+### 2. Per-user "Grant access" panel in Admin → Users
+On each user row, a "Manage access" button opening a dialog with tabs per document kind (OA / BOQ / PI / PO / Requisition). Admin filters/searches, ticks documents, picks permission, saves — inserts `document_access` rows in one go.
 
-Keep the actor exclusion strictly enforced (requirement #7).
+### 3. Optional convenience toggle (off by default)
+In Admin → Settings, a checkbox: **"Auto-share new documents with everyone who has that module's view permission."**
+When on, a database trigger inserts `document_access` rows on `INSERT` into `orders` / `boqs` / `proforma_invoices` / `purchase_orders` / `requisitions` for every user that currently has module view perm for the relevant module. Off by default so the rule you chose ("only docs shared with them") stays the default; admins can opt in if they want new docs auto-visible to the team.
 
-### 2. Persist Seen server-side for module-permitted users
+### 4. Small UX touch on empty lists
+On BOQ / OA / PI / PO / Requisition lists, when the signed-in user is non-admin and sees zero rows, show a one-line hint: "No documents have been shared with you yet. Ask an admin to grant access in Admin → Document Access."
 
-Update the database so a Seen record can be written by any authenticated non-actor user who has module permission on the notification's module (not only target-department users):
+## Technical notes
 
-- Update `public.mark_notification_seen(_notif_id)`: allow insert when `actor_user_id <> auth.uid()` AND (dept matches target OR `has_module_perm(auth.uid(), module)` OR `has_role(auth.uid(),'admin')`).
-- Update RLS on `app_notification_reads` INSERT policy to mirror the same predicate so direct inserts from `ModuleNotifications.ack()` also succeed.
-- Keep SELECT policy unchanged (users continue to see their own read rows).
+- All writes go to the existing `public.document_access` table `(doc_kind, doc_id, user_id, permission)`. No schema changes needed for items 1, 2, 4.
+- Item 3 needs one migration: an `app_settings` key `auto_share_module_view` (boolean) plus AFTER INSERT triggers on the five document tables that read that setting and fan out `document_access` rows. Triggers are `SECURITY DEFINER` with `search_path = public` and are idempotent (`ON CONFLICT DO NOTHING`).
+- No changes to RLS policies, `has_doc_access`, notifications, approvals, module permissions, or any existing workflow.
 
-This does not change notification generation or grouping — only who may record a Seen/Ack row for themselves.
+## What I will NOT do
 
-### 3. Make unseen counts drop immediately after Seen
+- Change RLS so module permission alone reveals documents (you rejected that option).
+- Change creator-detection, approval flow, notifications, or Design/Manufacturing/Purchase logic.
+- Touch existing single-doc "Manage access" dialogs — they stay.
 
-Every unseen counter must subtract, for the current user, both:
-
-- server-side `app_notification_reads` rows where `user_id = auth.uid()`, AND
-- the local `personalSeen` fallback (already used by `GlobalNotificationsBell`).
-
-Update the following counters to include the current user's `personalSeen` set:
-
-- `src/hooks/useUnseenNotifCount.ts` — `useUnseenNotifCount` and `useUnseenNotifCountsMap` must union `personalSeen` into the "seen" set before counting, and re-subscribe to `lov-personal-seen-changed` so the list badges refresh instantly.
-- `src/hooks/useUnreadNotifications.ts` — after `mark_notification_seen` succeeds, decrement immediately in local state; also poll on `lov-personal-seen-changed`.
-- `src/pages/notifications/NotificationDashboard.tsx` — the "Not Seen Notifications" chip must exclude notifications the current user has seen (server row OR personalSeen). Row-level Seen/Unseen status already uses `personalSeen` via the same helper.
-
-Also, after a successful `markSeenLocal` / `ack` in `ModuleNotifications`, keep the existing local-state decrement so the in-page badge drops before the realtime round-trip.
-
-### 4. Non-goals (explicitly not touched)
-
-- Notification generation, target_departments computation, grouping/merging.
-- Highlighting, old-vs-new display, revision key logic, tracking dialog.
-- OA/BOQ/PI/PO/Costing/Requisition workflow, formulas, approvals, PDF/export.
-- Admin-only tools.
-
-## Technical details
-
-- New DB migration:
-  - `CREATE OR REPLACE FUNCTION public.mark_notification_seen(_notif_id uuid)` — extended eligibility predicate; unchanged return type.
-  - `DROP POLICY ... ; CREATE POLICY app_notification_reads_insert ON public.app_notification_reads FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid() AND EXISTS (SELECT 1 FROM public.app_notifications n WHERE n.id = notification_id AND n.actor_user_id <> auth.uid() AND (has_role(auth.uid(),'admin') OR has_module_perm(auth.uid(), n.module) OR EXISTS (SELECT 1 FROM unnest(n.target_departments) d WHERE normalize_dept(d) = normalize_dept((SELECT department FROM notification_recipients WHERE user_id = auth.uid() LIMIT 1))))))`.
-  - No table structure change.
-- New shared helper `canSeeOrAck(notif, me, hasModuleAccess, isAdmin): boolean` in `src/lib/notifications/dept.ts` used by every render site so the rule stays consistent.
-- Reuse `useUserAccess` (already resolves per-module access) inside the four render sites to know the module gate.
-- Reuse existing `personalSeen` store; do not change its API.
-- No visual layout change beyond enabling the existing buttons for more users.
+Confirm and I'll build items 1, 2, and 4 first. Tell me if you also want item 3 (the auto-share toggle) in the same pass.

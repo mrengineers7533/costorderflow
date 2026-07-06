@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { NoSharedDocsHint } from "@/components/access/NoSharedDocsHint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -478,6 +479,7 @@ export default function RequisitionsList() {
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No requisitions yet. Open an approved BOQ in Manufacturing and use "Create Requisition".
+            <NoSharedDocsHint />
           </CardContent>
         </Card>
       ) : (

@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Users, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Users, Search, Share2, UserMinus } from "lucide-react";
 import { DOC_KIND_LABEL, type DocKind } from "@/lib/access/docAccess";
 import { ManageDocAccessDialog } from "@/components/access/ManageDocAccessDialog";
+import { BulkShareDocsDialog } from "@/components/access/BulkShareDocsDialog";
 
 type Row = { kind: DocKind; id: string; label: string; sub: string; assigned: number };
 
@@ -22,6 +24,8 @@ export default function AdminDocumentAccess() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Row | null>(null);
   const [counts, setCounts] = useState<Map<string, number>>(new Map());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<null | "share" | "revoke">(null);
 
   async function load() {
     setLoading(true);
@@ -60,11 +64,35 @@ export default function AdminDocumentAccess() {
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [kind]);
 
+  // Reset selection whenever the doc kind changes.
+  useEffect(() => { setSelected(new Set()); }, [kind]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) => r.label.toLowerCase().includes(q) || r.sub.toLowerCase().includes(q));
   }, [rows, search]);
+
+  const allOnPageChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+  const someOnPageChecked = filtered.some((r) => selected.has(r.id));
+
+  function togglePage() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageChecked) filtered.forEach((r) => next.delete(r.id));
+      else filtered.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -82,12 +110,42 @@ export default function AdminDocumentAccess() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Search by number or name…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              {selected.size > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  <Badge variant="secondary">{selected.size}</Badge> selected
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="default"
+                disabled={selected.size === 0}
+                onClick={() => setBulk("share")}
+              >
+                <Share2 className="h-4 w-4 mr-1" /> Share selected…
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={selected.size === 0}
+                onClick={() => setBulk("revoke")}
+              >
+                <UserMinus className="h-4 w-4 mr-1" /> Revoke selected…
+              </Button>
+            </div>
           </div>
 
           <div className="overflow-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allOnPageChecked ? true : someOnPageChecked ? "indeterminate" : false}
+                      onCheckedChange={togglePage}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Document</TableHead>
                   <TableHead>Reference</TableHead>
                   <TableHead className="text-center">Assigned Users</TableHead>
@@ -96,11 +154,18 @@ export default function AdminDocumentAccess() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No documents found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No documents found</TableCell></TableRow>
                 ) : filtered.map((r) => (
                   <TableRow key={r.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(r.id)}
+                        onCheckedChange={() => toggleOne(r.id)}
+                        aria-label={`Select ${r.label}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-sm">{r.label}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.sub}</TableCell>
                     <TableCell className="text-center">
@@ -126,6 +191,17 @@ export default function AdminDocumentAccess() {
           kind={open.kind}
           docId={open.id}
           docLabel={open.label}
+        />
+      )}
+
+      {bulk && (
+        <BulkShareDocsDialog
+          open={!!bulk}
+          onOpenChange={(v) => { if (!v) setBulk(null); }}
+          kind={kind}
+          docIds={Array.from(selected)}
+          mode={bulk}
+          onDone={() => { setSelected(new Set()); load(); }}
         />
       )}
     </div>
