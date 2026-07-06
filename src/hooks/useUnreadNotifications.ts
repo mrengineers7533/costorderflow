@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { onPersonalSeenChange } from "@/lib/notifications/personalSeen";
 
 /** Live-ish unread count for the sidebar bell. Polls every 60s. */
 export function useUnreadNotifications(userId: string | undefined | null) {
@@ -25,9 +26,11 @@ export function useUnreadNotifications(userId: string | undefined | null) {
 
     load();
     const t = setInterval(load, 60_000);
+    const off = onPersonalSeenChange(() => load());
     return () => {
       cancelled = true;
       clearInterval(t);
+      off();
     };
   }, [userId]);
 
