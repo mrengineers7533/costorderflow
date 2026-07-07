@@ -12,6 +12,19 @@ interface TrackingRow {
   ack_at: string | null;
 }
 
+interface EmailLogRow {
+  id: string;
+  recipient_email: string;
+  recipient_department: string | null;
+  kind: string;
+  status: string;
+  subject: string | null;
+  gmail_message_id: string | null;
+  error: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
 interface Props {
   notificationId: string | null;
   onOpenChange: (open: boolean) => void;
@@ -23,24 +36,34 @@ interface Props {
  */
 export function NotificationTrackingDialog({ notificationId, onOpenChange }: Props) {
   const [rows, setRows] = useState<TrackingRow[]>([]);
+  const [emails, setEmails] = useState<EmailLogRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!notificationId) {
       setRows([]);
+      setEmails([]);
       return;
     }
     let cancelled = false;
     (async () => {
       setLoading(true);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any).rpc("get_notification_tracking", {
-        _notif_id: notificationId,
-      });
+      const [{ data }, { data: emailData }] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).rpc("get_notification_tracking", { _notif_id: notificationId }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("email_notification_log")
+          .select("*")
+          .eq("notification_id", notificationId)
+          .order("created_at", { ascending: false }),
+      ]);
       if (cancelled) return;
       setRows(((data as TrackingRow[]) || []).slice().sort((a, b) =>
         (a.department || "").localeCompare(b.department || ""),
       ));
+      setEmails((emailData as EmailLogRow[]) || []);
       setLoading(false);
     })();
     return () => {
@@ -100,6 +123,51 @@ export function NotificationTrackingDialog({ notificationId, onOpenChange }: Pro
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {emails.length > 0 && (
+          <div className="mt-4">
+            <div className="text-sm font-medium mb-2">Emails</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left">
+                  <tr>
+                    <th className="px-3 py-2">Recipient</th>
+                    <th className="px-3 py-2">Kind</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">When</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {emails.map((e) => (
+                    <tr key={e.id}>
+                      <td className="px-3 py-2">
+                        <div>{e.recipient_email}</div>
+                        {e.recipient_department && (
+                          <div className="text-xs text-muted-foreground capitalize">{e.recipient_department}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs capitalize">{e.kind}</td>
+                      <td className="px-3 py-2">
+                        {e.status === "sent" ? (
+                          <Badge>Sent</Badge>
+                        ) : e.status === "failed" ? (
+                          <Badge variant="destructive" title={e.error || ""}>Failed</Badge>
+                        ) : (
+                          <Badge variant="outline">{e.status}</Badge>
+                        )}
+                        {e.status === "failed" && e.error && (
+                          <div className="text-xs text-destructive mt-1 max-w-xs truncate" title={e.error}>{e.error}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {new Date(e.sent_at || e.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </DialogContent>
