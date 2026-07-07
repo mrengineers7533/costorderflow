@@ -1,50 +1,73 @@
-## What's actually happening
 
-The database is behaving correctly, not hiding data by mistake. Every OA, BOQ, PI, Purchase Order and Requisition is protected by a per-document access rule:
+## Goal
+Every row inserted into `app_notifications` also sends one email per target department recipient, from your connected Gmail account. Existing app logic, formulas, PDFs, RLS, and Seen/Ack flows stay untouched.
 
-A signed-in user can only see a document if **one** of these is true:
-1. They are an **admin**.
-2. They are the **creator** of that document.
-3. They have been explicitly **granted access** to that specific document in **Admin → Document Access**.
+## What you need to do once
+Connect your company Gmail via the Gmail app connector (one-click OAuth). The whole app then sends from that inbox.
 
-Giving a user "BOQs (view)" or "OA (edit)" module permission only unlocks the **page/menu** — it does not, by itself, reveal any documents. This matches the visibility rule you just confirmed: "Only documents shared with them."
+## Architecture
 
-I checked the data. Every non-admin user I saw (`design@…`, `office.*@…`, `purchase.1@…`, `project.1@…`, etc.) has:
-- `orders_created = 0`, `boqs_created = 0`, `pis_created = 0`
-- `docs_shared = 0` in `document_access` (one exception: `bhavesh@…` has 1)
+```text
+INSERT app_notifications
+        │
+        ▼
+DB trigger (AFTER INSERT) ──► pg_net POST ──► Edge Function: send-notification-email
+                                                       │
+                                                       ├─► resolve recipients (notification_recipients + target_departments, exclude actor)
+                                                       ├─► Gmail API (via connector gateway) — one send per recipient
+                                                       └─► write email_notification_log rows
 
-So their lists are empty because nothing has been shared with them yet — not because of a bug.
+pg_cron every 15 min ──► Edge Function: notification-email-reminders
+                                    └─► for notifications created >24h ago,
+                                        still not seen/ack, no reminder yet → send once
+```
 
-## What I propose to build
+Only NEW notifications are emailed. No backfill.
 
-To make sharing practical (right now Admin → Document Access is one-doc-at-a-time), add bulk tools. No RLS changes, no change to who-can-see-what rules.
+## Database changes (one migration)
 
-### 1. Bulk share in Admin → Document Access
-On the existing document list, add:
-- Checkboxes on each row + a "Select all on page" checkbox.
-- A "Share selected…" button that opens a dialog to pick one or more users and a permission (`view` / `edit`) and writes `document_access` rows for every selected doc × user.
-- A "Revoke selected…" action to remove those grants.
+1. New table `email_notification_log`
+   - notification_id (fk, indexed), recipient_email, recipient_department, recipient_user_id
+   - kind: 'initial' | 'reminder'
+   - status: 'pending' | 'sent' | 'failed'
+   - email_from, subject, gmail_message_id, error, sent_at, created_at
+   - Unique (notification_id, recipient_email, kind) → prevents duplicates
+   - GRANTs + RLS: admin read-all; users read rows for notifications they can see
+2. Trigger `on_app_notification_insert` → calls `pg_net.http_post` to the edge function with the notification id. Failures are swallowed so the app workflow never breaks.
+3. `pg_cron` job `notification-email-reminders` every 15 minutes.
 
-### 2. Per-user "Grant access" panel in Admin → Users
-On each user row, a "Manage access" button opening a dialog with tabs per document kind (OA / BOQ / PI / PO / Requisition). Admin filters/searches, ticks documents, picks permission, saves — inserts `document_access` rows in one go.
+## Edge functions (new, non-JWT)
 
-### 3. Optional convenience toggle (off by default)
-In Admin → Settings, a checkbox: **"Auto-share new documents with everyone who has that module's view permission."**
-When on, a database trigger inserts `document_access` rows on `INSERT` into `orders` / `boqs` / `proforma_invoices` / `purchase_orders` / `requisitions` for every user that currently has module view perm for the relevant module. Off by default so the rule you chose ("only docs shared with them") stays the default; admins can opt in if they want new docs auto-visible to the team.
+- `send-notification-email`
+  - Input: `{ notification_id, kind: 'initial' | 'reminder' }`
+  - Loads notification, resolves target recipients:
+    - For each target department in `target_departments`, pull active `notification_recipients` rows (dept match + optional module match).
+    - Exclude the actor (`actor_user_id` / actor email).
+    - Deduplicate by email.
+  - For each recipient: check `email_notification_log` uniqueness, insert `pending` row, call Gmail API (`/users/me/messages/send`) through the `google_mail` connector gateway using base64url RFC-2822 MIME, then update row to `sent` (store `gmail_message_id`) or `failed` (store error). Never throws to caller.
+  - Subject: `[<Module>] <DocNumber> — <Title>`
+  - HTML body includes: notification type, module/page, document number, created-by dept, target dept, change summary, required action, deep link built from `VITE_APP_URL` env + notification's route.
 
-### 4. Small UX touch on empty lists
-On BOQ / OA / PI / PO / Requisition lists, when the signed-in user is non-admin and sees zero rows, show a one-line hint: "No documents have been shared with you yet. Ask an admin to grant access in Admin → Document Access."
+- `notification-email-reminders` (cron-invoked)
+  - Selects notifications older than 24h where no ack/seen for target dept and no `reminder` row exists yet in log; invokes `send-notification-email` with `kind: 'reminder'`.
 
-## Technical notes
+## Admin visibility
 
-- All writes go to the existing `public.document_access` table `(doc_kind, doc_id, user_id, permission)`. No schema changes needed for items 1, 2, 4.
-- Item 3 needs one migration: an `app_settings` key `auto_share_module_view` (boolean) plus AFTER INSERT triggers on the five document tables that read that setting and fan out `document_access` rows. Triggers are `SECURITY DEFINER` with `search_path = public` and are idempotent (`ON CONFLICT DO NOTHING`).
-- No changes to RLS policies, `has_doc_access`, notifications, approvals, module permissions, or any existing workflow.
+Extend `NotificationTrackingDialog` with an "Emails" section listing per-recipient rows from `email_notification_log`: recipient, kind, status badge (Sent / Failed / Pending), timestamp, error tooltip. Admin-only view uses existing admin check.
 
-## What I will NOT do
+## What is explicitly NOT changed
+- No changes to notification creation call sites — trigger handles it.
+- No changes to Seen/Ack RPCs, notification bell, module permissions, RLS on existing tables, PDFs, costing, numbering, or workflow.
+- No emails to the actor. No duplicate emails (enforced by unique index).
+- Marking Seen/Ack does not send or cancel any email; it only stops the 24h reminder from firing.
 
-- Change RLS so module permission alone reveals documents (you rejected that option).
-- Change creator-detection, approval flow, notifications, or Design/Manufacturing/Purchase logic.
-- Touch existing single-doc "Manage access" dialogs — they stay.
+## Setup steps (I'll drive)
+1. Connect Gmail via `standard_connectors--connect` (`google_mail`).
+2. Add `APP_PUBLIC_URL` secret so email deep links work on published site.
+3. Run the migration (table + trigger + cron).
+4. Create the two edge functions.
+5. Extend the admin tracking dialog.
 
-Confirm and I'll build items 1, 2, and 4 first. Tell me if you also want item 3 (the auto-share toggle) in the same pass.
+## Assumptions
+- Gmail sending quota (~500/day per account) is sufficient for your volume. If you later exceed it we can switch to a Google Workspace service account or Lovable Emails.
+- Recipients are resolved from `notification_recipients` (already used elsewhere). Users listed there receive email; users with only module access do not.
