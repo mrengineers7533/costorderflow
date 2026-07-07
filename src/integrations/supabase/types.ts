@@ -1290,49 +1290,94 @@ export type Database = {
       }
       email_notification_log: {
         Row: {
+          ack_at: string | null
+          ack_status: boolean
+          cc_emails: string[] | null
           created_at: string
+          created_by_department: string | null
+          created_by_user: string | null
           email_from: string | null
           error: string | null
           gmail_message_id: string | null
           id: string
           kind: string
           notification_id: string
+          notification_type: string | null
           recipient_department: string | null
           recipient_email: string
           recipient_user_id: string | null
+          reminder_count: number
+          reminder_sent: boolean
+          reminder_sent_at: string | null
+          seen_at: string | null
+          seen_status: boolean
           sent_at: string | null
+          source_doc_no: string | null
+          source_module: string | null
+          source_page: string | null
           status: string
           subject: string | null
+          target_department: string | null
         }
         Insert: {
+          ack_at?: string | null
+          ack_status?: boolean
+          cc_emails?: string[] | null
           created_at?: string
+          created_by_department?: string | null
+          created_by_user?: string | null
           email_from?: string | null
           error?: string | null
           gmail_message_id?: string | null
           id?: string
           kind?: string
           notification_id: string
+          notification_type?: string | null
           recipient_department?: string | null
           recipient_email: string
           recipient_user_id?: string | null
+          reminder_count?: number
+          reminder_sent?: boolean
+          reminder_sent_at?: string | null
+          seen_at?: string | null
+          seen_status?: boolean
           sent_at?: string | null
+          source_doc_no?: string | null
+          source_module?: string | null
+          source_page?: string | null
           status?: string
           subject?: string | null
+          target_department?: string | null
         }
         Update: {
+          ack_at?: string | null
+          ack_status?: boolean
+          cc_emails?: string[] | null
           created_at?: string
+          created_by_department?: string | null
+          created_by_user?: string | null
           email_from?: string | null
           error?: string | null
           gmail_message_id?: string | null
           id?: string
           kind?: string
           notification_id?: string
+          notification_type?: string | null
           recipient_department?: string | null
           recipient_email?: string
           recipient_user_id?: string | null
+          reminder_count?: number
+          reminder_sent?: boolean
+          reminder_sent_at?: string | null
+          seen_at?: string | null
+          seen_status?: boolean
           sent_at?: string | null
+          source_doc_no?: string | null
+          source_module?: string | null
+          source_page?: string | null
           status?: string
           subject?: string | null
+          target_department?: string | null
         }
         Relationships: [
           {

@@ -1,73 +1,65 @@
-
 ## Goal
-Every row inserted into `app_notifications` also sends one email per target department recipient, from your connected Gmail account. Existing app logic, formulas, PDFs, RLS, and Seen/Ack flows stay untouched.
+Extend the existing Gmail notification pipeline with a complete, admin-visible email audit trail. Keep all costing/PDF/RLS/workflow logic untouched.
 
-## What you need to do once
-Connect your company Gmail via the Gmail app connector (one-click OAuth). The whole app then sends from that inbox.
+## What already exists (keep as-is)
+- `email_notification_log` table (basic fields), unique per (notification, recipient, kind).
+- `send-notification-email` edge function (writes pending → sent/failed).
+- `notification-email-reminders` cron (24h reminder).
+- `NotificationTrackingDialog` shows a small Emails list.
 
-## Architecture
+## What changes
 
-```text
-INSERT app_notifications
-        │
-        ▼
-DB trigger (AFTER INSERT) ──► pg_net POST ──► Edge Function: send-notification-email
-                                                       │
-                                                       ├─► resolve recipients (notification_recipients + target_departments, exclude actor)
-                                                       ├─► Gmail API (via connector gateway) — one send per recipient
-                                                       └─► write email_notification_log rows
+### 1. DB migration — extend `email_notification_log`
+Add columns (nullable, backfilled from `app_notifications` via trigger on insert):
+- `source_module` text, `source_page` text, `source_doc_no` text
+- `notification_type` text
+- `created_by_user` text, `created_by_department` text
+- `target_department` text (already have `recipient_department`, keep both; new one = notification's target dept, existing = recipient's dept)
+- `cc_emails` text[]
+- `reminder_sent` boolean default false
+- `reminder_sent_at` timestamptz
+- `reminder_count` int default 0
+- `seen_status` boolean default false
+- `ack_status` boolean default false
+- Keep existing: `email_from`, `recipient_email` (Email To), `subject`, `status`, `sent_at`, `gmail_message_id`, `error`, `kind`.
 
-pg_cron every 15 min ──► Edge Function: notification-email-reminders
-                                    └─► for notifications created >24h ago,
-                                        still not seen/ack, no reminder yet → send once
-```
+Add view `v_email_notification_log` that joins latest seen/ack from `app_notification_reads` per recipient so the UI shows live Seen/Ack without extra queries.
 
-Only NEW notifications are emailed. No backfill.
+RLS:
+- Admin: read all (existing).
+- Recipient user: read only rows where `recipient_user_id = auth.uid()` OR `recipient_email = auth.email()`.
+- Actor/creator: no access to email logs (they don't receive them anyway).
 
-## Database changes (one migration)
+### 2. Edge function updates
+`send-notification-email`:
+- On insert of the log row, populate all new denormalized fields from the loaded notification.
+- On successful reminder send, in addition to inserting a `kind=reminder` row, update the matching `kind=initial` row: `reminder_sent=true`, `reminder_sent_at=now()`, `reminder_count = reminder_count + 1`.
+- Preserve existing dedupe (unique index).
 
-1. New table `email_notification_log`
-   - notification_id (fk, indexed), recipient_email, recipient_department, recipient_user_id
-   - kind: 'initial' | 'reminder'
-   - status: 'pending' | 'sent' | 'failed'
-   - email_from, subject, gmail_message_id, error, sent_at, created_at
-   - Unique (notification_id, recipient_email, kind) → prevents duplicates
-   - GRANTs + RLS: admin read-all; users read rows for notifications they can see
-2. Trigger `on_app_notification_insert` → calls `pg_net.http_post` to the edge function with the notification id. Failures are swallowed so the app workflow never breaks.
-3. `pg_cron` job `notification-email-reminders` every 15 minutes.
+`notification-email-reminders`: unchanged except it now increments reminder_count on the initial row via the send function.
 
-## Edge functions (new, non-JWT)
+### 3. Seen/Ack sync
+Add a trigger on `app_notification_reads` (AFTER INSERT) that updates `email_notification_log.seen_status` / `ack_status` for matching (notification_id, recipient_user_id) rows. No changes to the RPCs users call.
 
-- `send-notification-email`
-  - Input: `{ notification_id, kind: 'initial' | 'reminder' }`
-  - Loads notification, resolves target recipients:
-    - For each target department in `target_departments`, pull active `notification_recipients` rows (dept match + optional module match).
-    - Exclude the actor (`actor_user_id` / actor email).
-    - Deduplicate by email.
-  - For each recipient: check `email_notification_log` uniqueness, insert `pending` row, call Gmail API (`/users/me/messages/send`) through the `google_mail` connector gateway using base64url RFC-2822 MIME, then update row to `sent` (store `gmail_message_id`) or `failed` (store error). Never throws to caller.
-  - Subject: `[<Module>] <DocNumber> — <Title>`
-  - HTML body includes: notification type, module/page, document number, created-by dept, target dept, change summary, required action, deep link built from `VITE_APP_URL` env + notification's route.
+### 4. Admin UI — new "Mail Sent Details" section
+New page `src/pages/admin/AdminEmailAudit.tsx` (linked from Admin tabs):
+- Filters: date range, module, status (Sent/Pending/Failed), reminder sent Y/N, seen/ack status, search by doc no / recipient.
+- Table columns exactly matching the requirement list: Email Log ID, Notification ID, Module, Doc No, Type, Created By (user · dept), Target Dept, To, CC, From, Subject, Status badge, Sent At, Gmail Msg ID, Error, Reminder (Y/N + when + count), Seen, Ack.
+- One row per recipient (already the case).
+- Paginated (50/page), sortable by Sent At default desc.
+- CSV export button.
 
-- `notification-email-reminders` (cron-invoked)
-  - Selects notifications older than 24h where no ack/seen for target dept and no `reminder` row exists yet in log; invokes `send-notification-email` with `kind: 'reminder'`.
+Extend existing `NotificationTrackingDialog` Emails table to show the new fields (Reminder, Seen, Ack, CC) in a compact form.
 
-## Admin visibility
+### 5. Non-admin visibility
+No new page for end users. The existing `NotificationTrackingDialog` already gates by RLS; with the tightened policy above, non-admins only see their own rows.
 
-Extend `NotificationTrackingDialog` with an "Emails" section listing per-recipient rows from `email_notification_log`: recipient, kind, status badge (Sent / Failed / Pending), timestamp, error tooltip. Admin-only view uses existing admin check.
+## Explicitly NOT touched
+Costing formulas, Cost Sheet Motor-with-Remarks, quotation layout, PDF exports, numbering counters, notification creation call sites, Seen/Ack RPC signatures, notification bell, module RLS.
 
-## What is explicitly NOT changed
-- No changes to notification creation call sites — trigger handles it.
-- No changes to Seen/Ack RPCs, notification bell, module permissions, RLS on existing tables, PDFs, costing, numbering, or workflow.
-- No emails to the actor. No duplicate emails (enforced by unique index).
-- Marking Seen/Ack does not send or cancel any email; it only stops the 24h reminder from firing.
-
-## Setup steps (I'll drive)
-1. Connect Gmail via `standard_connectors--connect` (`google_mail`).
-2. Add `APP_PUBLIC_URL` secret so email deep links work on published site.
-3. Run the migration (table + trigger + cron).
-4. Create the two edge functions.
-5. Extend the admin tracking dialog.
-
-## Assumptions
-- Gmail sending quota (~500/day per account) is sufficient for your volume. If you later exceed it we can switch to a Google Workspace service account or Lovable Emails.
-- Recipients are resolved from `notification_recipients` (already used elsewhere). Users listed there receive email; users with only module access do not.
+## Files
+- New migration: extend table + view + policies + reads trigger.
+- Edit `supabase/functions/send-notification-email/index.ts`: populate new fields, bump reminder counters.
+- New `src/pages/admin/AdminEmailAudit.tsx` + route wiring in `AdminTabs.tsx` / `App.tsx`.
+- Edit `src/components/notifications/NotificationTrackingDialog.tsx`: show new fields.
+- Regenerated `src/integrations/supabase/types.ts` after migration.

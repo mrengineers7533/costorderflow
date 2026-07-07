@@ -23,6 +23,12 @@ interface EmailLogRow {
   error: string | null;
   sent_at: string | null;
   created_at: string;
+  reminder_sent?: boolean;
+  reminder_sent_at?: string | null;
+  reminder_count?: number;
+  seen_status?: boolean;
+  ack_status?: boolean;
+  cc_emails?: string[] | null;
 }
 
 interface Props {
@@ -135,6 +141,8 @@ export function NotificationTrackingDialog({ notificationId, onOpenChange }: Pro
                     <th className="px-3 py-2">Recipient</th>
                     <th className="px-3 py-2">Kind</th>
                     <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Reminder</th>
+                    <th className="px-3 py-2">Seen / Ack</th>
                     <th className="px-3 py-2">When</th>
                   </tr>
                 </thead>
@@ -145,6 +153,9 @@ export function NotificationTrackingDialog({ notificationId, onOpenChange }: Pro
                         <div>{e.recipient_email}</div>
                         {e.recipient_department && (
                           <div className="text-xs text-muted-foreground capitalize">{e.recipient_department}</div>
+                        )}
+                        {e.cc_emails && e.cc_emails.length > 0 && (
+                          <div className="text-[10px] text-muted-foreground">CC: {e.cc_emails.join(", ")}</div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs capitalize">{e.kind}</td>
@@ -158,6 +169,27 @@ export function NotificationTrackingDialog({ notificationId, onOpenChange }: Pro
                         )}
                         {e.status === "failed" && e.error && (
                           <div className="text-xs text-destructive mt-1 max-w-xs truncate" title={e.error}>{e.error}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {e.reminder_sent ? (
+                          <div>
+                            <Badge variant="secondary">Yes ({e.reminder_count || 1})</Badge>
+                            {e.reminder_sent_at && (
+                              <div className="text-[10px] text-muted-foreground mt-1">{new Date(e.reminder_sent_at).toLocaleString()}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="outline">No</Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {e.ack_status ? (
+                          <Badge>Acknowledged</Badge>
+                        ) : e.seen_status ? (
+                          <Badge variant="secondary">Seen</Badge>
+                        ) : (
+                          <Badge variant="outline">—</Badge>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
