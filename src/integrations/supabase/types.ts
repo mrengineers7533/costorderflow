@@ -1267,6 +1267,83 @@ export type Database = {
         }
         Relationships: []
       }
+      email_notification_config: {
+        Row: {
+          id: boolean
+          reminder_fn_url: string
+          send_fn_url: string
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          reminder_fn_url: string
+          send_fn_url: string
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          reminder_fn_url?: string
+          send_fn_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_notification_log: {
+        Row: {
+          created_at: string
+          email_from: string | null
+          error: string | null
+          gmail_message_id: string | null
+          id: string
+          kind: string
+          notification_id: string
+          recipient_department: string | null
+          recipient_email: string
+          recipient_user_id: string | null
+          sent_at: string | null
+          status: string
+          subject: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_from?: string | null
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          kind?: string
+          notification_id: string
+          recipient_department?: string | null
+          recipient_email: string
+          recipient_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_from?: string | null
+          error?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          kind?: string
+          notification_id?: string
+          recipient_department?: string | null
+          recipient_email?: string
+          recipient_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_notification_log_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "app_notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fg_raw_material_map: {
         Row: {
           base_quantity: number
