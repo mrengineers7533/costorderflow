@@ -1,65 +1,60 @@
 ## Goal
-Extend the existing Gmail notification pipeline with a complete, admin-visible email audit trail. Keep all costing/PDF/RLS/workflow logic untouched.
+Run a live end-to-end verification of the Gmail notification + Email Audit pipeline without changing any business logic, then re-run the security scan. No CC work in this pass.
 
-## What already exists (keep as-is)
-- `email_notification_log` table (basic fields), unique per (notification, recipient, kind).
-- `send-notification-email` edge function (writes pending → sent/failed).
-- `notification-email-reminders` cron (24h reminder).
-- `NotificationTrackingDialog` shows a small Emails list.
+## Approach
+All checks are read-only or use existing app flows. No schema, function, or UI changes.
 
-## What changes
+## Steps
 
-### 1. DB migration — extend `email_notification_log`
-Add columns (nullable, backfilled from `app_notifications` via trigger on insert):
-- `source_module` text, `source_page` text, `source_doc_no` text
-- `notification_type` text
-- `created_by_user` text, `created_by_department` text
-- `target_department` text (already have `recipient_department`, keep both; new one = notification's target dept, existing = recipient's dept)
-- `cc_emails` text[]
-- `reminder_sent` boolean default false
-- `reminder_sent_at` timestamptz
-- `reminder_count` int default 0
-- `seen_status` boolean default false
-- `ack_status` boolean default false
-- Keep existing: `email_from`, `recipient_email` (Email To), `subject`, `status`, `sent_at`, `gmail_message_id`, `error`, `kind`.
+### 1. Pick a real target recipient
+Query `notification_recipients` for one active row whose `department` matches a real target dept used by a module (e.g. `design` or `purchase`) and whose `email` is a mailbox you can actually open. Confirm the row's `user_id` maps to a real profile in `profiles`. Record: recipient email, department, user_id.
 
-Add view `v_email_notification_log` that joins latest seen/ack from `app_notification_reads` per recipient so the UI shows live Seen/Ack without extra queries.
+### 2. Create one test notification
+Insert a single row into `app_notifications` via the existing RPC / insert path used by the app (same trigger the modules use), with:
+- `module` = the module matching step 1
+- `target_departments` = `[recipient.department]`
+- `actor_user_id` = a different user than the recipient (so actor-exclusion is testable)
+- `record_ref` = `TEST-EMAIL-AUDIT-<timestamp>`
+- `title` / `summary` = "E2E email audit test"
 
-RLS:
-- Admin: read all (existing).
-- Recipient user: read only rows where `recipient_user_id = auth.uid()` OR `recipient_email = auth.email()`.
-- Actor/creator: no access to email logs (they don't receive them anyway).
+No new tables, no schema changes.
 
-### 2. Edge function updates
-`send-notification-email`:
-- On insert of the log row, populate all new denormalized fields from the loaded notification.
-- On successful reminder send, in addition to inserting a `kind=reminder` row, update the matching `kind=initial` row: `reminder_sent=true`, `reminder_sent_at=now()`, `reminder_count = reminder_count + 1`.
-- Preserve existing dedupe (unique index).
+### 3. Verify send
+Within ~30s:
+- Check `email_send_log` / `email_notification_log` rows for this `notification_id`:
+  - Exactly one row per resolved recipient (dedupe check).
+  - `status` transitions `pending` → `sent`.
+  - `gmail_message_id` populated.
+  - `email_from` = the connected Gmail address.
+  - `recipient_email` = the target user only.
+  - No row exists for the actor's email.
+- Check the target inbox to confirm actual delivery.
+- Check edge function logs for `send-notification-email` for any errors.
 
-`notification-email-reminders`: unchanged except it now increments reminder_count on the initial row via the send function.
+### 4. Verify Email Audit page
+Open `/admin/email-audit` as an admin and confirm the new row shows:
+Email To, Email From, Notification ID, Module/Page, Document No., Status (Sent), Sent date/time, Reminder (No, count 0), Seen (No), Ack (No). Try filters (module, status) and search by the `record_ref`.
 
-### 3. Seen/Ack sync
-Add a trigger on `app_notification_reads` (AFTER INSERT) that updates `email_notification_log.seen_status` / `ack_status` for matching (notification_id, recipient_user_id) rows. No changes to the RPCs users call.
+### 5. Verify Seen sync
+As the recipient user, open the notification (existing "mark as seen" flow / bell). Re-open Email Audit and confirm the row now shows Seen = Yes. This validates the `sync_email_log_reads` trigger on `app_notification_reads`.
 
-### 4. Admin UI — new "Mail Sent Details" section
-New page `src/pages/admin/AdminEmailAudit.tsx` (linked from Admin tabs):
-- Filters: date range, module, status (Sent/Pending/Failed), reminder sent Y/N, seen/ack status, search by doc no / recipient.
-- Table columns exactly matching the requirement list: Email Log ID, Notification ID, Module, Doc No, Type, Created By (user · dept), Target Dept, To, CC, From, Subject, Status badge, Sent At, Gmail Msg ID, Error, Reminder (Y/N + when + count), Seen, Ack.
-- One row per recipient (already the case).
-- Paginated (50/page), sortable by Sent At default desc.
-- CSV export button.
+### 6. Verify Ack sync
+As the recipient user, click Acknowledge on the same notification. Re-open Email Audit and confirm Ack = Yes.
 
-Extend existing `NotificationTrackingDialog` Emails table to show the new fields (Reminder, Seen, Ack, CC) in a compact form.
+### 7. Verify reminder gating (without waiting 24h)
+Two-part check, no code changes:
+- Read `notification-email-reminders` source to confirm its query filters to notifications older than 24h AND not yet seen/acknowledged.
+- Manually invoke the reminder function once with the test `notification_id`. Because it is already Seen+Ack from step 5–6, expect zero new `email_notification_log` rows of kind `reminder` and no bump in `reminder_count`.
+- Then create a second short-lived test notification, leave it unseen, and manually invoke the reminder function with a temporary "ignore 24h" branch? — No, we will NOT modify code. Instead: verify the reminder path fires by directly inserting a second notification, then in a scratch check, call the reminder function; confirm it correctly skips the seen one and would target the unseen one only if the age filter passes. Document the 24h age filter as the only remaining gate.
 
-### 5. Non-admin visibility
-No new page for end users. The existing `NotificationTrackingDialog` already gates by RLS; with the tightened policy above, non-admins only see their own rows.
+### 8. Cleanup
+Delete the two test `app_notifications` rows and their `email_notification_log` rows so audit stays clean.
 
-## Explicitly NOT touched
-Costing formulas, Cost Sheet Motor-with-Remarks, quotation layout, PDF exports, numbering counters, notification creation call sites, Seen/Ack RPC signatures, notification bell, module RLS.
+### 9. Security re-scan
+Run the security scanner once and report findings. Do not auto-fix; list them for your review.
 
-## Files
-- New migration: extend table + view + policies + reads trigger.
-- Edit `supabase/functions/send-notification-email/index.ts`: populate new fields, bump reminder counters.
-- New `src/pages/admin/AdminEmailAudit.tsx` + route wiring in `AdminTabs.tsx` / `App.tsx`.
-- Edit `src/components/notifications/NotificationTrackingDialog.tsx`: show new fields.
-- Regenerated `src/integrations/supabase/types.ts` after migration.
+## Reporting
+After each step I will paste the concrete evidence: row counts, status values, screenshots/text of Email Audit, and edge function log snippets. If any step fails, I will stop and report before continuing.
+
+## Explicitly not touched
+Costing formulas, Cost Sheet Motor-with-Remarks, quotation layout, PDF exports, numbering, RLS, notification creation code, Seen/Ack RPCs, notification bell, module workflows, UI layout, CC recipients.
