@@ -31,13 +31,14 @@ Deno.serve(async (req) => {
         .limit(1);
       if (existing && existing.length > 0) continue;
 
-      // Skip if all recipients already acknowledged
-      const { data: reads } = await admin
+      // Skip if any ack row exists for this notification (someone acknowledged)
+      const { data: acks } = await admin
         .from('app_notification_reads')
-        .select('acknowledged_at, department')
-        .eq('notification_id', n.id);
-      const anyUnacked = !reads || reads.length === 0 || reads.some((r: any) => !r.acknowledged_at);
-      if (!anyUnacked) continue;
+        .select('id')
+        .eq('notification_id', n.id)
+        .eq('kind', 'ack')
+        .limit(1);
+      if (acks && acks.length > 0) continue;
 
       // Invoke send fn as reminder
       const { data: cfg } = await admin.from('email_notification_config').select('send_fn_url').eq('id', true).maybeSingle();
