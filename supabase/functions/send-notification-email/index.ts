@@ -153,6 +153,14 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
         status: 'pending',
         email_from: sender,
         subject,
+        source_module: n.module,
+        source_page: n.module,
+        source_doc_no: n.record_ref,
+        notification_type: n.event_type,
+        created_by_user: n.actor_user_name,
+        created_by_department: n.actor_department,
+        target_department: r.department,
+        cc_emails: [],
       })
       .select('id')
       .maybeSingle();
@@ -165,6 +173,26 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
       results.push({ email, ok: false, error: sendErr });
     } else {
       await admin.from('email_notification_log').update({ status: 'sent', gmail_message_id: gmailId, sent_at: new Date().toISOString() }).eq('id', logRow!.id);
+      if (kind === 'reminder') {
+        // Bump reminder counters on the initial row
+        const { data: initial } = await admin
+          .from('email_notification_log')
+          .select('id, reminder_count')
+          .eq('notification_id', notification_id)
+          .eq('recipient_email', email)
+          .eq('kind', 'initial')
+          .maybeSingle();
+        if (initial?.id) {
+          await admin
+            .from('email_notification_log')
+            .update({
+              reminder_sent: true,
+              reminder_sent_at: new Date().toISOString(),
+              reminder_count: (initial.reminder_count || 0) + 1,
+            })
+            .eq('id', initial.id);
+        }
+      }
       results.push({ email, ok: true, gmailId });
     }
   }
