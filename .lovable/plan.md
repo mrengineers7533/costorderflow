@@ -1,60 +1,53 @@
-## Goal
-Run a live end-to-end verification of the Gmail notification + Email Audit pipeline without changing any business logic, then re-run the security scan. No CC work in this pass.
+# Module-permission-based access across all modules
+
+Extend the "Design users see/edit all BOQs" pattern to every module so an admin-granted **module view** permission lets a user see all documents in that module, and **module edit** lets them create/update/delete any document in it. Per-document sharing (`document_access`) stays as an extra path for users without the module perm.
+
+## Modules → tables mapping
+
+| Module perm | Primary tables | Child/related tables |
+|---|---|---|
+| `costing` | `orders`, `boqs`, `proforma_invoices` | `boq_revisions`, `boq_item_attachments`, `boq_item_design_status`, `boq_remarks_audit_log`, `boq_revision_approval_snapshots`, `proforma_invoice_documents`, `order_revision_notifications`, `client_copies`, `boq_distribution_log` |
+| `design` | `boqs` (view all — already done), `boq_design_reviews`, `boq_design_review_items`, `boq_design_review_documents`, `boq_design_comments` | already broadly readable; extend edit for `design` edit perm |
+| `purchase` | `purchase_orders`, `vendors` | `purchase_order_rows`, `purchase_order_sends`, `purchase_order_audit` |
+| `manufacturing` | (reads `boqs`, `orders`, `requisitions`) | grants via cross-module read helper (see below) |
+| `requisitions` | `requisitions` | `requisition_items`, `requisition_raw_materials`, `requisition_lots`, `requisition_distribution_log` |
+| `annexures` | `requisition_annexures` | `requisition_annexure_rows` |
+| `grn` | `grn_receipts` | — |
+| `raw_materials` | `rm_master_uploads`, `fg_raw_material_map` | (already scoped) |
+| `cost_sheets` | `cost_sheets` | — |
+| `reports` | read-only across orders/boqs/pi/po/req (view perm only) | — |
 
 ## Approach
-All checks are read-only or use existing app flows. No schema, function, or UI changes.
 
-## Steps
+1. **Add two SQL helpers** (SECURITY DEFINER, stable, `search_path=public`):
+   - `public.has_module_view(_user uuid, _module app_module)` → true if admin OR row in `user_module_access` for that module with any permission.
+   - `public.has_module_edit(_user uuid, _module app_module)` → true if admin OR row in `user_module_access` with `permission='edit'`.
+   (If `app_module` enum doesn't exist, use `text`.)
 
-### 1. Pick a real target recipient
-Query `notification_recipients` for one active row whose `department` matches a real target dept used by a module (e.g. `design` or `purchase`) and whose `email` is a mailbox you can actually open. Confirm the row's `user_id` maps to a real profile in `profiles`. Record: recipient email, department, user_id.
+2. **Rewrite RLS on each primary table** with four policies:
+   - `SELECT`: `has_module_view(auth.uid(), '<mod>') OR has_doc_access(...) OR created_by = auth.uid()`
+   - `INSERT`: `has_module_edit(auth.uid(), '<mod>')` (or creator path)
+   - `UPDATE`: `has_module_edit(...) OR existing doc-scoped edit path`
+   - `DELETE`: `has_module_edit(...) OR admin`
+   Keep the current admin bypass and `has_doc_access` paths so per-document sharing still works for users without the module perm.
 
-### 2. Create one test notification
-Insert a single row into `app_notifications` via the existing RPC / insert path used by the app (same trigger the modules use), with:
-- `module` = the module matching step 1
-- `target_departments` = `[recipient.department]`
-- `actor_user_id` = a different user than the recipient (so actor-exclusion is testable)
-- `record_ref` = `TEST-EMAIL-AUDIT-<timestamp>`
-- `title` / `summary` = "E2E email audit test"
+3. **Child tables** inherit through the parent row (e.g. `purchase_order_rows` checks `has_module_view/edit('purchase')` OR access to the parent PO). Rewrite each child table's policies to add the module-perm branch alongside the existing parent-access branch.
 
-No new tables, no schema changes.
+4. **Manufacturing** module perm additionally grants read on `boqs`, `orders`, `requisitions` (view-only cross-module read) so the manufacturing workflow keeps working. No edit rights on those from `manufacturing` alone.
 
-### 3. Verify send
-Within ~30s:
-- Check `email_send_log` / `email_notification_log` rows for this `notification_id`:
-  - Exactly one row per resolved recipient (dedupe check).
-  - `status` transitions `pending` → `sent`.
-  - `gmail_message_id` populated.
-  - `email_from` = the connected Gmail address.
-  - `recipient_email` = the target user only.
-  - No row exists for the actor's email.
-- Check the target inbox to confirm actual delivery.
-- Check edge function logs for `send-notification-email` for any errors.
+5. **Storage buckets**: extend `order_templates` / `rm_master_uploads` / BOQ attachment buckets to accept module-view perm on the corresponding module (already done for the two flagged ones; apply same pattern to BOQ attachments and PI/PO uploads where present).
 
-### 4. Verify Email Audit page
-Open `/admin/email-audit` as an admin and confirm the new row shows:
-Email To, Email From, Notification ID, Module/Page, Document No., Status (Sent), Sent date/time, Reminder (No, count 0), Seen (No), Ack (No). Try filters (module, status) and search by the `record_ref`.
+6. **Frontend list pages** (`OrdersList`, `BoqList`, `PiList`, `RequisitionsList`, `PurchaseList`, `AnnexureFolder`, `GrnList`, `CostSheetsList`): drop the "share this doc" empty-state hint for users who already have the module perm — RLS now returns the rows directly, no client change needed beyond hiding the hint when `useUserAccess.canAccess(module)` is true.
 
-### 5. Verify Seen sync
-As the recipient user, open the notification (existing "mark as seen" flow / bell). Re-open Email Audit and confirm the row now shows Seen = Yes. This validates the `sync_email_log_reads` trigger on `app_notification_reads`.
+7. **No changes** to: notification generation, approval workflow, calculations, PDF export, cost-sheet logic, numbering, activity feed, email audit.
 
-### 6. Verify Ack sync
-As the recipient user, click Acknowledge on the same notification. Re-open Email Audit and confirm Ack = Yes.
+## Delivery
 
-### 7. Verify reminder gating (without waiting 24h)
-Two-part check, no code changes:
-- Read `notification-email-reminders` source to confirm its query filters to notifications older than 24h AND not yet seen/acknowledged.
-- Manually invoke the reminder function once with the test `notification_id`. Because it is already Seen+Ack from step 5–6, expect zero new `email_notification_log` rows of kind `reminder` and no bump in `reminder_count`.
-- Then create a second short-lived test notification, leave it unseen, and manually invoke the reminder function with a temporary "ignore 24h" branch? — No, we will NOT modify code. Instead: verify the reminder path fires by directly inserting a second notification, then in a scratch check, call the reminder function; confirm it correctly skips the seen one and would target the unseen one only if the age filter passes. Document the 24h age filter as the only remaining gate.
+- **1 migration** (large, single file) rewriting all affected policies + adding the two helpers.
+- **Small frontend patch**: conditionally hide `NoSharedDocsHint` when the user already has the module permission.
+- **Re-run security linter** after migration and report new findings (expect none — this widens read to authenticated users with an explicit grant, not to `anon`).
 
-### 8. Cleanup
-Delete the two test `app_notifications` rows and their `email_notification_log` rows so audit stays clean.
+## Risks / notes
 
-### 9. Security re-scan
-Run the security scanner once and report findings. Do not auto-fix; list them for your review.
-
-## Reporting
-After each step I will paste the concrete evidence: row counts, status values, screenshots/text of Email Audit, and edge function log snippets. If any step fails, I will stop and report before continuing.
-
-## Explicitly not touched
-Costing formulas, Cost Sheet Motor-with-Remarks, quotation layout, PDF exports, numbering, RLS, notification creation code, Seen/Ack RPCs, notification bell, module workflows, UI layout, CC recipients.
+- Users with only a module **view** perm will now see every document ever created in that module, including historical/archived ones. Confirm this is intended (the design module already behaves this way).
+- Per-document sharing (`document_access`) becomes redundant for users who also have the module perm, but stays functional for the "external per-doc reviewer" case.
