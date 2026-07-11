@@ -55,12 +55,15 @@ Deno.serve(async (req) => {
         .limit(1);
       if (acks && acks.length > 0) continue;
 
-      // Invoke send fn as reminder
-      const { data: cfg } = await admin.from('email_notification_config').select('send_fn_url').eq('id', true).maybeSingle();
+      // Invoke send fn as reminder (pass shared secret)
+      const { data: cfg } = await admin.from('email_notification_config').select('send_fn_url, cron_secret').eq('id', true).maybeSingle();
       if (!cfg?.send_fn_url) break;
       await fetch(cfg.send_fn_url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-cron-secret': cfg.cron_secret || '',
+        },
         body: JSON.stringify({ notification_id: n.id, kind: 'reminder' }),
       }).catch(() => {});
       queued++;
