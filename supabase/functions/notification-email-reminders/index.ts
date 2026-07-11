@@ -10,6 +10,21 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    // Require shared cron secret from the DB config — this endpoint must not
+    // be callable by anonymous or arbitrary authenticated users.
+    const provided = req.headers.get('x-cron-secret') || '';
+    const { data: cfgSecret } = await admin
+      .from('email_notification_config')
+      .select('cron_secret')
+      .eq('id', true)
+      .maybeSingle();
+    const expected = cfgSecret?.cron_secret || '';
+    if (!expected || provided !== expected) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     // Notifications older than 24h
     const { data: notifs, error } = await admin
@@ -40,12 +55,15 @@ Deno.serve(async (req) => {
         .limit(1);
       if (acks && acks.length > 0) continue;
 
-      // Invoke send fn as reminder
-      const { data: cfg } = await admin.from('email_notification_config').select('send_fn_url').eq('id', true).maybeSingle();
+      // Invoke send fn as reminder (pass shared secret)
+      const { data: cfg } = await admin.from('email_notification_config').select('send_fn_url, cron_secret').eq('id', true).maybeSingle();
       if (!cfg?.send_fn_url) break;
       await fetch(cfg.send_fn_url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-cron-secret': cfg.cron_secret || '',
+        },
         body: JSON.stringify({ notification_id: n.id, kind: 'reminder' }),
       }).catch(() => {});
       queued++;
