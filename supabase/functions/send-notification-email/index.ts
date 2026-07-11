@@ -202,6 +202,21 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    // Require shared cron secret from the DB config — this endpoint is only
+    // meant to be called by the DB trigger or the reminders cron job.
+    const provided = req.headers.get('x-cron-secret') || '';
+    const { data: cfgSecret } = await admin
+      .from('email_notification_config')
+      .select('cron_secret')
+      .eq('id', true)
+      .maybeSingle();
+    const expected = cfgSecret?.cron_secret || '';
+    if (!expected || provided !== expected) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const body = await req.json().catch(() => ({}));
     const { notification_id, kind } = body || {};
     if (!notification_id) {
