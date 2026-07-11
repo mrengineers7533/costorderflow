@@ -1269,18 +1269,21 @@ export type Database = {
       }
       email_notification_config: {
         Row: {
+          cron_secret: string
           id: boolean
           reminder_fn_url: string
           send_fn_url: string
           updated_at: string
         }
         Insert: {
+          cron_secret: string
           id?: boolean
           reminder_fn_url: string
           send_fn_url: string
           updated_at?: string
         }
         Update: {
+          cron_secret?: string
           id?: boolean
           reminder_fn_url?: string
           send_fn_url?: string
