@@ -5,11 +5,21 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const CRON_SECRET = Deno.env.get('NOTIFICATION_EMAIL_CRON_SECRET') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    // Require shared cron secret — this endpoint must not be callable by
+    // anonymous or arbitrary authenticated users.
+    const provided = req.headers.get('x-cron-secret') || '';
+    if (!CRON_SECRET || provided !== CRON_SECRET) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     // Notifications older than 24h
     const { data: notifs, error } = await admin
