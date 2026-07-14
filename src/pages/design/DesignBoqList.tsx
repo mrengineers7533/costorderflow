@@ -37,9 +37,21 @@ export default function DesignBoqList() {
       }
       const byFamily = new Map<string, BoqRecord>();
       for (const b of all) {
-        const fam = rootById.get(b.order_id) || b.order_id || b.id;
+        // Prefer OA family root (matches Admin behavior). When `orders` RLS
+        // hides the parent lookup for non-admin Design users, fall back to
+        // the shared `boq_number` which is identical across a revision family.
+        const fam =
+          rootById.get(b.order_id) ||
+          b.boq_number ||
+          b.order_id ||
+          b.id;
         const ex = byFamily.get(fam);
-        if (!ex || (b.revision ?? 0) > (ex.revision ?? 0)) byFamily.set(fam, b);
+        const better =
+          !ex ||
+          (b.revision ?? 0) > (ex.revision ?? 0) ||
+          ((b.revision ?? 0) === (ex.revision ?? 0) &&
+            (b.updated_at || "") > (ex.updated_at || ""));
+        if (better) byFamily.set(fam, b);
       }
       const latest = Array.from(byFamily.values())
         .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
