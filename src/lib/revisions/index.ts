@@ -34,6 +34,27 @@ async function refreshBoqApprovalSnapshot(boqId: string): Promise<void> {
   }
 }
 
+/** Server-side carry-forward that copies Design item statuses and applied
+ *  Design comments from the previous BOQ revision onto the new one. Runs
+ *  under SECURITY DEFINER so Costing users who revise the OA aren't blocked
+ *  by the Design-only INSERT RLS on boq_item_design_status /
+ *  boq_design_comments.  Best-effort — failures are logged, not thrown. */
+async function serverCarryForwardBoqDesignState(
+  prevBoqId: string,
+  newBoqId: string,
+): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.rpc as any)(
+      "carry_forward_boq_design_state",
+      { _prev_boq_id: prevBoqId, _new_boq_id: newBoqId },
+    );
+    if (error) console.warn("carry_forward_boq_design_state failed", error);
+  } catch (e) {
+    console.warn("carry_forward_boq_design_state threw", e);
+  }
+}
+
 async function loadCarriedDesignStatuses(prevBoq: BoqRecord): Promise<{
   byItemId: Map<string, CarriedDesignStatus>;
   bySignature: Map<string, CarriedDesignStatus>;
