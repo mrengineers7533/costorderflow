@@ -1,0 +1,184 @@
+
+-- Fix module-key typo in snapshot refresh RPC so Costing users can also refresh
+-- (previously referenced a non-existent 'boqs' module key). Design users were
+-- already accepted; this only widens for Costing without changing any behavior
+-- that already worked for Admin.
+CREATE OR REPLACE FUNCTION public.refresh_boq_revision_approval_snapshot(_boq_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  _allowed boolean := false;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Auth required';
+  END IF;
+
+  SELECT (
+    public.has_role(auth.uid(), 'admin')
+    OR public.has_module_access(auth.uid(), 'design')
+    OR public.has_module_access(auth.uid(), 'costing')
+    OR public.has_module_access(auth.uid(), 'manufacturing')
+    OR EXISTS (
+      SELECT 1
+      FROM public.boqs b
+      LEFT JOIN public.orders o ON o.id = COALESCE(b.source_order_id, b.order_id)
+      WHERE b.id = _boq_id
+        AND (b.user_id = auth.uid() OR o.user_id = auth.uid())
+    )
+  ) INTO _allowed;
+
+  IF NOT COALESCE(_allowed, false) THEN
+    RAISE EXCEPTION 'Not allowed to refresh approval snapshot';
+  END IF;
+
+  RETURN public.refresh_boq_revision_approval_snapshot_internal(_boq_id);
+END;
+$function$;
+
+-- Widen carry_forward_boq_design_state so Admin OR Costing edit OR Design edit
+-- can invoke it. Design edit already had implicit ability via other paths; this
+-- makes it explicit and covers rare cases where Design triggers a re-carry
+-- from the UI.
+CREATE OR REPLACE FUNCTION public.carry_forward_boq_design_state(_prev_boq_id uuid, _new_boq_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  _uid     uuid := auth.uid();
+  _new_rev int;
+BEGIN
+  IF _uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
+  IF NOT (
+    public.has_role(_uid, 'admin'::public.app_role)
+    OR public.can_edit_module(_uid, 'costing')
+    OR public.can_edit_module(_uid, 'design')
+  ) THEN
+    RAISE EXCEPTION 'not permitted';
+  END IF;
+  IF _prev_boq_id IS NULL OR _new_boq_id IS NULL OR _prev_boq_id = _new_boq_id THEN RETURN; END IF;
+
+  SELECT revision INTO _new_rev FROM public.boqs WHERE id = _new_boq_id;
+  IF _new_rev IS NULL THEN _new_rev := 0; END IF;
+
+  WITH prev_items AS (
+    SELECT lower(btrim(coalesce(elem->>'description',''))) || '|' ||
+           lower(btrim(coalesce(elem->>'model_number',''))) AS sig,
+           (elem->>'id')::text AS item_id
+    FROM public.boqs b, jsonb_array_elements(b.line_items) elem
+    WHERE b.id = _prev_boq_id
+  ),
+  new_items AS (
+    SELECT lower(btrim(coalesce(elem->>'description',''))) || '|' ||
+           lower(btrim(coalesce(elem->>'model_number',''))) AS sig,
+           (elem->>'id')::text AS item_id
+    FROM public.boqs b, jsonb_array_elements(b.line_items) elem
+    WHERE b.id = _new_boq_id
+  ),
+  prev_status_by_sig AS (
+    SELECT DISTINCT ON (pi.sig) pi.sig, s.status, s.reason,
+           s.decided_by, s.decided_by_name, s.decided_by_department, s.decided_at
+    FROM public.boq_item_design_status s
+    JOIN prev_items pi ON pi.item_id = s.boq_item_id
+    WHERE s.boq_id = _prev_boq_id
+    ORDER BY pi.sig, CASE WHEN s.status='approved' THEN 0 ELSE 1 END, s.decided_at DESC NULLS LAST
+  ),
+  prev_summary AS (
+    SELECT COUNT(*) FILTER (WHERE status='approved') AS approved_ct,
+           COUNT(*) FILTER (WHERE status IN ('not_approved','rejected','pending')) AS blocking_ct
+    FROM public.boq_item_design_status WHERE boq_id = _prev_boq_id
+  ),
+  prev_rep AS (
+    SELECT status, reason, decided_by, decided_by_name, decided_by_department, decided_at
+    FROM public.boq_item_design_status
+    WHERE boq_id = _prev_boq_id AND status='approved'
+    ORDER BY decided_at DESC NULLS LAST LIMIT 1
+  ),
+  new_by_sig AS (
+    SELECT DISTINCT ON (sig) sig, item_id FROM new_items ORDER BY sig, item_id
+  )
+  INSERT INTO public.boq_item_design_status(
+    boq_id, boq_item_id, boq_revision, status, reason,
+    decided_by, decided_by_name, decided_by_department, decided_at)
+  SELECT _new_boq_id, ni.item_id, _new_rev,
+    COALESCE(ps.status, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.status END),
+    COALESCE(ps.reason, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.reason END),
+    COALESCE(ps.decided_by, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.decided_by END),
+    COALESCE(ps.decided_by_name, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.decided_by_name END),
+    COALESCE(ps.decided_by_department, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.decided_by_department END),
+    COALESCE(ps.decided_at, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.decided_at END)
+  FROM new_by_sig ni
+  LEFT JOIN prev_status_by_sig ps ON ps.sig = ni.sig
+  CROSS JOIN prev_summary sm
+  LEFT JOIN prev_rep pr ON true
+  WHERE COALESCE(ps.status, CASE WHEN sm.approved_ct > 0 AND sm.blocking_ct = 0 THEN pr.status END) IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.boq_item_design_status ex
+      WHERE ex.boq_id = _new_boq_id AND ex.boq_item_id = ni.item_id
+    );
+
+  WITH prev_items AS (
+    SELECT lower(btrim(coalesce(elem->>'description',''))) || '|' ||
+           lower(btrim(coalesce(elem->>'model_number',''))) AS sig,
+           (elem->>'id')::text AS item_id
+    FROM public.boqs b, jsonb_array_elements(b.line_items) elem
+    WHERE b.id = _prev_boq_id
+  ),
+  new_items AS (
+    SELECT lower(btrim(coalesce(elem->>'description',''))) || '|' ||
+           lower(btrim(coalesce(elem->>'model_number',''))) AS sig,
+           (elem->>'id')::text AS item_id
+    FROM public.boqs b, jsonb_array_elements(b.line_items) elem
+    WHERE b.id = _new_boq_id
+  ),
+  new_by_sig AS (
+    SELECT DISTINCT ON (sig) sig, item_id FROM new_items ORDER BY sig, item_id
+  )
+  INSERT INTO public.boq_design_comments(
+    boq_id, boq_item_id, column_key, comment,
+    user_id, user_name, user_email, department,
+    applied_to_oa_at, applied_to_oa_by, applied_value, oa_revision_id)
+  SELECT _new_boq_id, ns.item_id, c.column_key, c.comment,
+    c.user_id, c.user_name, c.user_email, c.department,
+    COALESCE(c.applied_to_oa_at, now()), c.applied_to_oa_by, c.applied_value, c.oa_revision_id
+  FROM public.boq_design_comments c
+  JOIN prev_items pi ON pi.item_id = c.boq_item_id
+  JOIN new_by_sig ns ON ns.sig = pi.sig
+  WHERE c.boq_id = _prev_boq_id
+    AND c.applied_to_oa_at IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.boq_design_comments ex
+      WHERE ex.boq_id = _new_boq_id
+        AND ex.boq_item_id = ns.item_id
+        AND COALESCE(ex.column_key,'') = COALESCE(c.column_key,'')
+        AND ex.comment = c.comment
+    );
+
+  UPDATE public.boqs b
+  SET line_items = COALESCE((
+    SELECT jsonb_agg(
+      CASE WHEN st.status = 'approved' THEN
+        jsonb_set(
+          jsonb_set(t.elem, '{approval_status}', to_jsonb('approved'::text)),
+          '{approval_comment}',
+          to_jsonb(COALESCE(st.reason, t.elem->>'approval_comment', ''))
+        )
+      ELSE t.elem END
+      ORDER BY t.ord)
+    FROM jsonb_array_elements(b.line_items) WITH ORDINALITY AS t(elem, ord)
+    LEFT JOIN public.boq_item_design_status st
+      ON st.boq_id = b.id
+     AND st.boq_item_id = (t.elem->>'id')
+  ), b.line_items)
+  WHERE b.id = _new_boq_id;
+
+  BEGIN
+    PERFORM public.refresh_boq_revision_approval_snapshot(_new_boq_id);
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END;
+$function$;
