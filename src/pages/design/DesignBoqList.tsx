@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Eye, Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
+import { useUnseenNotifCountsMap } from "@/hooks/useUnseenNotifCount";
 
 export default function DesignBoqList() {
+  const nav = useNavigate();
   const [rows, setRows] = useState<BoqRecord[]>([]);
+  const [familyIds, setFamilyIds] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
   const [q, setQ] = useState("");
@@ -36,6 +39,7 @@ export default function DesignBoqList() {
           .map((o) => [o.id, o.parent_order_id || o.id]));
       }
       const byFamily = new Map<string, BoqRecord>();
+      const famToIds = new Map<string, string[]>();
       for (const b of all) {
         // Prefer OA family root (matches Admin behavior). When `orders` RLS
         // hides the parent lookup for non-admin Design users, fall back to
@@ -52,9 +56,17 @@ export default function DesignBoqList() {
           ((b.revision ?? 0) === (ex.revision ?? 0) &&
             (b.updated_at || "") > (ex.updated_at || ""));
         if (better) byFamily.set(fam, b);
+        const list = famToIds.get(fam) || [];
+        list.push(b.id);
+        famToIds.set(fam, list);
       }
       const latest = Array.from(byFamily.values())
         .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+      const perLatest = new Map<string, string[]>();
+      for (const [fam, rec] of byFamily.entries()) {
+        perLatest.set(rec.id, famToIds.get(fam) || [rec.id]);
+      }
+      setFamilyIds(perLatest);
       setRows(latest);
       setLoading(false);
     })();
@@ -84,6 +96,31 @@ export default function DesignBoqList() {
               .some((v) => (v || "").toLowerCase().includes(term)),
       );
   }, [rows, tab, q]);
+
+  const allBoqIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of visible) {
+      const ids = familyIds.get(r.id) || [r.id];
+      for (const id of ids) set.add(id);
+    }
+    return Array.from(set);
+  }, [visible, familyIds]);
+  const { counts: unseenCounts } = useUnseenNotifCountsMap("boq", allBoqIds);
+
+  function familyUnseenCount(latestId: string): number {
+    const ids = familyIds.get(latestId) || [latestId];
+    let n = 0;
+    for (const id of ids) n += unseenCounts[id] || 0;
+    return n;
+  }
+
+  function openNotifs(latestId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    const params = new URLSearchParams();
+    params.set("unseen", "1");
+    params.set("boq", latestId);
+    nav(`/notifications?${params.toString()}`);
+  }
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -131,6 +168,7 @@ export default function DesignBoqList() {
                   <TableHead>Project</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Approval</TableHead>
+                  <TableHead>Pending Notifications</TableHead>
                   <TableHead>Last Updated</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
@@ -158,6 +196,25 @@ export default function DesignBoqList() {
                       ) : (
                         <Badge variant="secondary">Not Approved by Design</Badge>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const n = familyUnseenCount(r.id);
+                        const tone =
+                          n > 0
+                            ? "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
+                            : "bg-muted text-muted-foreground border-border hover:bg-muted/80";
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => openNotifs(r.id, e)}
+                            title={n > 0 ? `${n} pending notification(s)` : "No pending notifications"}
+                            className={`inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-full border text-xs font-semibold tabular-nums transition-colors ${tone}`}
+                          >
+                            {n > 0 ? n : "—"}
+                          </button>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.updated_at).toLocaleString()}
