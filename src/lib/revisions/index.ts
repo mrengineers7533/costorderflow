@@ -491,7 +491,7 @@ export async function reviseBoqFromOrder(
     try {
       const { data: refreshed } = await supabase
         .from("boqs").select("line_items").eq("id", newBoq.id).maybeSingle();
-      const li = (refreshed as { line_items?: BoqLineItem[] } | null)?.line_items;
+      const li = (refreshed as unknown as { line_items?: BoqLineItem[] } | null)?.line_items;
       if (Array.isArray(li)) (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = li;
     } catch (e) {
       console.warn("Re-hydrate newBoq.line_items failed", e);
