@@ -37,26 +37,28 @@ function esc(s: any) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
-function renderHtml(n: any, targetDept: string, kind: string, link: string): string {
+function renderHtml(n: any, targetDept: string, kind: string, link: string, totalChanges: number): string {
   const module = (n.module || 'Notification').toString().toUpperCase();
-  const banner = kind === 'reminder' ? '⏰ Reminder — still pending' : '🔔 New notification';
+  const docNo = n.record_ref || '—';
+  const changedBy = `${n.actor_department || '—'}${n.actor_user_name ? ` / ${n.actor_user_name}` : ''}`;
+  const dt = n.created_at ? new Date(n.created_at).toUTCString() : new Date().toUTCString();
+  const banner = kind === 'reminder' ? 'Reminder — still pending' : 'Action Required';
   return `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#111;background:#f6f7f9;padding:24px">
     <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="background:#0f172a;color:#fff;padding:16px 20px;font-size:14px">${esc(banner)} · <b>${esc(module)}</b></div>
-      <div style="padding:20px">
-        <h2 style="margin:0 0 8px 0;font-size:18px">${esc(n.title || 'Notification')}</h2>
-        <div style="color:#475569;font-size:13px;margin-bottom:16px">${esc(n.summary || '')}</div>
-        <table style="width:100%;font-size:13px;border-collapse:collapse">
-          <tr><td style="padding:6px 0;color:#64748b;width:180px">Notification Type</td><td>${esc(n.event_type || '—')}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b">Module / Page</td><td>${esc(module)}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b">Document Number</td><td><b>${esc(n.record_ref || '—')}</b></td></tr>
-          <tr><td style="padding:6px 0;color:#64748b">Client</td><td>${esc(n.client_name || '—')}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b">Created By</td><td>${esc(n.actor_user_name || '—')} · ${esc(n.actor_department || '—')}</td></tr>
+      <div style="padding:20px;font-size:14px;line-height:1.55;color:#111">
+        <p style="margin:0 0 14px">A change has been made in <b>${esc(module)}</b> for document <b>${esc(docNo)}</b>.</p>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px">
+          <tr><td style="padding:6px 0;color:#64748b;width:170px">Document No.</td><td><b>${esc(docNo)}</b></td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Source Module/Page</td><td>${esc(module)}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Changed By</td><td>${esc(changedBy)}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Date/Time</td><td>${esc(dt)}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Total Changes</td><td>${esc(totalChanges)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Target Department</td><td>${esc(targetDept)}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b">Required Action</td><td>Review &amp; acknowledge in the app</td></tr>
         </table>
-        <div style="margin-top:20px">
-          <a href="${esc(link)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">Open in app</a>
+        <p style="margin:0 0 18px">Please log in to GMS to review the notification and take the required action.</p>
+        <div>
+          <a href="${esc(link)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">Open Notification</a>
         </div>
         <div style="margin-top:24px;color:#94a3b8;font-size:11px">You are receiving this because your department is a notification target. Mark it Seen/Acknowledge in the app to stop reminders.</div>
       </div>
@@ -137,18 +139,37 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
 
   const sender = await getSenderEmail();
   const link = buildDeepLink(n);
-  const subject = `[${(n.module || 'Notification').toString().toUpperCase()}] ${n.record_ref || ''} — ${n.title || 'Update'}${kind === 'reminder' ? ' (Reminder)' : ''}`.trim();
+  const docNo = n.record_ref || '';
+  const subject = `Action Required: Update in ${docNo}${kind === 'reminder' ? ' (Reminder)' : ''}`.trim();
+  const totalChanges = Math.max(
+    Number(n.total_changed_cells) || 0,
+    Number(n.total_changed_rows) || 0,
+    1,
+  );
+
+  // Group recipients by normalized department -> one email per department
+  const byDept = new Map<string, { deptLabel: string; recipients: Array<{ email: string; user_id?: string | null }> }>();
+  for (const [email, r] of byEmail) {
+    const key = normalizeDept(r.department) || 'other';
+    if (!byDept.has(key)) byDept.set(key, { deptLabel: r.department || key, recipients: [] });
+    byDept.get(key)!.recipients.push({ email, user_id: r.user_id });
+  }
 
   const results: any[] = [];
-  for (const [email, r] of byEmail) {
-    // Insert pending row; unique constraint prevents duplicates
+  for (const [, group] of byDept) {
+    const emails = group.recipients.map((r) => r.email);
+    if (emails.length === 0) continue;
+    const primary = emails[0];
+    const toHeader = emails.join(', ');
+
+    // One log row per department email (unique by notification_id + recipient_email + kind)
     const { data: logRow, error: insErr } = await admin
       .from('email_notification_log')
       .insert({
         notification_id,
-        recipient_email: email,
-        recipient_department: r.department,
-        recipient_user_id: r.user_id,
+        recipient_email: primary,
+        recipient_department: group.deptLabel,
+        recipient_user_id: null,
         kind,
         status: 'pending',
         email_from: sender,
@@ -159,41 +180,46 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
         notification_type: n.event_type,
         created_by_user: n.actor_user_name,
         created_by_department: n.actor_department,
-        target_department: r.department,
-        cc_emails: [],
+        target_department: group.deptLabel,
+        cc_emails: emails.slice(1),
       })
       .select('id')
       .maybeSingle();
-    if (insErr) { results.push({ email, skipped: 'already logged' }); continue; }
+    if (insErr) { results.push({ dept: group.deptLabel, skipped: 'already logged' }); continue; }
 
-    const html = renderHtml(n, r.department, kind, link);
-    const { id: gmailId, error: sendErr } = await sendGmail(email, subject, html);
-    if (sendErr) {
-      await admin.from('email_notification_log').update({ status: 'failed', error: sendErr }).eq('id', logRow!.id);
-      results.push({ email, ok: false, error: sendErr });
-    } else {
-      await admin.from('email_notification_log').update({ status: 'sent', gmail_message_id: gmailId, sent_at: new Date().toISOString() }).eq('id', logRow!.id);
-      if (kind === 'reminder') {
-        // Bump reminder counters on the initial row
-        const { data: initial } = await admin
-          .from('email_notification_log')
-          .select('id, reminder_count')
-          .eq('notification_id', notification_id)
-          .eq('recipient_email', email)
-          .eq('kind', 'initial')
-          .maybeSingle();
-        if (initial?.id) {
-          await admin
+    try {
+      const html = renderHtml(n, group.deptLabel, kind, link, totalChanges);
+      const { id: gmailId, error: sendErr } = await sendGmail(toHeader, subject, html);
+      if (sendErr) {
+        await admin.from('email_notification_log').update({ status: 'failed', error: sendErr }).eq('id', logRow!.id);
+        results.push({ dept: group.deptLabel, ok: false, error: sendErr });
+      } else {
+        await admin.from('email_notification_log').update({ status: 'sent', gmail_message_id: gmailId, sent_at: new Date().toISOString() }).eq('id', logRow!.id);
+        if (kind === 'reminder') {
+          const { data: initial } = await admin
             .from('email_notification_log')
-            .update({
-              reminder_sent: true,
-              reminder_sent_at: new Date().toISOString(),
-              reminder_count: (initial.reminder_count || 0) + 1,
-            })
-            .eq('id', initial.id);
+            .select('id, reminder_count')
+            .eq('notification_id', notification_id)
+            .eq('recipient_email', primary)
+            .eq('kind', 'initial')
+            .maybeSingle();
+          if (initial?.id) {
+            await admin
+              .from('email_notification_log')
+              .update({
+                reminder_sent: true,
+                reminder_sent_at: new Date().toISOString(),
+                reminder_count: (initial.reminder_count || 0) + 1,
+              })
+              .eq('id', initial.id);
+          }
         }
+        results.push({ dept: group.deptLabel, ok: true, gmailId, recipients: emails.length });
       }
-      results.push({ email, ok: true, gmailId });
+    } catch (e) {
+      const msg = (e as Error).message || 'send failed';
+      await admin.from('email_notification_log').update({ status: 'failed', error: msg }).eq('id', logRow!.id);
+      results.push({ dept: group.deptLabel, ok: false, error: msg });
     }
   }
   return { ok: true, count: results.length, results };
