@@ -10,6 +10,7 @@ const GMAIL_KEY = Deno.env.get('GOOGLE_MAIL_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_URL = Deno.env.get('APP_PUBLIC_URL') || 'https://costorderflow.lovable.app';
+const FIXED_SENDER = 'pc.2@mrengineers.com';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -67,6 +68,7 @@ function renderHtml(n: any, targetDept: string, kind: string, link: string, tota
 
 async function sendGmail(to: string, subject: string, html: string): Promise<{ id?: string; error?: string }>{
   const raw = [
+    `From: ${FIXED_SENDER}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
@@ -137,7 +139,8 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
 
   if (byEmail.size === 0) return { ok: true, skipped: 'no recipients after actor exclusion' };
 
-  const sender = await getSenderEmail();
+  await getSenderEmail().catch(() => null);
+  const sender = FIXED_SENDER;
   const link = buildDeepLink(n);
   const docNo = n.record_ref || '';
   const subject = `Action Required: Update in ${docNo}${kind === 'reminder' ? ' (Reminder)' : ''}`.trim();
