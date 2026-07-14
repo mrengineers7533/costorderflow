@@ -3050,6 +3050,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      ensure_current_user_recipient: { Args: never; Returns: string }
       get_boq_by_verification_token: {
         Args: { _token: string }
         Returns: {
