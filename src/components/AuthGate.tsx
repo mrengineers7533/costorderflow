@@ -11,6 +11,7 @@ import { Mail, Lock, LogIn, Eye, EyeOff, AlertCircle, User as UserIcon } from "l
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import gmsLogo from "@/assets/gms-logo.png";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { ensureCurrentUserRecipient } from "@/lib/notifications/dept";
 
 const FALLBACK_DOMAINS = ["fmec.in", "gmsdelhi.com", "mrengineers.com"];
 
@@ -53,10 +54,16 @@ export function AuthGate({ children }: { children: (user: User) => React.ReactNo
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setLoading(false);
+      if (nextSession?.user) {
+        void ensureCurrentUserRecipient();
+      }
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      if (data.session?.user) {
+        void ensureCurrentUserRecipient();
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
