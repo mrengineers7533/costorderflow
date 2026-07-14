@@ -482,6 +482,20 @@ export async function reviseBoqFromOrder(
     } catch (e) {
       console.warn("Carry-forward boq_item_design_status threw", e);
     }
+    // Server-side backstop: works even when the caller is a Costing user
+    // without design:edit (client-side inserts get blocked by RLS in that
+    // case, leaving revised BOQs blank until the next Design touch).
+    await serverCarryForwardBoqDesignState(prevBoq.id, newBoq.id);
+    // Re-hydrate line_items from the DB row the RPC just patched so the
+    // in-memory record reflects the carried approvals.
+    try {
+      const { data: refreshed } = await supabase
+        .from("boqs").select("line_items").eq("id", newBoq.id).maybeSingle();
+      const li = (refreshed as { line_items?: BoqLineItem[] } | null)?.line_items;
+      if (Array.isArray(li)) (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = li;
+    } catch (e) {
+      console.warn("Re-hydrate newBoq.line_items failed", e);
+    }
   }
 
   return newBoq;
