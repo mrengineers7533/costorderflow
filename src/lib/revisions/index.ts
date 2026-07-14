@@ -34,6 +34,27 @@ async function refreshBoqApprovalSnapshot(boqId: string): Promise<void> {
   }
 }
 
+/** Server-side carry-forward that copies Design item statuses and applied
+ *  Design comments from the previous BOQ revision onto the new one. Runs
+ *  under SECURITY DEFINER so Costing users who revise the OA aren't blocked
+ *  by the Design-only INSERT RLS on boq_item_design_status /
+ *  boq_design_comments.  Best-effort — failures are logged, not thrown. */
+async function serverCarryForwardBoqDesignState(
+  prevBoqId: string,
+  newBoqId: string,
+): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.rpc as any)(
+      "carry_forward_boq_design_state",
+      { _prev_boq_id: prevBoqId, _new_boq_id: newBoqId },
+    );
+    if (error) console.warn("carry_forward_boq_design_state failed", error);
+  } catch (e) {
+    console.warn("carry_forward_boq_design_state threw", e);
+  }
+}
+
 async function loadCarriedDesignStatuses(prevBoq: BoqRecord): Promise<{
   byItemId: Map<string, CarriedDesignStatus>;
   bySignature: Map<string, CarriedDesignStatus>;
@@ -461,6 +482,20 @@ export async function reviseBoqFromOrder(
     } catch (e) {
       console.warn("Carry-forward boq_item_design_status threw", e);
     }
+    // Server-side backstop: works even when the caller is a Costing user
+    // without design:edit (client-side inserts get blocked by RLS in that
+    // case, leaving revised BOQs blank until the next Design touch).
+    await serverCarryForwardBoqDesignState(prevBoq.id, newBoq.id);
+    // Re-hydrate line_items from the DB row the RPC just patched so the
+    // in-memory record reflects the carried approvals.
+    try {
+      const { data: refreshed } = await supabase
+        .from("boqs").select("line_items").eq("id", newBoq.id).maybeSingle();
+      const li = (refreshed as unknown as { line_items?: BoqLineItem[] } | null)?.line_items;
+      if (Array.isArray(li)) (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = li;
+    } catch (e) {
+      console.warn("Re-hydrate newBoq.line_items failed", e);
+    }
   }
 
   return newBoq;
@@ -760,6 +795,16 @@ export async function createPendingBoqRevision(
     (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = patched;
   } catch (e) {
     console.warn("Carry-forward pending BOQ design statuses threw", e);
+  }
+  // Server-side backstop for the pending-revision path too.
+  await serverCarryForwardBoqDesignState(prevBoq.id, newBoq.id);
+  try {
+    const { data: refreshed } = await supabase
+      .from("boqs").select("line_items").eq("id", newBoq.id).maybeSingle();
+    const li = (refreshed as unknown as { line_items?: BoqLineItem[] } | null)?.line_items;
+    if (Array.isArray(li)) (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = li;
+  } catch (e) {
+    console.warn("Re-hydrate pending newBoq.line_items failed", e);
   }
   // Fire-and-forget verification email (no-op if recipient not configured).
   try {
