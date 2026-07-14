@@ -25,6 +25,7 @@ import {
 import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/requisition/delete";
 import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
 import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
+import { useDocAccess } from "@/hooks/useDocAccess";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,7 @@ export default function RequisitionDetail() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { canEdit: docCanEdit } = useDocAccess("requisition", id);
 
   useEffect(() => {
     (async () => {
@@ -268,7 +270,7 @@ export default function RequisitionDetail() {
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
 
-  const canDelete = isAdmin || (currentUserId != null && req.user_id === currentUserId);
+  const canDelete = isAdmin || docCanEdit || (currentUserId != null && req.user_id === currentUserId);
   const isGeneral = (req as unknown as { kind?: string }).kind === "general";
   const genTitle = (req as unknown as { title?: string | null }).title || "";
 
