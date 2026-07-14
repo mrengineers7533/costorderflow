@@ -3018,6 +3018,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      carry_forward_boq_design_state: {
+        Args: { _new_boq_id: string; _prev_boq_id: string }
+        Returns: undefined
+      }
       count_unread_notifications: { Args: never; Returns: number }
       current_user_department: { Args: never; Returns: string }
       current_user_modules: {
