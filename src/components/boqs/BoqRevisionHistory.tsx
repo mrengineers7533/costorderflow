@@ -26,6 +26,7 @@ export function BoqRevisionHistory({
     (async () => {
       setLoading(true);
       try {
+        // Preferred path (matches Admin): resolve OA family via orders.
         const { data: oaRow } = await supabase
           .from("orders").select("id,parent_order_id").eq("id", orderId).maybeSingle();
         const root = (oaRow as { parent_order_id?: string | null; id?: string } | null)?.parent_order_id
@@ -37,9 +38,29 @@ export function BoqRevisionHistory({
           orderId, root,
           ...(((famRows || []) as Array<{ id: string }>).map((r) => r.id)),
         ].filter(Boolean))) as string[];
-        const { data: boqs } = await supabase
-          .from("boqs").select("*").in("order_id", ids);
-        const list = ((boqs as unknown as BoqRecord[]) || [])
+        let list: BoqRecord[] = [];
+        if (ids.length > 0) {
+          const { data: boqs } = await supabase
+            .from("boqs").select("*").in("order_id", ids);
+          list = ((boqs as unknown as BoqRecord[]) || []);
+        }
+        // Fallback for non-admin users (e.g. Design) whose `orders` RLS hides
+        // the family lookup: BOQ revisions in one family share the same
+        // boq_number, so pull all rows with the current BOQ's boq_number.
+        if (list.length <= 1) {
+          const { data: currentBoq } = await supabase
+            .from("boqs").select("boq_number").eq("id", currentBoqId).maybeSingle();
+          const boqNumber = (currentBoq as { boq_number?: string | null } | null)?.boq_number;
+          if (boqNumber) {
+            const { data: familyByNumber } = await supabase
+              .from("boqs").select("*").eq("boq_number", boqNumber);
+            const seen = new Set(list.map((r) => r.id));
+            for (const r of ((familyByNumber as unknown as BoqRecord[]) || [])) {
+              if (!seen.has(r.id)) { list.push(r); seen.add(r.id); }
+            }
+          }
+        }
+        list = list
           .slice()
           .sort((a, b) => (a.revision ?? 0) - (b.revision ?? 0));
         if (!cancelled) setRows(list);
