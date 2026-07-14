@@ -796,6 +796,16 @@ export async function createPendingBoqRevision(
   } catch (e) {
     console.warn("Carry-forward pending BOQ design statuses threw", e);
   }
+  // Server-side backstop for the pending-revision path too.
+  await serverCarryForwardBoqDesignState(prevBoq.id, newBoq.id);
+  try {
+    const { data: refreshed } = await supabase
+      .from("boqs").select("line_items").eq("id", newBoq.id).maybeSingle();
+    const li = (refreshed as unknown as { line_items?: BoqLineItem[] } | null)?.line_items;
+    if (Array.isArray(li)) (newBoq as unknown as { line_items: BoqLineItem[] }).line_items = li;
+  } catch (e) {
+    console.warn("Re-hydrate pending newBoq.line_items failed", e);
+  }
   // Fire-and-forget verification email (no-op if recipient not configured).
   try {
     const verificationUrl = `${window.location.origin}/boq-verify/${token}`;

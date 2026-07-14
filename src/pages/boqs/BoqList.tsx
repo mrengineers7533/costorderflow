@@ -81,16 +81,44 @@ export default function BoqList() {
 
   useEffect(() => {
     setLoading(true);
-    let q = supabase.from("boqs").select("*").order("created_at", { ascending: false });
-    if (!showSuperseded) {
-      // Show current rows AND pending/rejected rows so seniors/users can see them.
-      q = q.or("is_current.eq.true,verification_status.eq.pending_verification,verification_status.eq.rejected");
-    }
-    q.then(({ data, error }) => {
-      if (error) toast({ title: "Failed to load BOQs", description: error.message, variant: "destructive" });
-      else setRows((data as unknown as BoqRecord[]) || []);
+    (async () => {
+      const { data, error } = await supabase
+        .from("boqs").select("*").order("created_at", { ascending: false });
+      if (error) {
+        toast({ title: "Failed to load BOQs", description: error.message, variant: "destructive" });
+        setLoading(false); return;
+      }
+      const all = ((data || []) as unknown as BoqRecord[]);
+      if (showSuperseded) { setRows(all); setLoading(false); return; }
+      // Collapse to ONE row per OA family, keeping the latest revision.
+      // Older revisions remain available via the expandable revision-history
+      // panel already rendered below each row.
+      const orderIds = Array.from(new Set(all.map((b) => b.order_id).filter(Boolean))) as string[];
+      let rootById = new Map<string, string>();
+      if (orderIds.length) {
+        const { data: ords } = await supabase
+          .from("orders").select("id,parent_order_id").in("id", orderIds);
+        rootById = new Map(
+          ((ords || []) as Array<{ id: string; parent_order_id: string | null }>)
+            .map((o) => [o.id, o.parent_order_id || o.id]),
+        );
+      }
+      const byFamily = new Map<string, BoqRecord>();
+      for (const b of all) {
+        const fam = rootById.get(b.order_id) || b.order_id || b.id;
+        const ex = byFamily.get(fam);
+        // Prefer higher revision; on tie, prefer the newer created_at.
+        const better = !ex
+          || (b.revision ?? 0) > (ex.revision ?? 0)
+          || ((b.revision ?? 0) === (ex.revision ?? 0)
+              && (b.created_at || "") > (ex.created_at || ""));
+        if (better) byFamily.set(fam, b);
+      }
+      const latest = Array.from(byFamily.values())
+        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      setRows(latest);
       setLoading(false);
-    });
+    })();
   }, [showSuperseded, refreshTick]);
 
   /** Lazy-load every BOQ revision tied to the same OA family as `b`. */
