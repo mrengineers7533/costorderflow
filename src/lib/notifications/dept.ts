@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { markPersonalSeen } from "@/lib/notifications/personalSeen";
 
 /**
  * Normalize a department label for case/whitespace-insensitive matching.
@@ -142,9 +143,30 @@ export async function markNotificationSeen(notifId: string): Promise<boolean> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any).rpc("mark_notification_seen", { _notif_id: notifId });
-    return !error && data !== false;
+    const ok = !error && data !== false;
+    // Also mirror locally so every mounted unseen-count hook refreshes
+    // immediately without waiting for the realtime round-trip.
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth.user?.id) markPersonalSeen(auth.user.id, notifId);
+    } catch { /* non-fatal */ }
+    return ok;
   } catch {
     /* non-fatal */
     return false;
+  }
+}
+
+/**
+ * Ensure the currently signed-in user has an active `notification_recipients`
+ * row so department-scoped notifications (Design/Purchase/...) reach them.
+ * Idempotent — safe to call on every session start.
+ */
+export async function ensureCurrentUserRecipient(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).rpc("ensure_current_user_recipient");
+  } catch {
+    /* non-fatal */
   }
 }
