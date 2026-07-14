@@ -1,27 +1,24 @@
-## Root cause
+## Add "Pending Notifications" column to Design BOQ list
 
-In the Design page, all 11 revisions of `MRBOQ/26-27/0002` appear as separate rows even though `DesignBoqList` already has the same family-collapse logic as Admin.
+Add a new column between "Approval" and "Last Updated" in `src/pages/design/DesignBoqList.tsx` that shows a per-family pending-notification count for the logged-in Design user.
 
-The Admin `BoqList` collapses siblings by looking up `orders.parent_order_id` to compute a family root. Each BOQ revision points to a different `order_id`, and the family map is what merges them.
+### Behavior
+- Reuse the existing `NotSeenNotifBadge` (variant `cell`) and `useUnseenNotifCountsMap` hook — no changes to notification creation, Seen/Ack rules, or backend logic.
+- Since the list already collapses to one row per BOQ family (latest revision), collect every BOQ id belonging to each visible family and sum their unseen counts so the badge covers the entire revision chain.
+- Clicking the badge navigates to `/notifications?unseen=1&boq=<latestBoqId>` (existing `NotSeenNotifBadge` behavior), opening the current Notification Dashboard filtered to that BOQ.
+- Realtime + personal-seen listeners already inside `useUnseenNotifCountsMap` make the count drop immediately when a notification is marked Seen.
+- Show `0` when nothing pending (matches badge default).
 
-For Design users, `orders` RLS (`orders_select_doc_access`) requires document-level access to each OA. Design module only grants view access to BOQs, so the `orders` lookup returns 0 rows, `rootById` is empty, and each revision falls back to its own `order_id` — so nothing collapses.
+### Implementation details
+1. In the initial `boqs` fetch, keep the raw `all` array; build `familyToBoqIds: Map<familyKey, string[]>` alongside the existing `byFamily` map (same family-key logic: orders parent → boq_number → order_id → id).
+2. Store `familyToBoqIds` in state so the render pass can look up sibling BOQ ids for each visible row.
+3. Compute `allBoqIds` = union of every id from visible families, pass to `useUnseenNotifCountsMap("boq", allBoqIds)`.
+4. New `<TableHead>Pending Notifications</TableHead>` + `<TableCell>` rendering a single `NotSeenNotifBadge` with:
+   - `boqId={r.id}` (so click deep-links to the latest revision as required),
+   - a numeric override showing the summed count for the whole family.
+5. Because `NotSeenNotifBadge` computes its own count internally, add a lightweight sibling: render a small button mirroring its `cell` style but using the pre-summed family count. Keep it visually identical to existing badges elsewhere so UI layout is unchanged.
 
-Verified in DB: all 11 rows in the affected family share the identical `boq_number` `MRBOQ/26-27/0002/R10` but have 11 distinct `order_id`s.
+### Files touched
+- `src/pages/design/DesignBoqList.tsx` — add column, family-id map, hook call, badge cell.
 
-## Fix (listing-only, Design page)
-
-Update the family key derivation in `src/pages/design/DesignBoqList.tsx` to fall back to `boq_number` when the `orders` lookup can't provide a root. Since revised BOQs already share the same `boq_number` within a family, this collapses the list correctly without any RLS, schema, or workflow change.
-
-New family key order per row:
-1. `rootById.get(order_id)` — same as Admin, used when orders are visible.
-2. `boq_number` — new fallback for Design users whose `orders` SELECT is filtered.
-3. `order_id` then `id` — final safety fallback.
-
-Selection rule for the surviving row stays the same as Admin: highest `revision`, tiebreak by newer `created_at`/`updated_at`.
-
-## Not changed
-
-- Admin `BoqList` untouched.
-- No RLS, GRANTs, RPCs, migrations, or database rows changed.
-- Revision history, comments, approvals, OA revision, and revised BOQ generation unchanged.
-- Opening a BOQ still shows all older revisions via the existing revision history.
+No other files, RLS, or backend logic change.
