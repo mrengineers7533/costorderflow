@@ -1,81 +1,49 @@
 
-# Unified module-based access for non-admin users
+## Goal
 
-Goal: when Admin assigns a module/page to any active user, that user gets the same working features on that page that `it@mrengineers.com` (admin) currently uses — no more per-document sharing or creator-only checks getting in the way. Access to non-assigned modules stays blocked. Admin behavior is unchanged.
+Make the Design page work for any non-admin user who has been granted the `design` module by Admin exactly the way it already works for Admin. No new features, no changes to OA/BOQ revision, numbering, approval logic, comment logic, or Admin behavior.
 
-## Root causes still blocking non-admin users
+## Scope of the fix
 
-1. **Frontend gating is inconsistent.** `useDocAccess` was updated last turn, but several action buttons (Approve / Reject / Save comments / Upload attachments / Revise / Distribute) in `BoqEditor`, `DesignBoqView`, `OrderEditor`, `PiEditor`, `PurchaseDetail`, `RequisitionDetail` still gate on `isCreator` or on `document_access` rows only.
-2. **RLS still owner-scoped on several write paths**, so even if the UI shows the button, the DB rejects the write:
-   - `boq_item_attachments` INSERT/SELECT require `uploaded_by = auth.uid()` and boq owner check.
-   - `boq_design_reviews` and `boq_design_review_items` SELECT are `user_id = auth.uid() OR admin` — Design user B cannot read/append to review round started by Design user A on same BOQ.
-   - `boq_design_comments` UPDATE/DELETE are owner-only (fine for edit-own; but current admin can update anyone's — non-admins in same module should be allowed to at least read all comments, which SELECT already covers).
-   - `boq_item_design_status` UPDATE requires only `design:view`; should require `design:edit` for consistency (tighten) but not block current work.
-3. **`app_notifications` recipient policy** is fine for read; no change needed.
-4. **Design-user-only INSERT policy `design users can insert comments`** is on the `public` role — must be `authenticated` (also flagged by security scan).
+Only the following are changed:
+- RLS policies (SELECT/INSERT/UPDATE) on Design-related tables
+- SECURITY DEFINER RPCs used by the Design workflow (permission checks)
+- Minor UI gating in Design pages so buttons match the user's real permissions
+
+Nothing else is touched.
+
+## What must work for a `design`-module user (already works for Admin)
+
+1. `/design` list shows one latest BOQ row per OA family (MR + GMS).
+2. Opening a BOQ shows the full revision history (all older revisions accessible).
+3. User can add/save/edit item-wise Design comments and per-item Approve / Not-approve.
+4. Those comments appear on the linked OA page for the Costing/OA owner.
+5. When Costing revises the OA, the auto-created revised BOQ appears in Design's list.
+6. The revised BOQ inherits previous-round Approved status and applied Design comments per item (already implemented server-side; must not be blocked by RLS for the Design user viewing it).
+7. Design user can comment/approve again on the revised BOQ.
+
+## Investigation checklist (build phase)
+
+Read and verify only:
+- `boqs`, `boq_item_design_status`, `boq_design_comments`, `boq_design_reviews`, `boq_design_review_items`, `boq_item_attachments`, `boq_revision_approval_snapshots` — SELECT/INSERT/UPDATE policies. Confirm each has an `authenticated` policy of the form `admin OR can_view_module('design') OR has_doc_access('boq', boq_id)` for SELECT, and `admin OR can_edit_module('design') OR has_doc_access('boq', boq_id, 'edit')` for comment/approval INSERT/UPDATE. BOQ line-item edits stay Costing-only (Design remains view-only on BOQ data — existing rule).
+- RPCs invoked from Design UI (e.g. `apply_design_comment_to_oa`, `refresh_boq_revision_snapshot`, any carry-forward helper): ensure the internal permission check accepts `has_role(uid,'admin') OR can_view_module(uid,'design')` (or `edit` where a write is performed) instead of only admin/creator.
+- `has_doc_access('boq', ...)` already grants Design users view on all BOQs — keep as is; only patch tables/RPCs that bypass it.
+- Frontend gating: `useDocAccess('boq', id)` and `useUserAccess` on `DesignBoqView.tsx`, `DesignBoqList.tsx`, `DesignCommentsInline.tsx`, `RevisionsTable.tsx`. Any button hidden behind `isAdmin` that a `design:edit` user should also see must switch to `canEdit`/`canAccess('design')`. BOQ item-data edit controls remain admin/Costing only.
 
 ## Changes
 
-### A. Database migration (RLS + helpers)
-
-- **`boq_item_attachments`**
-  - Replace SELECT policy: allow admin OR `has_doc_access(auth.uid(),'boq',boq_id,'view')` (so any costing/design/manufacturing user assigned to the BOQ module can see attachments on their BOQs).
-  - Replace INSERT policy: allow admin OR `can_edit_doc(auth.uid(),'boq',boq_id,'costing')` AND `uploaded_by = auth.uid()`.
-  - Keep DELETE owner-or-admin (already OK) plus module_edit_gate_del.
-
-- **`boq_design_reviews`**
-  - Replace SELECT policy: admin OR `has_doc_access(auth.uid(),'boq',boq_id,'view')` (any Design/Costing viewer sees the round).
-  - Keep INSERT/UPDATE/DELETE as owner-or-admin + module_edit_gate on `design`.
-
-- **`boq_design_review_items`**
-  - Replace SELECT policy to mirror parent: admin OR viewer of the parent review's BOQ via `has_doc_access`.
-  - Keep write policies as-is (owner via parent review, plus module_edit_gate).
-
-- **`boq_design_review_documents`**, **`boq_design_review_email_log`** — mirror SELECT to `has_doc_access` of parent BOQ so shared Design users can see attachments/emails on rounds they didn't start.
-
-- **`boq_design_comments`**
-  - Change the `design users can insert comments` policy role from `public` to `authenticated`. Keep its check as-is.
-  - (No functional change to who can insert.)
-
-- **`boq_item_design_status`**
-  - Tighten UPDATE to require `has_module_perm('design','edit')` (currently 'view' — cosmetic tightening; keeps admin/design-edit ability).
-
-- Leave `orders`, `boqs`, `proforma_invoices`, `purchase_orders`, `requisitions` policies untouched — the previous turns already made them module-driven.
-
-### B. Frontend — replace owner checks with module-permission checks
-
-Introduce a small helper (already present via `useDocAccess`) and swap direct `user_id === session.user.id` / `isCreator` gates on action controls to `canEdit` (or `canView`) from `useDocAccess`.
-
-Files to update:
-- `src/pages/orders/OrderEditor.tsx` — Save Draft, Finalize, Revise, Apply Design Comment, Delete buttons: gate on `canEdit` from `useDocAccess('order', id)`.
-- `src/pages/pi/PiEditor.tsx` — same for PI actions: `useDocAccess('pi', id)`.
-- `src/pages/boqs/BoqEditor.tsx` — remove residual `isCreator` gates on Distribute/Approve/Save (last turn covered edit; audit remaining buttons).
-- `src/pages/design/DesignBoqView.tsx` — Save/Approve/Reject buttons: allow when user has `design:edit` on the BOQ (via `useDocAccess('boq', id).canEdit` — mapped in hook so design→BOQ edit means comments/approval only, not item edit).
-- `src/pages/purchase/PurchaseDetail.tsx` and PO editor screens — gate on `useDocAccess('purchase_order', id)`.
-- `src/pages/requisitions/RequisitionDetail.tsx` and annexure screens — gate on `useDocAccess('requisition', id)`.
-- `src/components/boqs/BoqItemAttachments.tsx` — enable upload when `useDocAccess('boq', boqId).canEdit`.
-
-Sidebar and route guards already use `useUserAccess` / `RequireModule`; no change needed.
-
-### C. Tests
-
-Extend `src/test/moduleAccessGating.test.ts`:
-- Design user (`design:view`) can read another user's design review round + comments (mock RLS SELECT paths via `useDocAccess('boq').canView === true`).
-- Costing user (`costing:edit`) sees `canEdit === true` for order/pi/boq created by another user.
-- Purchase user (`purchase:edit`) sees `canEdit === true` for PO created by another user.
-- Requisitions user (`requisitions:edit`) sees `canEdit === true` for requisition created by another user.
-- User with no module access on a doc kind sees `canView === false`.
-
-## Technical notes
-
-- No changes to workflows, numbering, formulas, PDF, notifications, revision carry-forward, or approval sync.
-- No new features; only unlocks existing functionality behind consistent module gating.
-- Admin (`it@mrengineers.com`) short-circuits via `has_role('admin')` in every helper — behavior identical.
-- Migration will keep all existing policies except the ones explicitly listed; each dropped policy will be recreated in the same migration.
-- Public-role → authenticated-role fix on `boq_design_comments` INSERT is a straight replacement.
+1. **Migration** — Add/replace RLS policies so every Design-flow table listed above allows the pattern above. Include GRANTs already in place; only policy bodies change. Keep existing admin/creator policies intact (do not drop).
+2. **Migration** — For each Design RPC that currently short-circuits on admin or creator only, widen the permission check to include `can_view_module('design')` for reads and `can_edit_module('design')` for writes (comments, per-item approval, snapshot refresh, apply-to-OA). No business logic inside the RPCs changes.
+3. **Frontend** — In `src/pages/design/DesignBoqView.tsx` and any Design comment/approval component, replace `isAdmin`-only guards on Save / Approve / Bulk-approve / Submit with `canEdit` from `useDocAccess('boq', id)` (which already resolves Design edit permission). No other UI or logic changes.
+4. **Tests** — Extend `src/test/moduleAccessGating.test.ts` with cases: Design edit user can save comment, toggle per-item approval, submit review, and see revised BOQ in list. Existing tests must still pass.
 
 ## Out of scope
 
-- New buttons, columns, or workflows.
-- Changing which modules unlock which doc kinds beyond the existing `has_doc_access` mapping.
-- Backfill scripts.
+- OA/BOQ revision engine, numbering, calculations, formulas, PDF, notifications.
+- Admin-only pages and controls.
+- Any new feature or UI restructure.
+
+## Verification
+
+- Run `vitest` for `moduleAccessGating`, `inheritedDesignApprovalConsistency`, `approvalBadgesE2E`.
+- Re-run one security scan after migration; expect no new findings.
