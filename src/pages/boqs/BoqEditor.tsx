@@ -37,6 +37,7 @@ import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog
 import { fetchRemarksAuditLog, saveBoqRemarks } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { useDocAccess } from "@/hooks/useDocAccess";
 import { Columns3 } from "lucide-react";
 
 function newBoqItem(seq: number): BoqLineItem {
