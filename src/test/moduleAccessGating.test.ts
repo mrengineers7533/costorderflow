@@ -96,4 +96,25 @@ describe("useDocAccess module-based gating", () => {
     expect(r.canView).toBe(true);
     expect(r.canEdit).toBe(true);
   });
+
+  it("Purchase edit user can view and edit any purchase_order", async () => {
+    state.modules = [{ user_id: "user-1", module: "purchase", permission: "edit" }];
+    const r = await run("purchase_order");
+    expect(r.canView).toBe(true);
+    expect(r.canEdit).toBe(true);
+  });
+
+  it("Requisitions edit user can view and edit any requisition", async () => {
+    state.modules = [{ user_id: "user-1", module: "requisitions", permission: "edit" }];
+    const r = await run("requisition");
+    expect(r.canView).toBe(true);
+    expect(r.canEdit).toBe(true);
+  });
+
+  it("Design view user can view BOQ (module-level, no per-doc share)", async () => {
+    state.modules = [{ user_id: "user-1", module: "design", permission: "view" }];
+    const r = await run("boq");
+    expect(r.canView).toBe(true);
+    expect(r.canEdit).toBe(false);
+  });
 });
