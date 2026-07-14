@@ -37,6 +37,7 @@ import { statusLabel, snapshotRevision, diffItemsAgainstBaseline, buildChangeLog
 import { fetchRemarksAuditLog, saveBoqRemarks } from "@/lib/boq/auditLog";
 import { DistributeBoqDialog } from "@/components/boqs/DistributeBoqDialog";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
+import { useDocAccess } from "@/hooks/useDocAccess";
 import { Columns3 } from "lucide-react";
 
 function newBoqItem(seq: number): BoqLineItem {
@@ -100,11 +101,18 @@ export default function BoqEditor() {
   const [showMotor, setShowMotor] = useState<boolean>(true);
 
   const isCreator = !!currentUserId && (currentUserId === oaOwnerId || currentUserId === boqUserId);
-  // Remarks is the ONLY editable field, and only by the OA/BOQ creator.
-  const canEditRemarks = isCreator;
+  // Module-level access: Office/OA Creator users with costing:edit gain the
+  // same UI edit rights as the doc creator. Design users are view-only on BOQ
+  // items (docAccess.MODULE_MAP excludes design from boq edit) — they still
+  // use the Design comment/approve flow, not this editor.
+  const { canEdit: docCanEdit } = useDocAccess("boq", boqId ?? undefined);
+  const canEditor = isCreator || docCanEdit;
+  // Remarks is editable by the OA/BOQ creator or any user with costing:edit.
+  const canEditRemarks = canEditor;
   const locked = designReviewStatus === "design_approved" || designReviewStatus === "final_sent";
-  // After comments are received (or while iterating), the creator can edit any item field.
-  const canEditFull = isCreator && !locked && (
+  // After comments are received (or while iterating), any user with edit
+  // rights (creator or costing:edit) can edit any item field.
+  const canEditFull = canEditor && !locked && (
     designReviewStatus === "review_received" ||
     designReviewStatus === "changes_required" ||
     designReviewStatus === "boq_updated" ||

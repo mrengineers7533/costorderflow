@@ -1,53 +1,74 @@
-# Module-permission-based access across all modules
+# Non-admin access fix: Design (view + comment + approve) & Office/OA Creator (full OA edit/revise)
 
-Extend the "Design users see/edit all BOQs" pattern to every module so an admin-granted **module view** permission lets a user see all documents in that module, and **module edit** lets them create/update/delete any document in it. Per-document sharing (`document_access`) stays as an extra path for users without the module perm.
+Access-control only. No changes to numbering, revision logic, approval carry-forward, notifications, calculations, PDF, UI layout, or Admin behavior.
 
-## Modules → tables mapping
+## Root causes
 
-| Module perm | Primary tables | Child/related tables |
-|---|---|---|
-| `costing` | `orders`, `boqs`, `proforma_invoices` | `boq_revisions`, `boq_item_attachments`, `boq_item_design_status`, `boq_remarks_audit_log`, `boq_revision_approval_snapshots`, `proforma_invoice_documents`, `order_revision_notifications`, `client_copies`, `boq_distribution_log` |
-| `design` | `boqs` (view all — already done), `boq_design_reviews`, `boq_design_review_items`, `boq_design_review_documents`, `boq_design_comments` | already broadly readable; extend edit for `design` edit perm |
-| `purchase` | `purchase_orders`, `vendors` | `purchase_order_rows`, `purchase_order_sends`, `purchase_order_audit` |
-| `manufacturing` | (reads `boqs`, `orders`, `requisitions`) | grants via cross-module read helper (see below) |
-| `requisitions` | `requisitions` | `requisition_items`, `requisition_raw_materials`, `requisition_lots`, `requisition_distribution_log` |
-| `annexures` | `requisition_annexures` | `requisition_annexure_rows` |
-| `grn` | `grn_receipts` | — |
-| `raw_materials` | `rm_master_uploads`, `fg_raw_material_map` | (already scoped) |
-| `cost_sheets` | `cost_sheets` | — |
-| `reports` | read-only across orders/boqs/pi/po/req (view perm only) | — |
+1. `useDocAccess` only reads `document_access` rows. Design or Office users with a valid module permission but no per-doc row get `canView=false` / `canEdit=false`, so the UI hides Save / Comment / Approve / Apply / Revise buttons even though RLS already permits the write.
+2. `BoqEditor` (and equivalent Office gates) tie edit to `isCreator`. An Office user with `costing:edit` who is not the creator cannot revise or edit.
+3. `boq_revision_approval_snapshots` write policy references a non-existent `'boqs'` module key. Correct Office key is `'costing'`, so snapshot refresh silently fails on Office actions.
+4. `has_doc_access` DB fallback already maps design→BOQ view and costing→order/BOQ/PI — no other DB access changes needed.
 
-## Approach
+## Scope (locked from Q&A)
 
-1. **Add two SQL helpers** (SECURITY DEFINER, stable, `search_path=public`):
-   - `public.has_module_view(_user uuid, _module app_module)` → true if admin OR row in `user_module_access` for that module with any permission.
-   - `public.has_module_edit(_user uuid, _module app_module)` → true if admin OR row in `user_module_access` with `permission='edit'`.
-   (If `app_module` enum doesn't exist, use `text`.)
+- Office/OA Creator module key = **costing** only.
+- Purchase and Requisition modules are **not** touched in this pass.
+- Design remains **view-only** on BOQ item data. Comments and approvals continue through the existing Design flow.
 
-2. **Rewrite RLS on each primary table** with four policies:
-   - `SELECT`: `has_module_view(auth.uid(), '<mod>') OR has_doc_access(...) OR created_by = auth.uid()`
-   - `INSERT`: `has_module_edit(auth.uid(), '<mod>')` (or creator path)
-   - `UPDATE`: `has_module_edit(...) OR existing doc-scoped edit path`
-   - `DELETE`: `has_module_edit(...) OR admin`
-   Keep the current admin bypass and `has_doc_access` paths so per-document sharing still works for users without the module perm.
+## Changes
 
-3. **Child tables** inherit through the parent row (e.g. `purchase_order_rows` checks `has_module_view/edit('purchase')` OR access to the parent PO). Rewrite each child table's policies to add the module-perm branch alongside the existing parent-access branch.
+### A. `src/hooks/useDocAccess.ts` (rewrite body, same exports)
 
-4. **Manufacturing** module perm additionally grants read on `boqs`, `orders`, `requisitions` (view-only cross-module read) so the manufacturing workflow keeps working. No edit rights on those from `manufacturing` alone.
+Compute permissions from admin + module perms + `document_access`.
 
-5. **Storage buckets**: extend `order_templates` / `rm_master_uploads` / BOQ attachment buckets to accept module-view perm on the corresponding module (already done for the two flagged ones; apply same pattern to BOQ attachments and PI/PO uploads where present).
+Doc-kind → module mapping used only in this hook:
+- `order`, `pi`: view = `costing:view`, edit = `costing:edit`
+- `boq`: view = `costing:view` OR `design:view`; **edit = `costing:edit` only** (Design cannot edit BOQ items)
+- `purchase_order`, `requisition`: unchanged from today (document_access only)
 
-6. **Frontend list pages** (`OrdersList`, `BoqList`, `PiList`, `RequisitionsList`, `PurchaseList`, `AnnexureFolder`, `GrnList`, `CostSheetsList`): drop the "share this doc" empty-state hint for users who already have the module perm — RLS now returns the rows directly, no client change needed beyond hiding the hint when `useUserAccess.canAccess(module)` is true.
+`canView` = admin OR module-view-match OR any `document_access` row.
+`canEdit` = admin OR module-edit-match OR `document_access` row with `edit`.
 
-7. **No changes** to: notification generation, approval workflow, calculations, PDF export, cost-sheet logic, numbering, activity feed, email audit.
+### B. `src/pages/boqs/BoqEditor.tsx`
 
-## Delivery
+Change `canEditFull` / `canEditRemarks` from `isCreator` to `isCreator OR canEdit` (from `useDocAccess('boq', boqId)`). Locked / verified / finalized gates remain untouched. Design users still cannot edit — their `canEdit` stays false by (A).
 
-- **1 migration** (large, single file) rewriting all affected policies + adding the two helpers.
-- **Small frontend patch**: conditionally hide `NoSharedDocsHint` when the user already has the module permission.
-- **Re-run security linter** after migration and report new findings (expect none — this widens read to authenticated users with an explicit grant, not to `anon`).
+### C. `src/pages/orders/OrderEditor.tsx` and `src/pages/pi/PiEditor.tsx`
 
-## Risks / notes
+Only where a creator-only boolean currently blocks module editors, replace `isCreator` with `isCreator OR canEdit`. No write-path logic changes; no changes to apply-comment, revise, or numbering flows.
 
-- Users with only a module **view** perm will now see every document ever created in that module, including historical/archived ones. Confirm this is intended (the design module already behaves this way).
-- Per-document sharing (`document_access`) becomes redundant for users who also have the module perm, but stays functional for the "external per-doc reviewer" case.
+### D. `src/components/access/NoSharedDocsHint.tsx`
+
+Extend the module short-circuit so Office users with `costing:view` also stop seeing the "ask admin" hint on order/BOQ/PI lists.
+
+### E. Database migration (one file)
+
+Replace `boq_revision_approval_snapshots` write policy so writers = admin OR `has_module_access('design')` OR `has_module_access('costing')`. SELECT policy unchanged. No other RLS changes.
+
+### F. Tests — `src/test/moduleAccessGating.test.ts`
+
+- Design user, BOQ, no `document_access` → `canView=true`, `canEdit=false`.
+- Office `costing:edit` user, order/BOQ/PI, no row → `canView=true`, `canEdit=true`.
+- Non-Design/non-Office user, no perms, no row → both false.
+- Admin short-circuit unchanged.
+
+## Files touched
+
+```text
+src/hooks/useDocAccess.ts                   (rewrite body, same exports)
+src/components/access/NoSharedDocsHint.tsx  (extend module map)
+src/pages/boqs/BoqEditor.tsx                (canEditFull/canEditRemarks include canEdit)
+src/pages/orders/OrderEditor.tsx            (only if a creator gate blocks module editors)
+src/pages/pi/PiEditor.tsx                   (same targeted check)
+supabase/migrations/<new>.sql               (1 policy replacement)
+src/test/moduleAccessGating.test.ts         (new)
+```
+
+## Explicitly not changed
+
+- Admin behavior anywhere.
+- `has_doc_access`, `can_edit_doc`, `has_module_perm` function bodies.
+- Purchase and Requisition access.
+- All approval / comment / revision / snapshot carry-forward code.
+- Notifications, numbering, PDF, UI layout, sidebar, routes.
+- Design users' write scope on BOQ item data (still forbidden).
