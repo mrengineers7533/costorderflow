@@ -1,58 +1,81 @@
-# Enable OA revise for Costing users (access-only fix)
 
-## Root cause
+# Unified module-based access for non-admin users
 
-Revising an OA fails for a Costing (`costing:edit`) user when the source OA was created by someone else. Two layers block it:
+Goal: when Admin assigns a module/page to any active user, that user gets the same working features on that page that `it@mrengineers.com` (admin) currently uses — no more per-document sharing or creator-only checks getting in the way. Access to non-assigned modules stays blocked. Admin behavior is unchanged.
 
-1. **`orders_insert_own` (permissive INSERT)** requires `auth.uid() = user_id OR admin`. `reviseOrder` in `src/lib/revisions/index.ts` copies the whole source row via `stripOrderForInsert`, so `user_id` on the new revision row still points to the original creator. The insert is rejected.
-2. **`boqs_insert_own` (permissive INSERT)** on `boqs` has the same rule. Even if the OA insert succeeded, the auto-revised BOQ insert (`reviseBoqFromOrder`) would fail for the same reason (`user_id` copied from previous BOQ).
-3. The equivalent policy `pi_insert_own` on `proforma_invoices` has the same shape and would eventually bite PI clone/revise paths — fix in the same migration so the three tables stay consistent.
+## Root causes still blocking non-admin users
 
-`can_edit_module`, `can_edit_doc`, `has_doc_access` already grant Costing users edit/view; the SELECT/UPDATE/DELETE paths and the RESTRICTIVE `module_edit_gate_ins` policy already work. Only the permissive INSERT policies are too narrow.
+1. **Frontend gating is inconsistent.** `useDocAccess` was updated last turn, but several action buttons (Approve / Reject / Save comments / Upload attachments / Revise / Distribute) in `BoqEditor`, `DesignBoqView`, `OrderEditor`, `PiEditor`, `PurchaseDetail`, `RequisitionDetail` still gate on `isCreator` or on `document_access` rows only.
+2. **RLS still owner-scoped on several write paths**, so even if the UI shows the button, the DB rejects the write:
+   - `boq_item_attachments` INSERT/SELECT require `uploaded_by = auth.uid()` and boq owner check.
+   - `boq_design_reviews` and `boq_design_review_items` SELECT are `user_id = auth.uid() OR admin` — Design user B cannot read/append to review round started by Design user A on same BOQ.
+   - `boq_design_comments` UPDATE/DELETE are owner-only (fine for edit-own; but current admin can update anyone's — non-admins in same module should be allowed to at least read all comments, which SELECT already covers).
+   - `boq_item_design_status` UPDATE requires only `design:view`; should require `design:edit` for consistency (tighten) but not block current work.
+3. **`app_notifications` recipient policy** is fine for read; no change needed.
+4. **Design-user-only INSERT policy `design users can insert comments`** is on the `public` role — must be `authenticated` (also flagged by security scan).
 
-Nothing else in the OA revise path (RPC, numbering, snapshot triggers, notifications) enforces creator identity — those layers already delegate to module/doc-access helpers.
+## Changes
 
-## Fix
+### A. Database migration (RLS + helpers)
 
-### 1. Migration (single file) — widen permissive INSERT policies
+- **`boq_item_attachments`**
+  - Replace SELECT policy: allow admin OR `has_doc_access(auth.uid(),'boq',boq_id,'view')` (so any costing/design/manufacturing user assigned to the BOQ module can see attachments on their BOQs).
+  - Replace INSERT policy: allow admin OR `can_edit_doc(auth.uid(),'boq',boq_id,'costing')` AND `uploaded_by = auth.uid()`.
+  - Keep DELETE owner-or-admin (already OK) plus module_edit_gate_del.
 
-Drop and recreate the three permissive INSERT policies so the check is "creator OR admin OR module-editor":
+- **`boq_design_reviews`**
+  - Replace SELECT policy: admin OR `has_doc_access(auth.uid(),'boq',boq_id,'view')` (any Design/Costing viewer sees the round).
+  - Keep INSERT/UPDATE/DELETE as owner-or-admin + module_edit_gate on `design`.
 
-- `orders_insert_own` on `public.orders`
-  - `WITH CHECK ( auth.uid() = user_id OR has_role(auth.uid(),'admin') OR can_edit_module(auth.uid(),'costing') )`
-- `boqs_insert_own` on `public.boqs` — same three-way check with `'costing'`.
-- `pi_insert_own` on `public.proforma_invoices` — same three-way check with `'costing'`.
+- **`boq_design_review_items`**
+  - Replace SELECT policy to mirror parent: admin OR viewer of the parent review's BOQ via `has_doc_access`.
+  - Keep write policies as-is (owner via parent review, plus module_edit_gate).
 
-RESTRICTIVE `module_edit_gate_ins` policies stay in place, so a caller still needs `can_edit_module('costing')` (or admin). No other policies, functions, or triggers are touched. Design users are unaffected — they have no `costing:edit`, so this three-way check does not open OA/PI edit to them.
+- **`boq_design_review_documents`**, **`boq_design_review_email_log`** — mirror SELECT to `has_doc_access` of parent BOQ so shared Design users can see attachments/emails on rounds they didn't start.
 
-### 2. No code changes required in `src/lib/revisions/index.ts`
+- **`boq_design_comments`**
+  - Change the `design users can insert comments` policy role from `public` to `authenticated`. Keep its check as-is.
+  - (No functional change to who can insert.)
 
-`reviseOrder` and `reviseBoqFromOrder` keep copying `user_id` unchanged so downstream reporting/history still show the original creator. RLS now permits the write for any `costing:edit` user.
+- **`boq_item_design_status`**
+  - Tighten UPDATE to require `has_module_perm('design','edit')` (currently 'view' — cosmetic tightening; keeps admin/design-edit ability).
 
-### 3. No UI changes
+- Leave `orders`, `boqs`, `proforma_invoices`, `purchase_orders`, `requisitions` policies untouched — the previous turns already made them module-driven.
 
-Revise-OA button, save/apply-comment gates, and route guards already use `useDocAccess` + module perms after the earlier plan; they already show Revise/Save for `costing:edit` users. Admin behavior, Design gates, Purchase, and Requisition are untouched.
+### B. Frontend — replace owner checks with module-permission checks
 
-## Files touched
+Introduce a small helper (already present via `useDocAccess`) and swap direct `user_id === session.user.id` / `isCreator` gates on action controls to `canEdit` (or `canView`) from `useDocAccess`.
 
-```text
-supabase/migrations/<new>.sql   (drop + recreate 3 permissive INSERT policies)
-```
+Files to update:
+- `src/pages/orders/OrderEditor.tsx` — Save Draft, Finalize, Revise, Apply Design Comment, Delete buttons: gate on `canEdit` from `useDocAccess('order', id)`.
+- `src/pages/pi/PiEditor.tsx` — same for PI actions: `useDocAccess('pi', id)`.
+- `src/pages/boqs/BoqEditor.tsx` — remove residual `isCreator` gates on Distribute/Approve/Save (last turn covered edit; audit remaining buttons).
+- `src/pages/design/DesignBoqView.tsx` — Save/Approve/Reject buttons: allow when user has `design:edit` on the BOQ (via `useDocAccess('boq', id).canEdit` — mapped in hook so design→BOQ edit means comments/approval only, not item edit).
+- `src/pages/purchase/PurchaseDetail.tsx` and PO editor screens — gate on `useDocAccess('purchase_order', id)`.
+- `src/pages/requisitions/RequisitionDetail.tsx` and annexure screens — gate on `useDocAccess('requisition', id)`.
+- `src/components/boqs/BoqItemAttachments.tsx` — enable upload when `useDocAccess('boq', boqId).canEdit`.
 
-No frontend, RPC, edge function, or business-logic files change.
+Sidebar and route guards already use `useUserAccess` / `RequireModule`; no change needed.
 
-## Explicitly not changed
+### C. Tests
 
-- Admin behavior, Design access, Purchase/Requisition RLS.
-- OA/BOQ numbering, revision logic, approval carry-forward, snapshots.
-- `reviseOrder`, `reviseBoqFromOrder`, `syncBoqsAndPisForOrder`.
-- Formulas, PDFs, notifications, UI layout.
-- RESTRICTIVE `module_edit_gate_ins` policies (still enforce `costing:edit`).
+Extend `src/test/moduleAccessGating.test.ts`:
+- Design user (`design:view`) can read another user's design review round + comments (mock RLS SELECT paths via `useDocAccess('boq').canView === true`).
+- Costing user (`costing:edit`) sees `canEdit === true` for order/pi/boq created by another user.
+- Purchase user (`purchase:edit`) sees `canEdit === true` for PO created by another user.
+- Requisitions user (`requisitions:edit`) sees `canEdit === true` for requisition created by another user.
+- User with no module access on a doc kind sees `canView === false`.
 
-## Acceptance mapping
+## Technical notes
 
-- Costing user with `costing:view` + `costing:edit` opens another user's OA → allowed by existing SELECT policy.
-- Edits / applies Design comment / saves → allowed by existing permissive UPDATE `orders_update_doc_access` (uses `has_doc_access` which honors `can_edit_module('costing')`).
-- Clicks Revise OA → new `orders` INSERT now passes because of widened `orders_insert_own`; RESTRICTIVE gate passes because user has `costing:edit`.
-- Auto-revised BOQ → `boqs` INSERT passes the same way.
-- No changes to numbering, approval carry-forward, or Admin flow.
+- No changes to workflows, numbering, formulas, PDF, notifications, revision carry-forward, or approval sync.
+- No new features; only unlocks existing functionality behind consistent module gating.
+- Admin (`it@mrengineers.com`) short-circuits via `has_role('admin')` in every helper — behavior identical.
+- Migration will keep all existing policies except the ones explicitly listed; each dropped policy will be recreated in the same migration.
+- Public-role → authenticated-role fix on `boq_design_comments` INSERT is a straight replacement.
+
+## Out of scope
+
+- New buttons, columns, or workflows.
+- Changing which modules unlock which doc kinds beyond the existing `has_doc_access` mapping.
+- Backfill scripts.
