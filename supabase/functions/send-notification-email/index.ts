@@ -10,7 +10,21 @@ const GMAIL_KEY = Deno.env.get('GOOGLE_MAIL_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_URL = Deno.env.get('APP_PUBLIC_URL') || 'https://costorderflow.lovable.app';
-const FIXED_SENDER = 'pc.2@mrengineers.com';
+const DEFAULT_SENDER = 'pc.2@mrengineers.com';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function loadConfiguredSender(): Promise<string | null> {
+  try {
+    const { data } = await admin
+      .from('email_notification_config')
+      .select('sender_email')
+      .eq('id', true)
+      .maybeSingle();
+    const s = (data?.sender_email || '').toString().trim();
+    if (!s || !EMAIL_RE.test(s)) return null;
+    return s;
+  } catch { return null; }
+}
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -66,9 +80,9 @@ function renderHtml(n: any, targetDept: string, kind: string, link: string, tota
     </div></body></html>`;
 }
 
-async function sendGmail(to: string, subject: string, html: string): Promise<{ id?: string; error?: string }>{
+async function sendGmail(from: string, to: string, subject: string, html: string): Promise<{ id?: string; error?: string }>{
   const raw = [
-    `From: ${FIXED_SENDER}`,
+    `From: ${from}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
@@ -139,8 +153,8 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
 
   if (byEmail.size === 0) return { ok: true, skipped: 'no recipients after actor exclusion' };
 
-  await getSenderEmail().catch(() => null);
-  const sender = FIXED_SENDER;
+  const configured = await loadConfiguredSender();
+  const sender = configured || '';
   const link = buildDeepLink(n);
   const docNo = n.record_ref || '';
   const subject = `Action Required: Update in ${docNo}${kind === 'reminder' ? ' (Reminder)' : ''}`.trim();
@@ -176,6 +190,7 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
         kind,
         status: 'pending',
         email_from: sender,
+        sender_email: sender,
         subject,
         source_module: n.module,
         source_page: n.module,
@@ -190,9 +205,18 @@ async function handle(notification_id: string, kind: 'initial' | 'reminder') {
       .maybeSingle();
     if (insErr) { results.push({ dept: group.deptLabel, skipped: 'already logged' }); continue; }
 
+    if (!sender) {
+      await admin.from('email_notification_log').update({
+        status: 'failed',
+        error: 'Sender email is not configured or invalid. Set it in Admin > Email Settings.',
+      }).eq('id', logRow!.id);
+      results.push({ dept: group.deptLabel, ok: false, error: 'sender_not_configured' });
+      continue;
+    }
+
     try {
       const html = renderHtml(n, group.deptLabel, kind, link, totalChanges);
-      const { id: gmailId, error: sendErr } = await sendGmail(toHeader, subject, html);
+      const { id: gmailId, error: sendErr } = await sendGmail(sender, toHeader, subject, html);
       if (sendErr) {
         await admin.from('email_notification_log').update({ status: 'failed', error: sendErr }).eq('id', logRow!.id);
         results.push({ dept: group.deptLabel, ok: false, error: sendErr });

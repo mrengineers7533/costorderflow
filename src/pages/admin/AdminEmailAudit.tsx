@@ -31,6 +31,7 @@ interface Row {
   seen_status: boolean;
   ack_status: boolean;
   created_at: string;
+  sender_email: string | null;
 }
 
 const PAGE_SIZE = 50;
@@ -77,6 +78,9 @@ export default function AdminEmailAudit() {
   const [seen, setSeen] = useState<string>("all");
   const [module, setModule] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [senderFilter, setSenderFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [modules, setModules] = useState<string[]>([]);
 
   useEffect(() => {
@@ -100,6 +104,15 @@ export default function AdminEmailAudit() {
         const s = `%${search.trim()}%`;
         q = q.or(`recipient_email.ilike.${s},source_doc_no.ilike.${s},subject.ilike.${s}`);
       }
+      if (senderFilter.trim()) {
+        q = q.ilike("sender_email", `%${senderFilter.trim()}%`);
+      }
+      if (fromDate) q = q.gte("created_at", new Date(fromDate).toISOString());
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        q = q.lte("created_at", end.toISOString());
+      }
       const { data, count } = await q;
       if (cancelled) return;
       setRows((data as Row[]) || []);
@@ -107,7 +120,7 @@ export default function AdminEmailAudit() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [page, status, reminder, seen, module, search]);
+  }, [page, status, reminder, seen, module, search, senderFilter, fromDate, toDate]);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,10 +174,24 @@ export default function AdminEmailAudit() {
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="skipped_duplicate">Duplicate skipped</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block">Sender</label>
+          <Input value={senderFilter} onChange={(e) => { setPage(0); setSenderFilter(e.target.value); }} placeholder="sender…" className="w-[180px]" />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block">From</label>
+          <Input type="date" value={fromDate} onChange={(e) => { setPage(0); setFromDate(e.target.value); }} className="w-[150px]" />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block">To</label>
+          <Input type="date" value={toDate} onChange={(e) => { setPage(0); setToDate(e.target.value); }} className="w-[150px]" />
         </div>
         <div>
           <label className="text-xs text-muted-foreground block">Reminder</label>
@@ -204,6 +231,7 @@ export default function AdminEmailAudit() {
               <th className="px-2 py-2">Created By</th>
               <th className="px-2 py-2">Target Dept</th>
               <th className="px-2 py-2">Sent To</th>
+              <th className="px-2 py-2">Sender</th>
               <th className="px-2 py-2">Subject</th>
               <th className="px-2 py-2">Status</th>
               <th className="px-2 py-2">Sent At</th>
@@ -215,11 +243,11 @@ export default function AdminEmailAudit() {
           </thead>
           <tbody className="divide-y">
             {loading ? (
-              <tr><td colSpan={13} className="p-8 text-center text-muted-foreground">
+              <tr><td colSpan={14} className="p-8 text-center text-muted-foreground">
                 <Loader2 className="inline h-4 w-4 animate-spin mr-2" /> Loading…
               </td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={13} className="p-8 text-center text-muted-foreground">No email records.</td></tr>
+              <tr><td colSpan={14} className="p-8 text-center text-muted-foreground">No email records.</td></tr>
             ) : rows.map((r) => (
               <tr key={r.id} className="hover:bg-muted/20">
                 <td className="px-2 py-2 capitalize">{r.source_module || "—"}</td>
@@ -236,6 +264,7 @@ export default function AdminEmailAudit() {
                     <div className="text-[10px] text-muted-foreground">CC: {r.cc_emails.join(", ")}</div>
                   )}
                 </td>
+                <td className="px-2 py-2 text-xs">{r.sender_email || "—"}</td>
                 <td className="px-2 py-2 max-w-[280px] truncate" title={r.subject || ""}>{r.subject || "—"}</td>
                 <td className="px-2 py-2"><StatusBadge s={r.status} /></td>
                 <td className="px-2 py-2 whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
