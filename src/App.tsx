@@ -49,6 +49,7 @@ import AdminDocumentAccess from "./pages/admin/AdminDocumentAccess";
 import AdminVendors from "./pages/admin/AdminVendors";
 import RevisionRepairReport from "./pages/admin/RevisionRepairReport";
 import AdminEmailAudit from "./pages/admin/AdminEmailAudit";
+import AdminEmailSettings from "./pages/admin/AdminEmailSettings";
 import BoqVerify from "./pages/boqs/BoqVerify";
 import DesignReview from "./pages/boqs/DesignReview";
 import FinalBoq from "./pages/boqs/FinalBoq";
@@ -157,6 +158,10 @@ const App = () => (
                       <Route
                         path="/admin/email-audit"
                         element={<RequireAdmin user={user}><AdminEmailAudit /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/email-settings"
+                        element={<RequireAdmin user={user}><AdminEmailSettings /></RequireAdmin>}
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
