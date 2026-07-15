@@ -140,7 +140,24 @@ export default function BoqList() {
       ].filter(Boolean)));
       const { data: boqs } = await supabase
         .from("boqs").select("*").in("order_id", ids).order("revision", { ascending: true });
-      setFamilyBoqs((s) => ({ ...s, [b.id]: (boqs as unknown as BoqRecord[]) || [] }));
+      let list = ((boqs as unknown as BoqRecord[]) || []);
+      // Fallback for non-admin users whose `orders` RLS hides the family
+      // lookup: match sibling revisions by `boq_number` stem.
+      if (list.length <= 1) {
+        const stem = stripRevisionSuffix(b.boq_number);
+        if (stem) {
+          const { data: byNumber } = await supabase
+            .from("boqs").select("*")
+            .or(`boq_number.eq.${stem},boq_number.ilike.${stem}/R%`)
+            .order("revision", { ascending: true });
+          const seen = new Set(list.map((r) => r.id));
+          for (const r of ((byNumber as unknown as BoqRecord[]) || [])) {
+            if (!seen.has(r.id)) { list.push(r); seen.add(r.id); }
+          }
+          list.sort((x, y) => (x.revision ?? 0) - (y.revision ?? 0));
+        }
+      }
+      setFamilyBoqs((s) => ({ ...s, [b.id]: list }));
     } catch (e) {
       toast({ title: "Failed to load revisions", description: (e as Error).message, variant: "destructive" });
     } finally {
