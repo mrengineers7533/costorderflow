@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.admin_reset_generated_data() TO authenticated;
