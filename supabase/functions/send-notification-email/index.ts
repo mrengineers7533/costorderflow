@@ -52,12 +52,74 @@ function esc(s: any) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
+const MODULE_LABEL: Record<string, string> = {
+  boq: 'BOQ',
+  order: 'OA',
+  oa: 'OA',
+  pi: 'PI',
+  purchase: 'Purchase Order',
+  grn: 'GRN',
+  requisition: 'Requisition',
+  annexure: 'Annexure',
+  design: 'Design',
+  design_comment: 'Design Comment',
+};
+
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
+  return String(v);
+}
+
+function renderChangeDetails(n: any): string {
+  const raw = Array.isArray(n.line_item_changes) ? n.line_item_changes : [];
+  if (raw.length === 0) return '';
+  const MAX = 50;
+  const rows = raw.slice(0, MAX);
+  const overflow = raw.length - rows.length;
+  const blocks: string[] = [];
+  for (const c of rows) {
+    const rowNo = esc(c?.line_no ?? '—');
+    const kind = String(c?.kind || 'modified');
+    if (kind === 'added') {
+      blocks.push(`<div style="border-top:1px solid #e5e7eb;padding:10px 0"><b>Row No.:</b> ${rowNo} — Row added</div>`);
+      continue;
+    }
+    if (kind === 'removed') {
+      blocks.push(`<div style="border-top:1px solid #e5e7eb;padding:10px 0"><b>Row No.:</b> ${rowNo} — Row removed</div>`);
+      continue;
+    }
+    const fields = Array.isArray(c?.changed_fields) ? c.changed_fields : [];
+    const before = (c?.before && typeof c.before === 'object') ? c.before : {};
+    const after = (c?.after && typeof c.after === 'object') ? c.after : {};
+    const fieldParts = fields.map((f: string) => (
+      `<div style="margin:6px 0 0 12px">
+        <div><b>Field:</b> ${esc(f)}</div>
+        <div><b>Previous Value:</b> ${esc(fmtVal(before[f]))}</div>
+        <div><b>New Value:</b> ${esc(fmtVal(after[f]))}</div>
+      </div>`
+    )).join('');
+    blocks.push(
+      `<div style="border-top:1px solid #e5e7eb;padding:10px 0">
+        <div><b>Row No.:</b> ${rowNo}</div>
+        ${fieldParts}
+      </div>`,
+    );
+  }
+  const more = overflow > 0
+    ? `<div style="padding:10px 0;color:#64748b;font-size:12px">+${overflow} more change${overflow===1?'':'s'} — open the notification for the full list.</div>`
+    : '';
+  return `<div style="margin:8px 0 16px"><div style="font-weight:600;color:#0f172a;margin-bottom:4px">Change Details</div>${blocks.join('')}${more}</div>`;
+}
+
 function renderHtml(n: any, targetDept: string, kind: string, link: string, totalChanges: number): string {
   const module = (n.module || 'Notification').toString().toUpperCase();
+  const docType = MODULE_LABEL[String(n.module || '').toLowerCase()] || module;
   const docNo = n.record_ref || '—';
   const changedBy = `${n.actor_department || '—'}${n.actor_user_name ? ` / ${n.actor_user_name}` : ''}`;
   const dt = n.created_at ? new Date(n.created_at).toUTCString() : new Date().toUTCString();
   const banner = kind === 'reminder' ? 'Reminder — still pending' : 'Action Required';
+  const details = renderChangeDetails(n);
   return `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#111;background:#f6f7f9;padding:24px">
     <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="background:#0f172a;color:#fff;padding:16px 20px;font-size:14px">${esc(banner)} · <b>${esc(module)}</b></div>
@@ -65,12 +127,14 @@ function renderHtml(n: any, targetDept: string, kind: string, link: string, tota
         <p style="margin:0 0 14px">A change has been made in <b>${esc(module)}</b> for document <b>${esc(docNo)}</b>.</p>
         <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:16px">
           <tr><td style="padding:6px 0;color:#64748b;width:170px">Document No.</td><td><b>${esc(docNo)}</b></td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Document Type</td><td>${esc(docType)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Source Module/Page</td><td>${esc(module)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Changed By</td><td>${esc(changedBy)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Date/Time</td><td>${esc(dt)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Total Changes</td><td>${esc(totalChanges)}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b">Target Department</td><td>${esc(targetDept)}</td></tr>
         </table>
+        ${details}
         <p style="margin:0 0 18px">Please log in to GMS to review the notification and take the required action.</p>
         <div>
           <a href="${esc(link)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px">Open Notification</a>
