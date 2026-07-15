@@ -12,6 +12,7 @@ const tabs = [
   { to: "/admin/vendors", label: "Vendors" },
   { to: "/admin/notifications", label: "Notifications" },
   { to: "/admin/email-audit", label: "Email Audit" },
+  { to: "/admin/email-settings", label: "Email Settings" },
   { to: "/admin/revision-repair", label: "Revision Repair" },
 ];
 
