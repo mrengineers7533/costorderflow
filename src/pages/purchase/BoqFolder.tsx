@@ -11,19 +11,20 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
+import { boqFamilyKey } from "@/lib/boq/familyKey";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
 
 function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
-  const familyOf = new Map<string, string>();
-  for (const o of orders) familyOf.set(o.id, o.parent_order_id || o.id);
+  const rootById = new Map<string, string>();
+  for (const o of orders) rootById.set(o.id, o.parent_order_id || o.id);
   const approved = boqs.filter(
     (b) => (b.verification_status ?? "approved") === "approved",
   );
   const byFamily = new Map<string, BoqRecord>();
   for (const b of approved) {
-    const fam = familyOf.get(b.order_id) || b.order_id;
+    const fam = boqFamilyKey(b, rootById);
     const existing = byFamily.get(fam);
     if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) byFamily.set(fam, b);
   }

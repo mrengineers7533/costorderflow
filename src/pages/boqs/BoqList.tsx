@@ -29,6 +29,7 @@ import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { boqFamilyKey, stripRevisionSuffix } from "@/lib/boq/familyKey";
 
 type OaOption = {
   id: string;
@@ -105,7 +106,7 @@ export default function BoqList() {
       }
       const byFamily = new Map<string, BoqRecord>();
       for (const b of all) {
-        const fam = rootById.get(b.order_id) || b.order_id || b.id;
+        const fam = boqFamilyKey(b, rootById);
         const ex = byFamily.get(fam);
         // Prefer higher revision; on tie, prefer the newer created_at.
         const better = !ex
