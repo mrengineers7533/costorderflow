@@ -52,7 +52,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const unread = useUnreadNotifications(user?.id);
 
   const visibleReport = reportItems.filter((it) =>
-    it.module === "dashboard" ? true : isAdmin || canAccess(it.module),
+    isAdmin || canAccess(it.module),
   );
   const visibleMid = midItems.filter((it) =>
     isAdmin || canAccess(it.module),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfileName } from "@/hooks/useProfileName";
+import { useUserAccess } from "@/hooks/useUserAccess";
+import { AccessDenied } from "@/components/AccessDenied";
+import type { ModuleKey } from "@/lib/access/modules";
 import type { User } from "@supabase/supabase-js";
 import type { OrderRecord } from "@/lib/orders/types";
 import type { BoqRecord } from "@/lib/boq/types";
@@ -24,6 +27,21 @@ function isThisMonth(d: string | undefined | null) {
   return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 }
 
+const MODULE_LANDING: { module: ModuleKey; path: string }[] = [
+  { module: "costing", path: "/orders" },
+  { module: "design", path: "/design" },
+  { module: "manufacturing", path: "/manufacturing" },
+  { module: "purchase", path: "/purchase" },
+  { module: "requisitions", path: "/requisitions" },
+  { module: "annexures", path: "/requisitions/annexures" },
+  { module: "grn", path: "/grn" },
+  { module: "cost_sheets", path: "/cost-sheets" },
+  { module: "raw_materials", path: "/raw-materials" },
+  { module: "workflow", path: "/workflow" },
+  { module: "reports", path: "/reports" },
+  { module: "notifications", path: "/notifications" },
+];
+
 const Index = () => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
@@ -31,6 +49,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const displayName = useProfileName(user);
+  const { isAdmin, canAccess, loading: accessLoading } = useUserAccess(user?.id);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -91,6 +110,15 @@ const Index = () => {
   const recentOas = orders.slice(0, 5);
   const recentBoqs = boqs.slice(0, 5);
   const recentPis = pis.slice(0, 5);
+
+  if (!user || accessLoading) {
+    return <div className="min-h-[40vh] grid place-items-center text-muted-foreground">Loading…</div>;
+  }
+  if (!isAdmin && !canAccess("dashboard")) {
+    const first = MODULE_LANDING.find((m) => canAccess(m.module));
+    if (first) return <Navigate to={first.path} replace />;
+    return <AccessDenied module="dashboard" />;
+  }
 
   return (
     <div className="min-h-screen">
