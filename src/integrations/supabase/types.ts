@@ -1273,6 +1273,9 @@ export type Database = {
           id: boolean
           reminder_fn_url: string
           send_fn_url: string
+          sender_email: string
+          sender_updated_at: string | null
+          sender_updated_by: string | null
           updated_at: string
         }
         Insert: {
@@ -1280,6 +1283,9 @@ export type Database = {
           id?: boolean
           reminder_fn_url: string
           send_fn_url: string
+          sender_email?: string
+          sender_updated_at?: string | null
+          sender_updated_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -1287,6 +1293,9 @@ export type Database = {
           id?: boolean
           reminder_fn_url?: string
           send_fn_url?: string
+          sender_email?: string
+          sender_updated_at?: string | null
+          sender_updated_by?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1304,7 +1313,7 @@ export type Database = {
           gmail_message_id: string | null
           id: string
           kind: string
-          notification_id: string
+          notification_id: string | null
           notification_type: string | null
           recipient_department: string | null
           recipient_email: string
@@ -1314,6 +1323,7 @@ export type Database = {
           reminder_sent_at: string | null
           seen_at: string | null
           seen_status: boolean
+          sender_email: string | null
           sent_at: string | null
           source_doc_no: string | null
           source_module: string | null
@@ -1334,7 +1344,7 @@ export type Database = {
           gmail_message_id?: string | null
           id?: string
           kind?: string
-          notification_id: string
+          notification_id?: string | null
           notification_type?: string | null
           recipient_department?: string | null
           recipient_email: string
@@ -1344,6 +1354,7 @@ export type Database = {
           reminder_sent_at?: string | null
           seen_at?: string | null
           seen_status?: boolean
+          sender_email?: string | null
           sent_at?: string | null
           source_doc_no?: string | null
           source_module?: string | null
@@ -1364,7 +1375,7 @@ export type Database = {
           gmail_message_id?: string | null
           id?: string
           kind?: string
-          notification_id?: string
+          notification_id?: string | null
           notification_type?: string | null
           recipient_department?: string | null
           recipient_email?: string
@@ -1374,6 +1385,7 @@ export type Database = {
           reminder_sent_at?: string | null
           seen_at?: string | null
           seen_status?: boolean
+          sender_email?: string | null
           sent_at?: string | null
           source_doc_no?: string | null
           source_module?: string | null
@@ -1391,6 +1403,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_sender_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          changed_by_email: string | null
+          id: string
+          new_sender: string
+          previous_sender: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          id?: string
+          new_sender: string
+          previous_sender?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          id?: string
+          new_sender?: string
+          previous_sender?: string | null
+        }
+        Relationships: []
       }
       fg_raw_material_map: {
         Row: {
