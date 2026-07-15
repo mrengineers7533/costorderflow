@@ -121,6 +121,42 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_reset_audit: {
+        Row: {
+          actor: string | null
+          completed_at: string | null
+          counts: Json
+          error: string | null
+          execution_id: string
+          files_removed: number
+          id: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          actor?: string | null
+          completed_at?: string | null
+          counts?: Json
+          error?: string | null
+          execution_id?: string
+          files_removed?: number
+          id?: string
+          started_at?: string
+          status: string
+        }
+        Update: {
+          actor?: string | null
+          completed_at?: string | null
+          counts?: Json
+          error?: string | null
+          execution_id?: string
+          files_removed?: number
+          id?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       allowed_domains: {
         Row: {
           created_at: string
@@ -2974,6 +3010,7 @@ export type Database = {
         Returns: string
       }
       admin_reset_generated_data: { Args: never; Returns: Json }
+      admin_reset_preview: { Args: never; Returns: Json }
       apply_design_comment_to_oa: {
         Args: { _applied_value: string; _comment_id: string; _oa_id: string }
         Returns: {

@@ -11,15 +11,32 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 
+const PREVIEW_LABELS: { key: string; label: string }[] = [
+  { key: "cost_sheets", label: "Cost Sheets" },
+  { key: "orders", label: "OA records" },
+  { key: "boqs", label: "BOQ records" },
+  { key: "boq_revisions", label: "BOQ revisions" },
+  { key: "proforma_invoices", label: "PI records" },
+  { key: "requisitions", label: "Requisitions" },
+  { key: "requisition_annexures", label: "Annexures" },
+  { key: "purchase_orders", label: "Purchase Orders" },
+  { key: "grn_receipts", label: "GRN receipts" },
+  { key: "app_notifications", label: "Notifications" },
+  { key: "boq_item_attachments", label: "Item attachments" },
+  { key: "boq_design_reviews", label: "Design reviews" },
+];
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, domains: 0, admins: 0 });
   const [loading, setLoading] = useState(true);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewCounts, setPreviewCounts] = useState<Record<string, number> | null>(null);
 
-  useEffect(() => {
-    (async () => {
+  const loadStats = async () => {
+    setLoading(true);
       const [a, b, c, d] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
@@ -33,8 +50,9 @@ export default function AdminDashboard() {
         admins: d.count ?? 0,
       });
       setLoading(false);
-    })();
-  }, []);
+  };
+
+  useEffect(() => { loadStats(); }, []);
 
   const cards = [
     { label: "Total Users", value: stats.total, icon: UsersIcon },
@@ -42,6 +60,24 @@ export default function AdminDashboard() {
     { label: "Allowed Domains", value: stats.domains, icon: Globe },
     { label: "Admins", value: stats.admins, icon: ShieldCheck },
   ];
+
+  const openReset = async () => {
+    setResetOpen(true);
+    setPreviewCounts(null);
+    setConfirmText("");
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-reset-cof-data", {
+        body: { mode: "preview" },
+      });
+      if (error) throw error;
+      setPreviewCounts((data as { counts?: Record<string, number> })?.counts ?? {});
+    } catch (e) {
+      toast({ title: "Preview failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const runReset = async () => {
     setResetting(true);
@@ -55,6 +91,7 @@ export default function AdminDashboard() {
       });
       setResetOpen(false);
       setConfirmText("");
+      await loadStats();
     } catch (e) {
       toast({ title: "Reset failed", description: (e as Error).message, variant: "destructive" });
     } finally {
@@ -95,7 +132,7 @@ export default function AdminDashboard() {
             notification recipients, users, roles, permissions, and numbering configuration will not
             be touched.
           </p>
-          <Button variant="destructive" onClick={() => setResetOpen(true)}>
+          <Button variant="destructive" onClick={openReset}>
             Reset Generated Data
           </Button>
         </CardContent>
@@ -106,13 +143,35 @@ export default function AdminDashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reset all generated transactional data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove all generated transactional data: SOT sheets, OAs, BOQs, PIs, Purchase
-              Requisitions, Purchase Orders, their revisions, attachments, audit logs, status history,
-              and all in-app notifications. Master data, settings, formulas, templates, notification
-              recipients, users, roles and numbering configuration will not be changed. This action
-              cannot be undone.
+              This action will permanently delete all generated Cost Sheets and their linked OA, BOQ,
+              PI, Requisition, Annexure, PO, Invoice, GRN and downstream transactional records. Users,
+              access control, master data, settings, formulas, notification configuration and email
+              configuration will remain unchanged.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+              Records that will be deleted
+            </div>
+            {previewLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading preview…
+              </div>
+            ) : previewCounts ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                {PREVIEW_LABELS.map(({ key, label }) => (
+                  <div key={key} className="flex justify-between">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-mono font-medium">{previewCounts[key] ?? 0}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Preview unavailable.</div>
+            )}
+          </div>
+
           <div className="space-y-2">
             <p className="text-sm">Type <span className="font-mono font-semibold">RESET GENERATED DATA</span> to confirm:</p>
             <Input
@@ -129,7 +188,7 @@ export default function AdminDashboard() {
               onClick={(e) => { e.preventDefault(); runReset(); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {resetting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : "Delete everything"}
+              {resetting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : "Permanently Reset Generated Data"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
