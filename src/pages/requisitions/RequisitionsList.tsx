@@ -26,6 +26,7 @@ import type {
   RequisitionRawMaterialRecord,
 } from "@/lib/requisition/types";
 import type { BoqRecord } from "@/lib/boq/types";
+import { buildOrderRootMap, groupBoqsByFamily, pickLatestApprovedBoqsPerFamily } from "@/lib/boq/familyKey";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +37,28 @@ import { financialYearOf } from "@/lib/purchase/poPdf";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
+
+type OrderFamilyLite = { id: string; parent_order_id?: string | null };
+
+function indexLatestApprovedByOrderId(boqs: BoqRecord[], orders: OrderFamilyLite[]) {
+  const rootById = buildOrderRootMap(orders);
+  const grouped = groupBoqsByFamily(
+    boqs.filter((b) => (b.verification_status ?? "approved") === "approved"),
+    rootById,
+  );
+  const latestByOrder = new Map<string, { rev: number; boqId: string }>();
+  for (const groupRows of grouped.groups.values()) {
+    const latest = groupRows[0];
+    const top = { rev: latest.revision ?? 0, boqId: latest.id };
+    for (const b of groupRows) {
+      if (b.order_id) latestByOrder.set(b.order_id, top);
+      if (b.source_order_id) latestByOrder.set(b.source_order_id, top);
+      const root = b.order_id ? rootById.get(b.order_id) : undefined;
+      if (root) latestByOrder.set(root, top);
+    }
+  }
+  return latestByOrder;
+}
 
 /**
  * Parse an uploaded Excel requisition in the grouped FG+RM format and
@@ -172,17 +195,15 @@ export default function RequisitionsList() {
 
         // compute latest approved revision per family for staleness banner
         const { data: allBoqs } = await supabase
-          .from("boqs").select("id, order_id, revision, verification_status");
+          .from("boqs")
+          .select("id, order_id, source_order_id, revised_from_id, boq_number, reference_oa_number, revision, is_current, verification_status, created_at, updated_at");
         const { data: orders } = await supabase.from("orders").select("id, parent_order_id");
-        const familyOf = new Map<string, string>();
-        (orders || []).forEach((o) => familyOf.set(o.id as string, (o as { parent_order_id?: string | null; id: string }).parent_order_id || (o.id as string)));
+        const latestByOrder = indexLatestApprovedByOrderId(
+          ((allBoqs as unknown as BoqRecord[]) || []),
+          ((orders as OrderFamilyLite[]) || []),
+        );
         const latest: Record<string, number> = {};
-        ((allBoqs as Array<{ order_id: string; revision: number; verification_status: string }>) || [])
-          .filter((b) => b.verification_status === "approved")
-          .forEach((b) => {
-            const fam = familyOf.get(b.order_id) || b.order_id;
-            if (latest[fam] == null || (b.revision ?? 0) > latest[fam]) latest[fam] = b.revision ?? 0;
-          });
+        latestByOrder.forEach((v, k) => { latest[k] = v.rev; });
         setLatestRevByRoot(latest);
 
         // Best-effort auto-supersede: for each family where an open requisition
@@ -191,16 +212,8 @@ export default function RequisitionsList() {
         // against the latest BOQ. Idempotent and silent.
         try {
           const stalePerFamily = new Map<string, string>(); // root -> latest boq_id
-          const latestByFam = new Map<string, { rev: number; boqId: string }>();
-          ((allBoqs as Array<{ id: string; order_id: string; revision: number; verification_status: string }>) || [])
-            .filter((b) => b.verification_status === "approved")
-            .forEach((b) => {
-              const fam = familyOf.get(b.order_id) || b.order_id;
-              const cur = latestByFam.get(fam);
-              if (!cur || (b.revision ?? 0) > cur.rev) latestByFam.set(fam, { rev: b.revision ?? 0, boqId: b.id });
-            });
           for (const r of list) {
-            const top = latestByFam.get(r.order_root_id);
+            const top = latestByOrder.get(r.order_root_id);
             if (!top) continue;
             if (top.rev > (r.boq_revision ?? 0) && r.status !== "closed") {
               stalePerFamily.set(r.order_root_id, top.boqId);
@@ -402,7 +415,10 @@ export default function RequisitionsList() {
                 .eq("verification_status", "approved")
                 .order("revision", { ascending: false })
                 .order("updated_at", { ascending: false });
-              const pick = ((bqs as unknown as BoqRecord[]) || [])[0];
+              const pick = pickLatestApprovedBoqsPerFamily(
+                ((bqs as unknown as BoqRecord[]) || []),
+                (orders as OrderFamilyLite[]) || [],
+              )[0];
               if (!pick) {
                 toast({ title: "No approved BOQ for this project", variant: "destructive" }); return;
               }
@@ -760,11 +776,14 @@ function UploadRequisitionButton({
       if (!pickedOa) { setBoqOptions([]); setPickedBoqId(null); return; }
       const { data } = await supabase
         .from("boqs")
-        .select("id, boq_number, revision, client_name")
+        .select("id, order_id, source_order_id, revised_from_id, boq_number, reference_oa_number, revision, is_current, verification_status, client_name, created_at, updated_at")
         .eq("order_id", pickedOa.id)
         .eq("verification_status", "approved")
         .order("revision", { ascending: false });
-      const list = (data as unknown as BoqLite[]) || [];
+      const list = pickLatestApprovedBoqsPerFamily(
+        (data as unknown as BoqRecord[]) || [],
+        [{ id: pickedOa.id, parent_order_id: pickedOa.parent_order_id }],
+      ).map((b) => ({ id: b.id, boq_number: b.boq_number, revision: b.revision ?? 0, client_name: b.client_name }));
       setBoqOptions(list);
       setPickedBoqId(list[0]?.id ?? null);
       if (!clientName && (pickedOa.company_name || list[0]?.client_name)) {
@@ -786,12 +805,15 @@ function UploadRequisitionButton({
       if (!orderList.length) return null;
       const orderIds = orderList.map((o) => o.id);
       const { data: bqs } = await supabase
-        .from("boqs").select("id, boq_number, revision, client_name, order_id")
+        .from("boqs").select("id, order_id, source_order_id, revised_from_id, boq_number, reference_oa_number, revision, is_current, verification_status, client_name, created_at, updated_at")
         .in("order_id", orderIds)
         .eq("verification_status", "approved")
         .order("revision", { ascending: false })
         .order("updated_at", { ascending: false });
-      const boq = (bqs as Array<BoqLite & { order_id: string }>)?.[0];
+      const boq = pickLatestApprovedBoqsPerFamily(
+        (bqs as unknown as BoqRecord[]) || [],
+        orderList,
+      )[0] as (BoqLite & { order_id: string }) | undefined;
       if (!boq) return null;
       const sourceOrder = orderList.find((o) => o.id === boq.order_id);
       const rootId = sourceOrder?.parent_order_id || sourceOrder?.id || rootIds[0];
