@@ -29,7 +29,7 @@ import { generateBoqPDF } from "@/lib/boq/pdf";
 import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
-import { boqFamilyKey, stripRevisionSuffix } from "@/lib/boq/familyKey";
+import { groupBoqsByFamily, stripRevisionSuffix } from "@/lib/boq/familyKey";
 
 type OaOption = {
   id: string;
@@ -104,20 +104,7 @@ export default function BoqList() {
             .map((o) => [o.id, o.parent_order_id || o.id]),
         );
       }
-      const byFamily = new Map<string, BoqRecord>();
-      for (const b of all) {
-        const fam = boqFamilyKey(b, rootById);
-        const ex = byFamily.get(fam);
-        // Prefer higher revision; on tie, prefer the newer created_at.
-        const better = !ex
-          || (b.revision ?? 0) > (ex.revision ?? 0)
-          || ((b.revision ?? 0) === (ex.revision ?? 0)
-              && (b.created_at || "") > (ex.created_at || ""));
-        if (better) byFamily.set(fam, b);
-      }
-      const latest = Array.from(byFamily.values())
-        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-      setRows(latest);
+      setRows(groupBoqsByFamily(all, rootById).rows);
       setLoading(false);
     })();
   }, [showSuperseded, refreshTick]);

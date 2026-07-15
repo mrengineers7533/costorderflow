@@ -11,7 +11,7 @@ import { Eye, Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 import { useUnseenNotifCountsMap } from "@/hooks/useUnseenNotifCount";
-import { boqFamilyKey } from "@/lib/boq/familyKey";
+import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 export default function DesignBoqList() {
   const nav = useNavigate();
@@ -39,38 +39,15 @@ export default function DesignBoqList() {
         rootById = new Map(((ords || []) as Array<{ id: string; parent_order_id: string | null }>)
           .map((o) => [o.id, o.parent_order_id || o.id]));
       }
-      const byFamily = new Map<string, BoqRecord>();
-      const famToIds = new Map<string, string[]>();
-      for (const b of all) {
-        // Prefer OA family root (matches Admin behavior). When `orders` RLS
-        // hides the parent lookup for non-admin Design users, fall back to
-        // the shared `boq_number` stem so base + revised rows collapse.
-        const fam = boqFamilyKey(b, rootById);
-        const ex = byFamily.get(fam);
-        const better =
-          !ex ||
-          (b.revision ?? 0) > (ex.revision ?? 0) ||
-          ((b.revision ?? 0) === (ex.revision ?? 0) &&
-            (b.updated_at || "") > (ex.updated_at || ""));
-        if (better) byFamily.set(fam, b);
-        const list = famToIds.get(fam) || [];
-        list.push(b.id);
-        famToIds.set(fam, list);
-      }
-      const latest = Array.from(byFamily.values())
-        .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
-      const perLatest = new Map<string, string[]>();
-      for (const [fam, rec] of byFamily.entries()) {
-        perLatest.set(rec.id, famToIds.get(fam) || [rec.id]);
-      }
-      setFamilyIds(perLatest);
-      setRows(latest);
+      const grouped = groupBoqsByFamily(all, rootById);
+      setFamilyIds(grouped.familyIdsByLatestId);
+      setRows(grouped.rows);
       setLoading(false);
     })();
   }, []);
 
   useEffect(() => {
-    if (!rows.length) return;
+    if (!rows.length) { setApprovalMap(new Map()); return; }
     let cancelled = false;
     fetchDesignApprovalStates(rows).then((m) => { if (!cancelled) setApprovalMap(m); });
     return () => { cancelled = true; };

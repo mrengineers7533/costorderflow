@@ -26,6 +26,7 @@ import { deleteRequisitionCascade, RequisitionDeleteBlockedError } from "@/lib/r
 import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
 import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 import { useDocAccess } from "@/hooks/useDocAccess";
+import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +60,22 @@ export default function RequisitionDetail() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
+async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<BoqRecord | null> {
+  const [{ data: allBoqs }, { data: orders }] = await Promise.all([
+    supabase
+      .from("boqs")
+      .select("*")
+      .eq("verification_status", "approved"),
+    supabase.from("orders").select("id,parent_order_id"),
+  ]);
+  const grouped = groupBoqsByFamily(
+    ((allBoqs as unknown as BoqRecord[]) || []),
+    (orders as Array<{ id: string; parent_order_id: string | null }>) || [],
+  );
+  const familyKey = grouped.familyKeyById.get(currentBoq.id);
+  return familyKey ? grouped.latestByFamily.get(familyKey) || null : null;
+}
+
   async function load() {
     if (!id) return;
     const { data: r } = await sb.from("requisitions").select("*").eq("id", id).maybeSingle();
@@ -71,23 +88,14 @@ export default function RequisitionDetail() {
     if (r.boq_id) {
       const { data: b } = await supabase.from("boqs").select("*").eq("id", r.boq_id).maybeSingle();
       setBoq(b as unknown as BoqRecord);
-      const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", (b as { order_id: string })?.order_id).maybeSingle();
-      const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
       const oaId = (b as { source_order_id?: string; order_id?: string } | null)?.source_order_id
         || (b as { order_id?: string } | null)?.order_id;
       if (oaId) {
         const { data: full } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
         setOrder((full as unknown as OrderRecord) || null);
       }
-      if (root) {
-        const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
-        const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
-        const { data: allBoqs } = await supabase.from("boqs")
-          .select("revision, verification_status")
-          .in("order_id", ids).eq("verification_status", "approved");
-        const max = ((allBoqs as Array<{ revision: number }>) || []).reduce((m, x) => Math.max(m, x.revision ?? 0), 0);
-        setLatestRev(max);
-      }
+      const latest = b ? await loadLatestApprovedBoqForFamily(b as unknown as BoqRecord) : null;
+      setLatestRev(latest?.revision ?? null);
     }
     setLoading(false);
   }
@@ -253,13 +261,7 @@ export default function RequisitionDetail() {
     // close current
     await sb.from("requisitions").update({ status: "closed" }).eq("id", req!.id);
     // pull latest approved boq for the family
-    const { data: order } = await supabase.from("orders").select("id, parent_order_id").eq("id", boq.order_id).maybeSingle();
-    const root = (order as { parent_order_id?: string | null; id: string } | null)?.parent_order_id || (order as { id: string } | null)?.id;
-    if (!root) return;
-    const { data: orders } = await supabase.from("orders").select("id").or(`id.eq.${root},parent_order_id.eq.${root}`);
-    const ids = (orders as Array<{ id: string }> || []).map((o) => o.id);
-    const { data: allBoqs } = await supabase.from("boqs").select("*").in("order_id", ids).eq("verification_status", "approved").order("revision", { ascending: false }).limit(1);
-    const latest = (allBoqs as unknown as BoqRecord[])?.[0];
+    const latest = await loadLatestApprovedBoqForFamily(boq);
     if (!latest) { toast({ title: "No approved BOQ found", variant: "destructive" }); return; }
     const { error } = await supabase.functions.invoke("create-requisition", { body: { boq_id: latest.id } });
     if (error) { toast({ title: "Regenerate failed", description: error.message, variant: "destructive" }); return; }

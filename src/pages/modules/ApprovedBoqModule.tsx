@@ -20,7 +20,7 @@ import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge"
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 import { fetchItemApprovalVerdicts, type ItemApprovalVerdict } from "@/lib/boq/itemApprovalSync";
 import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
-import { boqFamilyKey } from "@/lib/boq/familyKey";
+import { buildOrderRootMap, pickLatestApprovedBoqsPerFamily } from "@/lib/boq/familyKey";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -33,26 +33,6 @@ export interface ModuleConfig {
   subtitle: string;
   basePath: string;
   futureSteps: string[];
-}
-
-/** Pick the latest approved BOQ per OA family (parent_order_id || id). */
-function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
-  const rootById = new Map<string, string>();
-  for (const o of orders) rootById.set(o.id, o.parent_order_id || o.id);
-  const approved = boqs.filter(
-    (b) => (b.verification_status ?? "approved") === "approved",
-  );
-  const byFamily = new Map<string, BoqRecord>();
-  for (const b of approved) {
-    const fam = boqFamilyKey(b, rootById);
-    const existing = byFamily.get(fam);
-    if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) {
-      byFamily.set(fam, b);
-    }
-  }
-  return Array.from(byFamily.values()).sort((a, b) =>
-    (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
-  );
 }
 
 export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
@@ -75,7 +55,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
     })();
   }, []);
 
-  const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  const rows = useMemo(() => pickLatestApprovedBoqsPerFamily(boqs, orders), [boqs, orders]);
   useEffect(() => {
     if (!rows.length) { setApprovalMap(new Map()); return; }
     let cancelled = false;
@@ -88,9 +68,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
     return { MR: mr, GMS: gms };
   }, [rows]);
   const familyOf = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
-    return m;
+    return buildOrderRootMap(orders);
   }, [orders]);
 
   const filtered = useMemo(() => {
