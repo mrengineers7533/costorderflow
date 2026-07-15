@@ -11,6 +11,7 @@ import { Eye, Search } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 import { useUnseenNotifCountsMap } from "@/hooks/useUnseenNotifCount";
+import { boqFamilyKey } from "@/lib/boq/familyKey";
 
 export default function DesignBoqList() {
   const nav = useNavigate();
@@ -43,12 +44,8 @@ export default function DesignBoqList() {
       for (const b of all) {
         // Prefer OA family root (matches Admin behavior). When `orders` RLS
         // hides the parent lookup for non-admin Design users, fall back to
-        // the shared `boq_number` which is identical across a revision family.
-        const fam =
-          rootById.get(b.order_id) ||
-          b.boq_number ||
-          b.order_id ||
-          b.id;
+        // the shared `boq_number` stem so base + revised rows collapse.
+        const fam = boqFamilyKey(b, rootById);
         const ex = byFamily.get(fam);
         const better =
           !ex ||
