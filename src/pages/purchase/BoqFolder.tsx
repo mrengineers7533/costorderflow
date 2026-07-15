@@ -11,27 +11,10 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
-import { boqFamilyKey } from "@/lib/boq/familyKey";
+import { buildOrderRootMap, pickLatestApprovedBoqsPerFamily } from "@/lib/boq/familyKey";
 
 const fmtDate = (s: string | null | undefined) =>
   s ? new Date(s).toLocaleDateString("en-IN") : "—";
-
-function pickLatestApprovedPerFamily(boqs: BoqRecord[], orders: OrderRecord[]): BoqRecord[] {
-  const rootById = new Map<string, string>();
-  for (const o of orders) rootById.set(o.id, o.parent_order_id || o.id);
-  const approved = boqs.filter(
-    (b) => (b.verification_status ?? "approved") === "approved",
-  );
-  const byFamily = new Map<string, BoqRecord>();
-  for (const b of approved) {
-    const fam = boqFamilyKey(b, rootById);
-    const existing = byFamily.get(fam);
-    if (!existing || (b.revision ?? 0) > (existing.revision ?? 0)) byFamily.set(fam, b);
-  }
-  return Array.from(byFamily.values()).sort((a, b) =>
-    (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
-  );
-}
 
 export default function BoqFolder({ basePath = "/purchase" }: { basePath?: string } = {}) {
   const [boqs, setBoqs] = useState<BoqRecord[]>([]);
@@ -53,7 +36,7 @@ export default function BoqFolder({ basePath = "/purchase" }: { basePath?: strin
     })();
   }, []);
 
-  const rows = useMemo(() => pickLatestApprovedPerFamily(boqs, orders), [boqs, orders]);
+  const rows = useMemo(() => pickLatestApprovedBoqsPerFamily(boqs, orders), [boqs, orders]);
   useEffect(() => {
     if (!rows.length) { setApprovalMap(new Map()); return; }
     let cancelled = false;
@@ -66,15 +49,13 @@ export default function BoqFolder({ basePath = "/purchase" }: { basePath?: strin
     return m;
   }, [orders]);
   const familyOf = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const o of orders) m.set(o.id, o.parent_order_id || o.id);
-    return m;
+    return buildOrderRootMap(orders);
   }, [orders]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows
-      .filter((b) => orderFormatById.get(b.order_id) === tab)
+      .filter((b) => b.format === tab || orderFormatById.get(b.order_id) === tab)
       .filter((b) =>
         !q
           ? true
