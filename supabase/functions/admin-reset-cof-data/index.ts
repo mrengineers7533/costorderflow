@@ -44,23 +44,67 @@ Deno.serve(async (req) => {
     const isAdmin = (roleRows ?? []).some((r: { role: string }) => r.role === "admin");
     if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
-    // Centralized transactional delete via SECURITY DEFINER RPC.
-    // Call it as the user (authHeader) so auth.uid() / has_role work.
+    let mode: "preview" | "run" = "run";
+    try {
+      const body = await req.json();
+      if (body?.mode === "preview") mode = "preview";
+    } catch { /* no body */ }
+
+    // Calls RPCs as the authenticated user so SECURITY DEFINER admin checks work.
     const userAdmin = createClient(SUPABASE_URL, SERVICE_ROLE, {
       global: { headers: { Authorization: authHeader } },
     });
+
+    if (mode === "preview") {
+      const { data: previewCounts, error: pErr } = await userAdmin.rpc("admin_reset_preview");
+      if (pErr) return json({ error: `Preview failed: ${pErr.message}` }, 500);
+      return json({ ok: true, mode: "preview", counts: previewCounts ?? {} });
+    }
+
+    // Start audit row.
+    const { data: auditRow } = await admin
+      .from("admin_reset_audit")
+      .insert({ actor: callerId, status: "started" })
+      .select("id, execution_id")
+      .single();
+    const auditId = auditRow?.id as string | undefined;
+    const executionId = auditRow?.execution_id as string | undefined;
+
     const { data: rpcCounts, error: rpcErr } = await userAdmin.rpc("admin_reset_generated_data");
-    if (rpcErr) return json({ error: `Reset failed: ${rpcErr.message}` }, 500);
+    if (rpcErr) {
+      if (auditId) {
+        await admin.from("admin_reset_audit").update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error: rpcErr.message,
+        }).eq("id", auditId);
+      }
+      return json({ error: `Reset failed: ${rpcErr.message}`, execution_id: executionId }, 500);
+    }
     const counts: Record<string, number> = (rpcCounts as Record<string, number>) ?? {};
 
-    // Purge storage buckets.
     let filesRemoved = 0;
+    const bucketErrors: string[] = [];
     for (const bucket of BUCKETS) {
-      filesRemoved += await purgeBucket(admin, bucket);
+      try {
+        filesRemoved += await purgeBucket(admin, bucket);
+      } catch (e) {
+        bucketErrors.push(`${bucket}: ${(e as Error).message}`);
+      }
     }
     counts.filesRemoved = filesRemoved;
 
-    return json({ ok: true, counts });
+    if (auditId) {
+      await admin.from("admin_reset_audit").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        counts,
+        files_removed: filesRemoved,
+        error: bucketErrors.length ? bucketErrors.join("; ") : null,
+      }).eq("id", auditId);
+    }
+
+    return json({ ok: true, counts, execution_id: executionId });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
