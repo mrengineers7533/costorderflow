@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
 import type { BoqRecord } from "@/lib/boq/types";
+import { stripRevisionSuffix } from "@/lib/boq/familyKey";
 
 export function BoqRevisionHistory({
   currentBoqId,
@@ -51,9 +52,13 @@ export function BoqRevisionHistory({
           const { data: currentBoq } = await supabase
             .from("boqs").select("boq_number").eq("id", currentBoqId).maybeSingle();
           const boqNumber = (currentBoq as { boq_number?: string | null } | null)?.boq_number;
-          if (boqNumber) {
+          const stem = stripRevisionSuffix(boqNumber);
+          if (stem) {
+            // Match base (`<stem>`) AND every revision (`<stem>/R%`) so the
+            // full family loads even when `orders` RLS hides the parent link.
             const { data: familyByNumber } = await supabase
-              .from("boqs").select("*").eq("boq_number", boqNumber);
+              .from("boqs").select("*")
+              .or(`boq_number.eq.${stem},boq_number.ilike.${stem}/R%`);
             const seen = new Set(list.map((r) => r.id));
             for (const r of ((familyByNumber as unknown as BoqRecord[]) || [])) {
               if (!seen.has(r.id)) { list.push(r); seen.add(r.id); }
