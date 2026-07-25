@@ -78,6 +78,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [edited, setEdited] = useState<Record<string, EditedFg>>({});
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [showMake, setShowMake] = useColumnToggle("req.create.columns.make", false);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
   const navigate = useNavigate();
 
   const items: BoqLineItem[] = useMemo(
@@ -105,6 +106,13 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         .from("fg_raw_material_map")
         .select("model_number, is_direct_purchase, raw_materials");
       const all = (data as FullMap[]) || [];
+      // Load category rules for auto-classification (BOM → Master → Rule)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ruleRows } = await (supabase as any)
+        .from("rm_category_rules")
+        .select("pattern, category, priority, active")
+        .eq("active", true);
+      setCategoryRules((ruleRows as CategoryRule[]) || []);
       // normalize Column A to first line for matching + display
       const cleaned = all.map((m) => ({ ...m, model_number: firstLine(m.model_number) || m.model_number }));
       setFullMaps(cleaned);
@@ -203,8 +211,31 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     setEdited((prev) => {
       const cur = prev[fgId]; if (!cur) return prev;
       const rms = cur.raw_materials.slice();
-      rms[idx] = { ...rms[idx], ...patch };
+      const next = { ...rms[idx], ...patch };
+      // Auto-resolve category when material/size/master changes and user hasn't
+      // manually overridden it.
+      if (
+        (patch.material !== undefined || patch.size_model !== undefined) &&
+        next.material_category_source !== "manual"
+      ) {
+        const r = resolveMaterialCategory({
+          material: next.material,
+          sizeModel: next.size_model,
+          rules: categoryRules,
+          itemMasterCategory: next.material_category_source === "master" ? next.material_category : null,
+        });
+        next.material_category = r.category ?? "";
+        next.material_category_source = r.source;
+      }
+      rms[idx] = next;
       return { ...prev, [fgId]: { ...cur, raw_materials: rms } };
+    });
+  }
+
+  function updateFgMake(fgId: string, v: string) {
+    setEdited((prev) => {
+      const cur = prev[fgId]; if (!cur) return prev;
+      return { ...prev, [fgId]: { ...cur, fg_make: v } };
     });
   }
   function addRm(fgId: string) {
@@ -271,6 +302,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       const edited_items = ids.map((id) => ({
         boq_item_id: id,
         is_direct_purchase: edited[id].is_direct_purchase,
+        fg_make: edited[id].fg_make || null,
         raw_materials: edited[id].raw_materials
           .filter((r) => r.material.trim().length > 0)
           .map((r) => ({
@@ -280,6 +312,10 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
             qty_per_unit: r.qty_per_unit.trim() === "" ? null : Number(r.qty_per_unit),
             unit: r.unit || null,
             notes: r.notes || null,
+            rm_weight: r.rm_weight.trim() === "" ? null : Number(r.rm_weight),
+            remarks: r.remarks || null,
+            material_category: r.material_category || null,
+            material_category_source: r.material_category_source,
           })),
       }));
       const { data, error } = await supabase.functions.invoke("create-requisition", {
