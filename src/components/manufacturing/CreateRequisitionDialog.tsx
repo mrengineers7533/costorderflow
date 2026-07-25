@@ -348,7 +348,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto [overflow-anchor:none]">
         <DialogHeader>
           <DialogTitle>Create Requisition {step === "review" ? "· Review & Edit" : ""}</DialogTitle>
           <DialogDescription>
@@ -452,11 +452,20 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
           </>
         ) : (
           <>
-            {unmappedInReview > 0 && (
-              <div className="text-xs rounded border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 px-3 py-2">
-                {unmappedInReview} Finish Good item(s) have no raw materials. Add rows manually or mark as Direct Purchase.
-              </div>
-            )}
+            {/* Always reserve height so typing in a row (which toggles this
+                banner on/off) does not shift the scroll position. */}
+            <div
+              className={`text-xs rounded border px-3 py-2 min-h-[2.25rem] ${
+                unmappedInReview > 0
+                  ? "border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200"
+                  : "border-transparent invisible"
+              }`}
+              aria-hidden={unmappedInReview === 0}
+            >
+              {unmappedInReview > 0
+                ? `${unmappedInReview} Finish Good item(s) have no raw materials. Add rows manually or mark as Direct Purchase.`
+                : "placeholder"}
+            </div>
             <div className="space-y-4">
               {Object.values(edited).map((efg) => {
                 const it = items.find((x) => x.id === efg.boq_item_id);
