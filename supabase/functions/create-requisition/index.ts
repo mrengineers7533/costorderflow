@@ -219,6 +219,12 @@ Deno.serve(async (req) => {
     let unmapped_count = 0;
 
     if (selectedItems.length) {
+      // Build lookup up-front so we can enrich the inserted requisition_items
+      // (fg_make) and the derived raw material rows in one pass.
+      const editedByBoqItem = new Map<string, NonNullable<Body["edited_items"]>[number]>();
+      for (const e of (body.edited_items || [])) {
+        editedByBoqItem.set(String(e.boq_item_id), e);
+      }
       // deno-lint-ignore no-explicit-any
       const rows = selectedItems.map((it: any) => ({
         requisition_id: created.id,
@@ -232,17 +238,11 @@ Deno.serve(async (req) => {
         fg_snapshot: it,
         included_in_requisition: true,
         fg_uom: it.unit ?? null,
-        fg_make: (editedByBoqItem?.get?.(String(it.id))?.fg_make ?? null),
+        fg_make: editedByBoqItem.get(String(it.id))?.fg_make ?? null,
       }));
       const { data: insertedItems, error: itErr } = await admin
         .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
       if (itErr) throw itErr;
-
-      // Build a lookup of edited payloads by boq_item_id (string keys)
-      const editedByBoqItem = new Map<string, NonNullable<Body["edited_items"]>[number]>();
-      for (const e of (body.edited_items || [])) {
-        editedByBoqItem.set(String(e.boq_item_id), e);
-      }
 
       // Generate raw material rows per inserted item
       const rmRows: Array<Record<string, unknown>> = [];
@@ -255,6 +255,9 @@ Deno.serve(async (req) => {
           for (const rm of (edited.raw_materials || [])) {
             if (!rm || !rm.material) continue;
             const per = Number(rm.qty_per_unit) || 0;
+            const resolved = rm.material_category
+              ? { category: rm.material_category, source: rm.material_category_source ?? "manual" }
+              : resolveCategory(null, null, rm.material, rm.size_model ?? null);
             rmRows.push({
               requisition_id: created.id,
               requisition_item_id: ri.id,
@@ -269,6 +272,10 @@ Deno.serve(async (req) => {
               source: "manual",
               purchase_status: "pending",
               notes: rm.notes ?? null,
+              rm_weight: rm.rm_weight ?? null,
+              remarks: rm.remarks ?? null,
+              material_category: resolved.category,
+              material_category_source: resolved.source,
             });
             raw_material_count++;
           }
@@ -278,6 +285,8 @@ Deno.serve(async (req) => {
         if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
           for (const rm of mapping.raw_materials) {
             const per = Number(rm.qty_per_unit) || 0;
+            const masterCat = (rm as { material_category?: string }).material_category ?? null;
+            const resolved = resolveCategory(null, masterCat, rm.material, rm.size_model ?? null);
             rmRows.push({
               requisition_id: created.id,
               requisition_item_id: ri.id,
@@ -292,6 +301,10 @@ Deno.serve(async (req) => {
               source: "mapped",
               purchase_status: "pending",
               notes: rm.notes ?? null,
+              rm_weight: (rm as { weight?: number }).weight ?? null,
+              remarks: null,
+              material_category: resolved.category,
+              material_category_source: resolved.source,
             });
           }
           raw_material_count += mapping.raw_materials.length;
