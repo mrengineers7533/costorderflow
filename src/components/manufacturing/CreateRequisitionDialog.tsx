@@ -22,6 +22,7 @@ import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { logEvent } from "@/lib/activity/log";
+import { resolveMaterialCategory, type CategoryRule, type MaterialCategorySource } from "@/lib/requisition/materialCategory";
 
 interface Props {
   open: boolean;
@@ -38,18 +39,23 @@ type RmRow = {
   qty_per_unit: string;
   unit: string;
   notes: string;
+  rm_weight: string;
+  remarks: string;
+  material_category: string;
+  material_category_source: MaterialCategorySource | null;
 };
 
 type EditedFg = {
   boq_item_id: string;
   is_direct_purchase: boolean;
   raw_materials: RmRow[];
+  fg_make: string;
 };
 
 type FullMap = {
   model_number: string;
   is_direct_purchase: boolean;
-  raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }>;
+  raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string; weight?: number; material_category?: string }>;
 };
 
 export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
