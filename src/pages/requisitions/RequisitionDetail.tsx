@@ -595,15 +595,25 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 <tbody>
                   {rmGroups.length === 0 ? (
                     <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
-                  ) : rmGroups.flatMap((g) => g.rms.map((r, idx) => {
-                    const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
+                   ) : rmGroups.flatMap((g) => g.rms.map((r, idx) => {
+                     const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
+                     const it2 = g.item;
+                     const model2 = it2?.model_number || g.fgLabel;
+                     const desc2 = it2?.description || "";
                     return (
                       <tr key={r.id} className={`border-b last:border-0 ${r.source === "unmapped_placeholder" ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
                         {idx === 0 && (
-                          <td className="py-2 px-3 align-top border-r font-medium" rowSpan={g.rms.length}>
-                            {g.fgLabel}
-                            {unmapped && <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>}
-                          </td>
+                           <td className="py-2 px-3 align-top border-r" rowSpan={g.rms.length}>
+                             <div className="font-medium">
+                               {model2 || "—"}
+                               {unmapped && <Badge variant="outline" className="ml-2">Mapping Not Found</Badge>}
+                             </div>
+                             {desc2 && desc2 !== model2 ? (
+                               <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words max-w-[260px]">
+                                 {desc2}
+                               </div>
+                             ) : null}
+                           </td>
                         )}
                         <td className="py-2 px-3 border-r">{r.material}</td>
                         {showMake && <td className="py-2 px-3 border-r">{r.make || "—"}</td>}
