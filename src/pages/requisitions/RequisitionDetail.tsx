@@ -487,16 +487,24 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 <tbody>
                   {rmGroups.length === 0 ? (
                     <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
-                  ) : rmGroups.flatMap((g) => {
-                    const it = g.item;
-                    const fgLabel = it?.model_number || it?.description || g.fgLabel;
+                   ) : rmGroups.flatMap((g) => {
+                     const it = g.item;
+                     const model = it?.model_number || g.fgLabel;
+                     const desc = it?.description || "";
                     const fgMake = it ? resolveReqMake(it) : "";
                     const fgQty = it?.quantity != null ? String(it.quantity) : "—";
                     return g.rms.map((r, idx) => (
                       <tr key={r.id} className="border-b last:border-0">
                         {idx === 0 && (
                           <>
-                            <td className="py-2 px-2 align-top border-r font-medium" rowSpan={g.rms.length}>{fgLabel}</td>
+                             <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
+                               <div className="font-medium">{model || "—"}</div>
+                               {desc && desc !== model ? (
+                                 <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words max-w-[260px]">
+                                   {desc}
+                                 </div>
+                               ) : null}
+                             </td>
                             <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>{fgMake || "—"}</td>
                             <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
                           </>
