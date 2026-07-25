@@ -22,6 +22,7 @@ import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { useColumnToggle } from "@/hooks/useColumnToggle";
 import { logEvent } from "@/lib/activity/log";
+import { resolveMaterialCategory, type CategoryRule, type MaterialCategorySource } from "@/lib/requisition/materialCategory";
 
 interface Props {
   open: boolean;
@@ -38,19 +39,32 @@ type RmRow = {
   qty_per_unit: string;
   unit: string;
   notes: string;
+  rm_weight: string;
+  remarks: string;
+  material_category: string;
+  material_category_source: MaterialCategorySource | null;
 };
 
 type EditedFg = {
   boq_item_id: string;
   is_direct_purchase: boolean;
   raw_materials: RmRow[];
+  fg_make: string;
 };
 
 type FullMap = {
   model_number: string;
   is_direct_purchase: boolean;
-  raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string }>;
+  raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string; weight?: number; material_category?: string }>;
 };
+
+function emptyRm(): RmRow {
+  return {
+    make: "", material: "", size_model: "", qty_per_unit: "", unit: "",
+    notes: "", rm_weight: "", remarks: "", material_category: "",
+    material_category_source: null,
+  };
+}
 
 export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [notes, setNotes] = useState("");
@@ -64,6 +78,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [edited, setEdited] = useState<Record<string, EditedFg>>({});
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [showMake, setShowMake] = useColumnToggle("req.create.columns.make", false);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
   const navigate = useNavigate();
 
   const items: BoqLineItem[] = useMemo(
@@ -91,6 +106,13 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         .from("fg_raw_material_map")
         .select("model_number, is_direct_purchase, raw_materials");
       const all = (data as FullMap[]) || [];
+      // Load category rules for auto-classification (BOM → Master → Rule)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: ruleRows } = await (supabase as any)
+        .from("rm_category_rules")
+        .select("pattern, category, priority, active")
+        .eq("active", true);
+      setCategoryRules((ruleRows as CategoryRule[]) || []);
       // normalize Column A to first line for matching + display
       const cleaned = all.map((m) => ({ ...m, model_number: firstLine(m.model_number) || m.model_number }));
       setFullMaps(cleaned);
@@ -167,15 +189,19 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       const isDirect = mode === "auto" && !!mapping?.is_direct_purchase;
       const rms: RmRow[] = mapping && !isDirect && mode === "auto"
         ? mapping.raw_materials.map((rm) => ({
+            ...emptyRm(),
             make: rm.make ?? "",
             material: rm.material ?? "",
             size_model: rm.size_model ?? "",
             qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
             unit: rm.unit ?? "",
             notes: rm.notes ?? "",
+            rm_weight: rm.weight != null ? String(rm.weight) : "",
+            material_category: rm.material_category ?? "",
+            material_category_source: rm.material_category ? "master" : null,
           }))
         : [];
-      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms };
+      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms, fg_make: "" };
     }
     setEdited(next);
     setStep("review");
@@ -185,14 +211,37 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
     setEdited((prev) => {
       const cur = prev[fgId]; if (!cur) return prev;
       const rms = cur.raw_materials.slice();
-      rms[idx] = { ...rms[idx], ...patch };
+      const next = { ...rms[idx], ...patch };
+      // Auto-resolve category when material/size/master changes and user hasn't
+      // manually overridden it.
+      if (
+        (patch.material !== undefined || patch.size_model !== undefined) &&
+        next.material_category_source !== "manual"
+      ) {
+        const r = resolveMaterialCategory({
+          material: next.material,
+          sizeModel: next.size_model,
+          rules: categoryRules,
+          itemMasterCategory: next.material_category_source === "master" ? next.material_category : null,
+        });
+        next.material_category = r.category ?? "";
+        next.material_category_source = r.source;
+      }
+      rms[idx] = next;
       return { ...prev, [fgId]: { ...cur, raw_materials: rms } };
+    });
+  }
+
+  function updateFgMake(fgId: string, v: string) {
+    setEdited((prev) => {
+      const cur = prev[fgId]; if (!cur) return prev;
+      return { ...prev, [fgId]: { ...cur, fg_make: v } };
     });
   }
   function addRm(fgId: string) {
     setEdited((prev) => {
       const cur = prev[fgId]; if (!cur) return prev;
-      return { ...prev, [fgId]: { ...cur, raw_materials: [...cur.raw_materials, { make: "", material: "", size_model: "", qty_per_unit: "", unit: "", notes: "" }] } };
+      return { ...prev, [fgId]: { ...cur, raw_materials: [...cur.raw_materials, emptyRm()] } };
     });
   }
   function removeRm(fgId: string, idx: number) {
@@ -222,12 +271,16 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         ...prev[fgId],
         is_direct_purchase: !!mapping.is_direct_purchase,
         raw_materials: mapping.raw_materials.map((rm) => ({
+          ...emptyRm(),
           make: rm.make ?? "",
           material: rm.material ?? "",
           size_model: rm.size_model ?? "",
           qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
           unit: rm.unit ?? "",
           notes: rm.notes ?? "",
+          rm_weight: rm.weight != null ? String(rm.weight) : "",
+          material_category: rm.material_category ?? "",
+          material_category_source: rm.material_category ? "master" : null,
         })),
       },
     }));
@@ -249,6 +302,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       const edited_items = ids.map((id) => ({
         boq_item_id: id,
         is_direct_purchase: edited[id].is_direct_purchase,
+        fg_make: edited[id].fg_make || null,
         raw_materials: edited[id].raw_materials
           .filter((r) => r.material.trim().length > 0)
           .map((r) => ({
@@ -258,6 +312,10 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
             qty_per_unit: r.qty_per_unit.trim() === "" ? null : Number(r.qty_per_unit),
             unit: r.unit || null,
             notes: r.notes || null,
+            rm_weight: r.rm_weight.trim() === "" ? null : Number(r.rm_weight),
+            remarks: r.remarks || null,
+            material_category: r.material_category || null,
+            material_category_source: r.material_category_source,
           })),
       }));
       const { data, error } = await supabase.functions.invoke("create-requisition", {
@@ -413,6 +471,15 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         <span className="text-muted-foreground"> · Qty {fgQty}</span>
                       </div>
                       <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1 text-xs">
+                          <span className="text-muted-foreground">FG Make</span>
+                          <Input
+                            className="h-7 w-32"
+                            value={efg.fg_make}
+                            placeholder="e.g. MR Engineers"
+                            onChange={(e) => updateFgMake(efg.boq_item_id, e.target.value)}
+                          />
+                        </label>
                         <RmMasterPicker maps={fullMaps} onPick={(m) => applyMappingTo(efg.boq_item_id, m)} />
                         <label className="flex items-center gap-2 text-xs">
                           <Switch checked={efg.is_direct_purchase} onCheckedChange={(v) => toggleDirect(efg.boq_item_id, v)} />
@@ -433,14 +500,16 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                               <th className="text-left pr-2 pb-1">Size / Model</th>
                               <th className="text-right pr-2 pb-1">Qty / unit</th>
                               <th className="text-left pr-2 pb-1">Unit</th>
+                              <th className="text-right pr-2 pb-1">Weight</th>
+                              <th className="text-left pr-2 pb-1">Category</th>
                               <th className="text-right pr-2 pb-1">Reqd</th>
-                              <th className="text-left pr-2 pb-1">Notes</th>
+                              <th className="text-left pr-2 pb-1">Remarks</th>
                               <th></th>
                             </tr>
                           </thead>
                           <tbody>
                             {efg.raw_materials.length === 0 ? (
-                              <tr><td colSpan={8} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
+                              <tr><td colSpan={10} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
                             ) : efg.raw_materials.map((rm, i) => {
                               const per = Number(rm.qty_per_unit) || 0;
                               const reqd = per * fgQty;
@@ -451,8 +520,18 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                                   <td className="pr-2 py-1"><Input className="h-7" value={rm.size_model} onChange={(e) => updateRm(efg.boq_item_id, i, { size_model: e.target.value })} /></td>
                                   <td className="pr-2 py-1"><Input className="h-7 text-right w-20" value={rm.qty_per_unit} onChange={(e) => updateRm(efg.boq_item_id, i, { qty_per_unit: e.target.value })} /></td>
                                   <td className="pr-2 py-1"><Input className="h-7 w-16" value={rm.unit} onChange={(e) => updateRm(efg.boq_item_id, i, { unit: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7 text-right w-20" value={rm.rm_weight} onChange={(e) => updateRm(efg.boq_item_id, i, { rm_weight: e.target.value })} /></td>
+                                  <td className="pr-2 py-1">
+                                    <Input
+                                      className="h-7 w-28"
+                                      value={rm.material_category}
+                                      placeholder="auto"
+                                      title={rm.material_category_source ? `Source: ${rm.material_category_source}` : ""}
+                                      onChange={(e) => updateRm(efg.boq_item_id, i, { material_category: e.target.value, material_category_source: "manual" })}
+                                    />
+                                  </td>
                                   <td className="pr-2 py-1 text-right tabular-nums">{rm.qty_per_unit ? reqd : "—"}</td>
-                                  <td className="pr-2 py-1"><Input className="h-7" value={rm.notes} onChange={(e) => updateRm(efg.boq_item_id, i, { notes: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7" value={rm.remarks} onChange={(e) => updateRm(efg.boq_item_id, i, { remarks: e.target.value })} /></td>
                                   <td className="py-1"><Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeRm(efg.boq_item_id, i)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
                                 </tr>
                               );

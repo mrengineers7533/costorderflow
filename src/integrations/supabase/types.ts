@@ -2585,7 +2585,9 @@ export type Database = {
           boq_item_id: string
           created_at: string
           description: string | null
+          fg_make: string | null
           fg_snapshot: Json
+          fg_uom: string | null
           id: string
           included_in_requisition: boolean
           item_no: string | null
@@ -2603,7 +2605,9 @@ export type Database = {
           boq_item_id: string
           created_at?: string
           description?: string | null
+          fg_make?: string | null
           fg_snapshot?: Json
+          fg_uom?: string | null
           id?: string
           included_in_requisition?: boolean
           item_no?: string | null
@@ -2621,7 +2625,9 @@ export type Database = {
           boq_item_id?: string
           created_at?: string
           description?: string | null
+          fg_make?: string | null
           fg_snapshot?: Json
+          fg_uom?: string | null
           id?: string
           included_in_requisition?: boolean
           item_no?: string | null
@@ -2690,6 +2696,8 @@ export type Database = {
           lot_no: string | null
           make: string | null
           material: string
+          material_category: string | null
+          material_category_source: string | null
           model_number: string | null
           notes: string | null
           plan_status: string | null
@@ -2697,9 +2705,11 @@ export type Database = {
           po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
+          remarks: string | null
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          rm_weight: number | null
           size_model: string | null
           source: string
           unit: string | null
@@ -2714,6 +2724,8 @@ export type Database = {
           lot_no?: string | null
           make?: string | null
           material: string
+          material_category?: string | null
+          material_category_source?: string | null
           model_number?: string | null
           notes?: string | null
           plan_status?: string | null
@@ -2721,9 +2733,11 @@ export type Database = {
           po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
+          remarks?: string | null
           required_qty?: number | null
           requisition_id: string
           requisition_item_id?: string | null
+          rm_weight?: number | null
           size_model?: string | null
           source?: string
           unit?: string | null
@@ -2738,6 +2752,8 @@ export type Database = {
           lot_no?: string | null
           make?: string | null
           material?: string
+          material_category?: string | null
+          material_category_source?: string | null
           model_number?: string | null
           notes?: string | null
           plan_status?: string | null
@@ -2745,9 +2761,11 @@ export type Database = {
           po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
+          remarks?: string | null
           required_qty?: number | null
           requisition_id?: string
           requisition_item_id?: string | null
+          rm_weight?: number | null
           size_model?: string | null
           source?: string
           unit?: string | null
@@ -2839,6 +2857,39 @@ export type Database = {
           upload_file_path?: string | null
           upload_mime_type?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      rm_category_rules: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          pattern: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pattern: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pattern?: string
+          priority?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -3430,7 +3481,9 @@ export type Database = {
           boq_item_id: string
           created_at: string
           description: string | null
+          fg_make: string | null
           fg_snapshot: Json
+          fg_uom: string | null
           id: string
           included_in_requisition: boolean
           item_no: string | null
@@ -3462,6 +3515,8 @@ export type Database = {
           lot_no: string | null
           make: string | null
           material: string
+          material_category: string | null
+          material_category_source: string | null
           model_number: string | null
           notes: string | null
           plan_status: string | null
@@ -3469,9 +3524,11 @@ export type Database = {
           po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
+          remarks: string | null
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          rm_weight: number | null
           size_model: string | null
           source: string
           unit: string | null

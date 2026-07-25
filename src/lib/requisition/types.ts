@@ -37,6 +37,8 @@ export interface RequisitionItemRecord {
   created_at: string;
   updated_at: string;
   included_in_requisition?: boolean;
+  fg_make?: string | null;
+  fg_uom?: string | null;
 }
 
 export interface RequisitionLotRecord {
@@ -78,6 +80,10 @@ export interface RequisitionRawMaterialRecord {
     | null;
   annexure_status?: "created" | null;
   annexure_id?: string | null;
+  rm_weight?: number | null;
+  remarks?: string | null;
+  material_category?: string | null;
+  material_category_source?: "bom" | "master" | "rule" | "manual" | null;
 }
 
 export interface AnnexureRecord {
@@ -128,6 +134,8 @@ export interface FgRawMaterialMapRow {
     size_model?: string;
     unit?: string;
     notes?: string;
+    weight?: number;
+    material_category?: string;
   }>;
   notes: string | null;
   updated_at: string;

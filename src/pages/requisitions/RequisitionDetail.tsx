@@ -476,6 +476,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-right py-2 px-2 border-r">RM Qty</th>
+                    <th className="text-right py-2 px-2 border-r">Weight</th>
+                    <th className="text-left py-2 px-2 border-r">Category</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
@@ -484,7 +486,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                   ) : rmGroups.flatMap((g) => {
                     const it = g.item;
                     const fgLabel = it?.model_number || it?.description || g.fgLabel;
@@ -502,6 +504,13 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-2 border-r">{r.material}</td>
                         <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                         <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
+                        <td className="py-2 px-2 border-r text-right">{r.rm_weight ?? "—"}</td>
+                        <td className="py-2 px-2 border-r">
+                          {r.material_category || "—"}
+                          {r.material_category_source ? (
+                            <span className="ml-1 text-[10px] text-muted-foreground">({r.material_category_source})</span>
+                          ) : null}
+                        </td>
                         <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                         <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
                         {idx === 0 ? (

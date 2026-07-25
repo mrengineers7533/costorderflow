@@ -14,6 +14,7 @@ interface Body {
   edited_items?: Array<{
     boq_item_id: string;
     is_direct_purchase?: boolean;
+    fg_make?: string | null;
     raw_materials: Array<{
       make?: string | null;
       material: string;
@@ -21,6 +22,10 @@ interface Body {
       qty_per_unit: number | null;
       unit?: string | null;
       notes?: string | null;
+      rm_weight?: number | null;
+      remarks?: string | null;
+      material_category?: string | null;
+      material_category_source?: "bom" | "master" | "rule" | "manual" | null;
     }>;
   }>;
 }
@@ -70,6 +75,29 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    // Load category rules once for auto-classification fallback.
+    const { data: ruleRows } = await admin
+      .from("rm_category_rules")
+      .select("pattern, category, priority, active")
+      .eq("active", true);
+    type Rule = { pattern: string; category: string; priority: number; active: boolean };
+    const rules: Rule[] = ((ruleRows as Rule[]) || [])
+      .filter((r) => r && r.pattern && r.category)
+      .sort((a, b) => a.priority - b.priority || b.pattern.length - a.pattern.length);
+    function resolveCategory(
+      bomCategory: string | null | undefined,
+      masterCategory: string | null | undefined,
+      material: string | null | undefined,
+      sizeModel: string | null | undefined,
+    ): { category: string | null; source: "bom" | "master" | "rule" | null } {
+      if (bomCategory && String(bomCategory).trim()) return { category: String(bomCategory).trim(), source: "bom" };
+      if (masterCategory && String(masterCategory).trim()) return { category: String(masterCategory).trim(), source: "master" };
+      const hay = `${material ?? ""} ${sizeModel ?? ""}`.toUpperCase();
+      if (hay.trim()) {
+        for (const r of rules) if (hay.includes(r.pattern.toUpperCase())) return { category: r.category, source: "rule" };
+      }
+      return { category: null, source: null };
+    }
     const { data: boq, error: bErr } = await admin
       .from("boqs")
       .select("id, order_id, revision, verification_status, line_items, reference_oa_number, client_name, boq_number, user_id")
@@ -191,6 +219,12 @@ Deno.serve(async (req) => {
     let unmapped_count = 0;
 
     if (selectedItems.length) {
+      // Build lookup up-front so we can enrich the inserted requisition_items
+      // (fg_make) and the derived raw material rows in one pass.
+      const editedByBoqItem = new Map<string, NonNullable<Body["edited_items"]>[number]>();
+      for (const e of (body.edited_items || [])) {
+        editedByBoqItem.set(String(e.boq_item_id), e);
+      }
       // deno-lint-ignore no-explicit-any
       const rows = selectedItems.map((it: any) => ({
         requisition_id: created.id,
@@ -203,16 +237,12 @@ Deno.serve(async (req) => {
         remarks: it.remarks ?? null,
         fg_snapshot: it,
         included_in_requisition: true,
+        fg_uom: it.unit ?? null,
+        fg_make: editedByBoqItem.get(String(it.id))?.fg_make ?? null,
       }));
       const { data: insertedItems, error: itErr } = await admin
         .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
       if (itErr) throw itErr;
-
-      // Build a lookup of edited payloads by boq_item_id (string keys)
-      const editedByBoqItem = new Map<string, NonNullable<Body["edited_items"]>[number]>();
-      for (const e of (body.edited_items || [])) {
-        editedByBoqItem.set(String(e.boq_item_id), e);
-      }
 
       // Generate raw material rows per inserted item
       const rmRows: Array<Record<string, unknown>> = [];
@@ -225,6 +255,9 @@ Deno.serve(async (req) => {
           for (const rm of (edited.raw_materials || [])) {
             if (!rm || !rm.material) continue;
             const per = Number(rm.qty_per_unit) || 0;
+            const resolved = rm.material_category
+              ? { category: rm.material_category, source: rm.material_category_source ?? "manual" }
+              : resolveCategory(null, null, rm.material, rm.size_model ?? null);
             rmRows.push({
               requisition_id: created.id,
               requisition_item_id: ri.id,
@@ -239,6 +272,10 @@ Deno.serve(async (req) => {
               source: "manual",
               purchase_status: "pending",
               notes: rm.notes ?? null,
+              rm_weight: rm.rm_weight ?? null,
+              remarks: rm.remarks ?? null,
+              material_category: resolved.category,
+              material_category_source: resolved.source,
             });
             raw_material_count++;
           }
@@ -248,6 +285,8 @@ Deno.serve(async (req) => {
         if (mapping && !mapping.is_direct_purchase && mapping.raw_materials.length) {
           for (const rm of mapping.raw_materials) {
             const per = Number(rm.qty_per_unit) || 0;
+            const masterCat = (rm as { material_category?: string }).material_category ?? null;
+            const resolved = resolveCategory(null, masterCat, rm.material, rm.size_model ?? null);
             rmRows.push({
               requisition_id: created.id,
               requisition_item_id: ri.id,
@@ -262,6 +301,10 @@ Deno.serve(async (req) => {
               source: "mapped",
               purchase_status: "pending",
               notes: rm.notes ?? null,
+              rm_weight: (rm as { weight?: number }).weight ?? null,
+              remarks: null,
+              material_category: resolved.category,
+              material_category_source: resolved.source,
             });
           }
           raw_material_count += mapping.raw_materials.length;
