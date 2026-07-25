@@ -471,6 +471,15 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         <span className="text-muted-foreground"> · Qty {fgQty}</span>
                       </div>
                       <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1 text-xs">
+                          <span className="text-muted-foreground">FG Make</span>
+                          <Input
+                            className="h-7 w-32"
+                            value={efg.fg_make}
+                            placeholder="e.g. MR Engineers"
+                            onChange={(e) => updateFgMake(efg.boq_item_id, e.target.value)}
+                          />
+                        </label>
                         <RmMasterPicker maps={fullMaps} onPick={(m) => applyMappingTo(efg.boq_item_id, m)} />
                         <label className="flex items-center gap-2 text-xs">
                           <Switch checked={efg.is_direct_purchase} onCheckedChange={(v) => toggleDirect(efg.boq_item_id, v)} />
@@ -491,14 +500,16 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                               <th className="text-left pr-2 pb-1">Size / Model</th>
                               <th className="text-right pr-2 pb-1">Qty / unit</th>
                               <th className="text-left pr-2 pb-1">Unit</th>
+                              <th className="text-right pr-2 pb-1">Weight</th>
+                              <th className="text-left pr-2 pb-1">Category</th>
                               <th className="text-right pr-2 pb-1">Reqd</th>
-                              <th className="text-left pr-2 pb-1">Notes</th>
+                              <th className="text-left pr-2 pb-1">Remarks</th>
                               <th></th>
                             </tr>
                           </thead>
                           <tbody>
                             {efg.raw_materials.length === 0 ? (
-                              <tr><td colSpan={8} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
+                              <tr><td colSpan={10} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
                             ) : efg.raw_materials.map((rm, i) => {
                               const per = Number(rm.qty_per_unit) || 0;
                               const reqd = per * fgQty;
@@ -509,8 +520,18 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                                   <td className="pr-2 py-1"><Input className="h-7" value={rm.size_model} onChange={(e) => updateRm(efg.boq_item_id, i, { size_model: e.target.value })} /></td>
                                   <td className="pr-2 py-1"><Input className="h-7 text-right w-20" value={rm.qty_per_unit} onChange={(e) => updateRm(efg.boq_item_id, i, { qty_per_unit: e.target.value })} /></td>
                                   <td className="pr-2 py-1"><Input className="h-7 w-16" value={rm.unit} onChange={(e) => updateRm(efg.boq_item_id, i, { unit: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7 text-right w-20" value={rm.rm_weight} onChange={(e) => updateRm(efg.boq_item_id, i, { rm_weight: e.target.value })} /></td>
+                                  <td className="pr-2 py-1">
+                                    <Input
+                                      className="h-7 w-28"
+                                      value={rm.material_category}
+                                      placeholder="auto"
+                                      title={rm.material_category_source ? `Source: ${rm.material_category_source}` : ""}
+                                      onChange={(e) => updateRm(efg.boq_item_id, i, { material_category: e.target.value, material_category_source: "manual" })}
+                                    />
+                                  </td>
                                   <td className="pr-2 py-1 text-right tabular-nums">{rm.qty_per_unit ? reqd : "—"}</td>
-                                  <td className="pr-2 py-1"><Input className="h-7" value={rm.notes} onChange={(e) => updateRm(efg.boq_item_id, i, { notes: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7" value={rm.remarks} onChange={(e) => updateRm(efg.boq_item_id, i, { remarks: e.target.value })} /></td>
                                   <td className="py-1"><Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeRm(efg.boq_item_id, i)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
                                 </tr>
                               );
