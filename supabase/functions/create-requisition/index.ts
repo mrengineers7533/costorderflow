@@ -14,6 +14,7 @@ interface Body {
   edited_items?: Array<{
     boq_item_id: string;
     is_direct_purchase?: boolean;
+    fg_make?: string | null;
     raw_materials: Array<{
       make?: string | null;
       material: string;
@@ -21,6 +22,10 @@ interface Body {
       qty_per_unit: number | null;
       unit?: string | null;
       notes?: string | null;
+      rm_weight?: number | null;
+      remarks?: string | null;
+      material_category?: string | null;
+      material_category_source?: "bom" | "master" | "rule" | "manual" | null;
     }>;
   }>;
 }
@@ -70,6 +75,29 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    // Load category rules once for auto-classification fallback.
+    const { data: ruleRows } = await admin
+      .from("rm_category_rules")
+      .select("pattern, category, priority, active")
+      .eq("active", true);
+    type Rule = { pattern: string; category: string; priority: number; active: boolean };
+    const rules: Rule[] = ((ruleRows as Rule[]) || [])
+      .filter((r) => r && r.pattern && r.category)
+      .sort((a, b) => a.priority - b.priority || b.pattern.length - a.pattern.length);
+    function resolveCategory(
+      bomCategory: string | null | undefined,
+      masterCategory: string | null | undefined,
+      material: string | null | undefined,
+      sizeModel: string | null | undefined,
+    ): { category: string | null; source: "bom" | "master" | "rule" | null } {
+      if (bomCategory && String(bomCategory).trim()) return { category: String(bomCategory).trim(), source: "bom" };
+      if (masterCategory && String(masterCategory).trim()) return { category: String(masterCategory).trim(), source: "master" };
+      const hay = `${material ?? ""} ${sizeModel ?? ""}`.toUpperCase();
+      if (hay.trim()) {
+        for (const r of rules) if (hay.includes(r.pattern.toUpperCase())) return { category: r.category, source: "rule" };
+      }
+      return { category: null, source: null };
+    }
     const { data: boq, error: bErr } = await admin
       .from("boqs")
       .select("id, order_id, revision, verification_status, line_items, reference_oa_number, client_name, boq_number, user_id")
@@ -203,6 +231,8 @@ Deno.serve(async (req) => {
         remarks: it.remarks ?? null,
         fg_snapshot: it,
         included_in_requisition: true,
+        fg_uom: it.unit ?? null,
+        fg_make: (editedByBoqItem?.get?.(String(it.id))?.fg_make ?? null),
       }));
       const { data: insertedItems, error: itErr } = await admin
         .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
