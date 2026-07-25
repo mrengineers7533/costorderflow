@@ -58,6 +58,14 @@ type FullMap = {
   raw_materials: Array<{ make?: string; material: string; size_model?: string; qty_per_unit: number; unit?: string; notes?: string; weight?: number; material_category?: string }>;
 };
 
+function emptyRm(): RmRow {
+  return {
+    make: "", material: "", size_model: "", qty_per_unit: "", unit: "",
+    notes: "", rm_weight: "", remarks: "", material_category: "",
+    material_category_source: null,
+  };
+}
+
 export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -173,15 +181,19 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       const isDirect = mode === "auto" && !!mapping?.is_direct_purchase;
       const rms: RmRow[] = mapping && !isDirect && mode === "auto"
         ? mapping.raw_materials.map((rm) => ({
+            ...emptyRm(),
             make: rm.make ?? "",
             material: rm.material ?? "",
             size_model: rm.size_model ?? "",
             qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
             unit: rm.unit ?? "",
             notes: rm.notes ?? "",
+            rm_weight: rm.weight != null ? String(rm.weight) : "",
+            material_category: rm.material_category ?? "",
+            material_category_source: rm.material_category ? "master" : null,
           }))
         : [];
-      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms };
+      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms, fg_make: "" };
     }
     setEdited(next);
     setStep("review");
@@ -198,7 +210,7 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
   function addRm(fgId: string) {
     setEdited((prev) => {
       const cur = prev[fgId]; if (!cur) return prev;
-      return { ...prev, [fgId]: { ...cur, raw_materials: [...cur.raw_materials, { make: "", material: "", size_model: "", qty_per_unit: "", unit: "", notes: "" }] } };
+      return { ...prev, [fgId]: { ...cur, raw_materials: [...cur.raw_materials, emptyRm()] } };
     });
   }
   function removeRm(fgId: string, idx: number) {
@@ -228,12 +240,16 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         ...prev[fgId],
         is_direct_purchase: !!mapping.is_direct_purchase,
         raw_materials: mapping.raw_materials.map((rm) => ({
+          ...emptyRm(),
           make: rm.make ?? "",
           material: rm.material ?? "",
           size_model: rm.size_model ?? "",
           qty_per_unit: rm.qty_per_unit != null ? String(rm.qty_per_unit) : "",
           unit: rm.unit ?? "",
           notes: rm.notes ?? "",
+          rm_weight: rm.weight != null ? String(rm.weight) : "",
+          material_category: rm.material_category ?? "",
+          material_category_source: rm.material_category ? "master" : null,
         })),
       },
     }));
