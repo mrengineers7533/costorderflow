@@ -753,8 +753,8 @@ export default function RequisitionPlan() {
                             </SelectContent>
                           </Select>
                         </td>
+                        <td className="py-2 px-1 border-r text-xs">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                         <td className="py-2 px-1 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-1 border-r"></td>
                         <td className="py-2 px-1 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-1">
                           {r.annexure_status === "created"
@@ -888,6 +888,7 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
+                      <td className="py-2 px-2 border-r text-xs">{rawMaterialTypeLabel(c.raw_material_type)}</td>
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
