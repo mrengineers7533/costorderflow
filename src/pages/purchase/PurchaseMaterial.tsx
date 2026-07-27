@@ -127,7 +127,7 @@ export default function PurchaseMaterial() {
     const [{ data: rmData }, { data: annexData }, { data: poData }] = await Promise.all([
       sb
         .from("requisition_raw_materials")
-        .select("id,requisition_id,lot_no,material,size_model,make,unit,required_qty,plan_status,annexure_status,annexure_id,po_status,po_id,rm_price,vendor_name")
+        .select("id,requisition_id,lot_no,material,size_model,make,unit,required_qty,plan_status,annexure_status,annexure_id,po_status,po_id,rm_price,vendor_name,raw_material_type")
         .eq("annexure_status", "created"),
       sb.from("requisition_annexures").select("id,status").eq("status", "active"),
       sb.from("purchase_orders").select("*").order("created_at", { ascending: false }),
