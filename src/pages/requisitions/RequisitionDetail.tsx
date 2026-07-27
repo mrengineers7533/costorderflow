@@ -316,16 +316,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
       <div className="min-h-[44px] space-y-5">
         <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
-        {id && (
-          <ModuleNotifications
-            links={{
-              requisitionId: id,
-              boqId: req?.boq_id ?? undefined,
-              orderRootId:
-                (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
-            }}
-          />
-        )}
+        {id && <ModuleNotifications links={notifLinks} />}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
