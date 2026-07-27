@@ -22,6 +22,7 @@ import type {
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
+import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
 
 const fmtQty2 = (v: unknown): string => {
   if (v === null || v === undefined || v === "") return "—";
