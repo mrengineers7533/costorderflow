@@ -29,6 +29,7 @@ import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
+import { RAW_MATERIAL_TYPES, RAW_MATERIAL_TYPE_PLACEHOLDER } from "@/lib/requisition/rawMaterialType";
 
 /** Uncontrolled inline text cell — saves on blur only when the value changed. */
 function TextCell({
@@ -706,7 +707,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-3 border-r">Unit</th>
                     <th className="text-right py-2 px-3 border-r">Price</th>
                     <th className="text-left py-2 px-3 border-r">Vendor</th>
-                    <th className="text-left py-2 px-3">Status</th>
+                    <th className="text-left py-2 px-3">Raw Material Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -741,14 +742,16 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-3 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-3">
                           <Select
-                            value={r.purchase_status}
-                            onValueChange={(v) => updateRm(r.id, { purchase_status: v as "pending" | "ordered" | "received" })}
+                            value={r.raw_material_type || undefined}
+                            onValueChange={(v) => updateRm(r.id, { raw_material_type: v })}
                           >
-                            <SelectTrigger className="h-7 w-28"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-7 w-32">
+                              <SelectValue placeholder={RAW_MATERIAL_TYPE_PLACEHOLDER} />
+                            </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="ordered">Ordered</SelectItem>
-                              <SelectItem value="received">Received</SelectItem>
+                              {RAW_MATERIAL_TYPES.map((t) => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </td>
