@@ -589,6 +589,7 @@ export default function PurchaseMaterial() {
                     <th className="text-left py-2 pr-3">Material</th>
                     <th className="text-left py-2 pr-3">Size / Model</th>
                     <th className="text-left py-2 pr-3">Make</th>
+                    <th className="text-left py-2 pr-3">Raw Material Type</th>
                     <th className="text-right py-2 pr-3">Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
                     <th className="text-left py-2 pr-3">Due On</th>
@@ -603,7 +604,7 @@ export default function PurchaseMaterial() {
                 </thead>
                 <tbody>
                   {filteredRows.length === 0 ? (
-                    <tr><td colSpan={16} className="py-6 text-center text-muted-foreground">
+                    <tr><td colSpan={17} className="py-6 text-center text-muted-foreground">
                       {selectedLots.size === 0 ? "Select a lot to view raw materials." : "No rows match the filter."}
                     </td></tr>
                   ) : filteredRows.map((r) => {
@@ -627,6 +628,7 @@ export default function PurchaseMaterial() {
                         <td className="py-2 pr-3">{r.material}</td>
                         <td className="py-2 pr-3">{r.size_model || "—"}</td>
                         <td className="py-2 pr-3">{r.make || "—"}</td>
+                        <td className="py-2 pr-3">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                         <td className="py-2 pr-3 text-right">
                           {editable ? (
                             <Input type="number" className="h-7 text-xs text-right w-20"
