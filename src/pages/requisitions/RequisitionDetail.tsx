@@ -489,8 +489,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
             <CardHeader className="space-y-0 py-3">
               <CardTitle className="text-sm">Generated requisition</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="w-full text-sm border">
+            <CardContent className="relative w-full max-w-full overflow-x-auto">
+              <table className="w-full min-w-[1180px] text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
                     <th className="text-left py-2 px-2 border-r">Finished Good</th>
