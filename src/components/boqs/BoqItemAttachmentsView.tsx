@@ -103,22 +103,33 @@ export function useItemAttachments(
   items: { id: string; description?: string; model_number?: string }[] | undefined,
 ) {
   const [map, setMap] = useState<Map<string, AttachmentRow[]>>(new Map());
+  // Callers usually build the `items` array inline (`items.map(...)`), so the
+  // array identity changes on every render. Depending on it directly re-ran
+  // this effect (and its unconditional setMap) on every render, causing an
+  // endless render/fetch loop. Depend on a stable signature instead.
+  const itemsKey = JSON.stringify(
+    (items || []).map((i) => [i.id, i.description || "", i.model_number || ""]),
+  );
   useEffect(() => {
     let cancelled = false;
-    if (!boqId || !items?.length) { setMap(new Map()); return; }
+    const list = JSON.parse(itemsKey) as [string, string, string][];
+    if (!boqId || !list.length) {
+      setMap((prev) => (prev.size === 0 ? prev : new Map()));
+      return;
+    }
     (async () => {
       const { fetchItemAttachments } = await import("@/lib/boq/itemAttachments");
       const m = await fetchItemAttachments(
         boqId,
-        items.map((i) => ({
-          id: i.id,
-          description: i.description || "",
-          model_number: i.model_number || "",
+        list.map(([id, description, model_number]) => ({
+          id,
+          description,
+          model_number,
         })) as never,
       );
-      if (!cancelled) setMap(m);
+      if (!cancelled) setMap((prev) => (prev.size === 0 && m.size === 0 ? prev : m));
     })();
     return () => { cancelled = true; };
-  }, [boqId, items]);
+  }, [boqId, itemsKey]);
   return map;
 }
