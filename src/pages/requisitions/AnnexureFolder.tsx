@@ -493,6 +493,7 @@ export default function AnnexureFolder() {
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2">Total Qty</th>
                     <th className="text-right py-2 px-2 border-l">Price</th>
@@ -508,6 +509,7 @@ export default function AnnexureFolder() {
                       <td className="py-2 px-2 border-r">{r.material}</td>
                       <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{r.make || "—"}</td>
+                      <td className="py-2 px-2 border-r">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                       <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
                       <td className="py-2 px-2 text-right">{fmtQty2(r.total_qty)}</td>
                       <td className="py-2 px-2 text-right border-l">{formatReqPrice(pv.rm_price)}</td>
@@ -518,7 +520,7 @@ export default function AnnexureFolder() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted/30 font-medium">
-                    <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
+                    <td colSpan={6} className="py-2 px-2 text-right border-r">Grand Total</td>
                     <td className="py-2 px-2 text-right">{fmtQty2(viewEntry.total)}</td>
                     <td className="py-2 px-2" colSpan={2} />
                   </tr>
