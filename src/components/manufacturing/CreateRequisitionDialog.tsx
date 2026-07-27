@@ -517,12 +517,14 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                               <th className="text-left pr-2 pb-1">Category</th>
                               <th className="text-right pr-2 pb-1">Reqd</th>
                               <th className="text-left pr-2 pb-1">Remarks</th>
+                              <th className="text-right pr-2 pb-1">Price</th>
+                              <th className="text-left pr-2 pb-1">Vendor</th>
                               <th></th>
                             </tr>
                           </thead>
                           <tbody>
                             {efg.raw_materials.length === 0 ? (
-                              <tr><td colSpan={10} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
+                              <tr><td colSpan={12} className="py-2 text-center text-muted-foreground">No raw materials. Add a row.</td></tr>
                             ) : efg.raw_materials.map((rm, i) => {
                               const per = Number(rm.qty_per_unit) || 0;
                               const reqd = per * fgQty;
@@ -545,6 +547,8 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                                   </td>
                                   <td className="pr-2 py-1 text-right tabular-nums">{rm.qty_per_unit ? reqd : "—"}</td>
                                   <td className="pr-2 py-1"><Input className="h-7" value={rm.remarks} onChange={(e) => updateRm(efg.boq_item_id, i, { remarks: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7 text-right w-24" inputMode="decimal" placeholder="0.00" value={rm.rm_price} onChange={(e) => updateRm(efg.boq_item_id, i, { rm_price: e.target.value })} /></td>
+                                  <td className="pr-2 py-1"><Input className="h-7 w-32" placeholder="Vendor" value={rm.vendor_name} onChange={(e) => updateRm(efg.boq_item_id, i, { vendor_name: e.target.value })} /></td>
                                   <td className="py-1"><Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeRm(efg.boq_item_id, i)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
                                 </tr>
                               );
