@@ -37,6 +37,9 @@ const costingItems: { title: string; url: string; icon: typeof LayoutGrid; modul
 const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Design",              url: "/design",                 icon: PencilRuler,    module: "design" },
   { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
+];
+
+const tailItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
   { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
 ];
@@ -77,6 +80,9 @@ export function AppSidebar({ user }: { user?: User | null }) {
     isAdmin || canAccess(it.module),
   );
   const visiblePurchase = purchaseItems.filter((it) =>
+    isAdmin || canAccess(it.module),
+  );
+  const visibleTail = tailItems.filter((it) =>
     isAdmin || canAccess(it.module),
   );
 
@@ -271,6 +277,10 @@ export function AppSidebar({ user }: { user?: User | null }) {
                     ))}
                 </>
               )}
+
+              {visibleTail.map((item) => (
+                <MenuItem key={item.title} item={item} />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
