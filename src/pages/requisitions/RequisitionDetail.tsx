@@ -28,6 +28,12 @@ import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/Bo
 import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
+/** Display-only formatter for the requisition reference price. Blank when unset. */
+export function formatReqPrice(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(Number(v))) return "—";
+  return Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
