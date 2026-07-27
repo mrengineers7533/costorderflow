@@ -1,49 +1,41 @@
-## Goal
+## Diagnosis (confirmed by reading the code)
 
-1. Stop the Requisition detail page from shifting/jumping while it loads.
-2. Show the Price and Vendor values (already captured in Create Requisition) on the Requisition detail page and in downstream views.
-3. Change nothing about existing calculations, workflows, PO/GRN logic, numbering, permissions, or PDFs.
+The page isn't "auto-scrolling" — it is re-rendering and re-fetching in a loop, and every loop re-lays-out the wide table, which makes the page jump vertically and shift horizontally as the scrollbar appears/disappears.
 
-## 1. Layout stability — `src/pages/requisitions/RequisitionDetail.tsx`
+Two confirmed infinite-loop paths:
 
-Current causes of the jump:
-- While `loading` is true the page renders a bare `<div className="p-6 …">Loading…</div>`, then swaps to a `container mx-auto px-4 lg:px-6 py-5` shell — different width/padding, and the vertical scrollbar appears once content lands, shifting everything horizontally.
-- `EntityActivityBanner` and `ModuleNotifications` mount async above the header, pushing the whole page down after first paint.
-- Tables use default auto layout, so column widths re-flow when longer strings arrive.
+1. **`useItemAttachments` re-fires every render** (`src/components/boqs/BoqItemAttachmentsView.tsx:106-122`). Its effect depends on the `items` array, and `RequisitionDetail.tsx:116-119` passes a freshly built `items.map(...)` array on every render. The effect always calls `setMap(...)` with a brand-new `Map`, which re-renders, which builds a new array, which re-fires the effect → endless render/fetch loop.
 
-Fixes (presentation only):
-- Render the loading and "not found" states inside the *same* container shell used for the loaded state, so padding/width never change.
-- Reserve vertical space for the two async banners (fixed min-height wrapper) so their arrival doesn't push content.
-- Add `scrollbar-gutter: stable` on the app main scroll container so the scrollbar appearing doesn't shift width; add `overflow-anchor: none` on the detail page container to stop scroll anchoring jumps.
-- Give the data tables `table-fixed` with explicit column widths (plus `overflow-x-auto` wrappers already present) so columns don't re-flow once rows render.
+2. **`ModuleNotifications` reloads every render** (`src/components/notifications/ModuleNotifications.tsx:86-92, 267-277`). `mergedLinks` is memoized on the `links` prop, but `RequisitionDetail.tsx:315-323` passes an inline object literal, so `mergedLinks` is new each render, `load` (a `useCallback` with `mergedLinks` in its deps) is new each render, and `useEffect(() => load(), [load])` runs on every render → constant refetch + state churn.
 
-## 2. Price and Vendor on the Requisition detail page
+Layout amplifiers: no `scrollbar-gutter` on the page shell, the app has no `overflow-x` guard on `html/body`, and the 14-column Generated table uses auto layout so column widths recompute on every one of those re-renders.
 
-`requisition_raw_materials` already has `rm_price` and `vendor_name` (written by the create-requisition function), so no schema change and no migration is needed. Old rows simply return `null`.
+## Fixes
 
-- Include `rm_price, vendor_name` in the raw-material select on the detail page and add them to `RequisitionRawMaterialRecord` in `src/lib/requisition/types.ts`.
-- Add two right-side columns — **Price** (right-aligned, existing app number/currency formatting, blank when null) and **Vendor** (blank when null) — to:
-  - the "Generated" table (Finished Good / RM grid)
-  - the "Raw Materials" table
-- Values are display-only; not fed into any total, tax, or amount calculation.
+### 1. Break the attachment-hook loop
+- In `BoqItemAttachmentsView.tsx`, key the effect off a stable string signature of the items (id + description + model_number) instead of the array identity, and skip `setMap` when the result is equivalent to the current state (avoid setting a new empty `Map` when it is already empty).
+- In `RequisitionDetail.tsx`, memoize the array passed to `useItemAttachments` with `useMemo` over `items`.
 
-## 3. Downstream visibility (display-only carry-forward)
+### 2. Break the notifications loop
+- In `ModuleNotifications.tsx`, memoize `mergedLinks` on the stringified link signature rather than the `links` object identity, and drive the `load` callback + its effect from the primitive `modsKey`/`linksKey`/`limit`/`hasAnyLink` values only (drop the object from the dep list).
+- In `RequisitionDetail.tsx`, memoize the `links` object passed to `ModuleNotifications`.
 
-No new columns in downstream tables; values are looked up item-wise from the originating requisition raw-material rows.
+### 3. Remove residual layout shift / horizontal page movement
+- Add `html, body { overflow-x: hidden; }` and `scrollbar-gutter: stable` on the scrolling shell in `src/index.css`, so the vertical scrollbar appearing never shifts content left/right.
+- Ensure the app `main` container in `AppLayout.tsx` cannot overflow horizontally (`min-w-0` is present; add `overflow-x-clip` on the shell only, never on the table wrapper).
+- Wrap the Generated / Raw Materials tables in a stable container: `relative w-full max-w-full overflow-x-auto overflow-y-visible`, with the table given a stable `min-width` so wide content scrolls **inside** the container only.
+- Give the tables fixed layout with explicit column widths so widths don't re-compute when late data (price, vendor, attachments) lands.
+- Keep the existing reserved-height wrapper for the async banners and the existing `[overflow-anchor:none]`, and render the loading/not-found states inside the same container shell so first paint and loaded paint have identical geometry.
 
-- **Annexure rows** (`src/pages/requisitions/AnnexureFolder.tsx`): each annexure row already stores `source_rm_ids`; fetch the source RM rows and show Price/Vendor from them (when a merged row has conflicting values, show the first non-empty and mark multiples with `—`/tooltip).
-- **Purchase Planning / Purchase Material** (`src/pages/requisitions/RequisitionPlan.tsx`, `src/pages/purchase/PurchaseMaterial.tsx`): add read-only "Req Price" and "Req Vendor" reference columns next to the existing Rate/Vendor fields. The existing purchase Rate and vendor-selection fields keep their own values and logic untouched.
-- **PO create from annexure** (`src/pages/purchase/PoCreateFromAnnexure.tsx`): show the same two reference columns in the editable grid only (not in the printed PO layout), purely as a buying reference. PO rate/GST/amount logic unchanged.
-- **GRN** (`src/pages/grn/GrnList.tsx`): show the requisition reference Price/Vendor alongside the existing PO Rate/Vendor columns.
+### 4. No auto-focus / auto-scroll
+Verified there are no `scrollIntoView`, `window.scrollTo`, or `autoFocus` calls on this page; nothing to remove. The Lot `Input` and Status `Select` stay uncontrolled/controlled exactly as they are — only the surrounding re-render churn goes away, which is what made clicking them appear to move the page.
 
-Every one of these is an additional display column; no writes, no changes to selection, totals, or PDF output.
+## Explicitly unchanged
 
-## 4. Explicitly unchanged
-
-Order, PI, Design, Manufacturing, Purchase and Requisition business logic; quantity/price/tax/discount formulas; vendor and rate selection during purchase; PO generation and numbering; design approval and BOQ carry-forward; notifications, permissions, and all PDF/Excel exports.
+Price and Vendor columns stay exactly as they are on the Requisition detail page and in every downstream view (Annexure, Purchase Planning, Purchase Material, PO create, GRN). No changes to Order, PI, Design, Manufacturing, Purchase, BOQ revision, requisition/quantity/price calculations, vendor selection, status workflow, approvals, notification content, PDFs, numbering, or permissions.
 
 ## Technical notes
 
-- Files touched: `RequisitionDetail.tsx`, `AnnexureFolder.tsx`, `RequisitionPlan.tsx`, `PurchaseMaterial.tsx`, `PoCreateFromAnnexure.tsx`, `GrnList.tsx`, `src/lib/requisition/types.ts`, plus a small CSS/layout tweak in the app shell.
-- No database migration required — `rm_price` and `vendor_name` already exist on `requisition_raw_materials`.
-- Nulls render as blank, never `0` or `NaN`.
+- Files touched: `src/pages/requisitions/RequisitionDetail.tsx`, `src/components/boqs/BoqItemAttachmentsView.tsx`, `src/components/notifications/ModuleNotifications.tsx`, `src/index.css`, and a small shell tweak in `src/components/AppLayout.tsx`.
+- No database migration.
+- Verification: typecheck, then drive the page in a headless browser to confirm the network requests for attachments/notifications fire once (not continuously) and that `document.scrollingElement.scrollLeft` stays at 0 while the table scrolls internally.

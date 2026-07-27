@@ -83,14 +83,20 @@ export function ModuleNotifications({
     ? effectiveModule.slice().sort().join(",")
     : effectiveModule || "";
 
+  // Callers frequently pass an inline `links={{ ... }}` object literal, which
+  // is a new reference on every parent render. Memoising on the object
+  // identity therefore produced a new `mergedLinks` each render, a new `load`
+  // callback, and an endless load/setState/render loop. Key the memo off a
+  // stable serialised signature instead so the identity only changes when the
+  // actual link values change.
+  const linksKey = JSON.stringify({
+    ...(links || {}),
+    recordId: links?.recordId ?? recordId ?? null,
+  });
   const mergedLinks = useMemo<NotifLinks>(
-    () => ({
-      ...(links || {}),
-      recordId: links?.recordId ?? recordId ?? null,
-    }),
-    [links, recordId],
+    () => JSON.parse(linksKey) as NotifLinks,
+    [linksKey],
   );
-  const linksKey = JSON.stringify(mergedLinks);
 
   const [rows, setRows] = useState<NotifFull[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());

@@ -112,10 +112,25 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     [req],
   );
   // Attachments live on the source BOQ; match req items back to BOQ items by
-  // description + model_number signature.
-  const attMap = useItemAttachments(
-    req?.boq_id ?? null,
-    items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })) as never,
+  // description + model_number signature. Memoised so the hook's effect does
+  // not re-fire on every render (which caused a render/fetch loop and made
+  // the page visibly jump while the table re-laid out).
+  const attItems = useMemo(
+    () => items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })),
+    [items],
+  );
+  const attMap = useItemAttachments(req?.boq_id ?? null, attItems as never);
+
+  // Stable object identity so ModuleNotifications does not reload on every
+  // render of this page.
+  const notifLinks = useMemo(
+    () => ({
+      requisitionId: id as string,
+      boqId: req?.boq_id ?? undefined,
+      orderRootId:
+        (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
+    }),
+    [id, req],
   );
   const stale = latestRev != null && req != null && latestRev > req.boq_revision;
 
@@ -313,16 +328,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
       <div className="min-h-[44px] space-y-5">
         <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
-        {id && (
-          <ModuleNotifications
-            links={{
-              requisitionId: id,
-              boqId: req?.boq_id ?? undefined,
-              orderRootId:
-                (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
-            }}
-          />
-        )}
+        {id && <ModuleNotifications links={notifLinks} />}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -483,8 +489,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
             <CardHeader className="space-y-0 py-3">
               <CardTitle className="text-sm">Generated requisition</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="w-full text-sm border">
+            <CardContent className="relative w-full max-w-full overflow-x-auto">
+              <table className="w-full min-w-[1180px] text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
                     <th className="text-left py-2 px-2 border-r">Finished Good</th>
@@ -594,14 +600,14 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 {showMake ? "Hide Make column" : "Show Make column"}
               </Button>
             </CardHeader>
-            <CardContent className="overflow-x-auto space-y-3">
+            <CardContent className="relative w-full max-w-full overflow-x-auto space-y-3">
               {hasUnmapped && (
                 <div className="text-xs rounded border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2">
                   Some Finish Good items have no Raw Material mapping. Configure them in
                   {" "}<Link to="/admin/raw-materials" className="underline font-medium">Admin → Raw Materials</Link>.
                 </div>
               )}
-              <table className="w-full text-sm border">
+              <table className="w-full min-w-[1080px] text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
                     <th className="text-left py-2 px-3 border-r">Finished Good</th>
