@@ -44,7 +44,7 @@ export function AppLayout({ children, user }: { children: React.ReactNode; user:
               <UserMenu user={user} />
             </div>
           </header>
-          <main className="flex-1 min-w-0 bg-background">{children}</main>
+          <main className="flex-1 min-w-0 max-w-full overflow-x-clip bg-background">{children}</main>
         </div>
       </div>
     </SidebarProvider>
