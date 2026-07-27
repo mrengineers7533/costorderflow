@@ -43,6 +43,8 @@ type RmRow = {
   remarks: string;
   material_category: string;
   material_category_source: MaterialCategorySource | null;
+  rm_price: string;
+  vendor_name: string;
 };
 
 type EditedFg = {
@@ -62,7 +64,7 @@ function emptyRm(): RmRow {
   return {
     make: "", material: "", size_model: "", qty_per_unit: "", unit: "",
     notes: "", rm_weight: "", remarks: "", material_category: "",
-    material_category_source: null,
+    material_category_source: null, rm_price: "", vendor_name: "",
   };
 }
 
@@ -316,6 +318,8 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
             remarks: r.remarks || null,
             material_category: r.material_category || null,
             material_category_source: r.material_category_source,
+            rm_price: r.rm_price.trim() === "" ? null : Number(r.rm_price),
+            vendor_name: r.vendor_name || null,
           })),
       }));
       const { data, error } = await supabase.functions.invoke("create-requisition", {
