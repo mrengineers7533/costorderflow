@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, RefreshCw } from "lucide-react";
+import {
+  fetchRmPriceVendor, formatReqPrice, formatReqVendor, type RmPriceVendor,
+} from "@/lib/requisition/priceVendor";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -116,6 +119,7 @@ function computeDelay(reached: string | null, due: string | null): number | null
 export default function GrnList() {
   const [pos, setPos] = useState<Po[]>([]);
   const [rows, setRows] = useState<PoRow[]>([]);
+  const [pvMap, setPvMap] = useState<Map<string, RmPriceVendor>>(new Map());
   const [grns, setGrns] = useState<Record<string, Grn>>({});
   const [reqs, setReqs] = useState<Record<string, Requisition>>({});
   const [orders, setOrders] = useState<Record<string, Order>>({});
