@@ -463,6 +463,8 @@ export default function PoCreateFromAnnexure() {
                 <th className="px-2 py-2 border-r text-right">Rate</th>
                 <th className="px-2 py-2 border-r text-right">Disc %</th>
                 <th className="px-2 py-2 border-r text-right">GST %</th>
+                <th className="px-2 py-2 border-r text-right">Req. Price</th>
+                <th className="px-2 py-2 border-r text-left">Req. Vendor</th>
                 <th className="px-2 py-2 text-left">PO Status</th>
               </tr>
             </thead>
@@ -509,7 +511,7 @@ export default function PoCreateFromAnnexure() {
                 );
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={11} className="text-center text-muted-foreground py-6">No rows in this annexure.</td></tr>
+                <tr><td colSpan={13} className="text-center text-muted-foreground py-6">No rows in this annexure.</td></tr>
               )}
             </tbody>
           </table>
