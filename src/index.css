@@ -105,6 +105,18 @@ All colors MUST be HSL.
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
+  /* Page-stability guards: the vertical scrollbar appearing/disappearing must
+     never shift content sideways, and wide tables must scroll inside their own
+     container instead of moving the whole browser page horizontally. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-display tracking-tight;
   }
