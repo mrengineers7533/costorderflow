@@ -112,11 +112,14 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     [req],
   );
   // Attachments live on the source BOQ; match req items back to BOQ items by
-  // description + model_number signature.
-  const attMap = useItemAttachments(
-    req?.boq_id ?? null,
-    items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })) as never,
+  // description + model_number signature. Memoised so the hook's effect does
+  // not re-fire on every render (which caused a render/fetch loop and made
+  // the page visibly jump while the table re-laid out).
+  const attItems = useMemo(
+    () => items.map((i) => ({ id: i.id, description: i.description, model_number: i.model_number })),
+    [items],
   );
+  const attMap = useItemAttachments(req?.boq_id ?? null, attItems as never);
   const stale = latestRev != null && req != null && latestRev > req.boq_revision;
 
   async function copyLink() {
