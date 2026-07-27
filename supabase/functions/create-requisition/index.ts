@@ -26,6 +26,8 @@ interface Body {
       remarks?: string | null;
       material_category?: string | null;
       material_category_source?: "bom" | "master" | "rule" | "manual" | null;
+      rm_price?: number | null;
+      vendor_name?: string | null;
     }>;
   }>;
 }
@@ -276,6 +278,8 @@ Deno.serve(async (req) => {
               remarks: rm.remarks ?? null,
               material_category: resolved.category,
               material_category_source: resolved.source,
+              rm_price: rm.rm_price ?? null,
+              vendor_name: rm.vendor_name ?? null,
             });
             raw_material_count++;
           }
