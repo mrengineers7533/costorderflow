@@ -316,7 +316,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
           rmQty: r.required_qty != null ? String(r.required_qty) : "—",
           rmMake: r.make || "—",
           uom: r.unit || "—",
-          lot: it?.lot_no || "",
+          lot: r.lot_no || it?.lot_no || "",
           status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
           span: g.rms.length,
           first: idx === 0,
