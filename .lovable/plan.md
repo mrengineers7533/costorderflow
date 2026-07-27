@@ -1,16 +1,17 @@
 ## Goal
-On the Requisition detail page (Generated tab raw-material table), replace the free-text **Category** cell with a dropdown limited to exactly: 3P, 3P Iron, Pipe, Sheets, Structure, GMS, 3P Machine, Sheets MS, Sheets SS, GI Pipe, GI Sheets.
+Rename two column headers on the Requisition page shown in the screenshot (REQ/26-27/0003-R6/015 → Generated / Raw Materials tabs) — labels only, no behaviour change.
 
 ## Verified current state
-- `src/pages/requisitions/RequisitionDetail.tsx` (line ~607) renders Category as a `TextCell` bound to `r.material_category`, saving `material_category` plus `material_category_source: "manual"`, with a small `(rule)` / `(master)` source hint next to it.
-- The same 11 options already exist as `RAW_MATERIAL_TYPES` in `src/lib/requisition/rawMaterialType.ts`, used by the adjacent Raw Material Type dropdown.
-- Auto-classification (`src/lib/requisition/materialCategory.ts`, rules table) writes values like "MS Sheet" that are not in this list.
+`src/pages/requisitions/RequisitionDetail.tsx`:
+- Generated tab header row: `Category` (line 561) and `RM Type` (line 567), in the order RM Qty · Weight · Category · RM Make · UOM · Price · Vendor · Lot · RM Type — already matching the requested final layout.
+- Raw Materials tab header: `RM Type` (line 708).
+- The `Category` dropdown already uses the 11 options (`MATERIAL_CATEGORIES`); the `RM Type` dropdown already uses In House / 3rd Party / Steel (`RAW_MATERIAL_TYPES`).
+- A third `Category` header at line 801 belongs to the Items tab (`purchase_category`) and is unrelated — left untouched.
 
-## Change (frontend only)
-- Swap the Category `TextCell` for a `Select` using the shared 11-option list, bound to `r.material_category`, saving through the existing `updateRm(r.id, { material_category, material_category_source: "manual" })` — same write path, same per-row behaviour.
-- Keep the `(rule)` / `(master)` / `(manual)` source hint exactly as today.
-- Legacy/auto values not in the list (e.g. "MS Sheet") are still shown as the selected value so no existing data is hidden or silently cleared; picking a new option overwrites it with one of the 11.
-- Blank rows show a "Select category" placeholder.
+## Change (labels only)
+- Generated tab: `Category` → **RM Category**, `RM Type` → **Status**.
+- Raw Materials tab: `RM Type` → **Status** (same field, kept consistent on this page).
+- Dropdown option lists, stored fields (`material_category`, `raw_material_type`), save paths, and column order stay exactly as they are.
 
 ## Not changed
-Status / Raw Material Type columns, auto-classification rules and edge-function logic, other editable cells, PDF exports, Annexure/Purchase/PO/GRN carry-forward, database schema.
+Column order, dropdown options, data fields, Items tab Category, workflow/plan status, Annexure/PO/GRN carry-forward, PDFs, calculations, permissions, database.
