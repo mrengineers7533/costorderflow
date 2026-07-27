@@ -20,7 +20,7 @@ import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge"
 import { fetchDesignApprovalStates, type DesignApprovalState } from "@/lib/boq/designApprovalStatus";
 import { fetchItemApprovalVerdicts, type ItemApprovalVerdict } from "@/lib/boq/itemApprovalSync";
 import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
-import { buildOrderRootMap, pickLatestApprovedBoqsPerFamily } from "@/lib/boq/familyKey";
+import { buildOrderRootMap, groupBoqsByFamily, pickLatestApprovedBoqsPerFamily } from "@/lib/boq/familyKey";
 
 const fmtINR = (n: number) =>
   `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -42,20 +42,45 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"MR" | "GMS">("MR");
   const [approvalMap, setApprovalMap] = useState<Map<string, DesignApprovalState>>(new Map());
+  const [reqByBoqId, setReqByBoqId] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     (async () => {
-      const [b, o] = await Promise.all([
+      const [b, o, rq] = await Promise.all([
         supabase.from("boqs").select("*").order("created_at", { ascending: false }),
         supabase.from("orders").select("*"),
+        supabase.from("requisitions").select("id, boq_id"),
       ]);
       setBoqs((b.data as unknown as BoqRecord[]) || []);
       setOrders((o.data as unknown as OrderRecord[]) || []);
+      const counts = new Map<string, number>();
+      for (const r of (rq.data as { boq_id: string | null }[] | null) || []) {
+        if (!r.boq_id) continue;
+        counts.set(r.boq_id, (counts.get(r.boq_id) || 0) + 1);
+      }
+      setReqByBoqId(counts);
       setLoading(false);
     })();
   }, []);
 
   const rows = useMemo(() => pickLatestApprovedBoqsPerFamily(boqs, orders), [boqs, orders]);
+  // Requisitions may be linked to an older revision of the same family; aggregate per family.
+  const reqCountByBoqId = useMemo(() => {
+    if (!boqs.length) return new Map<string, number>();
+    const { familyKeyById } = groupBoqsByFamily(boqs, orders);
+    const perFamily = new Map<string, number>();
+    for (const [boqId, n] of reqByBoqId) {
+      const key = familyKeyById.get(boqId);
+      if (!key) continue;
+      perFamily.set(key, (perFamily.get(key) || 0) + n);
+    }
+    const out = new Map<string, number>();
+    for (const b of boqs) {
+      const key = familyKeyById.get(b.id);
+      if (key && perFamily.has(key)) out.set(b.id, perFamily.get(key)!);
+    }
+    return out;
+  }, [boqs, orders, reqByBoqId]);
   useEffect(() => {
     if (!rows.length) { setApprovalMap(new Map()); return; }
     let cancelled = false;
@@ -123,6 +148,7 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
           {filtered.map((b) => {
             const itemsCount = Array.isArray(b.line_items) ? b.line_items.length : 0;
             const rootId = familyOf.get(b.order_id) || b.order_id;
+            const reqCount = reqCountByBoqId.get(b.id) || 0;
             return (
               <Card key={b.id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="py-4 flex flex-wrap items-center gap-4">
@@ -134,6 +160,13 @@ export function ApprovedBoqListPage({ config }: { config: ModuleConfig }) {
                         <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>
                       ) : (
                         <Badge variant="secondary">Not Approved by Design</Badge>
+                      )}
+                      {reqCount > 0 ? (
+                        <Badge variant="outline" className="border-emerald-600 text-emerald-700">
+                          Requisition Created{reqCount > 1 ? ` (${reqCount})` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-muted-foreground">No Requisition</Badge>
                       )}
                       <NotSeenNotifBadge variant="cell" boqId={b.id} orderRootId={rootId} />
                     </div>
