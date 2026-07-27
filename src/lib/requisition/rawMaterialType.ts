@@ -21,7 +21,7 @@ export const RAW_MATERIAL_TYPES = [
 
 export type RawMaterialType = (typeof RAW_MATERIAL_TYPES)[number];
 
-export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select type";
+export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select RM type";
 
 /** Display label for a stored value; blank rows show an em dash. */
 export function rawMaterialTypeLabel(v?: string | null): string {
