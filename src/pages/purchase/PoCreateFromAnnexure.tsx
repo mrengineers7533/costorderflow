@@ -16,6 +16,10 @@ import { amountInWords } from "@/lib/purchase/amountInWords";
 import { fmtQty2 } from "@/lib/utils";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import {
+  fetchRmPriceVendor, mergePriceVendor, formatReqPrice, formatReqVendor,
+  type RmPriceVendor,
+} from "@/lib/requisition/priceVendor";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -59,6 +63,7 @@ export default function PoCreateFromAnnexure() {
 
   const [annexure, setAnnexure] = useState<AnnexureRecord | null>(null);
   const [rows, setRows] = useState<AnnexureRowRecord[]>([]);
+  const [pvMap, setPvMap] = useState<Map<string, RmPriceVendor>>(new Map());
   const [rmStatus, setRmStatus] = useState<Record<string, { po_status: string | null; po_id: string | null }>>({});
   const [meta, setMeta] = useState<Record<string, RowMeta>>({});
   const [loading, setLoading] = useState(true);
