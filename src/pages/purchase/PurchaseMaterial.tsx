@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { generatePoPDF, financialYearOf } from "@/lib/purchase/poPdf";
 import { VendorCombobox, type Vendor } from "@/components/purchase/VendorCombobox";
+import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
 import { Download, FileText, Plus, Trash2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -38,6 +39,8 @@ interface RawRow {
   annexure_id: string | null;
   po_status: "created" | null;
   po_id: string | null;
+  rm_price: number | null;
+  vendor_name: string | null;
 }
 
 interface PoRecord {
@@ -122,7 +125,7 @@ export default function PurchaseMaterial() {
     const [{ data: rmData }, { data: annexData }, { data: poData }] = await Promise.all([
       sb
         .from("requisition_raw_materials")
-        .select("id,requisition_id,lot_no,material,size_model,make,unit,required_qty,plan_status,annexure_status,annexure_id,po_status,po_id")
+        .select("id,requisition_id,lot_no,material,size_model,make,unit,required_qty,plan_status,annexure_status,annexure_id,po_status,po_id,rm_price,vendor_name")
         .eq("annexure_status", "created"),
       sb.from("requisition_annexures").select("id,status").eq("status", "active"),
       sb.from("purchase_orders").select("*").order("created_at", { ascending: false }),
@@ -592,12 +595,14 @@ export default function PurchaseMaterial() {
                     <th className="text-right py-2 pr-3">Disc %</th>
                     <th className="text-right py-2 pr-3">GST %</th>
                     <th className="text-right py-2 pr-3">Amount</th>
+                    <th className="text-right py-2 pr-3">Req. Price</th>
+                    <th className="text-left py-2 pr-3">Req. Vendor</th>
                     <th className="text-left py-2 pr-3">PO</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.length === 0 ? (
-                    <tr><td colSpan={14} className="py-6 text-center text-muted-foreground">
+                    <tr><td colSpan={16} className="py-6 text-center text-muted-foreground">
                       {selectedLots.size === 0 ? "Select a lot to view raw materials." : "No rows match the filter."}
                     </td></tr>
                   ) : filteredRows.map((r) => {
@@ -646,6 +651,8 @@ export default function PurchaseMaterial() {
                             value={m.gst} onChange={(e) => setRowMeta(r.id, { gst: e.target.value })} />
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums">{editable ? fmt(lineAmount) : "—"}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatReqPrice(r.rm_price)}</td>
+                        <td className="py-2 pr-3">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 pr-3">
                           {r.po_status === "created" && po ? (
                             <Badge className="bg-emerald-600 hover:bg-emerald-600">{po.po_number}</Badge>

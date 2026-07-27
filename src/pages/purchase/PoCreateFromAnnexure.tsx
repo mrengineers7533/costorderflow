@@ -16,6 +16,10 @@ import { amountInWords } from "@/lib/purchase/amountInWords";
 import { fmtQty2 } from "@/lib/utils";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import {
+  fetchRmPriceVendor, mergePriceVendor, formatReqPrice, formatReqVendor,
+  type RmPriceVendor,
+} from "@/lib/requisition/priceVendor";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -59,6 +63,7 @@ export default function PoCreateFromAnnexure() {
 
   const [annexure, setAnnexure] = useState<AnnexureRecord | null>(null);
   const [rows, setRows] = useState<AnnexureRowRecord[]>([]);
+  const [pvMap, setPvMap] = useState<Map<string, RmPriceVendor>>(new Map());
   const [rmStatus, setRmStatus] = useState<Record<string, { po_status: string | null; po_id: string | null }>>({});
   const [meta, setMeta] = useState<Record<string, RowMeta>>({});
   const [loading, setLoading] = useState(true);
@@ -107,6 +112,8 @@ export default function PoCreateFromAnnexure() {
 
       // collect underlying RM ids
       const rmIds = Array.from(new Set(list.flatMap((x) => x.source_rm_ids || [])));
+      // Reference Price / Vendor from the requisition (display only).
+      fetchRmPriceVendor(rmIds).then(setPvMap).catch(() => setPvMap(new Map()));
       if (rmIds.length) {
         const { data: rms } = await sb.from("requisition_raw_materials").select("id, po_status, po_id").in("id", rmIds);
         const map: Record<string, { po_status: string | null; po_id: string | null }> = {};
@@ -463,6 +470,8 @@ export default function PoCreateFromAnnexure() {
                 <th className="px-2 py-2 border-r text-right">Rate</th>
                 <th className="px-2 py-2 border-r text-right">Disc %</th>
                 <th className="px-2 py-2 border-r text-right">GST %</th>
+                <th className="px-2 py-2 border-r text-right">Req. Price</th>
+                <th className="px-2 py-2 border-r text-left">Req. Vendor</th>
                 <th className="px-2 py-2 text-left">PO Status</th>
               </tr>
             </thead>
@@ -500,6 +509,12 @@ export default function PoCreateFromAnnexure() {
                       <Input type="number" className="h-7 text-xs text-right w-16" disabled={!m.selected || lock.locked}
                         value={m.gst} onChange={(e) => setRowMeta(r.id, { gst: e.target.value })} />
                     </td>
+                    <td className="px-2 py-1.5 border-r text-right">
+                      {formatReqPrice(mergePriceVendor(r.source_rm_ids || [], pvMap).rm_price)}
+                    </td>
+                    <td className="px-2 py-1.5 border-r">
+                      {formatReqVendor(mergePriceVendor(r.source_rm_ids || [], pvMap).vendor_name)}
+                    </td>
                     <td className="px-2 py-1.5">
                       {lock.locked
                         ? <Badge variant="secondary" className="text-[10px]">PO Created</Badge>
@@ -509,7 +524,7 @@ export default function PoCreateFromAnnexure() {
                 );
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={11} className="text-center text-muted-foreground py-6">No rows in this annexure.</td></tr>
+                <tr><td colSpan={13} className="text-center text-muted-foreground py-6">No rows in this annexure.</td></tr>
               )}
             </tbody>
           </table>

@@ -21,6 +21,10 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { AnnexureRecord, AnnexureRowRecord } from "@/lib/requisition/types";
 import { ModuleNotifications } from "@/components/notifications/ModuleNotifications";
+import {
+  fetchRmPriceVendor, mergePriceVendor, formatReqPrice, formatReqVendor,
+  type RmPriceVendor,
+} from "@/lib/requisition/priceVendor";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -83,6 +87,16 @@ export default function AnnexureFolder() {
 
   // View modal
   const [viewEntry, setViewEntry] = useState<FolderEntry | null>(null);
+  // Reference Price / Vendor captured on the requisition, shown read-only here.
+  const [pvMap, setPvMap] = useState<Map<string, RmPriceVendor>>(new Map());
+
+  useEffect(() => {
+    if (!viewEntry) { setPvMap(new Map()); return; }
+    let alive = true;
+    const ids = viewEntry.rows.flatMap((r) => r.source_rm_ids || []);
+    fetchRmPriceVendor(ids).then((m) => { if (alive) setPvMap(m); });
+    return () => { alive = false; };
+  }, [viewEntry]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDel, setConfirmDel] = useState<AnnexureRecord | null>(null);
@@ -480,10 +494,14 @@ export default function AnnexureFolder() {
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2">Total Qty</th>
+                    <th className="text-right py-2 px-2 border-l">Price</th>
+                    <th className="text-left py-2 px-2 border-l">Vendor</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {viewEntry.rows.map((r) => (
+                  {viewEntry.rows.map((r) => {
+                    const pv = mergePriceVendor(r.source_rm_ids || [], pvMap);
+                    return (
                     <tr key={r.id} className="border-b last:border-0">
                       <td className="py-2 px-2 border-r">{r.lot_no}</td>
                       <td className="py-2 px-2 border-r">{r.material}</td>
@@ -491,13 +509,17 @@ export default function AnnexureFolder() {
                       <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                       <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
                       <td className="py-2 px-2 text-right">{fmtQty2(r.total_qty)}</td>
+                      <td className="py-2 px-2 text-right border-l">{formatReqPrice(pv.rm_price)}</td>
+                      <td className="py-2 px-2 border-l">{formatReqVendor(pv.vendor_name)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted/30 font-medium">
                     <td colSpan={5} className="py-2 px-2 text-right border-r">Grand Total</td>
                     <td className="py-2 px-2 text-right">{fmtQty2(viewEntry.total)}</td>
+                    <td className="py-2 px-2" colSpan={2} />
                   </tr>
                 </tfoot>
               </table>

@@ -84,6 +84,8 @@ export interface RequisitionRawMaterialRecord {
   remarks?: string | null;
   material_category?: string | null;
   material_category_source?: "bom" | "master" | "rule" | "manual" | null;
+  rm_price?: number | null;
+  vendor_name?: string | null;
 }
 
 export interface AnnexureRecord {

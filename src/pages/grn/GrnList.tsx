@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, RefreshCw } from "lucide-react";
+import {
+  fetchRmPriceVendor, formatReqPrice, formatReqVendor, type RmPriceVendor,
+} from "@/lib/requisition/priceVendor";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -37,6 +40,7 @@ type PoRow = {
   rate: number | null;
   line_amount: number | null;
   due_on: string | null;
+  raw_material_id?: string | null;
 };
 type Grn = {
   id: string;
@@ -115,6 +119,7 @@ function computeDelay(reached: string | null, due: string | null): number | null
 export default function GrnList() {
   const [pos, setPos] = useState<Po[]>([]);
   const [rows, setRows] = useState<PoRow[]>([]);
+  const [pvMap, setPvMap] = useState<Map<string, RmPriceVendor>>(new Map());
   const [grns, setGrns] = useState<Record<string, Grn>>({});
   const [reqs, setReqs] = useState<Record<string, Requisition>>({});
   const [orders, setOrders] = useState<Record<string, Order>>({});
@@ -146,10 +151,14 @@ export default function GrnList() {
     }
     const { data: rData } = await sb
       .from("purchase_order_rows")
-      .select("id,po_id,lot_no,material,size_model,make,unit,qty,rate,line_amount,due_on")
+      .select("id,po_id,lot_no,material,size_model,make,unit,qty,rate,line_amount,due_on,raw_material_id")
       .in("po_id", poIds);
     const rList = (rData || []) as PoRow[];
     setRows(rList);
+    // Reference Price / Vendor captured on the source requisition (display only).
+    fetchRmPriceVendor(rList.map((r) => r.raw_material_id || "").filter(Boolean))
+      .then(setPvMap)
+      .catch(() => setPvMap(new Map()));
 
     const { data: gData } = await sb.from("grn_receipts").select("*").in("po_id", poIds);
     const gMap: Record<string, Grn> = {};
@@ -434,6 +443,8 @@ export default function GrnList() {
                 <th className="text-left p-2">Material</th>
                 <th className="text-right p-2">Qty</th>
                 <th className="text-right p-2">Rate</th>
+                <th className="text-right p-2">Req. Price</th>
+                <th className="text-left p-2">Req. Vendor</th>
                 <th className="text-left p-2">Due On</th>
                 <th className="text-left p-2">Reached</th>
                 <th className="text-right p-2">Recv Qty</th>
@@ -447,7 +458,7 @@ export default function GrnList() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={14} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
+                <tr><td colSpan={16} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
               ) : filtered.map((j) => {
                 const g = j.grn;
                 const status = g?.status || "pending";
@@ -473,6 +484,8 @@ export default function GrnList() {
                     </td>
                     <td className="p-2 text-right">{j.row.qty ?? 0} {j.row.unit || ""}</td>
                     <td className="p-2 text-right">{j.row.rate ?? "—"}</td>
+                    <td className="p-2 text-right">{formatReqPrice(pvMap.get(j.row.raw_material_id || "")?.rm_price ?? null)}</td>
+                    <td className="p-2">{formatReqVendor(pvMap.get(j.row.raw_material_id || "")?.vendor_name ?? null)}</td>
                     <td className="p-2 whitespace-nowrap">{j.row.due_on || "—"}</td>
                     <td className="p-2">
                       <Input

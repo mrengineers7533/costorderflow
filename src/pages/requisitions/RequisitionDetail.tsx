@@ -28,6 +28,7 @@ import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/Bo
 import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
+import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -269,8 +270,22 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     load();
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+        <div className="min-h-[44px]" />
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!req) {
+    return (
+      <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+        <div className="min-h-[44px]" />
+        <div className="text-sm text-muted-foreground">Requisition not found.</div>
+      </div>
+    );
+  }
 
   const canDelete = isAdmin || docCanEdit || (currentUserId != null && req.user_id === currentUserId);
   const isGeneral = (req as unknown as { kind?: string }).kind === "general";
@@ -295,18 +310,20 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
   }
 
   return (
-    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
-      <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
-      {id && (
-        <ModuleNotifications
-          links={{
-            requisitionId: id,
-            boqId: req?.boq_id ?? undefined,
-            orderRootId:
-              (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
-          }}
-        />
-      )}
+    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+      <div className="min-h-[44px] space-y-5">
+        <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
+        {id && (
+          <ModuleNotifications
+            links={{
+              requisitionId: id,
+              boqId: req?.boq_id ?? undefined,
+              orderRootId:
+                (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
+            }}
+          />
+        )}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -480,13 +497,15 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-2 border-r">Category</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
+                    <th className="text-right py-2 px-2 border-r">Price</th>
+                    <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={14} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                    ) : rmGroups.flatMap((g) => {
                      const it = g.item;
                      const model = it?.model_number || g.fgLabel;
@@ -521,6 +540,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         </td>
                         <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                         <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
+                        <td className="py-2 px-2 border-r text-right">{formatReqPrice(r.rm_price)}</td>
+                        <td className="py-2 px-2 border-r">{formatReqVendor(r.vendor_name)}</td>
                         {idx === 0 ? (
                           <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
                             <Input
@@ -589,12 +610,14 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-3 border-r">Size / Spec</th>
                     <th className="text-right py-2 px-3 border-r">Reqd Qty</th>
                     <th className="text-left py-2 px-3 border-r">Unit</th>
+                    <th className="text-right py-2 px-3 border-r">Price</th>
+                    <th className="text-left py-2 px-3 border-r">Vendor</th>
                     <th className="text-left py-2 px-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                    ) : rmGroups.flatMap((g) => g.rms.map((r, idx) => {
                      const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
                      const it2 = g.item;
@@ -620,6 +643,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-3 border-r">{r.size_model || "—"}</td>
                         <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
                         <td className="py-2 px-3 border-r">{r.unit || "—"}</td>
+                        <td className="py-2 px-3 border-r text-right">{formatReqPrice(r.rm_price)}</td>
+                        <td className="py-2 px-3 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-3">
                           <Select
                             value={r.purchase_status}

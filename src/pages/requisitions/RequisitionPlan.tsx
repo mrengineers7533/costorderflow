@@ -22,6 +22,7 @@ import type {
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
+import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
 
 const fmtQty2 = (v: unknown): string => {
   if (v === null || v === undefined || v === "") return "—";
@@ -611,12 +612,14 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
+                    <th className="text-right py-2 px-2 border-r">Price</th>
+                    <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.length === 0 ? (
-                    <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={13} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : groups.flatMap((g) => {
                     const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
                     const fgMake = g.item ? resolveMake(g.item) : "";
@@ -740,6 +743,8 @@ export default function RequisitionPlan() {
                             </SelectContent>
                           </Select>
                         </td>
+                        <td className="py-2 px-1 border-r text-right">{formatReqPrice(r.rm_price)}</td>
+                        <td className="py-2 px-1 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-1">
                           {r.annexure_status === "created"
                             ? <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
