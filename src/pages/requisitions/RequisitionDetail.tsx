@@ -490,7 +490,6 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
         <Tabs defaultValue="items">
           <TabsList>
             <TabsTrigger value="items">Items</TabsTrigger>
-            <TabsTrigger value="consistency">Consistency</TabsTrigger>
           </TabsList>
           <TabsContent value="items">
             <Card>
@@ -533,13 +532,11 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
         </Tabs>
       ) : (
       <Tabs defaultValue="generated">
+        {/* Only the Generated tab is part of the current workflow. The other
+            tab panels below stay in the file (unreachable) so they can be
+            restored later by re-adding their triggers here. */}
         <TabsList>
           <TabsTrigger value="generated">Generated</TabsTrigger>
-          <TabsTrigger value="raw">Raw Materials</TabsTrigger>
-          <TabsTrigger value="items">Machine List</TabsTrigger>
-          <TabsTrigger value="steel">Steel List</TabsTrigger>
-          <TabsTrigger value="outside">Outside Purchase</TabsTrigger>
-          <TabsTrigger value="consistency">Consistency</TabsTrigger>
         </TabsList>
 
         <TabsContent value="generated">
