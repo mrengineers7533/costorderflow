@@ -17,6 +17,7 @@ import {
   type ParsedRequisitionGroup,
   type PlanStatus,
 } from "./parseUpload";
+import { consolidateRawMaterialType } from "./rawMaterialType";
 
 /** Minimum shape needed downstream — kept loose so both flows can feed it. */
 export interface RmInputRow {
