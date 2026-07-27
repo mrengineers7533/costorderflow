@@ -1,5 +1,5 @@
 /**
- * Raw Material Type — a purely descriptive, row-level classification for
+ * RM Type — a purely descriptive, row-level classification for
  * requisition raw-material rows. It is stored in the additive, nullable
  * `raw_material_type` column and is NOT a workflow status: document and
  * row workflow statuses (`purchase_status`, `plan_status`, PO/GRN status)

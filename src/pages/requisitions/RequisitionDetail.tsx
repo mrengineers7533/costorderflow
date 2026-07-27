@@ -564,7 +564,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2">Raw Material Type</th>
+                    <th className="text-left py-2 px-2">RM Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -705,7 +705,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-3 border-r">Unit</th>
                     <th className="text-right py-2 px-3 border-r">Price</th>
                     <th className="text-left py-2 px-3 border-r">Vendor</th>
-                    <th className="text-left py-2 px-3">Raw Material Type</th>
+                    <th className="text-left py-2 px-3">RM Type</th>
                   </tr>
                 </thead>
                 <tbody>

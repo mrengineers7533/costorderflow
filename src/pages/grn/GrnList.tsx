@@ -443,7 +443,7 @@ export default function GrnList() {
                 <th className="text-left p-2">PO / Date</th>
                 <th className="text-left p-2">Vendor</th>
                 <th className="text-left p-2">Material</th>
-                <th className="text-left p-2">Raw Material Type</th>
+                <th className="text-left p-2">RM Type</th>
                 <th className="text-right p-2">Qty</th>
                 <th className="text-right p-2">Rate</th>
                 <th className="text-right p-2">Req. Price</th>

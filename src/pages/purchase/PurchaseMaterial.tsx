@@ -591,7 +591,7 @@ export default function PurchaseMaterial() {
                     <th className="text-left py-2 pr-3">Material</th>
                     <th className="text-left py-2 pr-3">Size / Model</th>
                     <th className="text-left py-2 pr-3">Make</th>
-                    <th className="text-left py-2 pr-3">Raw Material Type</th>
+                    <th className="text-left py-2 pr-3">RM Type</th>
                     <th className="text-right py-2 pr-3">Qty</th>
                     <th className="text-left py-2 pr-3">Unit</th>
                     <th className="text-left py-2 pr-3">Due On</th>

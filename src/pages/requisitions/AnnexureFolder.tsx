@@ -301,7 +301,7 @@ export default function AnnexureFolder() {
     doc.text(`Status: ${status.toUpperCase()}`, 14, 28);
     autoTable(doc, {
       startY: 34,
-      head: [["Lot", "Raw Material", "Size", "RM Make", "Raw Material Type", "UOM", "Total Qty"]],
+      head: [["Lot", "Raw Material", "Size", "RM Make", "RM Type", "UOM", "Total Qty"]],
       body: e.rows.map((r) => [
         r.lot_no, r.material, r.size_model || "—", r.make || "—",
         rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type),
@@ -497,7 +497,7 @@ export default function AnnexureFolder() {
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
-                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Type</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2">Total Qty</th>
                     <th className="text-right py-2 px-2 border-l">Price</th>
