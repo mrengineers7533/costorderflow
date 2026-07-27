@@ -86,6 +86,7 @@ export interface RequisitionRawMaterialRecord {
   material_category_source?: "bom" | "master" | "rule" | "manual" | null;
   rm_price?: number | null;
   vendor_name?: string | null;
+  raw_material_type?: string | null;
 }
 
 export interface AnnexureRecord {
