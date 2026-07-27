@@ -394,6 +394,7 @@ export default function PurchaseMaterial() {
             size_model: c.size_model || null,
             make: c.make || null,
             unit: c.unit || null,
+            raw_material_type: (c as { raw_material_type?: string | null }).raw_material_type ?? null,
             due_on: c.due || null,
             qty,
             rate,
