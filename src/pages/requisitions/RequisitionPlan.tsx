@@ -621,7 +621,7 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Type</th>
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2">Annexure</th>
@@ -828,7 +828,7 @@ export default function RequisitionPlan() {
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Type</th>
                     <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
                     <th className="text-left py-2 px-2">Annexure</th>
                   </tr>

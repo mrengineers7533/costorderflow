@@ -466,7 +466,7 @@ export default function PoCreateFromAnnexure() {
                 <th className="px-2 py-2 border-r text-left">Material</th>
                 <th className="px-2 py-2 border-r text-left">Size</th>
                 <th className="px-2 py-2 border-r text-left">Make</th>
-                <th className="px-2 py-2 border-r text-left">Raw Material Type</th>
+                <th className="px-2 py-2 border-r text-left">RM Type</th>
                 <th className="px-2 py-2 border-r text-right">Qty</th>
                 <th className="px-2 py-2 border-r text-left">UOM</th>
                 <th className="px-2 py-2 border-r text-left">Due On</th>

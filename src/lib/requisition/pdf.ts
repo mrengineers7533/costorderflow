@@ -67,7 +67,7 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
     });
     autoTable(doc, withPdfTableDefaults({
       startY: 24 + headerLines.length * 4.5 + 4,
-      head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Raw Material Type"]],
+      head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "RM Type"]],
       body,
       theme: "grid",
       styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" },

@@ -1,5 +1,5 @@
 /**
- * Raw Material Type — a purely descriptive, row-level classification for
+ * RM Type — a purely descriptive, row-level classification for
  * requisition raw-material rows. It is stored in the additive, nullable
  * `raw_material_type` column and is NOT a workflow status: document and
  * row workflow statuses (`purchase_status`, `plan_status`, PO/GRN status)
@@ -21,7 +21,7 @@ export const RAW_MATERIAL_TYPES = [
 
 export type RawMaterialType = (typeof RAW_MATERIAL_TYPES)[number];
 
-export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select type";
+export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select RM type";
 
 /** Display label for a stored value; blank rows show an em dash. */
 export function rawMaterialTypeLabel(v?: string | null): string {
