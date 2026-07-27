@@ -27,6 +27,7 @@ import ConsistencyTab from "@/components/requisitions/ConsistencyTab";
 import { BoqItemAttachmentsView, useItemAttachments } from "@/components/boqs/BoqItemAttachmentsView";
 import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
+import CreatePlanningDialog from "@/components/requisitions/CreatePlanningDialog";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
 import { MATERIAL_CATEGORIES, RAW_MATERIAL_TYPES, RAW_MATERIAL_TYPE_PLACEHOLDER } from "@/lib/requisition/rawMaterialType";
@@ -409,6 +410,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
         </div>
         <div className="flex gap-2">
           <Link to="/requisitions"><Button variant="outline" size="sm">Back</Button></Link>
+          {!isGeneral && <CreatePlanningDialog requisition={req} />}
           {!isGeneral && stale && <Button size="sm" onClick={regenerate}>Regenerate for R{latestRev}</Button>}
           {!isGeneral && <Button size="sm" variant="outline" onClick={() => downloadPDF("default")}><Download className="mr-1 h-4 w-4" />PDF</Button>}
           {!isGeneral && <Button size="sm" onClick={() => downloadPDF("generated")}><Download className="mr-1 h-4 w-4" />PDF (Generated)</Button>}
