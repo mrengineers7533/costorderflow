@@ -29,6 +29,7 @@ import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
+import { RAW_MATERIAL_TYPES, RAW_MATERIAL_TYPE_PLACEHOLDER } from "@/lib/requisition/rawMaterialType";
 
 /** Uncontrolled inline text cell — saves on blur only when the value changed. */
 function TextCell({
@@ -273,19 +274,6 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     }));
   }, [rms, itemById]);
 
-  // Map UI status labels to the existing purchase_status enum so the
-  // "Generated" view can use the user's vocabulary without a DB migration.
-  const STATUS_TO_ENUM: Record<string, "pending" | "ordered" | "received"> = {
-    "Pending": "pending",
-    "Inhouse": "received",
-    "Outside Purchase": "ordered",
-  };
-  const ENUM_TO_STATUS: Record<string, string> = {
-    pending: "Pending",
-    received: "Inhouse",
-    ordered: "Outside Purchase",
-  };
-
   function buildGeneratedRows() {
     const rows: Array<{
       fgLabel: string;
@@ -317,7 +305,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
           rmMake: r.make || "—",
           uom: r.unit || "—",
           lot: r.lot_no || it?.lot_no || "",
-          status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
+          status: r.raw_material_type || "",
           span: g.rms.length,
           first: idx === 0,
         });
@@ -576,7 +564,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2">Status</th>
+                    <th className="text-left py-2 px-2">Raw Material Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -650,14 +638,16 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         </td>
                         <td className="py-2 px-2">
                           <Select
-                            value={ENUM_TO_STATUS[r.purchase_status] || "Pending"}
-                            onValueChange={(v) => updateRm(r.id, { purchase_status: STATUS_TO_ENUM[v] })}
+                            value={r.raw_material_type || undefined}
+                            onValueChange={(v) => updateRm(r.id, { raw_material_type: v })}
                           >
-                            <SelectTrigger className="h-7 w-36"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-7 w-36">
+                              <SelectValue placeholder={RAW_MATERIAL_TYPE_PLACEHOLDER} />
+                            </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Pending">Pending</SelectItem>
-                              <SelectItem value="Inhouse">Inhouse</SelectItem>
-                              <SelectItem value="Outside Purchase">Outside Purchase</SelectItem>
+                              {RAW_MATERIAL_TYPES.map((t) => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </td>
@@ -704,7 +694,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-3 border-r">Unit</th>
                     <th className="text-right py-2 px-3 border-r">Price</th>
                     <th className="text-left py-2 px-3 border-r">Vendor</th>
-                    <th className="text-left py-2 px-3">Status</th>
+                    <th className="text-left py-2 px-3">Raw Material Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -739,14 +729,16 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-3 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-3">
                           <Select
-                            value={r.purchase_status}
-                            onValueChange={(v) => updateRm(r.id, { purchase_status: v as "pending" | "ordered" | "received" })}
+                            value={r.raw_material_type || undefined}
+                            onValueChange={(v) => updateRm(r.id, { raw_material_type: v })}
                           >
-                            <SelectTrigger className="h-7 w-28"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-7 w-32">
+                              <SelectValue placeholder={RAW_MATERIAL_TYPE_PLACEHOLDER} />
+                            </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="ordered">Ordered</SelectItem>
-                              <SelectItem value="received">Received</SelectItem>
+                              {RAW_MATERIAL_TYPES.map((t) => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </td>

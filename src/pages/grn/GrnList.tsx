@@ -14,6 +14,7 @@ import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, 
 import {
   fetchRmPriceVendor, formatReqPrice, formatReqVendor, type RmPriceVendor,
 } from "@/lib/requisition/priceVendor";
+import { rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -41,6 +42,7 @@ type PoRow = {
   line_amount: number | null;
   due_on: string | null;
   raw_material_id?: string | null;
+  raw_material_type?: string | null;
 };
 type Grn = {
   id: string;
@@ -151,7 +153,7 @@ export default function GrnList() {
     }
     const { data: rData } = await sb
       .from("purchase_order_rows")
-      .select("id,po_id,lot_no,material,size_model,make,unit,qty,rate,line_amount,due_on,raw_material_id")
+      .select("id,po_id,lot_no,material,size_model,make,unit,qty,rate,line_amount,due_on,raw_material_id,raw_material_type")
       .in("po_id", poIds);
     const rList = (rData || []) as PoRow[];
     setRows(rList);
@@ -441,6 +443,7 @@ export default function GrnList() {
                 <th className="text-left p-2">PO / Date</th>
                 <th className="text-left p-2">Vendor</th>
                 <th className="text-left p-2">Material</th>
+                <th className="text-left p-2">Raw Material Type</th>
                 <th className="text-right p-2">Qty</th>
                 <th className="text-right p-2">Rate</th>
                 <th className="text-right p-2">Req. Price</th>
@@ -482,6 +485,7 @@ export default function GrnList() {
                         {[j.row.size_model, j.row.make].filter(Boolean).join(" · ") || "—"}
                       </div>
                     </td>
+                    <td className="p-2">{rawMaterialTypeLabel(j.row.raw_material_type)}</td>
                     <td className="p-2 text-right">{j.row.qty ?? 0} {j.row.unit || ""}</td>
                     <td className="p-2 text-right">{j.row.rate ?? "—"}</td>
                     <td className="p-2 text-right">{formatReqPrice(pvMap.get(j.row.raw_material_id || "")?.rm_price ?? null)}</td>

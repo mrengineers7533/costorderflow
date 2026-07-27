@@ -23,6 +23,7 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
+import { consolidateRawMaterialType, rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
 
 const fmtQty2 = (v: unknown): string => {
   if (v === null || v === undefined || v === "") return "—";
@@ -357,6 +358,8 @@ export default function RequisitionPlan() {
     sourceReqNos: string[];
     annexureCount: number; // number of source rms already in an annexure
     annexureIds: string[];
+    raw_material_type: string | null;
+    rawTypeValues: Array<string | null | undefined>;
   };
   const consolidated: ConsRow[] = useMemo(() => {
     const map = new Map<ConsKey, ConsRow>();
@@ -384,11 +387,14 @@ export default function RequisitionPlan() {
           sourceReqNos: [],
           annexureCount: 0,
           annexureIds: [],
+          raw_material_type: null,
+          rawTypeValues: [],
         };
         map.set(key, row);
       }
       row.total += Number(rm.required_qty || 0);
       row.sourceRmIds.push(rm.id);
+      row.rawTypeValues.push((rm as { raw_material_type?: string | null }).raw_material_type);
       if (rm.annexure_status === "created") {
         row.annexureCount += 1;
         if (rm.annexure_id && !row.annexureIds.includes(rm.annexure_id)) row.annexureIds.push(rm.annexure_id);
@@ -396,7 +402,9 @@ export default function RequisitionPlan() {
       const reqNo = reqById.get(rm.requisition_id)?.requisition_number;
       if (reqNo && !row.sourceReqNos.includes(reqNo)) row.sourceReqNos.push(reqNo);
     });
-    return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
+    const out = Array.from(map.values());
+    out.forEach((r) => { r.raw_material_type = consolidateRawMaterialType(r.rawTypeValues); });
+    return out.sort((a, b) => a.material.localeCompare(b.material));
   }, [rms, reqById]);
 
   function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
@@ -452,6 +460,7 @@ export default function RequisitionPlan() {
       unit: c.unit,
       total_qty: c.total,
       source_rm_ids: c.sourceRmIds,
+      raw_material_type: c.raw_material_type,
     }));
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
@@ -612,6 +621,7 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2">Annexure</th>
@@ -743,6 +753,7 @@ export default function RequisitionPlan() {
                             </SelectContent>
                           </Select>
                         </td>
+                        <td className="py-2 px-1 border-r text-xs">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                         <td className="py-2 px-1 border-r text-right">{formatReqPrice(r.rm_price)}</td>
                         <td className="py-2 px-1 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-1">
@@ -817,13 +828,14 @@ export default function RequisitionPlan() {
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
                     <th className="text-left py-2 px-2 border-r">Status</th>
+                    <th className="text-left py-2 px-2 border-r">Raw Material Type</th>
                     <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
                     <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.length === 0 ? (
-                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : consolidated.map((c) => {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
@@ -876,6 +888,7 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
+                      <td className="py-2 px-2 border-r text-xs">{rawMaterialTypeLabel(c.raw_material_type)}</td>
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
