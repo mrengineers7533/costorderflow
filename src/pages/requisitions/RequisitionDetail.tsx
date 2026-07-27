@@ -600,14 +600,14 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 {showMake ? "Hide Make column" : "Show Make column"}
               </Button>
             </CardHeader>
-            <CardContent className="overflow-x-auto space-y-3">
+            <CardContent className="relative w-full max-w-full overflow-x-auto space-y-3">
               {hasUnmapped && (
                 <div className="text-xs rounded border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2">
                   Some Finish Good items have no Raw Material mapping. Configure them in
                   {" "}<Link to="/admin/raw-materials" className="underline font-medium">Admin → Raw Materials</Link>.
                 </div>
               )}
-              <table className="w-full text-sm border">
+              <table className="w-full min-w-[1080px] text-sm border">
                 <thead className="text-xs text-muted-foreground border-b bg-muted/40">
                   <tr>
                     <th className="text-left py-2 px-3 border-r">Finished Good</th>
