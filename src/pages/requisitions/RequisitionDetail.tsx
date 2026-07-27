@@ -29,7 +29,7 @@ import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
-import { RAW_MATERIAL_TYPES, RAW_MATERIAL_TYPE_PLACEHOLDER } from "@/lib/requisition/rawMaterialType";
+import { MATERIAL_CATEGORIES, RAW_MATERIAL_TYPES, RAW_MATERIAL_TYPE_PLACEHOLDER } from "@/lib/requisition/rawMaterialType";
 
 /** Uncontrolled inline text cell — saves on blur only when the value changed. */
 function TextCell({
