@@ -605,14 +605,25 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                           <NumCell value={r.rm_weight} width="w-20" onSave={(v) => updateRm(r.id, { rm_weight: v })} />
                         </td>
                         <td className="py-2 px-2 border-r">
-                          <TextCell
-                            value={r.material_category}
-                            width="w-32"
-                            onSave={(v) => updateRm(r.id, {
+                          <Select
+                            value={r.material_category || undefined}
+                            onValueChange={(v) => updateRm(r.id, {
                               material_category: v || null,
                               material_category_source: v ? "manual" : null,
                             })}
-                          />
+                          >
+                            <SelectTrigger className="h-7 w-36">
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {r.material_category && !RAW_MATERIAL_TYPES.includes(r.material_category as never) ? (
+                                <SelectItem value={r.material_category}>{r.material_category}</SelectItem>
+                              ) : null}
+                              {RAW_MATERIAL_TYPES.map((t) => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           {r.material_category_source ? (
                             <span className="ml-1 text-[10px] text-muted-foreground">({r.material_category_source})</span>
                           ) : null}
