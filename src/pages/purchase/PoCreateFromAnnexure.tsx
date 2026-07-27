@@ -112,6 +112,8 @@ export default function PoCreateFromAnnexure() {
 
       // collect underlying RM ids
       const rmIds = Array.from(new Set(list.flatMap((x) => x.source_rm_ids || [])));
+      // Reference Price / Vendor from the requisition (display only).
+      fetchRmPriceVendor(rmIds).then(setPvMap).catch(() => setPvMap(new Map()));
       if (rmIds.length) {
         const { data: rms } = await sb.from("requisition_raw_materials").select("id, po_status, po_id").in("id", rmIds);
         const map: Record<string, { po_status: string | null; po_id: string | null }> = {};
