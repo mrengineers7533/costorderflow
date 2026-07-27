@@ -2192,6 +2192,7 @@ export type Database = {
           qty: number | null
           rate: number | null
           raw_material_id: string | null
+          raw_material_type: string | null
           size_model: string | null
           unit: string | null
           updated_at: string
@@ -2211,6 +2212,7 @@ export type Database = {
           qty?: number | null
           rate?: number | null
           raw_material_id?: string | null
+          raw_material_type?: string | null
           size_model?: string | null
           unit?: string | null
           updated_at?: string
@@ -2230,6 +2232,7 @@ export type Database = {
           qty?: number | null
           rate?: number | null
           raw_material_id?: string | null
+          raw_material_type?: string | null
           size_model?: string | null
           unit?: string | null
           updated_at?: string
@@ -2434,6 +2437,7 @@ export type Database = {
           make: string | null
           material: string
           plan_status: string
+          raw_material_type: string | null
           size_model: string | null
           source_rm_ids: string[]
           total_qty: number | null
@@ -2448,6 +2452,7 @@ export type Database = {
           make?: string | null
           material: string
           plan_status: string
+          raw_material_type?: string | null
           size_model?: string | null
           source_rm_ids?: string[]
           total_qty?: number | null
@@ -2462,6 +2467,7 @@ export type Database = {
           make?: string | null
           material?: string
           plan_status?: string
+          raw_material_type?: string | null
           size_model?: string | null
           source_rm_ids?: string[]
           total_qty?: number | null
@@ -2705,6 +2711,7 @@ export type Database = {
           po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
+          raw_material_type: string | null
           remarks: string | null
           required_qty: number | null
           requisition_id: string
@@ -2735,6 +2742,7 @@ export type Database = {
           po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
+          raw_material_type?: string | null
           remarks?: string | null
           required_qty?: number | null
           requisition_id: string
@@ -2765,6 +2773,7 @@ export type Database = {
           po_status?: string | null
           purchase_status?: string
           qty_per_unit?: number | null
+          raw_material_type?: string | null
           remarks?: string | null
           required_qty?: number | null
           requisition_id?: string
@@ -3530,6 +3539,7 @@ export type Database = {
           po_status: string | null
           purchase_status: string
           qty_per_unit: number | null
+          raw_material_type: string | null
           remarks: string | null
           required_qty: number | null
           requisition_id: string
