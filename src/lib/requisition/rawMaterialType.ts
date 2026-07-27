@@ -6,8 +6,19 @@
  * are untouched by this field.
  */
 export const RAW_MATERIAL_TYPES = [
+  "In House",
+  "3rd Party",
+  "Steel",
+] as const;
+
+export type RawMaterialType = (typeof RAW_MATERIAL_TYPES)[number];
+
+export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select RM type";
+
+/** Legacy / related category options used by the Material Category dropdown. */
+export const MATERIAL_CATEGORIES = [
   "3P",
-  "3P Iron",
+,  "3P Iron",
   "Pipe",
   "Sheets",
   "Structure",
@@ -18,10 +29,6 @@ export const RAW_MATERIAL_TYPES = [
   "GI Pipe",
   "GI Sheets",
 ] as const;
-
-export type RawMaterialType = (typeof RAW_MATERIAL_TYPES)[number];
-
-export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select RM type";
 
 /** Display label for a stored value; blank rows show an em dash. */
 export function rawMaterialTypeLabel(v?: string | null): string {
