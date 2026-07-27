@@ -18,7 +18,7 @@ export const RAW_MATERIAL_TYPE_PLACEHOLDER = "Select RM type";
 /** Legacy / related category options used by the Material Category dropdown. */
 export const MATERIAL_CATEGORIES = [
   "3P",
-,  "3P Iron",
+  "3P Iron",
   "Pipe",
   "Sheets",
   "Structure",
