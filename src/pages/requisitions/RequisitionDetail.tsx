@@ -269,8 +269,22 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     load();
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  if (!req) return <div className="p-6 text-sm text-muted-foreground">Requisition not found.</div>;
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+        <div className="min-h-[44px]" />
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!req) {
+    return (
+      <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+        <div className="min-h-[44px]" />
+        <div className="text-sm text-muted-foreground">Requisition not found.</div>
+      </div>
+    );
+  }
 
   const canDelete = isAdmin || docCanEdit || (currentUserId != null && req.user_id === currentUserId);
   const isGeneral = (req as unknown as { kind?: string }).kind === "general";
@@ -295,18 +309,20 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
   }
 
   return (
-    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
-      <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
-      {id && (
-        <ModuleNotifications
-          links={{
-            requisitionId: id,
-            boqId: req?.boq_id ?? undefined,
-            orderRootId:
-              (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
-          }}
-        />
-      )}
+    <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5 [overflow-anchor:none]">
+      <div className="min-h-[44px] space-y-5">
+        <EntityActivityBanner orderRootId={(req as { order_root_id?: string | null } | null)?.order_root_id ?? null} />
+        {id && (
+          <ModuleNotifications
+            links={{
+              requisitionId: id,
+              boqId: req?.boq_id ?? undefined,
+              orderRootId:
+                (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
+            }}
+          />
+        )}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
