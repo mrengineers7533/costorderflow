@@ -616,10 +616,10 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {r.material_category && !RAW_MATERIAL_TYPES.includes(r.material_category as never) ? (
+                              {r.material_category && !MATERIAL_CATEGORIES.includes(r.material_category as never) ? (
                                 <SelectItem value={r.material_category}>{r.material_category}</SelectItem>
                               ) : null}
-                              {RAW_MATERIAL_TYPES.map((t) => (
+                              {MATERIAL_CATEGORIES.map((t) => (
                                 <SelectItem key={t} value={t}>{t}</SelectItem>
                               ))}
                             </SelectContent>
