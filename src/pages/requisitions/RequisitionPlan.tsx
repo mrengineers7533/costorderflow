@@ -357,6 +357,8 @@ export default function RequisitionPlan() {
     sourceReqNos: string[];
     annexureCount: number; // number of source rms already in an annexure
     annexureIds: string[];
+    raw_material_type: string | null;
+    rawTypeValues: Array<string | null | undefined>;
   };
   const consolidated: ConsRow[] = useMemo(() => {
     const map = new Map<ConsKey, ConsRow>();
@@ -384,11 +386,14 @@ export default function RequisitionPlan() {
           sourceReqNos: [],
           annexureCount: 0,
           annexureIds: [],
+          raw_material_type: null,
+          rawTypeValues: [],
         };
         map.set(key, row);
       }
       row.total += Number(rm.required_qty || 0);
       row.sourceRmIds.push(rm.id);
+      row.rawTypeValues.push((rm as { raw_material_type?: string | null }).raw_material_type);
       if (rm.annexure_status === "created") {
         row.annexureCount += 1;
         if (rm.annexure_id && !row.annexureIds.includes(rm.annexure_id)) row.annexureIds.push(rm.annexure_id);
@@ -396,7 +401,9 @@ export default function RequisitionPlan() {
       const reqNo = reqById.get(rm.requisition_id)?.requisition_number;
       if (reqNo && !row.sourceReqNos.includes(reqNo)) row.sourceReqNos.push(reqNo);
     });
-    return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
+    const out = Array.from(map.values());
+    out.forEach((r) => { r.raw_material_type = consolidateRawMaterialType(r.rawTypeValues); });
+    return out.sort((a, b) => a.material.localeCompare(b.material));
   }, [rms, reqById]);
 
   function bulkPatch(rmIds: string[], patch: Partial<RequisitionRawMaterialRecord>) {
@@ -452,6 +459,7 @@ export default function RequisitionPlan() {
       unit: c.unit,
       total_qty: c.total,
       source_rm_ids: c.sourceRmIds,
+      raw_material_type: c.raw_material_type,
     }));
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
