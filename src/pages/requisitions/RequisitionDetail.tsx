@@ -29,6 +29,76 @@ import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
+
+/** Uncontrolled inline text cell — saves on blur only when the value changed. */
+function TextCell({
+  value,
+  onSave,
+  width = "w-28",
+  align = "left",
+  placeholder,
+}: {
+  value: string | null | undefined;
+  onSave: (v: string) => void;
+  width?: string;
+  align?: "left" | "right";
+  placeholder?: string;
+}) {
+  const initial = value ?? "";
+  return (
+    <Input
+      key={initial}
+      className={`h-7 ${width} ${align === "right" ? "text-right" : ""}`}
+      defaultValue={initial}
+      placeholder={placeholder}
+      onBlur={(e) => {
+        const v = e.target.value;
+        if (v === initial) return;
+        onSave(v);
+      }}
+    />
+  );
+}
+
+/** Uncontrolled inline numeric cell. Invalid input shows a row-level message
+ *  and reverts only this cell — no other row is touched. */
+function NumCell({
+  value,
+  onSave,
+  width = "w-24",
+}: {
+  value: number | null | undefined;
+  onSave: (v: number | null) => void;
+  width?: string;
+}) {
+  const initial = value == null ? "" : String(value);
+  const [err, setErr] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <Input
+        key={initial}
+        className={`h-7 ${width} text-right ${err ? "border-destructive" : ""}`}
+        defaultValue={initial}
+        inputMode="decimal"
+        onBlur={(e) => {
+          const raw = e.target.value.trim();
+          if (raw === initial) { setErr(false); return; }
+          if (raw === "") { setErr(false); onSave(null); return; }
+          const n = Number(raw);
+          if (!Number.isFinite(n)) {
+            setErr(true);
+            e.target.value = initial;
+            return;
+          }
+          setErr(false);
+          onSave(n);
+        }}
+      />
+      {err ? <span className="text-[10px] text-destructive">Enter a number</span> : null}
+    </div>
+  );
+}
+
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
