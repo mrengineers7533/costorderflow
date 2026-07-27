@@ -36,12 +36,12 @@ const costingItems: { title: string; url: string; icon: typeof LayoutGrid; modul
 
 const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Design",              url: "/design",                 icon: PencilRuler,    module: "design" },
-  { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
 ];
 
-const tailItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
+const manufacturingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
+  { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
   { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
+  { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
 ];
 
 const purchaseItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
@@ -79,12 +79,19 @@ export function AppSidebar({ user }: { user?: User | null }) {
   const visibleBottom = bottomItems.filter((it) =>
     isAdmin || canAccess(it.module),
   );
+  const visibleManufacturing = manufacturingItems.filter((it) =>
+    isAdmin || canAccess(it.module),
+  );
   const visiblePurchase = purchaseItems.filter((it) =>
     isAdmin || canAccess(it.module),
   );
-  const visibleTail = tailItems.filter((it) =>
-    isAdmin || canAccess(it.module),
-  );
+
+  const isManufacturingActive = visibleManufacturing.some((it) => isItemActive(it.url, pathname));
+  const [manufacturingOpen, setManufacturingOpen] = useState(isManufacturingActive);
+
+  useEffect(() => {
+    if (isManufacturingActive) setManufacturingOpen(true);
+  }, [isManufacturingActive]);
 
   const isPurchaseActive = visiblePurchase.some((it) => isItemActive(it.url, pathname));
   const [purchaseOpen, setPurchaseOpen] = useState(isPurchaseActive);
@@ -248,6 +255,36 @@ export function AppSidebar({ user }: { user?: User | null }) {
                 <MenuItem key={item.title} item={item} />
               ))}
 
+              {visibleManufacturing.length > 0 && (
+                <>
+                  <SidebarMenuItem>
+                    <button
+                      onClick={() => setManufacturingOpen((o) => !o)}
+                      className={`peer/menu-button flex items-center gap-2 overflow-hidden rounded-full text-left text-sm outline-none ring-sidebar-ring transition-colors duration-200 hover:bg-primary/10 hover:text-primary h-11 ${collapsed ? "w-11 justify-center px-0 mx-auto" : "w-full px-4 justify-between"} ${isManufacturingActive ? "bg-primary text-primary-foreground shadow-md hover:bg-primary hover:text-primary-foreground font-semibold" : "text-sidebar-foreground/70"}`}
+                    >
+                      <span className={`flex items-center gap-2 ${collapsed ? "w-full justify-center" : ""}`}>
+                        <Factory className="h-[18px] w-[18px] shrink-0" strokeWidth={1.8} />
+                        {!collapsed && <span className="text-sm">Manufacturing</span>}
+                      </span>
+                      {!collapsed && (
+                        <span>
+                          {manufacturingOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  </SidebarMenuItem>
+
+                  {(manufacturingOpen || collapsed) &&
+                    visibleManufacturing.map((item) => (
+                      <MenuItem key={item.title} item={item} indent={!collapsed} />
+                    ))}
+                </>
+              )}
+
               {visiblePurchase.length > 0 && (
                 <>
                   <SidebarMenuItem>
@@ -277,10 +314,6 @@ export function AppSidebar({ user }: { user?: User | null }) {
                     ))}
                 </>
               )}
-
-              {visibleTail.map((item) => (
-                <MenuItem key={item.title} item={item} />
-              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
