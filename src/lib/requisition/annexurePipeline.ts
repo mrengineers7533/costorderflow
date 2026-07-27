@@ -29,6 +29,8 @@ export interface RmInputRow {
   plan_status: PlanStatus | null;
   required_qty: number | null;
   fg_quantity?: number | null;
+  /** Additive descriptive classification carried forward from Requisition. */
+  raw_material_type?: string | null;
 }
 
 export interface ConsolidatedRow {
@@ -41,6 +43,7 @@ export interface ConsolidatedRow {
   plan_status: PlanStatus | null;
   total: number;
   sourceRmIds: string[];
+  raw_material_type: string | null;
 }
 
 /**
@@ -50,6 +53,7 @@ export interface ConsolidatedRow {
  */
 export function consolidateRawMaterials(rms: RmInputRow[]): ConsolidatedRow[] {
   const map = new Map<string, ConsolidatedRow>();
+  const typesByKey = new Map<string, Array<string | null | undefined>>();
   for (const rm of rms) {
     const key = [
       (rm.material || "").trim().toLowerCase(),
@@ -71,12 +75,20 @@ export function consolidateRawMaterials(rms: RmInputRow[]): ConsolidatedRow[] {
         plan_status: rm.plan_status,
         total: 0,
         sourceRmIds: [],
+        raw_material_type: null,
       };
       map.set(key, row);
     }
     row.total += Number(rm.required_qty || 0);
     if (rm.id) row.sourceRmIds.push(rm.id);
+    const list = typesByKey.get(key) || [];
+    list.push(rm.raw_material_type);
+    typesByKey.set(key, list);
   }
+  // Only keep a type when every source row agrees; otherwise leave it unset.
+  map.forEach((row, key) => {
+    row.raw_material_type = consolidateRawMaterialType(typesByKey.get(key) || []);
+  });
   return Array.from(map.values()).sort((a, b) => a.material.localeCompare(b.material));
 }
 
@@ -89,6 +101,7 @@ export interface AnnexureRowInsert {
   unit: string | null;
   total_qty: number;
   source_rm_ids: string[];
+  raw_material_type: string | null;
 }
 
 /**
@@ -109,6 +122,7 @@ export function buildAnnexureRowInserts(consolidated: ConsolidatedRow[]): Annexu
       unit: c.unit,
       total_qty: c.total,
       source_rm_ids: c.sourceRmIds,
+      raw_material_type: c.raw_material_type ?? null,
     }));
 }
 
