@@ -42,6 +42,7 @@ interface RawRow {
   po_id: string | null;
   rm_price: number | null;
   vendor_name: string | null;
+  raw_material_type: string | null;
 }
 
 interface PoRecord {
@@ -378,6 +379,7 @@ export default function PurchaseMaterial() {
             size_model: r.size_model,
             make: r.make,
             unit: r.unit,
+            raw_material_type: r.raw_material_type ?? null,
             due_on: due || null,
             qty,
             rate,
@@ -394,7 +396,6 @@ export default function PurchaseMaterial() {
             size_model: c.size_model || null,
             make: c.make || null,
             unit: c.unit || null,
-            raw_material_type: (c as { raw_material_type?: string | null }).raw_material_type ?? null,
             due_on: c.due || null,
             qty,
             rate,
@@ -629,7 +630,7 @@ export default function PurchaseMaterial() {
                         <td className="py-2 pr-3">{r.material}</td>
                         <td className="py-2 pr-3">{r.size_model || "—"}</td>
                         <td className="py-2 pr-3">{r.make || "—"}</td>
-                        <td className="py-2 pr-3">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
+                        <td className="py-2 pr-3">{rawMaterialTypeLabel(r.raw_material_type)}</td>
                         <td className="py-2 pr-3 text-right">
                           {editable ? (
                             <Input type="number" className="h-7 text-xs text-right w-20"
