@@ -318,7 +318,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
           rmMake: r.make || "—",
           uom: r.unit || "—",
           lot: r.lot_no || it?.lot_no || "",
-          status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
+          status: r.raw_material_type || "",
           span: g.rms.length,
           first: idx === 0,
         });
