@@ -2709,11 +2709,13 @@ export type Database = {
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          rm_price: number | null
           rm_weight: number | null
           size_model: string | null
           source: string
           unit: string | null
           updated_at: string
+          vendor_name: string | null
         }
         Insert: {
           annexure_id?: string | null
@@ -2737,11 +2739,13 @@ export type Database = {
           required_qty?: number | null
           requisition_id: string
           requisition_item_id?: string | null
+          rm_price?: number | null
           rm_weight?: number | null
           size_model?: string | null
           source?: string
           unit?: string | null
           updated_at?: string
+          vendor_name?: string | null
         }
         Update: {
           annexure_id?: string | null
@@ -2765,11 +2769,13 @@ export type Database = {
           required_qty?: number | null
           requisition_id?: string
           requisition_item_id?: string | null
+          rm_price?: number | null
           rm_weight?: number | null
           size_model?: string | null
           source?: string
           unit?: string | null
           updated_at?: string
+          vendor_name?: string | null
         }
         Relationships: [
           {
@@ -3528,11 +3534,13 @@ export type Database = {
           required_qty: number | null
           requisition_id: string
           requisition_item_id: string | null
+          rm_price: number | null
           rm_weight: number | null
           size_model: string | null
           source: string
           unit: string | null
           updated_at: string
+          vendor_name: string | null
         }[]
         SetofOptions: {
           from: "*"
