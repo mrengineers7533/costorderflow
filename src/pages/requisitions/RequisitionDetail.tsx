@@ -29,6 +29,76 @@ import { useDocAccess } from "@/hooks/useDocAccess";
 import { groupBoqsByFamily } from "@/lib/boq/familyKey";
 
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
+
+/** Uncontrolled inline text cell — saves on blur only when the value changed. */
+function TextCell({
+  value,
+  onSave,
+  width = "w-28",
+  align = "left",
+  placeholder,
+}: {
+  value: string | null | undefined;
+  onSave: (v: string) => void;
+  width?: string;
+  align?: "left" | "right";
+  placeholder?: string;
+}) {
+  const initial = value ?? "";
+  return (
+    <Input
+      key={initial}
+      className={`h-7 ${width} ${align === "right" ? "text-right" : ""}`}
+      defaultValue={initial}
+      placeholder={placeholder}
+      onBlur={(e) => {
+        const v = e.target.value;
+        if (v === initial) return;
+        onSave(v);
+      }}
+    />
+  );
+}
+
+/** Uncontrolled inline numeric cell. Invalid input shows a row-level message
+ *  and reverts only this cell — no other row is touched. */
+function NumCell({
+  value,
+  onSave,
+  width = "w-24",
+}: {
+  value: number | null | undefined;
+  onSave: (v: number | null) => void;
+  width?: string;
+}) {
+  const initial = value == null ? "" : String(value);
+  const [err, setErr] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <Input
+        key={initial}
+        className={`h-7 ${width} text-right ${err ? "border-destructive" : ""}`}
+        defaultValue={initial}
+        inputMode="decimal"
+        onBlur={(e) => {
+          const raw = e.target.value.trim();
+          if (raw === initial) { setErr(false); return; }
+          if (raw === "") { setErr(false); onSave(null); return; }
+          const n = Number(raw);
+          if (!Number.isFinite(n)) {
+            setErr(true);
+            e.target.value = initial;
+            return;
+          }
+          setErr(false);
+          onSave(n);
+        }}
+      />
+      {err ? <span className="text-[10px] text-destructive">Enter a number</span> : null}
+    </div>
+  );
+}
+
 export default function RequisitionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -246,7 +316,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
           rmQty: r.required_qty != null ? String(r.required_qty) : "—",
           rmMake: r.make || "—",
           uom: r.unit || "—",
-          lot: it?.lot_no || "",
+          lot: r.lot_no || it?.lot_no || "",
           status: ENUM_TO_STATUS[r.purchase_status] || r.purchase_status,
           span: g.rms.length,
           first: idx === 0,
@@ -534,34 +604,50 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                             <td className="py-2 px-2 align-top border-r text-right" rowSpan={g.rms.length}>{fgQty}</td>
                           </>
                         )}
-                        <td className="py-2 px-2 border-r">{r.material}</td>
-                        <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
-                        <td className="py-2 px-2 border-r text-right">{r.required_qty ?? "—"}</td>
-                        <td className="py-2 px-2 border-r text-right">{r.rm_weight ?? "—"}</td>
                         <td className="py-2 px-2 border-r">
-                          {r.material_category || "—"}
+                          <TextCell value={r.material} width="w-40" onSave={(v) => updateRm(r.id, { material: v })} />
+                        </td>
+                        <td className="py-2 px-2 border-r">
+                          <TextCell value={r.size_model} width="w-40" onSave={(v) => updateRm(r.id, { size_model: v || null })} />
+                        </td>
+                        <td className="py-2 px-2 border-r text-right">
+                          <NumCell value={r.required_qty} onSave={(v) => updateRm(r.id, { required_qty: v })} />
+                        </td>
+                        <td className="py-2 px-2 border-r text-right">
+                          <NumCell value={r.rm_weight} width="w-20" onSave={(v) => updateRm(r.id, { rm_weight: v })} />
+                        </td>
+                        <td className="py-2 px-2 border-r">
+                          <TextCell
+                            value={r.material_category}
+                            width="w-32"
+                            onSave={(v) => updateRm(r.id, {
+                              material_category: v || null,
+                              material_category_source: v ? "manual" : null,
+                            })}
+                          />
                           {r.material_category_source ? (
                             <span className="ml-1 text-[10px] text-muted-foreground">({r.material_category_source})</span>
                           ) : null}
                         </td>
-                        <td className="py-2 px-2 border-r">{r.make || "—"}</td>
-                        <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
-                        <td className="py-2 px-2 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-2 border-r">{formatReqVendor(r.vendor_name)}</td>
-                        {idx === 0 ? (
-                          <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
-                            <Input
-                              className="h-7 w-24"
-                              defaultValue={it?.lot_no || ""}
-                              onBlur={(e) => {
-                                if (!it) return;
-                                const v = e.target.value;
-                                if ((it.lot_no || "") === v) return;
-                                updateItem(it.id, { lot_no: v || null, purchase_status: v ? "lotted" : it.purchase_status });
-                              }}
-                            />
-                          </td>
-                        ) : null}
+                        <td className="py-2 px-2 border-r">
+                          <TextCell value={r.make} width="w-28" onSave={(v) => updateRm(r.id, { make: v || null })} />
+                        </td>
+                        <td className="py-2 px-2 border-r">
+                          <TextCell value={r.unit} width="w-20" onSave={(v) => updateRm(r.id, { unit: v || null })} />
+                        </td>
+                        <td className="py-2 px-2 border-r text-right">
+                          <NumCell value={r.rm_price} onSave={(v) => updateRm(r.id, { rm_price: v })} />
+                        </td>
+                        <td className="py-2 px-2 border-r">
+                          <TextCell value={r.vendor_name} width="w-36" onSave={(v) => updateRm(r.id, { vendor_name: v || null })} />
+                        </td>
+                        <td className="py-2 px-2 border-r">
+                          <TextCell
+                            value={r.lot_no ?? ""}
+                            width="w-24"
+                            onSave={(v) => updateRm(r.id, { lot_no: v || null })}
+                          />
+                        </td>
                         <td className="py-2 px-2">
                           <Select
                             value={ENUM_TO_STATUS[r.purchase_status] || "Pending"}
