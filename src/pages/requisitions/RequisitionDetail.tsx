@@ -615,12 +615,14 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-3 border-r">Size / Spec</th>
                     <th className="text-right py-2 px-3 border-r">Reqd Qty</th>
                     <th className="text-left py-2 px-3 border-r">Unit</th>
+                    <th className="text-right py-2 px-3 border-r">Price</th>
+                    <th className="text-left py-2 px-3 border-r">Vendor</th>
                     <th className="text-left py-2 px-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={showMake ? 7 : 6} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={showMake ? 9 : 8} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                    ) : rmGroups.flatMap((g) => g.rms.map((r, idx) => {
                      const unmapped = g.rms.some((x) => x.source === "unmapped_placeholder");
                      const it2 = g.item;
@@ -646,6 +648,8 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-3 border-r">{r.size_model || "—"}</td>
                         <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
                         <td className="py-2 px-3 border-r">{r.unit || "—"}</td>
+                        <td className="py-2 px-3 border-r text-right">{formatReqPrice(r.rm_price)}</td>
+                        <td className="py-2 px-3 border-r">{r.vendor_name || "—"}</td>
                         <td className="py-2 px-3">
                           <Select
                             value={r.purchase_status}
