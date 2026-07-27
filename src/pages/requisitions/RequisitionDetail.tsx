@@ -120,6 +120,18 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     [items],
   );
   const attMap = useItemAttachments(req?.boq_id ?? null, attItems as never);
+
+  // Stable object identity so ModuleNotifications does not reload on every
+  // render of this page.
+  const notifLinks = useMemo(
+    () => ({
+      requisitionId: id as string,
+      boqId: req?.boq_id ?? undefined,
+      orderRootId:
+        (req as { order_root_id?: string | null } | null)?.order_root_id ?? undefined,
+    }),
+    [id, req],
+  );
   const stale = latestRev != null && req != null && latestRev > req.boq_revision;
 
   async function copyLink() {
