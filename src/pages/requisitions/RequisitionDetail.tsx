@@ -541,7 +541,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-2 border-r">{r.make || "—"}</td>
                         <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
                         <td className="py-2 px-2 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-2 border-r">{r.vendor_name || "—"}</td>
+                        <td className="py-2 px-2 border-r">{formatReqVendor(r.vendor_name)}</td>
                         {idx === 0 ? (
                           <td className="py-2 px-2 align-top border-r" rowSpan={g.rms.length}>
                             <Input
@@ -644,7 +644,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-3 border-r text-right">{r.required_qty ?? "—"}</td>
                         <td className="py-2 px-3 border-r">{r.unit || "—"}</td>
                         <td className="py-2 px-3 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-3 border-r">{r.vendor_name || "—"}</td>
+                        <td className="py-2 px-3 border-r">{formatReqVendor(r.vendor_name)}</td>
                         <td className="py-2 px-3">
                           <Select
                             value={r.purchase_status}
