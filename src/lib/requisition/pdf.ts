@@ -62,12 +62,12 @@ export function generateRequisitionPDF(ctx: RequisitionPdfContext): jsPDF {
       row.push(r.rmMake);
       row.push(r.uom);
       row.push(r.lot || "—");
-      row.push(r.status);
+      row.push(r.status || "—");
       body.push(row);
     });
     autoTable(doc, withPdfTableDefaults({
       startY: 24 + headerLines.length * 4.5 + 4,
-      head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Status"]],
+      head: [["Finished Good", "Make", "Qty", "Raw Material", "Size", "RM Qty", "RM Make", "UOM", "Lot", "Raw Material Type"]],
       body,
       theme: "grid",
       styles: { fontSize: 7.5, cellPadding: 1.6, valign: "top" },
