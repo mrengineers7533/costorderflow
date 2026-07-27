@@ -502,6 +502,12 @@ export default function PoCreateFromAnnexure() {
                       <Input type="number" className="h-7 text-xs text-right w-16" disabled={!m.selected || lock.locked}
                         value={m.gst} onChange={(e) => setRowMeta(r.id, { gst: e.target.value })} />
                     </td>
+                    <td className="px-2 py-1.5 border-r text-right">
+                      {formatReqPrice(mergePriceVendor(r.source_rm_ids || [], pvMap).rm_price)}
+                    </td>
+                    <td className="px-2 py-1.5 border-r">
+                      {formatReqVendor(mergePriceVendor(r.source_rm_ids || [], pvMap).vendor_name)}
+                    </td>
                     <td className="px-2 py-1.5">
                       {lock.locked
                         ? <Badge variant="secondary" className="text-[10px]">PO Created</Badge>
