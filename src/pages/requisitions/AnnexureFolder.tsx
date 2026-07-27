@@ -301,9 +301,13 @@ export default function AnnexureFolder() {
     doc.text(`Status: ${status.toUpperCase()}`, 14, 28);
     autoTable(doc, {
       startY: 34,
-      head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
-      body: e.rows.map((r) => [r.lot_no, r.material, r.size_model || "—", r.make || "—", r.unit || "—", fmtQty2(r.total_qty)]),
-      foot: [["", "", "", "", "Grand Total", fmtQty2(e.total)]],
+      head: [["Lot", "Raw Material", "Size", "RM Make", "Raw Material Type", "UOM", "Total Qty"]],
+      body: e.rows.map((r) => [
+        r.lot_no, r.material, r.size_model || "—", r.make || "—",
+        rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type),
+        r.unit || "—", fmtQty2(r.total_qty),
+      ]),
+      foot: [["", "", "", "", "", "Grand Total", fmtQty2(e.total)]],
       styles: { fontSize: 9 },
       headStyles: { fillColor: [40, 40, 40] },
     });
