@@ -274,19 +274,6 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
     }));
   }, [rms, itemById]);
 
-  // Map UI status labels to the existing purchase_status enum so the
-  // "Generated" view can use the user's vocabulary without a DB migration.
-  const STATUS_TO_ENUM: Record<string, "pending" | "ordered" | "received"> = {
-    "Pending": "pending",
-    "Inhouse": "received",
-    "Outside Purchase": "ordered",
-  };
-  const ENUM_TO_STATUS: Record<string, string> = {
-    pending: "Pending",
-    received: "Inhouse",
-    ordered: "Outside Purchase",
-  };
-
   function buildGeneratedRows() {
     const rows: Array<{
       fgLabel: string;
