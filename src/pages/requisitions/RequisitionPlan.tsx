@@ -744,6 +744,7 @@ export default function RequisitionPlan() {
                         </td>
                         <td className="py-2 px-1">
                           {r.annexure_status === "created"
+                        </td>
                             ? <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
                             : <span className="text-[11px] text-muted-foreground">—</span>}
                         </td>
