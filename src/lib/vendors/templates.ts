@@ -186,32 +186,58 @@ export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
   return { rows, skipped, total };
 }
 
-export function parseVendorItemWorkbook(file: ArrayBuffer): ParseResult<VendorItemRow> {
-  const rows: VendorItemRow[] = [];
-  const skipped: { row: number; reason: string }[] = [];
+/**
+ * Parses the Vendor Item sheet WITHOUT dropping any row.
+ * Every non-empty Excel row comes back; unusable ones carry `issues` so they
+ * can be stored as pending and corrected later.
+ */
+export function parseVendorItemWorkbook(file: ArrayBuffer): ParseResult<VendorItemParsedRow> {
+  const rows: VendorItemParsedRow[] = [];
   let total = 0;
-  sheetRows(file, ["Vendor Items", "VendorItems"]).forEach((r, i) => {
+  const seen = new Map<string, number>();
+
+  sheetRowsWithSource(file, ["Vendor Items", "VendorItems"]).forEach(({ norm: r, source }, i) => {
     const line = i + 2;
     const hasAny = Object.values(r).some((v) => norm(v));
     if (!hasAny) return;
     total++;
+
+    const issues: string[] = [];
     const vendor_name = norm(r[key("Vendor Name")]);
     const material = norm(r[key("Material")]);
-    if (!vendor_name && !material) { skipped.push({ row: line, reason: "Vendor Name and Material are required" }); return; }
-    if (!vendor_name) { skipped.push({ row: line, reason: "Vendor Name is required" }); return; }
-    if (!material) { skipped.push({ row: line, reason: "Material is required" }); return; }
+    if (!vendor_name) issues.push("Vendor name missing");
+    if (!material) issues.push("Item code missing (Material)");
+
     const priceRaw = norm(r[key("Price")]).replace(/[,₹\s]/g, "");
-    if (priceRaw && Number.isNaN(Number(priceRaw))) { skipped.push({ row: line, reason: `Price is not a number: ${priceRaw}` }); return; }
+    let price: number | null = null;
+    if (priceRaw === "") issues.push("Price missing");
+    else if (Number.isNaN(Number(priceRaw))) issues.push(`Invalid price format: ${norm(r[key("Price")])}`);
+    else price = Number(priceRaw);
+
+    const size_model = norm(r[key("Size/Model")]) || null;
+    const unit = norm(r[key("UOM")]) || null;
+
+    const dupKey = `${vendor_name.toLowerCase()}|${material.toLowerCase()}|${(size_model || "").toLowerCase()}`;
+    if (vendor_name && material) {
+      const prev = seen.get(dupKey);
+      if (prev) issues.push(`Duplicate vendor-item combination (also on row ${prev})`);
+      else seen.set(dupKey, line);
+    }
+
     rows.push({
+      row_no: line,
+      issues,
+      source,
       vendor_name,
       material,
-      size_model: norm(r[key("Size/Model")]) || null,
-      unit: norm(r[key("UOM")]) || null,
-      price: priceRaw === "" ? null : Number(priceRaw),
+      size_model,
+      unit,
+      price,
       is_preferred: yesNo(r[key("Preferred")], false),
       is_active: yesNo(r[key("Active")], true),
       notes: norm(r[key("Notes")]) || null,
     });
   });
-  return { rows, skipped, total };
+
+  return { rows, skipped: [], total };
 }
