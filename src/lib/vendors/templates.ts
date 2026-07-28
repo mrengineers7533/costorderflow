@@ -136,6 +136,22 @@ function sheetRows(file: ArrayBuffer, preferred: string[]): Record<string, unkno
   });
 }
 
+/** Rows with normalised keys plus the verbatim original cells (for later correction). */
+function sheetRowsWithSource(file: ArrayBuffer, preferred: string[]): { norm: Record<string, unknown>; source: Record<string, string> }[] {
+  const wb = XLSX.read(file, { type: "array" });
+  const name = wb.SheetNames.find((n) => preferred.some((p) => key(n) === key(p))) || wb.SheetNames[0];
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[name], { defval: "" });
+  return raw.map((r) => {
+    const out: Record<string, unknown> = {};
+    const src: Record<string, string> = {};
+    for (const [k, v] of Object.entries(r)) {
+      out[key(k)] = v;
+      src[String(k).trim()] = norm(v);
+    }
+    return { norm: out, source: src };
+  });
+}
+
 export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
   const rows: VendorRow[] = [];
   const skipped: { row: number; reason: string }[] = [];
