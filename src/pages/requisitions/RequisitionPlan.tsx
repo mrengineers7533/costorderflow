@@ -662,6 +662,11 @@ export default function RequisitionPlan() {
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <datalist id="vendor-item-master-names">
+        {Array.from(new Set(vendorPrices.map((v) => v.vendor_name).filter(Boolean))).map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Requisition Planning ({ids.length})</h1>
