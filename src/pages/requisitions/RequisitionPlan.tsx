@@ -23,7 +23,7 @@ import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
 import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
-import { consolidateRawMaterialType, rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
+import { consolidateRawMaterialType } from "@/lib/requisition/rawMaterialType";
 import { planStatusFromCategory } from "@/lib/requisition/planStatus";
 import { resolveMaterialCategory, type CategoryRule } from "@/lib/requisition/materialCategory";
 import {
