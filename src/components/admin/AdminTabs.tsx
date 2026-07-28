@@ -10,6 +10,7 @@ const tabs = [
   { to: "/admin/boq-verification", label: "BOQ Verification" },
   { to: "/admin/raw-materials", label: "Raw Materials" },
   { to: "/admin/vendors", label: "Vendors" },
+  { to: "/admin/vendor-items", label: "Vendor Item Master" },
   { to: "/admin/notifications", label: "Notifications" },
   { to: "/admin/email-audit", label: "Email Audit" },
   { to: "/admin/email-settings", label: "Email Settings" },
