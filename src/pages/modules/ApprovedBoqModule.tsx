@@ -417,8 +417,8 @@ export const PURCHASE_CONFIG: ModuleConfig = {
 
 export const MANUFACTURING_CONFIG: ModuleConfig = {
   kind: "manufacturing",
-  title: "Manufacturing",
-  subtitle: "Approved BOQs ready for manufacturing workflow.",
+  title: "Create Requisition",
+  subtitle: "Approved BOQs ready for requisition creation.",
   basePath: "/manufacturing",
   futureSteps: [
     "Raw Material Mapping",
