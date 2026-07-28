@@ -48,6 +48,7 @@ import AdminAccess from "./pages/admin/AdminAccess";
 import AdminDocumentAccess from "./pages/admin/AdminDocumentAccess";
 import AdminVendors from "./pages/admin/AdminVendors";
 import AdminVendorItems from "./pages/admin/AdminVendorItems";
+import AdminVendorTemplates from "./pages/admin/AdminVendorTemplates";
 import RevisionRepairReport from "./pages/admin/RevisionRepairReport";
 import AdminEmailAudit from "./pages/admin/AdminEmailAudit";
 import AdminEmailSettings from "./pages/admin/AdminEmailSettings";
@@ -155,6 +156,10 @@ const App = () => (
                       <Route
                         path="/admin/vendor-items"
                         element={<RequireAdmin user={user}><AdminVendorItems /></RequireAdmin>}
+                      />
+                      <Route
+                        path="/admin/vendor-templates"
+                        element={<RequireAdmin user={user}><AdminVendorTemplates /></RequireAdmin>}
                       />
                       <Route
                         path="/admin/revision-repair"
