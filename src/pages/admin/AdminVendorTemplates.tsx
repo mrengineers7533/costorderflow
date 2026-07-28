@@ -177,6 +177,7 @@ export default function AdminVendorTemplates() {
               <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
                 <li>Keep the header row exactly as provided.</li>
                 <li>Existing records are updated; new ones are created.</li>
+                <li>Blank optional columns are allowed — fill them in later via Edit.</li>
                 {c.kind === "items" && <li>Upload the Vendor Master first so vendors can be matched.</li>}
               </ul>
               <div className="flex gap-2 pt-1">
