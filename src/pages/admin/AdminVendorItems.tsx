@@ -18,6 +18,27 @@ const sb = supabase as any;
 
 interface VendorLite { id: string; name: string; is_active: boolean }
 
+type ItemRow = VendorItemPrice & {
+  notes?: string | null;
+  import_status?: string | null;
+  import_issues?: string[] | null;
+  source_row?: Record<string, string> | null;
+  source_row_no?: number | null;
+  source_file?: string | null;
+};
+
+type StatusFilter = "all" | "valid" | "pending";
+
+/** Reasons a row still cannot be used as a normal vendor price. */
+const computeIssues = (vendorName: string, material: string, price: string): string[] => {
+  const out: string[] = [];
+  if (!vendorName.trim()) out.push("Vendor name missing");
+  if (!material.trim()) out.push("Item code missing (Material)");
+  if (price.trim() === "") out.push("Price missing");
+  else if (Number.isNaN(Number(price))) out.push("Invalid price format");
+  return out;
+};
+
 const emptyForm = {
   vendor_id: "",
   vendor_name: "",
@@ -31,14 +52,15 @@ const emptyForm = {
 };
 
 export default function AdminVendorItems() {
-  const [rows, setRows] = useState<VendorItemPrice[]>([]);
+  const [rows, setRows] = useState<ItemRow[]>([]);
   const [vendors, setVendors] = useState<VendorLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<VendorItemPrice | null>(null);
+  const [editing, setEditing] = useState<ItemRow | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [pendingDelete, setPendingDelete] = useState<VendorItemPrice | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ItemRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
@@ -47,7 +69,7 @@ export default function AdminVendorItems() {
       sb.from("vendor_item_prices").select("*").order("material"),
       sb.from("vendors").select("id,name,is_active").order("name"),
     ]);
-    setRows((vip || []) as VendorItemPrice[]);
+    setRows((vip || []) as ItemRow[]);
     setVendors((v || []) as VendorLite[]);
     setLoading(false);
   };
@@ -55,13 +77,19 @@ export default function AdminVendorItems() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) =>
-      [r.material, r.size_model, r.vendor_name, r.unit].some((x) => (x || "").toLowerCase().includes(s)));
-  }, [rows, q]);
+    return rows.filter((r) => {
+      const st = r.import_status || "ok";
+      if (statusFilter === "valid" && st !== "ok") return false;
+      if (statusFilter === "pending" && st === "ok") return false;
+      if (!s) return true;
+      return [r.material, r.size_model, r.vendor_name, r.unit].some((x) => (x || "").toLowerCase().includes(s));
+    });
+  }, [rows, q, statusFilter]);
+
+  const pendingCount = useMemo(() => rows.filter((r) => (r.import_status || "ok") !== "ok").length, [rows]);
 
   const startNew = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
-  const startEdit = (r: VendorItemPrice) => {
+  const startEdit = (r: ItemRow) => {
     setEditing(r);
     setForm({
       vendor_id: r.vendor_id || "",
