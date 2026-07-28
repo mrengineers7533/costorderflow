@@ -25,7 +25,7 @@ import {
   fetchRmPriceVendor, mergePriceVendor, formatReqPrice, formatReqVendor,
   type RmPriceVendor,
 } from "@/lib/requisition/priceVendor";
-import { rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -301,13 +301,12 @@ export default function AnnexureFolder() {
     doc.text(`Status: ${status.toUpperCase()}`, 14, 28);
     autoTable(doc, {
       startY: 34,
-      head: [["Lot", "Raw Material", "Size", "RM Make", "RM Type", "UOM", "Total Qty"]],
+      head: [["Lot", "Raw Material", "Size", "RM Make", "UOM", "Total Qty"]],
       body: e.rows.map((r) => [
         r.lot_no, r.material, r.size_model || "—", r.make || "—",
-        rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type),
         r.unit || "—", fmtQty2(r.total_qty),
       ]),
-      foot: [["", "", "", "", "", "Grand Total", fmtQty2(e.total)]],
+      foot: [["", "", "", "", "Grand Total", fmtQty2(e.total)]],
       styles: { fontSize: 9 },
       headStyles: { fillColor: [40, 40, 40] },
     });
@@ -497,7 +496,6 @@ export default function AnnexureFolder() {
                     <th className="text-left py-2 px-2 border-r">Raw Material</th>
                     <th className="text-left py-2 px-2 border-r">Size</th>
                     <th className="text-left py-2 px-2 border-r">RM Make</th>
-                    <th className="text-left py-2 px-2 border-r">RM Type</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2">Total Qty</th>
                     <th className="text-right py-2 px-2 border-l">Price</th>
@@ -513,7 +511,6 @@ export default function AnnexureFolder() {
                       <td className="py-2 px-2 border-r">{r.material}</td>
                       <td className="py-2 px-2 border-r">{r.size_model || "—"}</td>
                       <td className="py-2 px-2 border-r">{r.make || "—"}</td>
-                      <td className="py-2 px-2 border-r">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                       <td className="py-2 px-2 border-r">{r.unit || "—"}</td>
                       <td className="py-2 px-2 text-right">{fmtQty2(r.total_qty)}</td>
                       <td className="py-2 px-2 text-right border-l">{formatReqPrice(pv.rm_price)}</td>

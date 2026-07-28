@@ -14,7 +14,7 @@ import { Search, PackageCheck, MessageSquare, RotateCcw, Upload, Eye, Download, 
 import {
   fetchRmPriceVendor, formatReqPrice, formatReqVendor, type RmPriceVendor,
 } from "@/lib/requisition/priceVendor";
-import { rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -443,7 +443,6 @@ export default function GrnList() {
                 <th className="text-left p-2">PO / Date</th>
                 <th className="text-left p-2">Vendor</th>
                 <th className="text-left p-2">Material</th>
-                <th className="text-left p-2">RM Type</th>
                 <th className="text-right p-2">Qty</th>
                 <th className="text-right p-2">Rate</th>
                 <th className="text-right p-2">Req. Price</th>
@@ -461,7 +460,7 @@ export default function GrnList() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={16} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
+                <tr><td colSpan={15} className="py-8 text-center text-muted-foreground">No PO items match.</td></tr>
               ) : filtered.map((j) => {
                 const g = j.grn;
                 const status = g?.status || "pending";
@@ -485,7 +484,6 @@ export default function GrnList() {
                         {[j.row.size_model, j.row.make].filter(Boolean).join(" · ") || "—"}
                       </div>
                     </td>
-                    <td className="p-2">{rawMaterialTypeLabel(j.row.raw_material_type)}</td>
                     <td className="p-2 text-right">{j.row.qty ?? 0} {j.row.unit || ""}</td>
                     <td className="p-2 text-right">{j.row.rate ?? "—"}</td>
                     <td className="p-2 text-right">{formatReqPrice(pvMap.get(j.row.raw_material_id || "")?.rm_price ?? null)}</td>

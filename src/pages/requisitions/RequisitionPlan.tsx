@@ -22,8 +22,16 @@ import type {
 import type { BoqRecord } from "@/lib/boq/types";
 import type { OrderRecord } from "@/lib/orders/types";
 import { buildMakeResolver } from "@/lib/boq/makeResolver";
-import { formatReqPrice, formatReqVendor } from "@/lib/requisition/priceVendor";
-import { consolidateRawMaterialType, rawMaterialTypeLabel } from "@/lib/requisition/rawMaterialType";
+
+import { consolidateRawMaterialType } from "@/lib/requisition/rawMaterialType";
+import { planStatusFromCategory } from "@/lib/requisition/planStatus";
+import { resolveMaterialCategory, type CategoryRule } from "@/lib/requisition/materialCategory";
+import {
+  buildVendorPriceIndex,
+  lookupVendorPrice,
+  type VendorItemPrice,
+  type VendorPriceIndex,
+} from "@/lib/requisition/vendorPricing";
 
 const fmtQty2 = (v: unknown): string => {
   if (v === null || v === undefined || v === "") return "—";
@@ -94,6 +102,9 @@ export default function RequisitionPlan() {
   const [orders, setOrders] = useState<Record<string, OrderRecord>>({});
   const [annexures, setAnnexures] = useState<AnnexureRecord[]>([]);
   const [annexureRows, setAnnexureRows] = useState<AnnexureRowRecord[]>([]);
+  const [vendorPrices, setVendorPrices] = useState<VendorItemPrice[]>([]);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+  const [annexureMeta, setAnnexureMeta] = useState<Record<string, { created_at: string; lot_numbers: string[] }>>({});
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
@@ -188,6 +199,14 @@ export default function RequisitionPlan() {
     ]);
     const rList = (r as RequisitionRecord[]) || [];
     setReqs(rList);
+    // Vendor Item Master + category rules (used for auto-fill / auto-resolve)
+    const [{ data: vip }, { data: rules }] = await Promise.all([
+      sb.from("vendor_item_prices").select("*"),
+      sb.from("rm_category_rules").select("pattern,category,priority,active").eq("active", true),
+    ]);
+    const vipRows = (vip as VendorItemPrice[]) || [];
+    setVendorPrices(vipRows);
+    setCategoryRules((rules as CategoryRule[]) || []);
     const itemsList = (its as RequisitionItemRecord[]) || [];
     let rmList = (rmRows as RequisitionRawMaterialRecord[]) || [];
     setItems(itemsList);
@@ -241,7 +260,46 @@ export default function RequisitionPlan() {
         }
       }
     }
+    // Auto-fill Price / Vendor from the Vendor Item Master for rows that
+    // have neither value yet. Values stay fully editable afterwards.
+    if (vipRows.length) {
+      const idx = buildVendorPriceIndex(vipRows);
+      const fills: Array<{ id: string; rm_price: number | null; vendor_name: string | null }> = [];
+      rmList = rmList.map((rm) => {
+        const hasPrice = rm.rm_price != null;
+        const hasVendor = !!(rm.vendor_name && String(rm.vendor_name).trim());
+        if (hasPrice && hasVendor) return rm;
+        const hit = lookupVendorPrice(idx, rm.material, rm.size_model);
+        if (!hit) return rm;
+        const next = {
+          ...rm,
+          rm_price: hasPrice ? rm.rm_price : (hit.price ?? null),
+          vendor_name: hasVendor ? rm.vendor_name : (hit.vendor_name || null),
+        } as RequisitionRawMaterialRecord;
+        if (next.rm_price !== rm.rm_price || next.vendor_name !== rm.vendor_name) {
+          fills.push({ id: rm.id, rm_price: next.rm_price ?? null, vendor_name: next.vendor_name ?? null });
+        }
+        return next;
+      });
+      await Promise.all(fills.map((f) =>
+        sb.from("requisition_raw_materials")
+          .update({ rm_price: f.rm_price, vendor_name: f.vendor_name })
+          .eq("id", f.id)));
+    }
     setRms(rmList);
+    // Labels for the item-wise Annexure column
+    const axIds = Array.from(new Set(rmList.map((x) => x.annexure_id).filter(Boolean) as string[]));
+    if (axIds.length) {
+      const { data: axMeta } = await sb
+        .from("requisition_annexures")
+        .select("id,created_at,lot_numbers")
+        .in("id", axIds);
+      const meta: Record<string, { created_at: string; lot_numbers: string[] }> = {};
+      ((axMeta as Array<{ id: string; created_at: string; lot_numbers: string[] }>) || []).forEach((a) => {
+        meta[a.id] = { created_at: a.created_at, lot_numbers: a.lot_numbers || [] };
+      });
+      setAnnexureMeta(meta);
+    }
     const boqIds = Array.from(new Set(rList.map((x) => x.boq_id)));
     const nonNullBoqIds = boqIds.filter(Boolean) as string[];
     if (nonNullBoqIds.length) {
@@ -411,6 +469,15 @@ export default function RequisitionPlan() {
     rmIds.forEach((id) => patchRm(id, patch));
   }
 
+  /** Short, stable label for an annexure shown on item rows. */
+  function annexureLabel(id: string): string {
+    const meta = annexureMeta[id];
+    const short = `AX-${id.slice(0, 8).toUpperCase()}`;
+    if (!meta) return short;
+    const lots = (meta.lot_numbers || []).join(", ");
+    return lots ? `${short} • Lot ${lots}` : short;
+  }
+
   // Rows eligible for annexure creation: lot is selected, row not excluded, not already created.
   function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
     if (!c.lot_no) return false;
@@ -426,23 +493,42 @@ export default function RequisitionPlan() {
       toast({ title: "No rows selected", description: "Pick at least one Lot with rows to include.", variant: "destructive" });
       return;
     }
-    const missing = eligible.filter((c) => !c.lot_no || !c.plan_status);
-    if (missing.length > 0) {
-      const m = missing[0];
-      const where = [
-        m.lot_no ? `Lot ${m.lot_no}` : "no Lot",
-        m.material,
-        m.size_model || "",
-      ].filter(Boolean).join(" • ");
+    // Auto-resolve a missing RM Category from the row's stored category or
+    // the keyword rules; rows that still can't be resolved are skipped
+    // instead of blocking the whole annexure.
+    const rmById = new Map(rms.map((x) => [x.id, x]));
+    const resolved = eligible.map((c) => {
+      if (c.lot_no && c.plan_status) return { row: c, status: c.plan_status };
+      if (!c.lot_no) return { row: c, status: null as PlanStatus | null };
+      const src = c.sourceRmIds.map((id) => rmById.get(id)).find(Boolean) as
+        | (RequisitionRawMaterialRecord & { material_category?: string | null })
+        | undefined;
+      const fromStored = planStatusFromCategory(src?.material_category ?? null);
+      const auto = fromStored ?? planStatusFromCategory(
+        resolveMaterialCategory({
+          material: c.material,
+          sizeModel: c.size_model,
+          rules: categoryRules,
+        }).category,
+      );
+      return { row: c, status: (auto as PlanStatus | null) ?? null };
+    });
+    const usable = resolved.filter((x) => x.status && x.row.lot_no);
+    const skipped = resolved.length - usable.length;
+    if (usable.length === 0) {
       toast({
-        title: "Status required",
-        description:
-          `${missing.length} selected row(s) have no Status. Set a Status on the Generated Requisition tab for: ${where}.`,
+        title: "RM Category required",
+        description: "None of the selected rows have an RM Category that can be resolved. Set RM Category on the Generated Requisition tab.",
         variant: "destructive",
       });
       return;
     }
-    const lots = Array.from(new Set(eligible.map((c) => c.lot_no!).filter(Boolean)));
+    // Persist auto-resolved categories back onto the source rows.
+    usable.forEach((x) => {
+      if (!x.row.plan_status) bulkPatch(x.row.sourceRmIds, { plan_status: x.status as PlanStatus });
+    });
+    const eligibleResolved = usable.map((x) => ({ ...x.row, plan_status: x.status as PlanStatus }));
+    const lots = Array.from(new Set(eligibleResolved.map((c) => c.lot_no!).filter(Boolean)));
     const { data: { user } } = await supabase.auth.getUser();
     const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
       requisition_ids: ids,
@@ -450,7 +536,7 @@ export default function RequisitionPlan() {
       created_by: user?.id ?? null,
     }).select("*").maybeSingle();
     if (e1 || !ax) { toast({ title: "Create failed", description: e1?.message, variant: "destructive" }); return; }
-    const rows = eligible.map((c) => ({
+    const rows = eligibleResolved.map((c) => ({
       annexure_id: (ax as AnnexureRecord).id,
       lot_no: c.lot_no!,
       plan_status: c.plan_status!,
@@ -465,7 +551,7 @@ export default function RequisitionPlan() {
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
     // Mark contributing raw materials as annexure_status='created'
-    const contributingRmIds = Array.from(new Set(eligible.flatMap((c) => c.sourceRmIds)));
+    const contributingRmIds = Array.from(new Set(eligibleResolved.flatMap((c) => c.sourceRmIds)));
     const newAxId = (ax as AnnexureRecord).id;
     const { error: e3 } = await sb.from("requisition_raw_materials")
       .update({ annexure_status: "created", annexure_id: newAxId })
@@ -477,9 +563,17 @@ export default function RequisitionPlan() {
     setAnnexures((p) => [ax as AnnexureRecord, ...p]);
     setAnnexureRows((axRows as AnnexureRowRecord[]) || []);
     setActiveAnnexureId((ax as AnnexureRecord).id);
+    setAnnexureMeta((p) => ({
+      ...p,
+      [newAxId]: { created_at: (ax as AnnexureRecord).created_at, lot_numbers: lots },
+    }));
     setSelectedLots(new Set());
     setExcludedRowKeys(new Set());
-    toast({ title: "Annexure created", description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).` });
+    toast({
+      title: "Annexure created",
+      description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).`
+        + (skipped > 0 ? ` ${skipped} row(s) skipped — no RM Category.` : ""),
+    });
     setTab("reports");
   }
 
@@ -568,6 +662,11 @@ export default function RequisitionPlan() {
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-5 space-y-5">
+      <datalist id="vendor-item-master-names">
+        {Array.from(new Set(vendorPrices.map((v) => v.vendor_name).filter(Boolean))).map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Requisition Planning ({ids.length})</h1>
@@ -620,8 +719,7 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">BOQ/OA Number</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">RM Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Category</th>
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2">Annexure</th>
@@ -629,7 +727,7 @@ export default function RequisitionPlan() {
                 </thead>
                 <tbody>
                   {groups.length === 0 ? (
-                    <tr><td colSpan={13} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : groups.flatMap((g) => {
                     const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
                     const fgMake = g.item ? resolveMake(g.item) : "";
@@ -753,13 +851,44 @@ export default function RequisitionPlan() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="py-2 px-1 border-r text-xs">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
-                        <td className="py-2 px-1 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-1 border-r">{formatReqVendor(r.vendor_name)}</td>
+                        <td className="py-2 px-1 border-r text-right">
+                          <Input
+                            type="number"
+                            className="h-7 w-24 text-sm text-right"
+                            defaultValue={r.rm_price == null ? "" : String(r.rm_price)}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              const v = raw === "" ? null : Number(raw);
+                              if ((r.rm_price ?? null) === v) return;
+                              patchRm(r.id, { rm_price: v });
+                            }}
+                          />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input
+                            className="h-7 w-36 text-sm"
+                            defaultValue={r.vendor_name || ""}
+                            list="vendor-item-master-names"
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.vendor_name || null) === v) return;
+                              patchRm(r.id, { vendor_name: v });
+                            }}
+                          />
+                        </td>
                         <td className="py-2 px-1">
-                          {r.annexure_status === "created"
-                            ? <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
-                            : <span className="text-[11px] text-muted-foreground">—</span>}
+                          {r.annexure_id ? (
+                            <Link
+                              to={`/requisitions/annexures?annexureId=${r.annexure_id}`}
+                              className="text-[11px] underline text-primary"
+                            >
+                              {annexureLabel(r.annexure_id)}
+                            </Link>
+                          ) : r.annexure_status === "created" ? (
+                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     ));
@@ -827,15 +956,14 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">RM Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Category</th>
                     <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
                     <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.length === 0 ? (
-                    <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : consolidated.map((c) => {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
@@ -888,7 +1016,6 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="py-2 px-2 border-r text-xs">{rawMaterialTypeLabel(c.raw_material_type)}</td>
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
