@@ -53,8 +53,6 @@ export interface ParseResult<T> {
   skipped: { row: number; reason: string }[];
 }
 
-const CATS = ["steel", "machine", "3p"];
-
 export function exportVendorTemplate() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
@@ -69,8 +67,8 @@ export function exportVendorTemplate() {
     ["Vendor Master Template — Instructions"],
     [""],
     ["1. Use the 'Vendors' sheet. Do NOT rename or reorder the header row."],
-    ["2. Required: Name, Categories."],
-    ["3. Categories must be one or more of: steel, machine, 3p (comma separated)."],
+    ["2. Required: Name only."],
+    ["3. Categories are free text — put one or more, comma separated (e.g. steel, bearing, pulley)."],
     ["4. Active accepts Yes/No (blank = Yes)."],
     ["5. A vendor whose Name already exists will be UPDATED, otherwise created."],
     ["6. Supported formats: .xlsx, .xls"],
@@ -141,9 +139,6 @@ export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
       .split(/[,;/|]/)
       .map((c) => c.trim().toLowerCase())
       .filter(Boolean);
-    const bad = cats.filter((c) => !CATS.includes(c));
-    if (bad.length) { skipped.push({ row: line, reason: `Invalid category: ${bad.join(", ")}` }); return; }
-    if (!cats.length) { skipped.push({ row: line, reason: "At least one category required (steel / machine / 3p)" }); return; }
     rows.push({
       name,
       categories: Array.from(new Set(cats)),
