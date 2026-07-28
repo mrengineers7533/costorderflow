@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Pencil, Plus, Power } from "lucide-react";
+import { Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { ConfirmBulkDeleteDialog } from "@/components/common/ConfirmBulkDeleteDialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -31,7 +32,7 @@ interface Vendor {
 const emptyForm = {
   name: "", address: "", gstin: "", state_code: "", contact_person: "", phone: "", email: "", payment_terms: "NEFT/RTGS",
   notes: "",
-  cat_steel: false, cat_machine: false, cat_3p: false,
+  categories: "",
 };
 
 export default function AdminVendors() {
@@ -40,6 +41,8 @@ export default function AdminVendors() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [pendingDelete, setPendingDelete] = useState<Vendor | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -57,20 +60,16 @@ export default function AdminVendors() {
       contact_person: v.contact_person || "", phone: v.phone || "", email: v.email || "",
       payment_terms: v.payment_terms || "",
       notes: v.notes || "",
-      cat_steel: v.categories.includes("steel"),
-      cat_machine: v.categories.includes("machine"),
-      cat_3p: v.categories.includes("3p"),
+      categories: (v.categories || []).join(", "),
     });
     setOpen(true);
   };
 
   const save = async () => {
     if (!form.name.trim()) { toast.error("Name required"); return; }
-    const cats: string[] = [];
-    if (form.cat_steel) cats.push("steel");
-    if (form.cat_machine) cats.push("machine");
-    if (form.cat_3p) cats.push("3p");
-    if (cats.length === 0) { toast.error("Pick at least one category"); return; }
+    const cats = Array.from(new Set(
+      form.categories.split(/[,;/|]/).map((c) => c.trim().toLowerCase()).filter(Boolean)
+    ));
     const payload = {
       name: form.name.trim(), categories: cats,
       address: form.address.trim() || null, gstin: form.gstin.trim() || null, state_code: form.state_code.trim() || null,
@@ -94,6 +93,23 @@ export default function AdminVendors() {
   const toggleActive = async (v: Vendor) => {
     const { error } = await sb.from("vendors").update({ is_active: !v.is_active }).eq("id", v.id);
     if (error) { toast.error(error.message); return; }
+    await load();
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    const { error } = await sb.from("vendors").delete().eq("id", pendingDelete.id);
+    setDeleting(false);
+    if (error) {
+      const referenced = /foreign key|violates|referenced/i.test(error.message);
+      toast.error(referenced
+        ? "This vendor is used by existing purchase records. Mark it Inactive instead of deleting."
+        : error.message);
+      return;
+    }
+    setPendingDelete(null);
+    toast.success("Vendor deleted");
     await load();
   };
 
@@ -149,6 +165,7 @@ export default function AdminVendors() {
                       <div className="flex gap-1">
                         <Button size="sm" variant="outline" className="h-7" onClick={() => startEdit(v)}><Pencil className="h-3 w-3" /></Button>
                         <Button size="sm" variant="outline" className="h-7" onClick={() => toggleActive(v)}><Power className="h-3 w-3" /></Button>
+                        <Button size="sm" variant="outline" className="h-7" title="Delete vendor" onClick={() => setPendingDelete(v)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -164,11 +181,10 @@ export default function AdminVendors() {
           <DialogHeader><DialogTitle className="text-base">{editing ? "Edit vendor" : "Add vendor"}</DialogTitle></DialogHeader>
           <div className="space-y-3 text-xs">
             <div><Label>Name *</Label><Input className="h-8" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="flex gap-3 items-center">
-              <Label className="text-xs">Categories:</Label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_steel} onChange={(e) => setForm({ ...form, cat_steel: e.target.checked })} /> Steel</label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_machine} onChange={(e) => setForm({ ...form, cat_machine: e.target.checked })} /> Machine</label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={form.cat_3p} onChange={(e) => setForm({ ...form, cat_3p: e.target.checked })} /> 3P</label>
+            <div>
+              <Label>Categories</Label>
+              <Input className="h-8" placeholder="steel, bearing, pulley" value={form.categories} onChange={(e) => setForm({ ...form, categories: e.target.value })} />
+              <p className="text-[10px] text-muted-foreground mt-1">Free text, comma separated. Optional.</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>GSTIN</Label><Input className="h-8" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></div>
@@ -189,6 +205,16 @@ export default function AdminVendors() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmBulkDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        title="Delete vendor"
+        description="This permanently removes the vendor from the Vendor Master."
+        items={pendingDelete ? [pendingDelete.name] : []}
+        busy={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
