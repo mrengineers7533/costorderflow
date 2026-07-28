@@ -53,8 +53,6 @@ export interface ParseResult<T> {
   skipped: { row: number; reason: string }[];
 }
 
-const CATS = ["steel", "machine", "3p"];
-
 export function exportVendorTemplate() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
@@ -141,9 +139,6 @@ export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
       .split(/[,;/|]/)
       .map((c) => c.trim().toLowerCase())
       .filter(Boolean);
-    const bad = cats.filter((c) => !CATS.includes(c));
-    if (bad.length) { skipped.push({ row: line, reason: `Invalid category: ${bad.join(", ")}` }); return; }
-    if (!cats.length) { skipped.push({ row: line, reason: "At least one category required (steel / machine / 3p)" }); return; }
     rows.push({
       name,
       categories: Array.from(new Set(cats)),
