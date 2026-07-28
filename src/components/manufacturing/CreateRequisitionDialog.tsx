@@ -508,6 +508,9 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         <span className="font-medium">{it.item_no}. {it.model_number}</span>
                         <span className="text-muted-foreground"> · {it.description?.slice(0, 60)}</span>
                         <span className="text-muted-foreground"> · Qty {fgQty}</span>
+                        {efg.fg_make ? (
+                          <span className="text-muted-foreground"> · Make: <span className="font-medium text-foreground">{efg.fg_make}</span></span>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-3">
                         <label className="flex items-center gap-1 text-xs">
@@ -529,7 +532,30 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         </Button>
                       </div>
                     </div>
-                    {!efg.is_direct_purchase && (
+                    {efg.is_direct_purchase ? (
+                      <div className="p-3 space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Sent to 3P / Purchase as a complete Finish Good — no raw material lines are generated.
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Price</span>
+                            <Input className="h-7" inputMode="decimal" placeholder="0.00" value={efg.dp_price}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_price: e.target.value })} />
+                          </label>
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Vendor</span>
+                            <Input className="h-7" placeholder="Vendor" value={efg.dp_vendor}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_vendor: e.target.value })} />
+                          </label>
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Remarks</span>
+                            <Input className="h-7" value={efg.dp_remarks}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_remarks: e.target.value })} />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
                       <div className="p-3 space-y-2">
                         <table className="w-full text-xs">
                           <thead className="text-muted-foreground">
