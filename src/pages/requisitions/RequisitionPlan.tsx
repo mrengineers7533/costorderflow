@@ -664,8 +664,7 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">BOQ/OA Number</th>
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">RM Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Category</th>
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
                     <th className="text-left py-2 px-2">Annexure</th>
@@ -673,7 +672,7 @@ export default function RequisitionPlan() {
                 </thead>
                 <tbody>
                   {groups.length === 0 ? (
-                    <tr><td colSpan={13} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : groups.flatMap((g) => {
                     const fgLabel = `[${g.reqNo}] ${g.fgLabel}`;
                     const fgMake = g.item ? resolveMake(g.item) : "";
@@ -797,13 +796,44 @@ export default function RequisitionPlan() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="py-2 px-1 border-r text-xs">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
-                        <td className="py-2 px-1 border-r text-right">{formatReqPrice(r.rm_price)}</td>
-                        <td className="py-2 px-1 border-r">{formatReqVendor(r.vendor_name)}</td>
+                        <td className="py-2 px-1 border-r text-right">
+                          <Input
+                            type="number"
+                            className="h-7 w-24 text-sm text-right"
+                            defaultValue={r.rm_price == null ? "" : String(r.rm_price)}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              const v = raw === "" ? null : Number(raw);
+                              if ((r.rm_price ?? null) === v) return;
+                              patchRm(r.id, { rm_price: v });
+                            }}
+                          />
+                        </td>
+                        <td className="py-2 px-1 border-r">
+                          <Input
+                            className="h-7 w-36 text-sm"
+                            defaultValue={r.vendor_name || ""}
+                            list="vendor-item-master-names"
+                            onBlur={(e) => {
+                              const v = e.target.value.trim() || null;
+                              if ((r.vendor_name || null) === v) return;
+                              patchRm(r.id, { vendor_name: v });
+                            }}
+                          />
+                        </td>
                         <td className="py-2 px-1">
-                          {r.annexure_status === "created"
-                            ? <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
-                            : <span className="text-[11px] text-muted-foreground">—</span>}
+                          {r.annexure_id ? (
+                            <Link
+                              to={`/requisitions/annexures?annexureId=${r.annexure_id}`}
+                              className="text-[11px] underline text-primary"
+                            >
+                              {annexureLabel(r.annexure_id)}
+                            </Link>
+                          ) : r.annexure_status === "created" ? (
+                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     ));
