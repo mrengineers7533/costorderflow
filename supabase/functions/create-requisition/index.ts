@@ -15,6 +15,11 @@ interface Body {
     boq_item_id: string;
     is_direct_purchase?: boolean;
     fg_make?: string | null;
+    direct_purchase?: {
+      rm_price?: number | null;
+      vendor_name?: string | null;
+      remarks?: string | null;
+    } | null;
     raw_materials: Array<{
       make?: string | null;
       material: string;
