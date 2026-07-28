@@ -110,8 +110,12 @@ export default function AdminVendorItems() {
     const vendorName = form.vendor_id
       ? (vendors.find((v) => v.id === form.vendor_id)?.name || form.vendor_name.trim())
       : form.vendor_name.trim();
-    if (!material) { toast.error("Material is required"); return; }
-    if (!vendorName) { toast.error("Vendor is required"); return; }
+    const issues = computeIssues(vendorName, material, form.price);
+    const wasImported = !!editing && (editing.import_status || "ok") !== "ok";
+    if (issues.length && !wasImported) {
+      if (!material) { toast.error("Material is required"); return; }
+      if (!vendorName) { toast.error("Vendor is required"); return; }
+    }
     const payload = {
       vendor_id: form.vendor_id || null,
       vendor_name: vendorName,
@@ -120,8 +124,10 @@ export default function AdminVendorItems() {
       unit: form.unit.trim() || null,
       price: form.price.trim() === "" ? null : Number(form.price),
       is_preferred: form.is_preferred,
-      is_active: form.is_active,
+      is_active: issues.length ? false : form.is_active,
       notes: form.notes.trim() || null,
+      import_status: issues.length ? (editing?.import_status === "error" ? "error" : "pending") : "ok",
+      import_issues: issues,
     };
     if (editing) {
       const { error } = await sb.from("vendor_item_prices").update(payload).eq("id", editing.id);
@@ -131,12 +137,12 @@ export default function AdminVendorItems() {
       const { error } = await sb.from("vendor_item_prices").insert({ ...payload, created_by: u?.user?.id ?? null });
       if (error) { toast.error(error.message); return; }
     }
-    toast.success("Saved");
+    toast.success(issues.length ? `Saved as pending — ${issues.join("; ")}` : "Saved and marked valid");
     setOpen(false);
     await load();
   };
 
-  const togglePreferred = async (r: VendorItemPrice) => {
+  const togglePreferred = async (r: ItemRow) => {
     const { error } = await sb.from("vendor_item_prices").update({ is_preferred: !r.is_preferred }).eq("id", r.id);
     if (error) { toast.error(error.message); return; }
     await load();
