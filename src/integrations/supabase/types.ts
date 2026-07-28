@@ -2989,6 +2989,62 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_item_prices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          is_preferred: boolean
+          material: string
+          notes: string | null
+          price: number | null
+          size_model: string | null
+          unit: string | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_preferred?: boolean
+          material: string
+          notes?: string | null
+          price?: number | null
+          size_model?: string | null
+          unit?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_preferred?: boolean
+          material?: string
+          notes?: string | null
+          price?: number | null
+          size_model?: string | null
+          unit?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_item_prices_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendors: {
         Row: {
           address: string | null
