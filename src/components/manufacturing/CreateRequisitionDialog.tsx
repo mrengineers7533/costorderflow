@@ -52,6 +52,10 @@ type EditedFg = {
   is_direct_purchase: boolean;
   raw_materials: RmRow[];
   fg_make: string;
+  /** 3P (direct purchase) reference details for the complete Finish Good. */
+  dp_price: string;
+  dp_vendor: string;
+  dp_remarks: string;
 };
 
 type FullMap = {
@@ -185,8 +189,8 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       return;
     }
     const next: Record<string, EditedFg> = {};
-    for (const it of items) {
-      if (!selected[it.id]) continue;
+    items.forEach((it, idx) => {
+      if (!selected[it.id]) return;
       const mapping = mode === "auto" ? findMappingFor(it) : null;
       const isDirect = mode === "auto" && !!mapping?.is_direct_purchase;
       const rms: RmRow[] = mapping && !isDirect && mode === "auto"
@@ -203,8 +207,17 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
             material_category_source: rm.material_category ? "master" : null,
           }))
         : [];
-      next[it.id] = { boq_item_id: it.id, is_direct_purchase: isDirect, raw_materials: rms, fg_make: "" };
-    }
+      next[it.id] = {
+        boq_item_id: it.id,
+        is_direct_purchase: isDirect,
+        raw_materials: rms,
+        // Auto-populate FG Make from the BOQ item / linked OA line item.
+        fg_make: resolveMake(it, idx) || "",
+        dp_price: "",
+        dp_vendor: "",
+        dp_remarks: it.remarks || "",
+      };
+    });
     setEdited(next);
     setStep("review");
   }
@@ -258,6 +271,12 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       return { ...prev, [fgId]: { ...cur, is_direct_purchase: v, raw_materials: v ? [] : cur.raw_materials } };
     });
   }
+  function updateDp(fgId: string, patch: Partial<Pick<EditedFg, "dp_price" | "dp_vendor" | "dp_remarks">>) {
+    setEdited((prev) => {
+      const cur = prev[fgId]; if (!cur) return prev;
+      return { ...prev, [fgId]: { ...cur, ...patch } };
+    });
+  }
   function loadFromMaster(fgId: string) {
     const it = items.find((x) => x.id === fgId);
     if (!it) return;
@@ -305,6 +324,13 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
         boq_item_id: id,
         is_direct_purchase: edited[id].is_direct_purchase,
         fg_make: edited[id].fg_make || null,
+        direct_purchase: edited[id].is_direct_purchase
+          ? {
+              rm_price: edited[id].dp_price.trim() === "" ? null : Number(edited[id].dp_price),
+              vendor_name: edited[id].dp_vendor || null,
+              remarks: edited[id].dp_remarks || null,
+            }
+          : null,
         raw_materials: edited[id].raw_materials
           .filter((r) => r.material.trim().length > 0)
           .map((r) => ({
@@ -482,6 +508,9 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         <span className="font-medium">{it.item_no}. {it.model_number}</span>
                         <span className="text-muted-foreground"> · {it.description?.slice(0, 60)}</span>
                         <span className="text-muted-foreground"> · Qty {fgQty}</span>
+                        {efg.fg_make ? (
+                          <span className="text-muted-foreground"> · Make: <span className="font-medium text-foreground">{efg.fg_make}</span></span>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-3">
                         <label className="flex items-center gap-1 text-xs">
@@ -503,7 +532,30 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
                         </Button>
                       </div>
                     </div>
-                    {!efg.is_direct_purchase && (
+                    {efg.is_direct_purchase ? (
+                      <div className="p-3 space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Sent to 3P / Purchase as a complete Finish Good — no raw material lines are generated.
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Price</span>
+                            <Input className="h-7" inputMode="decimal" placeholder="0.00" value={efg.dp_price}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_price: e.target.value })} />
+                          </label>
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Vendor</span>
+                            <Input className="h-7" placeholder="Vendor" value={efg.dp_vendor}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_vendor: e.target.value })} />
+                          </label>
+                          <label className="text-xs space-y-1">
+                            <span className="text-muted-foreground">Remarks</span>
+                            <Input className="h-7" value={efg.dp_remarks}
+                              onChange={(e) => updateDp(efg.boq_item_id, { dp_remarks: e.target.value })} />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
                       <div className="p-3 space-y-2">
                         <table className="w-full text-xs">
                           <thead className="text-muted-foreground">
