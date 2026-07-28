@@ -70,13 +70,13 @@ export default function AdminVendorTemplates() {
     const p: Planned = { kind: "vendors", total, create: [], update: [], skipped };
     for (const r of rows) {
       const id = byName.get(k(r.name));
-      if (id) p.update.push({ label: r.name, id, payload: { ...r } });
-      else p.create.push({ label: r.name, payload: { ...r } });
+      if (id) p.update.push({ label: r.name, id, payload: { ...r }, issues: [] });
+      else p.create.push({ label: r.name, payload: { ...r }, issues: [] });
     }
     return p;
   };
 
-  const buildItemPlan = async (rows: VendorItemRow[], skipped: Planned["skipped"], total: number): Promise<Planned> => {
+  const buildItemPlan = async (rows: VendorItemParsedRow[], _skipped: Planned["skipped"], total: number, fileName: string): Promise<Planned> => {
     const [{ data: vendors }, { data: existing }] = await Promise.all([
       sb.from("vendors").select("id,name"),
       sb.from("vendor_item_prices").select("id,vendor_name,material,size_model"),
@@ -87,28 +87,32 @@ export default function AdminVendorTemplates() {
     (existing || []).forEach((e: { id: string; vendor_name: string; material: string; size_model: string | null }) =>
       existingMap.set(`${k(e.vendor_name)}|${k(e.material)}|${k(e.size_model)}`, e.id));
 
-    const p: Planned = { kind: "items", total, create: [], update: [], skipped: [...skipped] };
-    rows.forEach((r, i) => {
+    const p: Planned = { kind: "items", total, create: [], update: [], skipped: [] };
+    rows.forEach((r) => {
       const vendor_id = byName.get(k(r.vendor_name));
-      if (!vendor_id) {
-        p.skipped.push({ row: i + 2, reason: `Vendor "${r.vendor_name}" not found in Vendor Master — upload Vendors first` });
-        return;
-      }
+      const issues = [...r.issues];
+      if (r.vendor_name && !vendor_id) issues.push(`Vendor not found in Vendor Master: "${r.vendor_name}"`);
+      const status = issues.length ? "pending" : "ok";
       const payload = {
-        vendor_id,
+        vendor_id: vendor_id ?? null,
         vendor_name: r.vendor_name,
         material: r.material,
         size_model: r.size_model,
         unit: r.unit,
         price: r.price,
         is_preferred: r.is_preferred,
-        is_active: r.is_active,
+        is_active: status === "ok" ? r.is_active : false,
         notes: r.notes,
+        import_status: status,
+        import_issues: issues,
+        source_row: r.source,
+        source_row_no: r.row_no,
+        source_file: fileName,
       };
-      const label = `${r.material}${r.size_model ? ` (${r.size_model})` : ""} — ${r.vendor_name}`;
+      const label = `Row ${r.row_no}: ${r.material || "(no material)"}${r.size_model ? ` (${r.size_model})` : ""} — ${r.vendor_name || "(no vendor)"}`;
       const id = existingMap.get(`${k(r.vendor_name)}|${k(r.material)}|${k(r.size_model)}`);
-      if (id) p.update.push({ label, id, payload });
-      else p.create.push({ label, payload });
+      if (id && r.vendor_name && r.material) p.update.push({ label, id, payload, issues, row: r.row_no });
+      else p.create.push({ label, payload, issues, row: r.row_no });
     });
     return p;
   };
@@ -122,7 +126,7 @@ export default function AdminVendorTemplates() {
       if (!parsed.rows.length && !parsed.skipped.length) { toast.error("No rows found in the file"); return; }
       const built = kind === "vendors"
         ? await buildVendorPlan(parsed.rows as VendorRow[], parsed.skipped, parsed.total)
-        : await buildItemPlan(parsed.rows as VendorItemRow[], parsed.skipped, parsed.total);
+        : await buildItemPlan(parsed.rows as VendorItemParsedRow[], parsed.skipped, parsed.total, file.name);
       setPlan(built);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not read the file");
