@@ -51,6 +51,7 @@ export interface VendorItemRow {
 export interface ParseResult<T> {
   rows: T[];
   skipped: { row: number; reason: string }[];
+  total: number;
 }
 
 export function exportVendorTemplate() {
@@ -128,11 +129,15 @@ function sheetRows(file: ArrayBuffer, preferred: string[]): Record<string, unkno
 export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
   const rows: VendorRow[] = [];
   const skipped: { row: number; reason: string }[] = [];
+  let total = 0;
   sheetRows(file, ["Vendors"]).forEach((r, i) => {
     const line = i + 2;
+    const hasAny = Object.values(r).some((v) => norm(v));
+    if (!hasAny) return;
+    total++;
     const name = norm(r[key("Name")]);
     if (!name) {
-      if (Object.values(r).some((v) => norm(v))) skipped.push({ row: line, reason: "Name is required" });
+      skipped.push({ row: line, reason: "Name is required" });
       return;
     }
     const cats = norm(r[key("Categories")])
@@ -152,23 +157,24 @@ export function parseVendorWorkbook(file: ArrayBuffer): ParseResult<VendorRow> {
       is_active: yesNo(r[key("Active")], true),
     });
   });
-  return { rows, skipped };
+  return { rows, skipped, total };
 }
 
 export function parseVendorItemWorkbook(file: ArrayBuffer): ParseResult<VendorItemRow> {
   const rows: VendorItemRow[] = [];
   const skipped: { row: number; reason: string }[] = [];
+  let total = 0;
   sheetRows(file, ["Vendor Items", "VendorItems"]).forEach((r, i) => {
     const line = i + 2;
+    const hasAny = Object.values(r).some((v) => norm(v));
+    if (!hasAny) return;
+    total++;
     const vendor_name = norm(r[key("Vendor Name")]);
     const material = norm(r[key("Material")]);
-    if (!vendor_name && !material) {
-      if (Object.values(r).some((v) => norm(v))) skipped.push({ row: line, reason: "Vendor Name and Material are required" });
-      return;
-    }
+    if (!vendor_name && !material) { skipped.push({ row: line, reason: "Vendor Name and Material are required" }); return; }
     if (!vendor_name) { skipped.push({ row: line, reason: "Vendor Name is required" }); return; }
     if (!material) { skipped.push({ row: line, reason: "Material is required" }); return; }
-    const priceRaw = norm(r[key("Price")]);
+    const priceRaw = norm(r[key("Price")]).replace(/[,₹\s]/g, "");
     if (priceRaw && Number.isNaN(Number(priceRaw))) { skipped.push({ row: line, reason: `Price is not a number: ${priceRaw}` }); return; }
     rows.push({
       vendor_name,
@@ -181,5 +187,5 @@ export function parseVendorItemWorkbook(file: ArrayBuffer): ParseResult<VendorIt
       notes: norm(r[key("Notes")]) || null,
     });
   });
-  return { rows, skipped };
+  return { rows, skipped, total };
 }
