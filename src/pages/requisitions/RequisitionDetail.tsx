@@ -638,27 +638,12 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                         <td className="py-2 px-2 border-r">
                           <TextCell value={r.vendor_name} width="w-36" onSave={(v) => updateRm(r.id, { vendor_name: v || null })} />
                         </td>
-                        <td className="py-2 px-2 border-r">
+                        <td className="py-2 px-2">
                           <TextCell
                             value={r.lot_no ?? ""}
                             width="w-24"
                             onSave={(v) => updateRm(r.id, { lot_no: v || null })}
                           />
-                        </td>
-                        <td className="py-2 px-2">
-                          <Select
-                            value={r.raw_material_type || undefined}
-                            onValueChange={(v) => updateRm(r.id, { raw_material_type: v })}
-                          >
-                            <SelectTrigger className="h-7 w-36">
-                              <SelectValue placeholder={RAW_MATERIAL_TYPE_PLACEHOLDER} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {RAW_MATERIAL_TYPES.map((t) => (
-                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                         </td>
                       </tr>
                     ));
