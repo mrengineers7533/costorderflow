@@ -562,8 +562,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2 border-r">Price</th>
                     <th className="text-left py-2 px-2 border-r">Vendor</th>
-                    <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2">Status</th>
+                    <th className="text-left py-2 px-2">Lot</th>
                   </tr>
                 </thead>
                 <tbody>
