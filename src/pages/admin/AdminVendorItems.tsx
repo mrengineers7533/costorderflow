@@ -244,6 +244,28 @@ export default function AdminVendorItems() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="text-base">{editing ? "Edit item price" : "Add item price"}</DialogTitle></DialogHeader>
           <div className="space-y-3 text-xs">
+            {editing && (editing.import_status || "ok") !== "ok" && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
+                <p className="font-medium text-destructive">Needs correction</p>
+                <ul className="list-disc pl-4 text-muted-foreground">
+                  {(editing.import_issues || []).map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+                {editing.source_row && (
+                  <details className="pt-1">
+                    <summary className="cursor-pointer text-muted-foreground">
+                      Original Excel row{editing.source_row_no ? ` ${editing.source_row_no}` : ""}
+                      {editing.source_file ? ` — ${editing.source_file}` : ""}
+                    </summary>
+                    <div className="pt-1 space-y-0.5">
+                      {Object.entries(editing.source_row).map(([kk, vv]) => (
+                        <div key={kk} className="flex gap-2"><span className="text-muted-foreground min-w-28">{kk}</span><span>{vv || "—"}</span></div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                <p className="text-muted-foreground">Fix the fields below and save to mark this row valid.</p>
+              </div>
+            )}
             <div>
               <Label>Vendor *</Label>
               <Select value={form.vendor_id} onValueChange={(v) => setForm({ ...form, vendor_id: v })}>
