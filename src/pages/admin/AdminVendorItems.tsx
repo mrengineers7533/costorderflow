@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Pencil, Plus, Star, Trash2 } from "lucide-react";
 import type { VendorItemPrice } from "@/lib/requisition/vendorPricing";
+import { ConfirmBulkDeleteDialog } from "@/components/common/ConfirmBulkDeleteDialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -37,6 +38,8 @@ export default function AdminVendorItems() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<VendorItemPrice | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [pendingDelete, setPendingDelete] = useState<VendorItemPrice | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -69,7 +72,7 @@ export default function AdminVendorItems() {
       price: r.price == null ? "" : String(r.price),
       is_preferred: !!r.is_preferred,
       is_active: r.is_active !== false,
-      notes: "",
+      notes: (r as unknown as { notes?: string | null }).notes || "",
     });
     setOpen(true);
   };
@@ -111,10 +114,14 @@ export default function AdminVendorItems() {
     await load();
   };
 
-  const remove = async (r: VendorItemPrice) => {
-    if (!window.confirm(`Delete ${r.material} — ${r.vendor_name}?`)) return;
-    const { error } = await sb.from("vendor_item_prices").delete().eq("id", r.id);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    const { error } = await sb.from("vendor_item_prices").delete().eq("id", pendingDelete.id);
+    setDeleting(false);
     if (error) { toast.error(error.message); return; }
+    setPendingDelete(null);
+    toast.success("Item price deleted");
     await load();
   };
 
@@ -168,7 +175,7 @@ export default function AdminVendorItems() {
                     <td className="py-2 px-2">
                       <div className="flex gap-1">
                         <Button size="sm" variant="outline" className="h-7" onClick={() => startEdit(r)}><Pencil className="h-3 w-3" /></Button>
-                        <Button size="sm" variant="outline" className="h-7" onClick={() => remove(r)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button size="sm" variant="outline" className="h-7" title="Delete" onClick={() => setPendingDelete(r)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -191,6 +198,12 @@ export default function AdminVendorItems() {
                   {vendors.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <Input
+                className="h-8 mt-1"
+                placeholder="…or type a vendor name"
+                value={form.vendor_name}
+                onChange={(e) => setForm({ ...form, vendor_name: e.target.value, vendor_id: "" })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>Material *</Label><Input className="h-8" value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} /></div>
@@ -198,7 +211,7 @@ export default function AdminVendorItems() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>UOM</Label><Input className="h-8" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
-              <div><Label>Price</Label><Input className="h-8" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
+              <div><Label>Price</Label><Input className="h-8" type="number" placeholder="Can be filled later" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
             </div>
             <div className="flex gap-4 items-center pt-1">
               <label className="flex items-center gap-1.5">
@@ -216,6 +229,16 @@ export default function AdminVendorItems() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmBulkDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        title="Delete vendor item price"
+        description="This permanently removes the item price from the Vendor Item Master."
+        items={pendingDelete ? [`${pendingDelete.material}${pendingDelete.size_model ? ` (${pendingDelete.size_model})` : ""} — ${pendingDelete.vendor_name}`] : []}
+        busy={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
