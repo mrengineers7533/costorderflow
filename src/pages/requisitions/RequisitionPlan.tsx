@@ -102,6 +102,8 @@ export default function RequisitionPlan() {
   const [orders, setOrders] = useState<Record<string, OrderRecord>>({});
   const [annexures, setAnnexures] = useState<AnnexureRecord[]>([]);
   const [annexureRows, setAnnexureRows] = useState<AnnexureRowRecord[]>([]);
+  const [vendorPrices, setVendorPrices] = useState<VendorItemPrice[]>([]);
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
@@ -196,6 +198,14 @@ export default function RequisitionPlan() {
     ]);
     const rList = (r as RequisitionRecord[]) || [];
     setReqs(rList);
+    // Vendor Item Master + category rules (used for auto-fill / auto-resolve)
+    const [{ data: vip }, { data: rules }] = await Promise.all([
+      sb.from("vendor_item_prices").select("*"),
+      sb.from("rm_category_rules").select("pattern,category,priority,active").eq("active", true),
+    ]);
+    const vipRows = (vip as VendorItemPrice[]) || [];
+    setVendorPrices(vipRows);
+    setCategoryRules((rules as CategoryRule[]) || []);
     const itemsList = (its as RequisitionItemRecord[]) || [];
     let rmList = (rmRows as RequisitionRawMaterialRecord[]) || [];
     setItems(itemsList);
