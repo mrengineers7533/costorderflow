@@ -15,18 +15,19 @@ import {
   parseVendorWorkbook,
   parseVendorItemWorkbook,
   type VendorRow,
-  type VendorItemRow,
+  type VendorItemParsedRow,
 } from "@/lib/vendors/templates";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
 type Kind = "vendors" | "items";
+interface PlanEntry { label: string; id?: string; payload: Record<string, unknown>; issues: string[]; row?: number }
 interface Planned {
   kind: Kind;
   total: number;
-  create: { label: string; payload: Record<string, unknown> }[];
-  update: { label: string; id: string; payload: Record<string, unknown> }[];
+  create: PlanEntry[];
+  update: (PlanEntry & { id: string })[];
   skipped: { row: number; reason: string }[];
 }
 
@@ -35,8 +36,10 @@ interface ImportSummary {
   total: number;
   created: number;
   updated: number;
+  pending: number;
   failed: { label: string; reason: string }[];
   skipped: { row: number; reason: string }[];
+  issues: { row?: number; label: string; reasons: string[] }[];
 }
 
 /** Drop blank/null optional fields so an incomplete sheet never wipes existing data. */
