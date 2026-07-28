@@ -257,18 +257,27 @@ export default function AdminVendorTemplates() {
               <Badge variant="outline">{plan?.total ?? 0} total rows</Badge>
               <Badge className="bg-emerald-600 hover:bg-emerald-600">{plan?.create.length ?? 0} to create</Badge>
               <Badge variant="secondary">{plan?.update.length ?? 0} to update</Badge>
-              <Badge variant="outline">{plan?.skipped.length ?? 0} skipped</Badge>
+              {plan?.kind === "items"
+                ? <Badge variant="destructive">{[...plan.create, ...plan.update].filter((r) => r.issues.length).length} need correction</Badge>
+                : <Badge variant="outline">{plan?.skipped.length ?? 0} skipped</Badge>}
             </div>
+            {plan?.kind === "items" && (
+              <p className="text-muted-foreground">Every Excel row is imported. Rows with problems are saved as <b>Pending</b> with the reason so you can correct them in the Vendor Item Master.</p>
+            )}
             {!!plan?.create.length && (
               <div>
-                <p className="font-medium mb-1">Create</p>
-                <ul className="space-y-0.5 text-muted-foreground">{plan.create.map((r, i) => <li key={i}>{r.label}</li>)}</ul>
+                <p className="font-medium mb-1">Create ({plan.create.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">{plan.create.map((r, i) => (
+                  <li key={i}>{r.label}{r.issues.length ? <span className="text-destructive"> — pending: {r.issues.join("; ")}</span> : null}</li>
+                ))}</ul>
               </div>
             )}
             {!!plan?.update.length && (
               <div>
-                <p className="font-medium mb-1">Update</p>
-                <ul className="space-y-0.5 text-muted-foreground">{plan.update.map((r, i) => <li key={i}>{r.label}</li>)}</ul>
+                <p className="font-medium mb-1">Update ({plan.update.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">{plan.update.map((r, i) => (
+                  <li key={i}>{r.label}{r.issues.length ? <span className="text-destructive"> — pending: {r.issues.join("; ")}</span> : null}</li>
+                ))}</ul>
               </div>
             )}
             {!!plan?.skipped.length && (
