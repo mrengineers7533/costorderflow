@@ -2994,46 +2994,61 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          import_issues: string[]
+          import_status: string
           is_active: boolean
           is_preferred: boolean
-          material: string
+          material: string | null
           notes: string | null
           price: number | null
           size_model: string | null
+          source_file: string | null
+          source_row: Json | null
+          source_row_no: number | null
           unit: string | null
           updated_at: string
           vendor_id: string | null
-          vendor_name: string
+          vendor_name: string | null
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           id?: string
+          import_issues?: string[]
+          import_status?: string
           is_active?: boolean
           is_preferred?: boolean
-          material: string
+          material?: string | null
           notes?: string | null
           price?: number | null
           size_model?: string | null
+          source_file?: string | null
+          source_row?: Json | null
+          source_row_no?: number | null
           unit?: string | null
           updated_at?: string
           vendor_id?: string | null
-          vendor_name: string
+          vendor_name?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string | null
           id?: string
+          import_issues?: string[]
+          import_status?: string
           is_active?: boolean
           is_preferred?: boolean
-          material?: string
+          material?: string | null
           notes?: string | null
           price?: number | null
           size_model?: string | null
+          source_file?: string | null
+          source_row?: Json | null
+          source_row_no?: number | null
           unit?: string | null
           updated_at?: string
           vendor_id?: string | null
-          vendor_name?: string
+          vendor_name?: string | null
         }
         Relationships: [
           {

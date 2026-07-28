@@ -15,18 +15,19 @@ import {
   parseVendorWorkbook,
   parseVendorItemWorkbook,
   type VendorRow,
-  type VendorItemRow,
+  type VendorItemParsedRow,
 } from "@/lib/vendors/templates";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
 type Kind = "vendors" | "items";
+interface PlanEntry { label: string; id?: string; payload: Record<string, unknown>; issues: string[]; row?: number }
 interface Planned {
   kind: Kind;
   total: number;
-  create: { label: string; payload: Record<string, unknown> }[];
-  update: { label: string; id: string; payload: Record<string, unknown> }[];
+  create: PlanEntry[];
+  update: (PlanEntry & { id: string })[];
   skipped: { row: number; reason: string }[];
 }
 
@@ -35,8 +36,10 @@ interface ImportSummary {
   total: number;
   created: number;
   updated: number;
+  pending: number;
   failed: { label: string; reason: string }[];
   skipped: { row: number; reason: string }[];
+  issues: { row?: number; label: string; reasons: string[] }[];
 }
 
 /** Drop blank/null optional fields so an incomplete sheet never wipes existing data. */
@@ -67,13 +70,13 @@ export default function AdminVendorTemplates() {
     const p: Planned = { kind: "vendors", total, create: [], update: [], skipped };
     for (const r of rows) {
       const id = byName.get(k(r.name));
-      if (id) p.update.push({ label: r.name, id, payload: { ...r } });
-      else p.create.push({ label: r.name, payload: { ...r } });
+      if (id) p.update.push({ label: r.name, id, payload: { ...r }, issues: [] });
+      else p.create.push({ label: r.name, payload: { ...r }, issues: [] });
     }
     return p;
   };
 
-  const buildItemPlan = async (rows: VendorItemRow[], skipped: Planned["skipped"], total: number): Promise<Planned> => {
+  const buildItemPlan = async (rows: VendorItemParsedRow[], _skipped: Planned["skipped"], total: number, fileName: string): Promise<Planned> => {
     const [{ data: vendors }, { data: existing }] = await Promise.all([
       sb.from("vendors").select("id,name"),
       sb.from("vendor_item_prices").select("id,vendor_name,material,size_model"),
@@ -84,28 +87,32 @@ export default function AdminVendorTemplates() {
     (existing || []).forEach((e: { id: string; vendor_name: string; material: string; size_model: string | null }) =>
       existingMap.set(`${k(e.vendor_name)}|${k(e.material)}|${k(e.size_model)}`, e.id));
 
-    const p: Planned = { kind: "items", total, create: [], update: [], skipped: [...skipped] };
-    rows.forEach((r, i) => {
+    const p: Planned = { kind: "items", total, create: [], update: [], skipped: [] };
+    rows.forEach((r) => {
       const vendor_id = byName.get(k(r.vendor_name));
-      if (!vendor_id) {
-        p.skipped.push({ row: i + 2, reason: `Vendor "${r.vendor_name}" not found in Vendor Master — upload Vendors first` });
-        return;
-      }
+      const issues = [...r.issues];
+      if (r.vendor_name && !vendor_id) issues.push(`Vendor not found in Vendor Master: "${r.vendor_name}"`);
+      const status = issues.length ? "pending" : "ok";
       const payload = {
-        vendor_id,
+        vendor_id: vendor_id ?? null,
         vendor_name: r.vendor_name,
         material: r.material,
         size_model: r.size_model,
         unit: r.unit,
         price: r.price,
         is_preferred: r.is_preferred,
-        is_active: r.is_active,
+        is_active: status === "ok" ? r.is_active : false,
         notes: r.notes,
+        import_status: status,
+        import_issues: issues,
+        source_row: r.source,
+        source_row_no: r.row_no,
+        source_file: fileName,
       };
-      const label = `${r.material}${r.size_model ? ` (${r.size_model})` : ""} — ${r.vendor_name}`;
+      const label = `Row ${r.row_no}: ${r.material || "(no material)"}${r.size_model ? ` (${r.size_model})` : ""} — ${r.vendor_name || "(no vendor)"}`;
       const id = existingMap.get(`${k(r.vendor_name)}|${k(r.material)}|${k(r.size_model)}`);
-      if (id) p.update.push({ label, id, payload });
-      else p.create.push({ label, payload });
+      if (id && r.vendor_name && r.material) p.update.push({ label, id, payload, issues, row: r.row_no });
+      else p.create.push({ label, payload, issues, row: r.row_no });
     });
     return p;
   };
@@ -119,7 +126,7 @@ export default function AdminVendorTemplates() {
       if (!parsed.rows.length && !parsed.skipped.length) { toast.error("No rows found in the file"); return; }
       const built = kind === "vendors"
         ? await buildVendorPlan(parsed.rows as VendorRow[], parsed.skipped, parsed.total)
-        : await buildItemPlan(parsed.rows as VendorItemRow[], parsed.skipped, parsed.total);
+        : await buildItemPlan(parsed.rows as VendorItemParsedRow[], parsed.skipped, parsed.total, file.name);
       setPlan(built);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not read the file");
@@ -138,20 +145,58 @@ export default function AdminVendorTemplates() {
     const createdBy = u?.user?.id ?? null;
     let created = 0, updated = 0;
     const failed: { label: string; reason: string }[] = [];
+    const isItems = plan.kind === "items";
+    /** Import bookkeeping columns must always be written, even when blank-pruned. */
+    const meta = (payload: Record<string, unknown>) => (isItems
+      ? {
+          import_status: payload.import_status,
+          import_issues: payload.import_issues,
+          source_row: payload.source_row,
+          source_row_no: payload.source_row_no,
+          source_file: payload.source_file,
+          is_active: payload.is_active,
+        }
+      : {});
     for (const row of plan.update) {
-      const patch = pruneBlank(row.payload);
+      const patch = { ...pruneBlank(row.payload), ...meta(row.payload) };
       if (Object.keys(patch).length === 0) { updated++; continue; }
       const { error } = await sb.from(table).update(patch).eq("id", row.id);
       if (error) failed.push({ label: row.label, reason: error.message }); else updated++;
     }
     for (const row of plan.create) {
       const { error } = await sb.from(table).insert({ ...row.payload, created_by: createdBy });
-      if (error) failed.push({ label: row.label, reason: error.message }); else created++;
+      if (!error) { created++; continue; }
+      if (!isItems) { failed.push({ label: row.label, reason: error.message }); continue; }
+      // Never lose an Excel row: retry as an error record holding the original data.
+      const { error: e2 } = await sb.from(table).insert({
+        vendor_name: row.payload.vendor_name || null,
+        material: row.payload.material || null,
+        is_active: false,
+        import_status: "error",
+        import_issues: [...(row.issues || []), `Import error: ${error.message}`],
+        source_row: row.payload.source_row,
+        source_row_no: row.payload.source_row_no,
+        source_file: row.payload.source_file,
+        created_by: createdBy,
+      });
+      if (e2) failed.push({ label: row.label, reason: error.message }); else created++;
     }
+    const withIssues = [...plan.create, ...plan.update].filter((r) => r.issues.length);
+    const pending = withIssues.length;
     setBusy(false);
-    setSummary({ kind: plan.kind, total: plan.total, created, updated, failed, skipped: plan.skipped });
+    setSummary({
+      kind: plan.kind,
+      total: plan.total,
+      created,
+      updated,
+      pending,
+      failed,
+      skipped: plan.skipped,
+      issues: withIssues.map((r) => ({ row: r.row, label: r.label, reasons: r.issues })),
+    });
     setPlan(null);
     if (failed.length) toast.warning(`Imported with ${failed.length} failed row(s)`);
+    else if (pending) toast.success(`Imported — ${created} created, ${updated} updated, ${pending} need correction`);
     else toast.success(`Imported — ${created} created, ${updated} updated`);
   };
 
@@ -212,18 +257,27 @@ export default function AdminVendorTemplates() {
               <Badge variant="outline">{plan?.total ?? 0} total rows</Badge>
               <Badge className="bg-emerald-600 hover:bg-emerald-600">{plan?.create.length ?? 0} to create</Badge>
               <Badge variant="secondary">{plan?.update.length ?? 0} to update</Badge>
-              <Badge variant="outline">{plan?.skipped.length ?? 0} skipped</Badge>
+              {plan?.kind === "items"
+                ? <Badge variant="destructive">{[...plan.create, ...plan.update].filter((r) => r.issues.length).length} need correction</Badge>
+                : <Badge variant="outline">{plan?.skipped.length ?? 0} skipped</Badge>}
             </div>
+            {plan?.kind === "items" && (
+              <p className="text-muted-foreground">Every Excel row is imported. Rows with problems are saved as <b>Pending</b> with the reason so you can correct them in the Vendor Item Master.</p>
+            )}
             {!!plan?.create.length && (
               <div>
-                <p className="font-medium mb-1">Create</p>
-                <ul className="space-y-0.5 text-muted-foreground">{plan.create.map((r, i) => <li key={i}>{r.label}</li>)}</ul>
+                <p className="font-medium mb-1">Create ({plan.create.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">{plan.create.map((r, i) => (
+                  <li key={i}>{r.label}{r.issues.length ? <span className="text-destructive"> — pending: {r.issues.join("; ")}</span> : null}</li>
+                ))}</ul>
               </div>
             )}
             {!!plan?.update.length && (
               <div>
-                <p className="font-medium mb-1">Update</p>
-                <ul className="space-y-0.5 text-muted-foreground">{plan.update.map((r, i) => <li key={i}>{r.label}</li>)}</ul>
+                <p className="font-medium mb-1">Update ({plan.update.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">{plan.update.map((r, i) => (
+                  <li key={i}>{r.label}{r.issues.length ? <span className="text-destructive"> — pending: {r.issues.join("; ")}</span> : null}</li>
+                ))}</ul>
               </div>
             )}
             {!!plan?.skipped.length && (
@@ -252,10 +306,22 @@ export default function AdminVendorTemplates() {
           <div className="text-xs space-y-3 max-h-[55vh] overflow-y-auto">
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{summary?.total ?? 0} total rows</Badge>
-              <Badge className="bg-emerald-600 hover:bg-emerald-600">{summary?.created ?? 0} imported</Badge>
+              <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                {Math.max(0, (summary?.created ?? 0) + (summary?.updated ?? 0) - (summary?.pending ?? 0))} validated
+              </Badge>
+              <Badge variant="secondary">{summary?.created ?? 0} imported</Badge>
               <Badge variant="secondary">{summary?.updated ?? 0} updated</Badge>
-              <Badge variant="destructive">{(summary?.failed.length ?? 0) + (summary?.skipped.length ?? 0)} skipped / failed</Badge>
+              <Badge variant="destructive">{summary?.pending ?? 0} need correction</Badge>
+              {!!summary?.failed.length && <Badge variant="destructive">{summary.failed.length} failed</Badge>}
             </div>
+            {!!summary?.issues.length && (
+              <div>
+                <p className="font-medium mb-1">Rows requiring correction</p>
+                <ul className="space-y-0.5 text-muted-foreground">{summary.issues.map((r, i) => (
+                  <li key={i}>{r.label}: <span className="text-destructive">{r.reasons.join("; ")}</span></li>
+                ))}</ul>
+              </div>
+            )}
             {!!summary?.skipped.length && (
               <div>
                 <p className="font-medium mb-1">Skipped rows</p>
@@ -268,7 +334,7 @@ export default function AdminVendorTemplates() {
                 <ul className="space-y-0.5 text-muted-foreground">{summary.failed.map((r, i) => <li key={i}>{r.label}: {r.reason}</li>)}</ul>
               </div>
             )}
-            <p className="text-muted-foreground">Incomplete records were imported with blank fields — complete them anytime using Edit in the master.</p>
+            <p className="text-muted-foreground">No Excel row was skipped. Incomplete rows were imported as Pending with their original spreadsheet data — open them in the Vendor Item Master, correct the details and save to mark them valid.</p>
           </div>
           <DialogFooter>
             <Button size="sm" onClick={() => setSummary(null)}>Close</Button>

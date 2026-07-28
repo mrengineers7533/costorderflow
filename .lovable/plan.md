@@ -1,32 +1,31 @@
 ## Goal
-Make both masters fully maintainable after upload: per-record Edit and Delete (with confirmation), and an Excel import that never fails as a whole because of blank optional data or one bad row.
+Vendor Item Master Excel upload should never drop a row. Every Excel data row gets saved — good rows as usable prices, problem rows as **Pending / Incomplete** records that carry the exact reason and the original Excel data, editable later.
 
-## 1. Vendor Master (`src/pages/admin/AdminVendors.tsx`)
-- Fix the edit form so uploaded vendors can be corrected:
-  - Replace the three fixed category checkboxes (Steel / Machine / 3P) with a free-text "Categories" field (comma separated), matching what the Excel upload accepts.
-  - Remove the "Pick at least one category" block — only Name stays mandatory; every other field may be saved blank.
-- Add a Delete button per row, using the existing confirmation dialog component (`ConfirmBulkDeleteDialog`) with the vendor name shown. Keep the existing Active/Inactive toggle unchanged.
-- On delete, if the database rejects it because the vendor is referenced by purchase orders/prices, show a clear message suggesting deactivation instead — no cascade, no data loss.
+## 1. Database (one migration)
+Add to `vendor_item_prices`:
+- `import_status` — `ok` (default) / `pending` / `error`
+- `import_issues` — list of reasons (e.g. "Vendor not found", "Price missing", "Invalid price format", "Duplicate vendor-item combination")
+- `source_row` — the original Excel row as-is, plus `source_row_no` (Excel line number) and `source_file` (file name)
+- Relax the "must not be blank" rule on Material and Vendor Name so an incomplete row can still be stored (existing rows unaffected).
 
-## 2. Vendor Item Master (`src/pages/admin/AdminVendorItems.tsx`)
-- Keep the existing Edit dialog; make Vendor selectable by existing vendor OR free text (so item rows whose vendor was typed manually can still be edited), and allow Price to remain blank and be filled later.
-- Load `notes` into the edit form (today it always resets to empty and would wipe remarks on save).
-- Replace the browser `confirm()` delete with the same styled confirmation dialog used elsewhere.
+Pending rows are saved as **inactive**, which is exactly what the existing pricing/auto-fill logic already ignores — so Purchase, Requisition, Annexure, vendor selection and calculations behave exactly as today.
 
-## 3. Import robustness (`src/lib/vendors/templates.ts`, `src/pages/admin/AdminVendorTemplates.tsx`)
-- Parsing:
-  - Vendor rows: only Name is mandatory. Blank optional fields import as blank (not skipped, not overwritten with junk).
-  - Vendor item rows: only Vendor Name + Material mandatory; blank Price, UOM, Size/Model, Notes are allowed.
-  - A non-numeric Price becomes a row-level skip reason, never a file-level failure.
-  - Count total data rows so the summary can report them.
-- Applying the plan:
-  - Insert/update **row by row** instead of one bulk insert, so a single failing row is recorded and the rest still import.
-  - Blank optional cells on update do not erase existing values (only provided values overwrite) — protects already-entered data.
-- Import summary dialog after apply, showing: Total rows, Imported (created), Updated, Skipped/failed, and a row-wise list of reasons. Downloadable as text is not included unless you want it.
+## 2. Parsing (`src/lib/vendors/templates.ts`)
+- No row is ever "skipped". Each non-empty row returns a record plus a list of issues.
+- Issues detected: Vendor Name missing, Material missing, Price missing, Invalid price format, Unit/Size not matched to the vendor's existing entry, Duplicate vendor-item combination inside the same file.
+- Original row values are kept verbatim for later correction.
+
+## 3. Import apply (`src/pages/admin/AdminVendorTemplates.tsx`)
+- Review dialog now shows three buckets: **Will import (valid)**, **Will import as pending (needs correction)**, **Errors** — nothing labelled "skipped".
+- "Vendor not found" becomes a pending reason, not a skip; the typed vendor name is preserved so it can be linked after the vendor is added.
+- Row-by-row insert/update as today; if the database itself rejects a row, it is retried as an `error` record holding the original Excel row, so the data is still never lost.
+- Summary dialog shows: Total Excel rows, Successfully validated, Imported as incomplete/pending, Rows requiring correction, and the row-wise reason list (with Excel row numbers).
+
+## 4. Vendor Item Master page (`src/pages/admin/AdminVendorItems.tsx`)
+- New **Import status** badge column: Valid / Pending / Error, with the reasons shown on hover.
+- Filter chips: All / Valid / Needs correction.
+- Edit dialog gains a read-only "Original Excel row" panel and a **Mark as valid** action: on save, if Vendor, Material and a numeric Price are present, the row is set to `ok` + active and issues are cleared; otherwise it stays pending with refreshed reasons.
+- Existing Add / Edit / Delete / Preferred / Active behaviour is unchanged.
 
 ## Unchanged
-Purchase, Requisition, Annexure, pricing/auto-fill logic, calculations, permissions, notifications and all workflows stay exactly as they are. No migration and no changes to existing stored data.
-
-## Technical notes
-- Files touched: `src/pages/admin/AdminVendors.tsx`, `src/pages/admin/AdminVendorItems.tsx`, `src/pages/admin/AdminVendorTemplates.tsx`, `src/lib/vendors/templates.ts`, reuse of `src/components/common/ConfirmBulkDeleteDialog.tsx`.
-- Deletes use existing table policies on `vendors` / `vendor_item_prices`; no schema or RLS change.
+Vendor Master, Purchase, Requisition, Annexure, vendor selection, pricing rules, calculations, permissions, notifications, workflows, and all existing stored data.
