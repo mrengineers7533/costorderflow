@@ -41,13 +41,13 @@ const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module
 const manufacturingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Create Requisition",  url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
   { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
-  { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
 ];
 
 const purchaseItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
   { title: "Requisition",     url: "/requisitions",           icon: ClipboardCheck, module: "requisitions" },
   { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText,       module: "annexures" },
   { title: "Purchase",        url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
+  { title: "GRN",             url: "/grn",                    icon: PackageCheck,   module: "grn" },
 ];
 
 const isItemActive = (url: string, pathname: string) => {
