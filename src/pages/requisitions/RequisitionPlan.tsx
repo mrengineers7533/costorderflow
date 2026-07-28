@@ -469,6 +469,15 @@ export default function RequisitionPlan() {
     rmIds.forEach((id) => patchRm(id, patch));
   }
 
+  /** Short, stable label for an annexure shown on item rows. */
+  function annexureLabel(id: string): string {
+    const meta = annexureMeta[id];
+    const short = `AX-${id.slice(0, 8).toUpperCase()}`;
+    if (!meta) return short;
+    const lots = (meta.lot_numbers || []).join(", ");
+    return lots ? `${short} • Lot ${lots}` : short;
+  }
+
   // Rows eligible for annexure creation: lot is selected, row not excluded, not already created.
   function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
     if (!c.lot_no) return false;
