@@ -259,6 +259,32 @@ export default function RequisitionPlan() {
         }
       }
     }
+    // Auto-fill Price / Vendor from the Vendor Item Master for rows that
+    // have neither value yet. Values stay fully editable afterwards.
+    if (vipRows.length) {
+      const idx = buildVendorPriceIndex(vipRows);
+      const fills: Array<{ id: string; rm_price: number | null; vendor_name: string | null }> = [];
+      rmList = rmList.map((rm) => {
+        const hasPrice = rm.rm_price != null;
+        const hasVendor = !!(rm.vendor_name && String(rm.vendor_name).trim());
+        if (hasPrice && hasVendor) return rm;
+        const hit = lookupVendorPrice(idx, rm.material, rm.size_model);
+        if (!hit) return rm;
+        const next = {
+          ...rm,
+          rm_price: hasPrice ? rm.rm_price : (hit.price ?? null),
+          vendor_name: hasVendor ? rm.vendor_name : (hit.vendor_name || null),
+        } as RequisitionRawMaterialRecord;
+        if (next.rm_price !== rm.rm_price || next.vendor_name !== rm.vendor_name) {
+          fills.push({ id: rm.id, rm_price: next.rm_price ?? null, vendor_name: next.vendor_name ?? null });
+        }
+        return next;
+      });
+      await Promise.all(fills.map((f) =>
+        sb.from("requisition_raw_materials")
+          .update({ rm_price: f.rm_price, vendor_name: f.vendor_name })
+          .eq("id", f.id)));
+    }
     setRms(rmList);
     const boqIds = Array.from(new Set(rList.map((x) => x.boq_id)));
     const nonNullBoqIds = boqIds.filter(Boolean) as string[];
