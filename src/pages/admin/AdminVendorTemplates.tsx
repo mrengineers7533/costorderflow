@@ -24,10 +24,31 @@ const sb = supabase as any;
 type Kind = "vendors" | "items";
 interface Planned {
   kind: Kind;
+  total: number;
   create: { label: string; payload: Record<string, unknown> }[];
   update: { label: string; id: string; payload: Record<string, unknown> }[];
   skipped: { row: number; reason: string }[];
 }
+
+interface ImportSummary {
+  kind: Kind;
+  total: number;
+  created: number;
+  updated: number;
+  failed: { label: string; reason: string }[];
+  skipped: { row: number; reason: string }[];
+}
+
+/** Drop blank/null optional fields so an incomplete sheet never wipes existing data. */
+const pruneBlank = (payload: Record<string, unknown>) => {
+  const out: Record<string, unknown> = {};
+  for (const [k2, v] of Object.entries(payload)) {
+    if (v === null || v === undefined || v === "") continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    out[k2] = v;
+  }
+  return out;
+};
 
 const k = (s: string | null | undefined) => (s || "").trim().toLowerCase();
 
@@ -37,11 +58,13 @@ export default function AdminVendorTemplates() {
   const vendorInput = useRef<HTMLInputElement>(null);
   const itemInput = useRef<HTMLInputElement>(null);
 
-  const buildVendorPlan = async (rows: VendorRow[], skipped: Planned["skipped"]): Promise<Planned> => {
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+
+  const buildVendorPlan = async (rows: VendorRow[], skipped: Planned["skipped"], total: number): Promise<Planned> => {
     const { data } = await sb.from("vendors").select("id,name");
     const byName = new Map<string, string>();
     (data || []).forEach((v: { id: string; name: string }) => byName.set(k(v.name), v.id));
-    const p: Planned = { kind: "vendors", create: [], update: [], skipped };
+    const p: Planned = { kind: "vendors", total, create: [], update: [], skipped };
     for (const r of rows) {
       const id = byName.get(k(r.name));
       if (id) p.update.push({ label: r.name, id, payload: { ...r } });
@@ -50,7 +73,7 @@ export default function AdminVendorTemplates() {
     return p;
   };
 
-  const buildItemPlan = async (rows: VendorItemRow[], skipped: Planned["skipped"]): Promise<Planned> => {
+  const buildItemPlan = async (rows: VendorItemRow[], skipped: Planned["skipped"], total: number): Promise<Planned> => {
     const [{ data: vendors }, { data: existing }] = await Promise.all([
       sb.from("vendors").select("id,name"),
       sb.from("vendor_item_prices").select("id,vendor_name,material,size_model"),
@@ -61,7 +84,7 @@ export default function AdminVendorTemplates() {
     (existing || []).forEach((e: { id: string; vendor_name: string; material: string; size_model: string | null }) =>
       existingMap.set(`${k(e.vendor_name)}|${k(e.material)}|${k(e.size_model)}`, e.id));
 
-    const p: Planned = { kind: "items", create: [], update: [], skipped: [...skipped] };
+    const p: Planned = { kind: "items", total, create: [], update: [], skipped: [...skipped] };
     rows.forEach((r, i) => {
       const vendor_id = byName.get(k(r.vendor_name));
       if (!vendor_id) {
@@ -95,8 +118,8 @@ export default function AdminVendorTemplates() {
       const parsed = kind === "vendors" ? parseVendorWorkbook(buf) : parseVendorItemWorkbook(buf);
       if (!parsed.rows.length && !parsed.skipped.length) { toast.error("No rows found in the file"); return; }
       const built = kind === "vendors"
-        ? await buildVendorPlan(parsed.rows as VendorRow[], parsed.skipped)
-        : await buildItemPlan(parsed.rows as VendorItemRow[], parsed.skipped);
+        ? await buildVendorPlan(parsed.rows as VendorRow[], parsed.skipped, parsed.total)
+        : await buildItemPlan(parsed.rows as VendorItemRow[], parsed.skipped, parsed.total);
       setPlan(built);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not read the file");
@@ -114,18 +137,21 @@ export default function AdminVendorTemplates() {
     const { data: u } = await supabase.auth.getUser();
     const createdBy = u?.user?.id ?? null;
     let created = 0, updated = 0;
-    const errors: string[] = [];
+    const failed: { label: string; reason: string }[] = [];
     for (const row of plan.update) {
-      const { error } = await sb.from(table).update(row.payload).eq("id", row.id);
-      if (error) errors.push(`${row.label}: ${error.message}`); else updated++;
+      const patch = pruneBlank(row.payload);
+      if (Object.keys(patch).length === 0) { updated++; continue; }
+      const { error } = await sb.from(table).update(patch).eq("id", row.id);
+      if (error) failed.push({ label: row.label, reason: error.message }); else updated++;
     }
-    if (plan.create.length) {
-      const { error } = await sb.from(table).insert(plan.create.map((c) => ({ ...c.payload, created_by: createdBy })));
-      if (error) errors.push(error.message); else created = plan.create.length;
+    for (const row of plan.create) {
+      const { error } = await sb.from(table).insert({ ...row.payload, created_by: createdBy });
+      if (error) failed.push({ label: row.label, reason: error.message }); else created++;
     }
     setBusy(false);
+    setSummary({ kind: plan.kind, total: plan.total, created, updated, failed, skipped: plan.skipped });
     setPlan(null);
-    if (errors.length) toast.error(`Imported with errors: ${errors.slice(0, 3).join(" | ")}`);
+    if (failed.length) toast.warning(`Imported with ${failed.length} failed row(s)`);
     else toast.success(`Imported — ${created} created, ${updated} updated`);
   };
 
