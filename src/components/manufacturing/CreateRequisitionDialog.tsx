@@ -104,7 +104,21 @@ export function CreateRequisitionDialog({ open, onOpenChange, boq }: Props) {
       const oaId = (boq as { source_order_id?: string }).source_order_id || boq.order_id;
       if (oaId) {
         const { data: o } = await supabase.from("orders").select("*").eq("id", oaId).maybeSingle();
-        setOrder((o as unknown as OrderRecord) || null);
+        let resolved = (o as unknown as OrderRecord) || null;
+        // Prefer the latest (current) revision of the same OA family so the
+        // Make reflects the newest linked OA revision.
+        if (resolved) {
+          const rootId = (resolved as { parent_order_id?: string }).parent_order_id || resolved.id;
+          const { data: latest } = await supabase
+            .from("orders").select("*")
+            .or(`id.eq.${rootId},parent_order_id.eq.${rootId}`)
+            .eq("is_current", true)
+            .order("revision", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latest) resolved = latest as unknown as OrderRecord;
+        }
+        setOrder(resolved);
       }
       // Load whole master so we can fuzzy match against Column A
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
