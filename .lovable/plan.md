@@ -1,38 +1,32 @@
-# Vendor Templates — download & bulk upload
+## Goal
+Make both masters fully maintainable after upload: per-record Edit and Delete (with confirmation), and an Excel import that never fails as a whole because of blank optional data or one bad row.
 
-Add one new Admin page that hosts both Excel templates (Vendor Master and Vendor Item Master), with download and upload in the same place.
+## 1. Vendor Master (`src/pages/admin/AdminVendors.tsx`)
+- Fix the edit form so uploaded vendors can be corrected:
+  - Replace the three fixed category checkboxes (Steel / Machine / 3P) with a free-text "Categories" field (comma separated), matching what the Excel upload accepts.
+  - Remove the "Pick at least one category" block — only Name stays mandatory; every other field may be saved blank.
+- Add a Delete button per row, using the existing confirmation dialog component (`ConfirmBulkDeleteDialog`) with the vendor name shown. Keep the existing Active/Inactive toggle unchanged.
+- On delete, if the database rejects it because the vendor is referenced by purchase orders/prices, show a clear message suggesting deactivation instead — no cascade, no data loss.
 
-## New page
+## 2. Vendor Item Master (`src/pages/admin/AdminVendorItems.tsx`)
+- Keep the existing Edit dialog; make Vendor selectable by existing vendor OR free text (so item rows whose vendor was typed manually can still be edited), and allow Price to remain blank and be filled later.
+- Load `notes` into the edit form (today it always resets to empty and would wipe remarks on save).
+- Replace the browser `confirm()` delete with the same styled confirmation dialog used elsewhere.
 
-- Route `/admin/vendor-templates`, added to the admin tab bar as **Vendor Templates** (next to Vendors / Vendor Item Master).
-- Two cards on the page:
-  1. **Vendor Master** — Download template / Upload filled file
-  2. **Vendor Item Master** — Download template / Upload filled file
-- Each card shows the expected columns and a short instruction list.
+## 3. Import robustness (`src/lib/vendors/templates.ts`, `src/pages/admin/AdminVendorTemplates.tsx`)
+- Parsing:
+  - Vendor rows: only Name is mandatory. Blank optional fields import as blank (not skipped, not overwritten with junk).
+  - Vendor item rows: only Vendor Name + Material mandatory; blank Price, UOM, Size/Model, Notes are allowed.
+  - A non-numeric Price becomes a row-level skip reason, never a file-level failure.
+  - Count total data rows so the summary can report them.
+- Applying the plan:
+  - Insert/update **row by row** instead of one bulk insert, so a single failing row is recorded and the rest still import.
+  - Blank optional cells on update do not erase existing values (only provided values overwrite) — protects already-entered data.
+- Import summary dialog after apply, showing: Total rows, Imported (created), Updated, Skipped/failed, and a row-wise list of reasons. Downloadable as text is not included unless you want it.
 
-## Templates (generated client-side with the existing `xlsx` library, same style as the Requisition template)
-
-**Vendor_Master_Template.xlsx** — sheet "Vendors" + "Instructions"
-Columns: Name*, Categories (comma separated: steel / machine / 3p)*, GSTIN, State Code, Address, Contact Person, Phone, Email, Payment Terms, Active (Yes/No)
-
-**Vendor_Item_Master_Template.xlsx** — sheet "Vendor Items" + "Instructions"
-Columns: Vendor Name*, Material*, Size/Model, UOM, Price, Preferred (Yes/No), Active (Yes/No), Notes
-
-Both include 2–3 sample rows and column widths.
-
-## Upload behaviour
-
-- Accepts `.xlsx` / `.xls`, parsed in the browser; headers matched case-insensitively, extra columns ignored.
-- Validation before writing: required fields present, price numeric, categories limited to steel/machine/3p, Yes/No fields parsed loosely.
-- Preview step: a dialog lists rows to be **created**, rows to be **updated**, and rows **skipped with reasons**; nothing is written until the user confirms.
-- Matching rules for update-vs-create:
-  - Vendors: match on Name (case-insensitive).
-  - Vendor items: match on Vendor Name + Material + Size/Model (case-insensitive).
-- Vendor items resolve `vendor_id` from an existing vendor with the same name; if no vendor exists the row is skipped with a clear reason (so the user uploads Vendors first).
-- Result toast + a summary table of created/updated/skipped counts after the run.
+## Unchanged
+Purchase, Requisition, Annexure, pricing/auto-fill logic, calculations, permissions, notifications and all workflows stay exactly as they are. No migration and no changes to existing stored data.
 
 ## Technical notes
-
-- New files: `src/pages/admin/AdminVendorTemplates.tsx`, `src/lib/vendors/templates.ts` (template builders + parser/validator).
-- Route registered in `src/App.tsx` under the existing admin/RequireAdmin wrapper; tab added in `src/components/admin/AdminTabs.tsx`.
-- Writes go through the existing `vendors` and `vendor_item_prices` tables via the current client — no schema change, no migration, no change to existing add/edit dialogs or downstream pricing logic.
+- Files touched: `src/pages/admin/AdminVendors.tsx`, `src/pages/admin/AdminVendorItems.tsx`, `src/pages/admin/AdminVendorTemplates.tsx`, `src/lib/vendors/templates.ts`, reuse of `src/components/common/ConfirmBulkDeleteDialog.tsx`.
+- Deletes use existing table policies on `vendors` / `vendor_item_prices`; no schema or RLS change.
