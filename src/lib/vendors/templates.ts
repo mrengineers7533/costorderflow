@@ -48,6 +48,16 @@ export interface VendorItemRow {
   notes: string | null;
 }
 
+/** A vendor-item row as parsed, together with any validation issues found. */
+export interface VendorItemParsedRow extends VendorItemRow {
+  /** Excel line number (header = 1). */
+  row_no: number;
+  /** Human readable reasons this row cannot be used as-is. Empty = valid. */
+  issues: string[];
+  /** Verbatim Excel cell values so the row can be corrected later. */
+  source: Record<string, string>;
+}
+
 export interface ParseResult<T> {
   rows: T[];
   skipped: { row: number; reason: string }[];
