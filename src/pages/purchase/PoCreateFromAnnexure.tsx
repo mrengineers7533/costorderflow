@@ -466,7 +466,6 @@ export default function PoCreateFromAnnexure() {
                 <th className="px-2 py-2 border-r text-left">Material</th>
                 <th className="px-2 py-2 border-r text-left">Size</th>
                 <th className="px-2 py-2 border-r text-left">Make</th>
-                <th className="px-2 py-2 border-r text-left">RM Type</th>
                 <th className="px-2 py-2 border-r text-right">Qty</th>
                 <th className="px-2 py-2 border-r text-left">UOM</th>
                 <th className="px-2 py-2 border-r text-left">Due On</th>
@@ -494,7 +493,6 @@ export default function PoCreateFromAnnexure() {
                     <td className="px-2 py-1.5 border-r">{r.material}</td>
                     <td className="px-2 py-1.5 border-r">{r.size_model || "—"}</td>
                     <td className="px-2 py-1.5 border-r">{r.make || "—"}</td>
-                    <td className="px-2 py-1.5 border-r">{rawMaterialTypeLabel((r as { raw_material_type?: string | null }).raw_material_type)}</td>
                     <td className="px-2 py-1.5 border-r text-right">{fmtQty2(r.total_qty)}</td>
                     <td className="px-2 py-1.5 border-r">{r.unit || "—"}</td>
                     <td className="px-2 py-1.5 border-r">
