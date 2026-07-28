@@ -334,7 +334,7 @@ export default function AdminVendorTemplates() {
                 <ul className="space-y-0.5 text-muted-foreground">{summary.failed.map((r, i) => <li key={i}>{r.label}: {r.reason}</li>)}</ul>
               </div>
             )}
-            <p className="text-muted-foreground">Incomplete records were imported with blank fields — complete them anytime using Edit in the master.</p>
+            <p className="text-muted-foreground">No Excel row was skipped. Incomplete rows were imported as Pending with their original spreadsheet data — open them in the Vendor Item Master, correct the details and save to mark them valid.</p>
           </div>
           <DialogFooter>
             <Button size="sm" onClick={() => setSummary(null)}>Close</Button>
