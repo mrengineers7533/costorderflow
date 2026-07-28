@@ -306,10 +306,22 @@ export default function AdminVendorTemplates() {
           <div className="text-xs space-y-3 max-h-[55vh] overflow-y-auto">
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{summary?.total ?? 0} total rows</Badge>
-              <Badge className="bg-emerald-600 hover:bg-emerald-600">{summary?.created ?? 0} imported</Badge>
+              <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                {Math.max(0, (summary?.created ?? 0) + (summary?.updated ?? 0) - (summary?.pending ?? 0))} validated
+              </Badge>
+              <Badge variant="secondary">{summary?.created ?? 0} imported</Badge>
               <Badge variant="secondary">{summary?.updated ?? 0} updated</Badge>
-              <Badge variant="destructive">{(summary?.failed.length ?? 0) + (summary?.skipped.length ?? 0)} skipped / failed</Badge>
+              <Badge variant="destructive">{summary?.pending ?? 0} need correction</Badge>
+              {!!summary?.failed.length && <Badge variant="destructive">{summary.failed.length} failed</Badge>}
             </div>
+            {!!summary?.issues.length && (
+              <div>
+                <p className="font-medium mb-1">Rows requiring correction</p>
+                <ul className="space-y-0.5 text-muted-foreground">{summary.issues.map((r, i) => (
+                  <li key={i}>{r.label}: <span className="text-destructive">{r.reasons.join("; ")}</span></li>
+                ))}</ul>
+              </div>
+            )}
             {!!summary?.skipped.length && (
               <div>
                 <p className="font-medium mb-1">Skipped rows</p>
