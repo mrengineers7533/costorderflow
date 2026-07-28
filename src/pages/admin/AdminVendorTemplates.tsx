@@ -145,20 +145,58 @@ export default function AdminVendorTemplates() {
     const createdBy = u?.user?.id ?? null;
     let created = 0, updated = 0;
     const failed: { label: string; reason: string }[] = [];
+    const isItems = plan.kind === "items";
+    /** Import bookkeeping columns must always be written, even when blank-pruned. */
+    const meta = (payload: Record<string, unknown>) => (isItems
+      ? {
+          import_status: payload.import_status,
+          import_issues: payload.import_issues,
+          source_row: payload.source_row,
+          source_row_no: payload.source_row_no,
+          source_file: payload.source_file,
+          is_active: payload.is_active,
+        }
+      : {});
     for (const row of plan.update) {
-      const patch = pruneBlank(row.payload);
+      const patch = { ...pruneBlank(row.payload), ...meta(row.payload) };
       if (Object.keys(patch).length === 0) { updated++; continue; }
       const { error } = await sb.from(table).update(patch).eq("id", row.id);
       if (error) failed.push({ label: row.label, reason: error.message }); else updated++;
     }
     for (const row of plan.create) {
       const { error } = await sb.from(table).insert({ ...row.payload, created_by: createdBy });
-      if (error) failed.push({ label: row.label, reason: error.message }); else created++;
+      if (!error) { created++; continue; }
+      if (!isItems) { failed.push({ label: row.label, reason: error.message }); continue; }
+      // Never lose an Excel row: retry as an error record holding the original data.
+      const { error: e2 } = await sb.from(table).insert({
+        vendor_name: row.payload.vendor_name || null,
+        material: row.payload.material || null,
+        is_active: false,
+        import_status: "error",
+        import_issues: [...(row.issues || []), `Import error: ${error.message}`],
+        source_row: row.payload.source_row,
+        source_row_no: row.payload.source_row_no,
+        source_file: row.payload.source_file,
+        created_by: createdBy,
+      });
+      if (e2) failed.push({ label: row.label, reason: error.message }); else created++;
     }
+    const withIssues = [...plan.create, ...plan.update].filter((r) => r.issues.length);
+    const pending = withIssues.length;
     setBusy(false);
-    setSummary({ kind: plan.kind, total: plan.total, created, updated, failed, skipped: plan.skipped });
+    setSummary({
+      kind: plan.kind,
+      total: plan.total,
+      created,
+      updated,
+      pending,
+      failed,
+      skipped: plan.skipped,
+      issues: withIssues.map((r) => ({ row: r.row, label: r.label, reasons: r.issues })),
+    });
     setPlan(null);
     if (failed.length) toast.warning(`Imported with ${failed.length} failed row(s)`);
+    else if (pending) toast.success(`Imported — ${created} created, ${updated} updated, ${pending} need correction`);
     else toast.success(`Imported — ${created} created, ${updated} updated`);
   };
 
