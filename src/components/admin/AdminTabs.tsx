@@ -11,6 +11,7 @@ const tabs = [
   { to: "/admin/raw-materials", label: "Raw Materials" },
   { to: "/admin/vendors", label: "Vendors" },
   { to: "/admin/vendor-items", label: "Vendor Item Master" },
+  { to: "/admin/vendor-templates", label: "Vendor Templates" },
   { to: "/admin/notifications", label: "Notifications" },
   { to: "/admin/email-audit", label: "Email Audit" },
   { to: "/admin/email-settings", label: "Email Settings" },
