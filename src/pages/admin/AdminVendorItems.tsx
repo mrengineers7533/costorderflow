@@ -163,7 +163,12 @@ export default function AdminVendorItems() {
     <div className="container mx-auto px-4 lg:px-6 py-5">
       <AdminTabs title="Vendor Item Master" description="Vendor-wise item prices used to auto-fill Price / Vendor on requisitions." />
       <div className="flex items-center justify-between gap-2 mb-3">
-        <Input className="h-8 max-w-xs" placeholder="Search material / vendor…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="flex items-center gap-2">
+          <Input className="h-8 max-w-xs" placeholder="Search material / vendor…" value={q} onChange={(e) => setQ(e.target.value)} />
+          {([["all", "All"], ["valid", "Valid"], ["pending", `Needs correction${pendingCount ? ` (${pendingCount})` : ""}`]] as [StatusFilter, string][]).map(([v, label]) => (
+            <Button key={v} size="sm" variant={statusFilter === v ? "default" : "outline"} className="h-8" onClick={() => setStatusFilter(v)}>{label}</Button>
+          ))}
+        </div>
         <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />Add item price</Button>
       </div>
       <Card>
@@ -181,18 +186,19 @@ export default function AdminVendorItems() {
                   <th className="text-right py-2 px-2">Price</th>
                   <th className="text-left py-2 px-2">Preferred</th>
                   <th className="text-left py-2 px-2">Status</th>
+                  <th className="text-left py-2 px-2">Import status</th>
                   <th className="text-left py-2 px-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">No vendor item prices yet.</td></tr>
+                  <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">No vendor item prices yet.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-b last:border-0">
-                    <td className="py-2 px-2 font-medium">{r.material}</td>
+                    <td className="py-2 px-2 font-medium">{r.material || <span className="text-muted-foreground">—</span>}</td>
                     <td className="py-2 px-2 text-xs">{r.size_model || "—"}</td>
                     <td className="py-2 px-2 text-xs">{r.unit || "—"}</td>
-                    <td className="py-2 px-2 text-xs">{r.vendor_name}</td>
+                    <td className="py-2 px-2 text-xs">{r.vendor_name || "—"}</td>
                     <td className="py-2 px-2 text-right text-xs">
                       {r.price == null ? "—" : Number(r.price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
@@ -205,6 +211,20 @@ export default function AdminVendorItems() {
                       {r.is_active !== false
                         ? <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">Active</Badge>
                         : <Badge variant="outline" className="text-[10px]">Inactive</Badge>}
+                    </td>
+                    <td className="py-2 px-2">
+                      {(r.import_status || "ok") === "ok" ? (
+                        <Badge variant="secondary" className="text-[10px]">Valid</Badge>
+                      ) : (
+                        <Badge
+                          variant="destructive"
+                          className="text-[10px] cursor-help"
+                          title={(r.import_issues || []).join("\n")}
+                        >
+                          {r.import_status === "error" ? "Import error" : "Pending"}
+                          {r.source_row_no ? ` · row ${r.source_row_no}` : ""}
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-2 px-2">
                       <div className="flex gap-1">
