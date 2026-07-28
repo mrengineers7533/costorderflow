@@ -1,5 +1,13 @@
 import type { LineItem } from "@/lib/orders/types";
 
+/** Resolve the Make shown for an OA line item: the verbatim label when
+ *  present, otherwise the raw OA make code (MR / GMS / OTHER) as-is. */
+function oaMake(it: LineItem): string {
+  const lbl = (it.make_label || "").trim();
+  if (lbl) return lbl;
+  return (it.make || "").trim();
+}
+
 /** Build a resolver that returns the best Make string for a BOQ item.
  *  Priority:
  *   1. `boqItem.make` (trimmed)
@@ -17,7 +25,7 @@ export function buildMakeResolver(orderLineItems: LineItem[] | null | undefined)
   items.forEach((it) => {
     const model = (it.model || it.hsn_code || "").toString();
     const k = `${norm(it.description)}|${norm(model)}`;
-    const m = (it.make_label || "").trim();
+    const m = oaMake(it);
     if (m && !byKey.has(k)) byKey.set(k, m);
   });
 
@@ -31,7 +39,7 @@ export function buildMakeResolver(orderLineItems: LineItem[] | null | undefined)
     const hit = byKey.get(k);
     if (hit) return hit;
     if (typeof index === "number" && index >= 0 && index < items.length) {
-      return (items[index].make_label || "").trim();
+      return oaMake(items[index]);
     }
     return "";
   };
