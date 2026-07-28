@@ -493,23 +493,42 @@ export default function RequisitionPlan() {
       toast({ title: "No rows selected", description: "Pick at least one Lot with rows to include.", variant: "destructive" });
       return;
     }
-    const missing = eligible.filter((c) => !c.lot_no || !c.plan_status);
-    if (missing.length > 0) {
-      const m = missing[0];
-      const where = [
-        m.lot_no ? `Lot ${m.lot_no}` : "no Lot",
-        m.material,
-        m.size_model || "",
-      ].filter(Boolean).join(" • ");
+    // Auto-resolve a missing RM Category from the row's stored category or
+    // the keyword rules; rows that still can't be resolved are skipped
+    // instead of blocking the whole annexure.
+    const rmById = new Map(rms.map((x) => [x.id, x]));
+    const resolved = eligible.map((c) => {
+      if (c.lot_no && c.plan_status) return { row: c, status: c.plan_status };
+      if (!c.lot_no) return { row: c, status: null as PlanStatus | null };
+      const src = c.sourceRmIds.map((id) => rmById.get(id)).find(Boolean) as
+        | (RequisitionRawMaterialRecord & { material_category?: string | null })
+        | undefined;
+      const fromStored = planStatusFromCategory(src?.material_category ?? null);
+      const auto = fromStored ?? planStatusFromCategory(
+        resolveMaterialCategory({
+          material: c.material,
+          sizeModel: c.size_model,
+          rules: categoryRules,
+        }).category,
+      );
+      return { row: c, status: (auto as PlanStatus | null) ?? null };
+    });
+    const usable = resolved.filter((x) => x.status && x.row.lot_no);
+    const skipped = resolved.length - usable.length;
+    if (usable.length === 0) {
       toast({
-        title: "Status required",
-        description:
-          `${missing.length} selected row(s) have no Status. Set a Status on the Generated Requisition tab for: ${where}.`,
+        title: "RM Category required",
+        description: "None of the selected rows have an RM Category that can be resolved. Set RM Category on the Generated Requisition tab.",
         variant: "destructive",
       });
       return;
     }
-    const lots = Array.from(new Set(eligible.map((c) => c.lot_no!).filter(Boolean)));
+    // Persist auto-resolved categories back onto the source rows.
+    usable.forEach((x) => {
+      if (!x.row.plan_status) bulkPatch(x.row.sourceRmIds, { plan_status: x.status as PlanStatus });
+    });
+    const eligibleResolved = usable.map((x) => ({ ...x.row, plan_status: x.status as PlanStatus }));
+    const lots = Array.from(new Set(eligibleResolved.map((c) => c.lot_no!).filter(Boolean)));
     const { data: { user } } = await supabase.auth.getUser();
     const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
       requisition_ids: ids,
@@ -517,7 +536,7 @@ export default function RequisitionPlan() {
       created_by: user?.id ?? null,
     }).select("*").maybeSingle();
     if (e1 || !ax) { toast({ title: "Create failed", description: e1?.message, variant: "destructive" }); return; }
-    const rows = eligible.map((c) => ({
+    const rows = eligibleResolved.map((c) => ({
       annexure_id: (ax as AnnexureRecord).id,
       lot_no: c.lot_no!,
       plan_status: c.plan_status!,
@@ -532,7 +551,7 @@ export default function RequisitionPlan() {
     const { data: axRows, error: e2 } = await sb.from("requisition_annexure_rows").insert(rows).select("*");
     if (e2) { toast({ title: "Create failed", description: e2.message, variant: "destructive" }); return; }
     // Mark contributing raw materials as annexure_status='created'
-    const contributingRmIds = Array.from(new Set(eligible.flatMap((c) => c.sourceRmIds)));
+    const contributingRmIds = Array.from(new Set(eligibleResolved.flatMap((c) => c.sourceRmIds)));
     const newAxId = (ax as AnnexureRecord).id;
     const { error: e3 } = await sb.from("requisition_raw_materials")
       .update({ annexure_status: "created", annexure_id: newAxId })
@@ -544,9 +563,17 @@ export default function RequisitionPlan() {
     setAnnexures((p) => [ax as AnnexureRecord, ...p]);
     setAnnexureRows((axRows as AnnexureRowRecord[]) || []);
     setActiveAnnexureId((ax as AnnexureRecord).id);
+    setAnnexureMeta((p) => ({
+      ...p,
+      [newAxId]: { created_at: (ax as AnnexureRecord).created_at, lot_numbers: lots },
+    }));
     setSelectedLots(new Set());
     setExcludedRowKeys(new Set());
-    toast({ title: "Annexure created", description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).` });
+    toast({
+      title: "Annexure created",
+      description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).`
+        + (skipped > 0 ? ` ${skipped} row(s) skipped — no RM Category.` : ""),
+    });
     setTab("reports");
   }
 
