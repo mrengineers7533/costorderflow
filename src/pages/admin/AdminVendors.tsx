@@ -24,11 +24,13 @@ interface Vendor {
   phone: string | null;
   email: string | null;
   payment_terms: string | null;
+  notes: string | null;
   is_active: boolean;
 }
 
 const emptyForm = {
   name: "", address: "", gstin: "", state_code: "", contact_person: "", phone: "", email: "", payment_terms: "NEFT/RTGS",
+  notes: "",
   cat_steel: false, cat_machine: false, cat_3p: false,
 };
 
@@ -54,6 +56,7 @@ export default function AdminVendors() {
       name: v.name, address: v.address || "", gstin: v.gstin || "", state_code: v.state_code || "",
       contact_person: v.contact_person || "", phone: v.phone || "", email: v.email || "",
       payment_terms: v.payment_terms || "",
+      notes: v.notes || "",
       cat_steel: v.categories.includes("steel"),
       cat_machine: v.categories.includes("machine"),
       cat_3p: v.categories.includes("3p"),
@@ -73,6 +76,7 @@ export default function AdminVendors() {
       address: form.address.trim() || null, gstin: form.gstin.trim() || null, state_code: form.state_code.trim() || null,
       contact_person: form.contact_person.trim() || null, phone: form.phone.trim() || null,
       email: form.email.trim() || null, payment_terms: form.payment_terms.trim() || null,
+      notes: form.notes.trim() || null,
     };
     if (editing) {
       const { error } = await sb.from("vendors").update(payload).eq("id", editing.id);
@@ -114,12 +118,14 @@ export default function AdminVendors() {
                   <th className="text-left py-2 px-2">Email</th>
                   <th className="text-left py-2 px-2">Phone</th>
                   <th className="text-left py-2 px-2">Status</th>
+                  <th className="text-left py-2 px-2">Address</th>
+                  <th className="text-left py-2 px-2">Remarks</th>
                   <th className="text-left py-2 px-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {vendors.length === 0 ? (
-                  <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">No vendors yet.</td></tr>
+                  <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">No vendors yet.</td></tr>
                 ) : vendors.map((v) => (
                   <tr key={v.id} className="border-b last:border-0">
                     <td className="py-2 px-2 font-medium">{v.name}</td>
@@ -137,6 +143,8 @@ export default function AdminVendors() {
                         ? <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">Active</Badge>
                         : <Badge variant="outline" className="text-[10px]">Inactive</Badge>}
                     </td>
+                    <td className="py-2 px-2 text-xs max-w-[220px] truncate" title={v.address || ""}>{v.address || "—"}</td>
+                    <td className="py-2 px-2 text-xs max-w-[220px] truncate" title={v.notes || ""}>{v.notes || "—"}</td>
                     <td className="py-2 px-2">
                       <div className="flex gap-1">
                         <Button size="sm" variant="outline" className="h-7" onClick={() => startEdit(v)}><Pencil className="h-3 w-3" /></Button>
@@ -173,6 +181,7 @@ export default function AdminVendors() {
             </div>
             <div><Label>Email</Label><Input className="h-8" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div><Label>Payment terms</Label><Input className="h-8" value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} /></div>
+            <div><Label>Remarks</Label><Input className="h-8" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
