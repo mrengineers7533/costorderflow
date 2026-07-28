@@ -209,6 +209,7 @@ export default function AdminVendorTemplates() {
           </DialogHeader>
           <div className="text-xs space-y-3 max-h-[55vh] overflow-y-auto">
             <div className="flex gap-2">
+              <Badge variant="outline">{plan?.total ?? 0} total rows</Badge>
               <Badge className="bg-emerald-600 hover:bg-emerald-600">{plan?.create.length ?? 0} to create</Badge>
               <Badge variant="secondary">{plan?.update.length ?? 0} to update</Badge>
               <Badge variant="outline">{plan?.skipped.length ?? 0} skipped</Badge>
@@ -237,6 +238,40 @@ export default function AdminVendorTemplates() {
             <Button size="sm" disabled={busy || !((plan?.create.length ?? 0) + (plan?.update.length ?? 0))} onClick={applyPlan}>
               Confirm import
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!summary} onOpenChange={(o) => !o && setSummary(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Import summary — {summary?.kind === "vendors" ? "Vendor Master" : "Vendor Item Master"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs space-y-3 max-h-[55vh] overflow-y-auto">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{summary?.total ?? 0} total rows</Badge>
+              <Badge className="bg-emerald-600 hover:bg-emerald-600">{summary?.created ?? 0} imported</Badge>
+              <Badge variant="secondary">{summary?.updated ?? 0} updated</Badge>
+              <Badge variant="destructive">{(summary?.failed.length ?? 0) + (summary?.skipped.length ?? 0)} skipped / failed</Badge>
+            </div>
+            {!!summary?.skipped.length && (
+              <div>
+                <p className="font-medium mb-1">Skipped rows</p>
+                <ul className="space-y-0.5 text-muted-foreground">{summary.skipped.map((r, i) => <li key={i}>Row {r.row}: {r.reason}</li>)}</ul>
+              </div>
+            )}
+            {!!summary?.failed.length && (
+              <div>
+                <p className="font-medium mb-1">Failed rows</p>
+                <ul className="space-y-0.5 text-muted-foreground">{summary.failed.map((r, i) => <li key={i}>{r.label}: {r.reason}</li>)}</ul>
+              </div>
+            )}
+            <p className="text-muted-foreground">Incomplete records were imported with blank fields — complete them anytime using Edit in the master.</p>
+          </div>
+          <DialogFooter>
+            <Button size="sm" onClick={() => setSummary(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
