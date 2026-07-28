@@ -44,10 +44,10 @@ const manufacturingItems: { title: string; url: string; icon: typeof LayoutGrid;
 ];
 
 const purchaseItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Requisition",     url: "/requisitions",           icon: ClipboardCheck, module: "requisitions" },
-  { title: "Annexure Folder", url: "/requisitions/annexures", icon: FileText,       module: "annexures" },
-  { title: "Purchase",        url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
-  { title: "GRN",             url: "/grn",                    icon: PackageCheck,   module: "grn" },
+  { title: "Purchase Requisition", url: "/requisitions",           icon: ClipboardCheck, module: "requisitions" },
+  { title: "Annexure Folder",      url: "/requisitions/annexures", icon: FileText,       module: "annexures" },
+  { title: "Purchase",             url: "/purchase",               icon: ShoppingCart,   module: "purchase" },
+  { title: "GRN",                  url: "/grn",                    icon: PackageCheck,   module: "grn" },
 ];
 
 const isItemActive = (url: string, pathname: string) => {
