@@ -104,6 +104,7 @@ export default function RequisitionPlan() {
   const [annexureRows, setAnnexureRows] = useState<AnnexureRowRecord[]>([]);
   const [vendorPrices, setVendorPrices] = useState<VendorItemPrice[]>([]);
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+  const [annexureMeta, setAnnexureMeta] = useState<Record<string, { created_at: string; lot_numbers: string[] }>>({});
   const [activeAnnexureId, setActiveAnnexureId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("generated");
@@ -286,6 +287,19 @@ export default function RequisitionPlan() {
           .eq("id", f.id)));
     }
     setRms(rmList);
+    // Labels for the item-wise Annexure column
+    const axIds = Array.from(new Set(rmList.map((x) => x.annexure_id).filter(Boolean) as string[]));
+    if (axIds.length) {
+      const { data: axMeta } = await sb
+        .from("requisition_annexures")
+        .select("id,created_at,lot_numbers")
+        .in("id", axIds);
+      const meta: Record<string, { created_at: string; lot_numbers: string[] }> = {};
+      ((axMeta as Array<{ id: string; created_at: string; lot_numbers: string[] }>) || []).forEach((a) => {
+        meta[a.id] = { created_at: a.created_at, lot_numbers: a.lot_numbers || [] };
+      });
+      setAnnexureMeta(meta);
+    }
     const boqIds = Array.from(new Set(rList.map((x) => x.boq_id)));
     const nonNullBoqIds = boqIds.filter(Boolean) as string[];
     if (nonNullBoqIds.length) {
