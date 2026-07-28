@@ -248,17 +248,48 @@ Deno.serve(async (req) => {
         fg_make: editedByBoqItem.get(String(it.id))?.fg_make ?? null,
       }));
       const { data: insertedItems, error: itErr } = await admin
-        .from("requisition_items").insert(rows).select("id, boq_item_id, model_number, description, quantity");
+        .from("requisition_items").insert(rows)
+        .select("id, boq_item_id, item_no, model_number, description, quantity, unit, remarks, fg_make");
       if (itErr) throw itErr;
 
       // Generate raw material rows per inserted item
       const rmRows: Array<Record<string, unknown>> = [];
+      // Build a complete-FG 3P purchase line for a Direct Purchase Finish Good.
+      // deno-lint-ignore no-explicit-any
+      function directPurchaseRow(ri: any, fgQty: number, extra?: {
+        rm_price?: number | null; vendor_name?: string | null; remarks?: string | null;
+      }) {
+        return {
+          requisition_id: created.id,
+          requisition_item_id: ri.id,
+          model_number: ri.model_number,
+          make: ri.fg_make ?? null,
+          material: ri.description || ri.model_number || "Finish Good",
+          size_model: ri.model_number ?? null,
+          qty_per_unit: 1,
+          fg_quantity: fgQty,
+          required_qty: fgQty,
+          unit: ri.unit ?? null,
+          source: "direct_purchase_fg",
+          purchase_status: "pending",
+          raw_material_type: "3rd Party",
+          material_category: "3P",
+          material_category_source: "manual",
+          notes: `Direct Purchase Finish Good · ${oaNumber || boq.reference_oa_number || ""} · BOQ ${boq.boq_number || ""}`.trim(),
+          remarks: extra?.remarks ?? ri.remarks ?? null,
+          rm_price: extra?.rm_price ?? null,
+          vendor_name: extra?.vendor_name ?? null,
+        };
+      }
       // deno-lint-ignore no-explicit-any
       for (const ri of (insertedItems as any[]) || []) {
         const fgQty = Number(ri.quantity) || 0;
         const edited = editedByBoqItem.get(String(ri.boq_item_id));
         if (edited) {
-          if (edited.is_direct_purchase) continue;
+          if (edited.is_direct_purchase) {
+            rmRows.push(directPurchaseRow(ri, fgQty, edited.direct_purchase ?? undefined));
+            continue;
+          }
           for (const rm of (edited.raw_materials || [])) {
             if (!rm || !rm.material) continue;
             const per = Number(rm.qty_per_unit) || 0;
@@ -318,7 +349,8 @@ Deno.serve(async (req) => {
           }
           raw_material_count += mapping.raw_materials.length;
         } else if (mapping && mapping.is_direct_purchase) {
-          // Direct purchase FG: no RM generated
+          // Direct purchase FG: no raw materials — route the complete FG to 3P.
+          rmRows.push(directPurchaseRow(ri, fgQty));
           continue;
         } else {
           // Unmapped — placeholder so Purchase sees the gap
