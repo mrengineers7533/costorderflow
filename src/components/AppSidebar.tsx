@@ -39,7 +39,7 @@ const bottomItems: { title: string; url: string; icon: typeof LayoutGrid; module
 ];
 
 const manufacturingItems: { title: string; url: string; icon: typeof LayoutGrid; module: ModuleKey }[] = [
-  { title: "Manufacturing",       url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
+  { title: "Create Requisition",  url: "/manufacturing",          icon: Factory,        module: "manufacturing" },
   { title: "Raw Material Master", url: "/raw-materials",          icon: Boxes,          module: "raw_materials" },
   { title: "GRN",                 url: "/grn",                    icon: PackageCheck,   module: "grn" },
 ];
@@ -264,7 +264,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                     >
                       <span className={`flex items-center gap-2 ${collapsed ? "w-full justify-center" : ""}`}>
                         <Factory className="h-[18px] w-[18px] shrink-0" strokeWidth={1.8} />
-                        {!collapsed && <span className="text-sm">Manufacturing</span>}
+                        {!collapsed && <span className="text-sm">Create Requisition</span>}
                       </span>
                       {!collapsed && (
                         <span>
