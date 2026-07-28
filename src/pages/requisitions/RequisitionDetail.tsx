@@ -567,7 +567,7 @@ async function loadLatestApprovedBoqForFamily(currentBoq: BoqRecord): Promise<Bo
                 </thead>
                 <tbody>
                   {rmGroups.length === 0 ? (
-                    <tr><td colSpan={14} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
+                    <tr><td colSpan={13} className="py-4 text-center text-muted-foreground">No raw materials generated.</td></tr>
                    ) : rmGroups.flatMap((g) => {
                      const it = g.item;
                      const model = it?.model_number || g.fgLabel;
