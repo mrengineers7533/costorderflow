@@ -924,15 +924,14 @@ export default function RequisitionPlan() {
                     <th className="text-left py-2 px-2 border-r">UOM</th>
                     <th className="text-right py-2 px-2 border-r">Total Qty</th>
                     <th className="text-left py-2 px-2 border-r">Lot</th>
-                    <th className="text-left py-2 px-2 border-r">Status</th>
-                    <th className="text-left py-2 px-2 border-r">RM Type</th>
+                    <th className="text-left py-2 px-2 border-r">RM Category</th>
                     <th className="text-left py-2 px-2 border-r">Source Req(s)</th>
                     <th className="text-left py-2 px-2">Annexure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidated.length === 0 ? (
-                    <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
+                    <tr><td colSpan={10} className="py-4 text-center text-muted-foreground">No raw materials.</td></tr>
                   ) : consolidated.map((c) => {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
@@ -985,7 +984,6 @@ export default function RequisitionPlan() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="py-2 px-2 border-r text-xs">{rawMaterialTypeLabel(c.raw_material_type)}</td>
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
