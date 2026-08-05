@@ -610,6 +610,16 @@ export default function RequisitionPlan() {
   }
 
   async function forwardToPurchase() {
+    const missing = groups.filter((g) => !g.rms.some((r) => (r.lot_no || "").trim()) || g.rms.some((r) => !(r.lot_no || "").trim()));
+    if (missing.length) {
+      const g = missing[0];
+      toast({
+        title: "Lot Number required",
+        description: `Please enter the Lot Number for Finished Good '${g.fgLabel}' before forwarding.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const { error } = await sb.from("requisitions").update({ status: "in_purchase" }).in("id", ids);
     if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Forwarded to Purchase", description: `${ids.length} requisition(s) marked in_purchase.` });
