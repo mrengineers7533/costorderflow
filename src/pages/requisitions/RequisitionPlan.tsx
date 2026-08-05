@@ -999,6 +999,7 @@ export default function RequisitionPlan() {
                   ) : consolidated.map((c) => {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
+                    const pending = !created && (!c.lot_no || !c.plan_status);
                     const lotSelected = c.lot_no ? selectedLots.has(c.lot_no) : false;
                     const rowChecked = !created && (selectedRowKeys.has(c.key) || (lotSelected && !excludedRowKeys.has(c.key)));
                     return (
@@ -1006,7 +1007,7 @@ export default function RequisitionPlan() {
                       <td className="py-2 px-2 border-r">
                         <Checkbox
                           checked={rowChecked}
-                          disabled={created || !c.lot_no}
+                          disabled={created || !c.lot_no || !c.plan_status}
                           onCheckedChange={(v) => {
                             if (lotSelected) {
                               setExcludedRowKeys((prev) => {
@@ -1063,12 +1064,11 @@ export default function RequisitionPlan() {
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
-                            <button className="text-[10px] underline text-muted-foreground" onClick={() => reincludeRow(c)}>Re-include</button>
-                          </div>
+                          <span className="text-[11px] font-medium text-muted-foreground">Annexure Created</span>
                         ) : partial ? (
                           <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                        ) : pending ? (
+                          <span className="text-[11px] text-muted-foreground">Pending — Lot / RM Category required</span>
                         ) : (
                           <span className="text-[11px] text-muted-foreground">—</span>
                         )}
