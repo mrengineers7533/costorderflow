@@ -558,7 +558,10 @@ export default function RequisitionPlan() {
           rules: categoryRules,
         }).category,
       );
-      return { row: c, status: (auto as PlanStatus | null) ?? null };
+      return {
+        row: c,
+        status: (auto as PlanStatus | null) ?? inferPlanStatus(c.material, c.size_model),
+      };
     });
     const usable = resolved.filter((x) => x.status && x.row.lot_no);
     const skipped = resolved.length - usable.length;
