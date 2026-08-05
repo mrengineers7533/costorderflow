@@ -101,6 +101,21 @@ function toMergedCategory(s: PlanStatus | null | undefined): string {
   if (s === "sheet_ms" || s === "sheet_ss") return MERGED_SHEET;
   return s || "";
 }
+
+/**
+ * Last-resort RM Category inference from the material / size text so that
+ * annexure creation never hard-blocks on unmapped rows. Only used when the
+ * row has no stored plan_status and no category rule matched.
+ */
+function inferPlanStatus(material: string, sizeModel?: string | null): PlanStatus {
+  const t = `${material || ""} ${sizeModel || ""}`.toUpperCase();
+  if (/\bGI\b/.test(t) && /SHEET|PLATE|COIL/.test(t)) return "sheet_gi";
+  if (/SHEET|PLATE|COIL/.test(t)) return /\bSS\b|STAINLESS|304|316/.test(t) ? "sheet_ss" : "sheet_ms";
+  if (/PIPE|TUBE/.test(t)) return "pipe";
+  if (/ANGLE|CHANNEL|BEAM|FLAT|ISMC|ISMB|SQUARE BAR|ROUND BAR|STRUCTURE/.test(t)) return "structure";
+  if (/MOTOR|MACHINE|BLOWER|FAN|PUMP|GEAR/.test(t)) return "machine";
+  return "3p";
+}
 /** Resolve a merged selection back to a concrete stored plan_status. */
 function fromMergedCategory(v: string, current: PlanStatus | null | undefined, material: string): PlanStatus {
   if (v !== MERGED_SHEET) return v as PlanStatus;
@@ -543,7 +558,10 @@ export default function RequisitionPlan() {
           rules: categoryRules,
         }).category,
       );
-      return { row: c, status: (auto as PlanStatus | null) ?? null };
+      return {
+        row: c,
+        status: (auto as PlanStatus | null) ?? inferPlanStatus(c.material, c.size_model),
+      };
     });
     const usable = resolved.filter((x) => x.status && x.row.lot_no);
     const skipped = resolved.length - usable.length;
