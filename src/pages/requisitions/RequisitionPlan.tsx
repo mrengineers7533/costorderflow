@@ -1056,13 +1056,17 @@ export default function RequisitionPlan() {
                       </td>
                       <td className="py-2 px-2 border-r">
                         <Select
-                          value={c.plan_status || ""}
-                          onValueChange={(v) => bulkPatch(c.sourceRmIds, { plan_status: v as PlanStatus })}
+                          value={toMergedCategory(c.plan_status as PlanStatus | null)}
+                          onValueChange={(v) =>
+                            bulkPatch(c.sourceRmIds, {
+                              plan_status: fromMergedCategory(v, c.plan_status as PlanStatus | null, c.material),
+                            })
+                          }
                         >
                           <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
-                            {ACTIVE_STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                            {MERGED_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                             ))}
                             {c.plan_status === "steel" && (
                               <SelectItem value="steel">Steel (legacy)</SelectItem>
