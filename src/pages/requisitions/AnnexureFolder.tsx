@@ -402,6 +402,10 @@ export default function AnnexureFolder() {
 
       {isAdmin && (
         <div className="flex items-center justify-end gap-2">
+          <span />
+        </div>
+      )}
+      {false && <span />}
           <span className="text-[11px] text-muted-foreground mr-auto">
             {selected.size > 0 ? `${selected.size} annexure(s) selected` : `${filteredAnnexures.length} annexure(s) shown`}
           </span>
