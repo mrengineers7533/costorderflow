@@ -212,6 +212,13 @@ export default function RequisitionPlan() {
     setRms((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionRawMaterialRecord : x));
     queuePatch("requisition_raw_materials", id, patch as Record<string, unknown>);
   }
+  /** Apply one Lot number to every RM row of a single Finished Good group. */
+  function setGroupLot(rows: { id: string; lot_no: string | null }[], lot: string | null) {
+    rows.forEach((r) => {
+      if ((r.lot_no || null) === lot) return;
+      patchRm(r.id, { lot_no: lot } as Partial<RequisitionRawMaterialRecord>);
+    });
+  }
 
   async function load() {
     if (ids.length === 0) { setLoading(false); return; }
