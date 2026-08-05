@@ -400,12 +400,25 @@ export default function AnnexureFolder() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="py-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total PO Items</p>
+            <p className="text-xl font-semibold">{poProgress.total}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">PO Created</p>
+            <p className="text-xl font-semibold text-primary">{poProgress.created}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Balance Pending</p>
+            <p className="text-xl font-semibold text-destructive">{poProgress.balance}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {isAdmin && (
         <div className="flex items-center justify-end gap-2">
-          <span />
-        </div>
-      )}
-      {false && <span />}
           <span className="text-[11px] text-muted-foreground mr-auto">
             {selected.size > 0 ? `${selected.size} annexure(s) selected` : `${filteredAnnexures.length} annexure(s) shown`}
           </span>
