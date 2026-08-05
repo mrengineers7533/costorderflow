@@ -42,11 +42,21 @@ export function VendorCombobox({ category, value, onChange }: Props) {
   };
   useEffect(() => { load(); }, []);
 
-  const filtered = vendors.filter((v) => {
-    if (!v.categories.includes(category)) return false;
-    if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  // Vendor categories are free text (bulk uploads bring their own labels), so
+  // never hide vendors that simply don't carry this exact category tag —
+  // matching vendors are listed first, everything else stays selectable.
+  const matchesCategory = (v: Vendor) => (v.categories || []).includes(category);
+  const filtered = vendors
+    .filter((v) => {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        v.name.toLowerCase().includes(q) ||
+        (v.email || "").toLowerCase().includes(q) ||
+        (v.categories || []).some((c) => c.toLowerCase().includes(q))
+      );
+    })
+    .sort((a, b) => Number(matchesCategory(b)) - Number(matchesCategory(a)) || a.name.localeCompare(b.name));
 
   return (
     <>
@@ -66,7 +76,7 @@ export function VendorCombobox({ category, value, onChange }: Props) {
           />
           <div className="max-h-56 overflow-auto space-y-1">
             {filtered.length === 0 ? (
-              <p className="text-xs text-muted-foreground p-2">No vendors for {category}.</p>
+              <p className="text-xs text-muted-foreground p-2">No vendors found.</p>
             ) : filtered.map((v) => (
               <button
                 key={v.id}
@@ -77,6 +87,9 @@ export function VendorCombobox({ category, value, onChange }: Props) {
                 <span>
                   <span className="font-medium">{v.name}</span>
                   {v.email && <span className="text-muted-foreground"> · {v.email}</span>}
+                  {!matchesCategory(v) && (v.categories || []).length > 0 && (
+                    <span className="text-muted-foreground"> · {v.categories.join(", ")}</span>
+                  )}
                 </span>
                 {value?.id === v.id && <Check className="h-3 w-3" />}
               </button>
