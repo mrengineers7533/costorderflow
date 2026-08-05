@@ -77,6 +77,8 @@ export default function AnnexureFolder() {
   const [rows, setRows] = useState<AnnexureRowRecord[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  // PO status per source raw-material id (drives the PO progress summary)
+  const [rmPo, setRmPo] = useState<Record<string, { po_status: string | null; po_id: string | null }>>({});
 
   // Filters
   const [q, setQ] = useState("");
@@ -144,6 +146,26 @@ export default function AnnexureFolder() {
   }
   useEffect(() => { load(); }, []);
 
+  // Load PO linkage for every raw-material referenced by the loaded annexure rows.
+  useEffect(() => {
+    const rmIds = Array.from(new Set(rows.flatMap((r) => r.source_rm_ids || [])));
+    if (rmIds.length === 0) { setRmPo({}); return; }
+    let alive = true;
+    (async () => {
+      const map: Record<string, { po_status: string | null; po_id: string | null }> = {};
+      for (let i = 0; i < rmIds.length; i += 500) {
+        const { data } = await sb
+          .from("requisition_raw_materials")
+          .select("id, po_status, po_id")
+          .in("id", rmIds.slice(i, i + 500));
+        ((data as Array<{ id: string; po_status: string | null; po_id: string | null }>) || [])
+          .forEach((x) => { map[x.id] = { po_status: x.po_status, po_id: x.po_id }; });
+      }
+      if (alive) setRmPo(map);
+    })();
+    return () => { alive = false; };
+  }, [rows]);
+
   const entries: FolderEntry[] = useMemo(() => {
     const out: FolderEntry[] = [];
     annexures.forEach((a) => {
@@ -206,6 +228,22 @@ export default function AnnexureFolder() {
     });
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
+
+  // PO progress across eligible (non-cancelled) annexure rows in the current filter.
+  const poProgress = useMemo(() => {
+    const ids = new Set<string>();
+    filtered.forEach((e) => {
+      const status = (e.annexure.status as string | undefined) || "active";
+      if (status === "cancelled") return;
+      e.rows.forEach((r) => (r.source_rm_ids || []).forEach((id) => ids.add(id)));
+    });
+    let created = 0;
+    ids.forEach((id) => {
+      const st = rmPo[id];
+      if (st && st.po_status === "created" && st.po_id) created += 1;
+    });
+    return { total: ids.size, created, balance: ids.size - created };
+  }, [filtered, rmPo]);
 
   async function cancelAnnexure(a: AnnexureRecord) {
     if (!window.confirm(`Cancel annexure created on ${new Date(a.created_at).toLocaleString("en-IN")}? Related rows will be marked as Cancelled and freed for a new annexure.`)) return;
