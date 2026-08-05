@@ -528,8 +528,9 @@ export default function RequisitionPlan() {
 
   // Rows can be selected individually or through their lot. An explicitly
   // unchecked row remains excluded from a selected lot.
-  function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
+  function isRowSelected(c: { key: string; lot_no: string | null; plan_status: PlanStatus | null; annexureCount: number; sourceRmIds: string[] }) {
     if (!c.lot_no) return false;
+    if (!c.plan_status) return false; // RM Category must be filled
     if (c.annexureCount >= c.sourceRmIds.length) return false; // fully created already
     if (selectedRowKeys.has(c.key)) return true;
     return selectedLots.has(c.lot_no) && !excludedRowKeys.has(c.key);
@@ -538,47 +539,14 @@ export default function RequisitionPlan() {
   async function createAnnexure() {
     const eligible = consolidated.filter(isRowSelected);
     if (eligible.length === 0) {
-      toast({ title: "No rows selected", description: "Select an individual row or at least one Lot.", variant: "destructive" });
-      return;
-    }
-    // Auto-resolve a missing RM Category from the row's stored category or
-    // the keyword rules; rows that still can't be resolved are skipped
-    // instead of blocking the whole annexure.
-    const rmById = new Map(rms.map((x) => [x.id, x]));
-    const resolved = eligible.map((c) => {
-      if (c.lot_no && c.plan_status) return { row: c, status: c.plan_status };
-      if (!c.lot_no) return { row: c, status: null as PlanStatus | null };
-      const src = c.sourceRmIds.map((id) => rmById.get(id)).find(Boolean) as
-        | (RequisitionRawMaterialRecord & { material_category?: string | null })
-        | undefined;
-      const fromStored = planStatusFromCategory(src?.material_category ?? null);
-      const auto = fromStored ?? planStatusFromCategory(
-        resolveMaterialCategory({
-          material: c.material,
-          sizeModel: c.size_model,
-          rules: categoryRules,
-        }).category,
-      );
-      return {
-        row: c,
-        status: (auto as PlanStatus | null) ?? inferPlanStatus(c.material, c.size_model),
-      };
-    });
-    const usable = resolved.filter((x) => x.status && x.row.lot_no);
-    const skipped = resolved.length - usable.length;
-    if (usable.length === 0) {
       toast({
-        title: "RM Category required",
-        description: "None of the selected rows have an RM Category that can be resolved. Set RM Category on the Generated Requisition tab.",
+        title: "No eligible rows selected",
+        description: "An annexure can only be created for rows that have both a Lot Number and an RM Category filled in.",
         variant: "destructive",
       });
       return;
     }
-    // Persist auto-resolved categories back onto the source rows.
-    usable.forEach((x) => {
-      if (!x.row.plan_status) bulkPatch(x.row.sourceRmIds, { plan_status: x.status as PlanStatus });
-    });
-    const eligibleResolved = usable.map((x) => ({ ...x.row, plan_status: x.status as PlanStatus }));
+    const eligibleResolved = eligible.map((c) => ({ ...c, plan_status: c.plan_status as PlanStatus }));
     const lots = Array.from(new Set(eligibleResolved.map((c) => c.lot_no!).filter(Boolean)));
     const { data: { user } } = await supabase.auth.getUser();
     const { data: ax, error: e1 } = await sb.from("requisition_annexures").insert({
@@ -623,19 +591,9 @@ export default function RequisitionPlan() {
     setExcludedRowKeys(new Set());
     toast({
       title: "Annexure created",
-      description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).`
-        + (skipped > 0 ? ` ${skipped} row(s) skipped — no RM Category.` : ""),
+      description: `${rows.length} consolidated row(s) across ${lots.length} lot(s).`,
     });
     setTab("reports");
-  }
-
-  async function reincludeRow(c: ConsRow) {
-    if (!window.confirm("Clear the 'Annexure Created' status on this row so it can be included in a new annexure? (The existing saved annexure won't be deleted.)")) return;
-    const { error } = await sb.from("requisition_raw_materials")
-      .update({ annexure_status: null, annexure_id: null })
-      .in("id", c.sourceRmIds);
-    if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
-    setRms((prev) => prev.map((x) => c.sourceRmIds.includes(x.id) ? { ...x, annexure_status: null, annexure_id: null } : x));
   }
 
   async function forwardToPurchase() {
@@ -987,13 +945,15 @@ export default function RequisitionPlan() {
                 const lotsAvailable = Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]));
                 const hasNoLotRows = consolidated.some((c) => !c.lot_no);
                 const eligibleCount = consolidated.filter(isRowSelected).length;
+                const eligibleTotal = consolidated.filter((c) =>
+                  c.lot_no && c.plan_status && c.annexureCount < c.sourceRmIds.length).length;
                 return (
                   <div className="mb-3 rounded border bg-muted/30 p-2.5 text-xs">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="font-medium text-foreground">Select Lot(s) or individual row(s):</span>
                       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setSelectedLots(new Set(lotsAvailable))}>Select all</Button>
                       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setSelectedRowKeys(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
-                      <span className="ml-auto text-muted-foreground">{eligibleCount} row(s) eligible</span>
+                      <span className="ml-auto text-muted-foreground">{eligibleCount} of {eligibleTotal} eligible row(s) selected</span>
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {lotsAvailable.length === 0 ? (
@@ -1041,6 +1001,7 @@ export default function RequisitionPlan() {
                   ) : consolidated.map((c) => {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
+                    const pending = !created && (!c.lot_no || !c.plan_status);
                     const lotSelected = c.lot_no ? selectedLots.has(c.lot_no) : false;
                     const rowChecked = !created && (selectedRowKeys.has(c.key) || (lotSelected && !excludedRowKeys.has(c.key)));
                     return (
@@ -1048,7 +1009,7 @@ export default function RequisitionPlan() {
                       <td className="py-2 px-2 border-r">
                         <Checkbox
                           checked={rowChecked}
-                          disabled={created || !c.lot_no}
+                          disabled={created || !c.lot_no || !c.plan_status}
                           onCheckedChange={(v) => {
                             if (lotSelected) {
                               setExcludedRowKeys((prev) => {
@@ -1105,12 +1066,11 @@ export default function RequisitionPlan() {
                       <td className="py-2 px-2 border-r text-xs text-muted-foreground">{c.sourceReqNos.join(", ")}</td>
                       <td className="py-2 px-2">
                         {created ? (
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="secondary" className="text-[10px]">Annexure Created</Badge>
-                            <button className="text-[10px] underline text-muted-foreground" onClick={() => reincludeRow(c)}>Re-include</button>
-                          </div>
+                          <span className="text-[11px] font-medium text-muted-foreground">Annexure Created</span>
                         ) : partial ? (
                           <Badge variant="outline" className="text-[10px]">Partial</Badge>
+                        ) : pending ? (
+                          <span className="text-[11px] text-muted-foreground">Pending — Lot / RM Category required</span>
                         ) : (
                           <span className="text-[11px] text-muted-foreground">—</span>
                         )}
