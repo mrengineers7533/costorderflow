@@ -397,7 +397,7 @@ export default function RequisitionPlan() {
   }
 
   // Build flat generated rows grouped by (reqId, fgItemId)
-  type Group = { reqNo: string; item: RequisitionItemRecord | null; fgLabel: string; rms: RequisitionRawMaterialRecord[] };
+  type Group = { reqNo: string; item: RequisitionItemRecord | null; fgLabel: string; fgName: string; fgCode: string; rms: RequisitionRawMaterialRecord[] };
   const groups: Group[] = useMemo(() => {
     const order: string[] = [];
     const buckets = new Map<string, Group>();
@@ -412,6 +412,8 @@ export default function RequisitionPlan() {
           reqNo,
           item: it,
           fgLabel: it?.model_number || it?.description || rm.model_number || "—",
+          fgName: it?.description || rm.material_description || it?.model_number || rm.model_number || "—",
+          fgCode: it?.model_number || rm.model_number || "",
           rms: [],
         };
         buckets.set(key, g);
