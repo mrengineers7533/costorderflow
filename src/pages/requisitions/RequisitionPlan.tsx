@@ -412,7 +412,7 @@ export default function RequisitionPlan() {
           reqNo,
           item: it,
           fgLabel: it?.model_number || it?.description || rm.model_number || "—",
-          fgName: it?.description || rm.material_description || it?.model_number || rm.model_number || "—",
+          fgName: it?.description || it?.model_number || rm.model_number || "—",
           fgCode: it?.model_number || rm.model_number || "",
           rms: [],
         };
