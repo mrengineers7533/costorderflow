@@ -77,6 +77,8 @@ export default function AnnexureFolder() {
   const [rows, setRows] = useState<AnnexureRowRecord[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  // PO status per source raw-material id (drives the PO progress summary)
+  const [rmPo, setRmPo] = useState<Record<string, { po_status: string | null; po_id: string | null }>>({});
 
   // Filters
   const [q, setQ] = useState("");
@@ -144,6 +146,26 @@ export default function AnnexureFolder() {
   }
   useEffect(() => { load(); }, []);
 
+  // Load PO linkage for every raw-material referenced by the loaded annexure rows.
+  useEffect(() => {
+    const rmIds = Array.from(new Set(rows.flatMap((r) => r.source_rm_ids || [])));
+    if (rmIds.length === 0) { setRmPo({}); return; }
+    let alive = true;
+    (async () => {
+      const map: Record<string, { po_status: string | null; po_id: string | null }> = {};
+      for (let i = 0; i < rmIds.length; i += 500) {
+        const { data } = await sb
+          .from("requisition_raw_materials")
+          .select("id, po_status, po_id")
+          .in("id", rmIds.slice(i, i + 500));
+        ((data as Array<{ id: string; po_status: string | null; po_id: string | null }>) || [])
+          .forEach((x) => { map[x.id] = { po_status: x.po_status, po_id: x.po_id }; });
+      }
+      if (alive) setRmPo(map);
+    })();
+    return () => { alive = false; };
+  }, [rows]);
+
   const entries: FolderEntry[] = useMemo(() => {
     const out: FolderEntry[] = [];
     annexures.forEach((a) => {
@@ -206,6 +228,22 @@ export default function AnnexureFolder() {
     });
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
+
+  // PO progress across eligible (non-cancelled) annexure rows in the current filter.
+  const poProgress = useMemo(() => {
+    const ids = new Set<string>();
+    filtered.forEach((e) => {
+      const status = (e.annexure.status as string | undefined) || "active";
+      if (status === "cancelled") return;
+      e.rows.forEach((r) => (r.source_rm_ids || []).forEach((id) => ids.add(id)));
+    });
+    let created = 0;
+    ids.forEach((id) => {
+      const st = rmPo[id];
+      if (st && st.po_status === "created" && st.po_id) created += 1;
+    });
+    return { total: ids.size, created, balance: ids.size - created };
+  }, [filtered, rmPo]);
 
   async function cancelAnnexure(a: AnnexureRecord) {
     if (!window.confirm(`Cancel annexure created on ${new Date(a.created_at).toLocaleString("en-IN")}? Related rows will be marked as Cancelled and freed for a new annexure.`)) return;
@@ -358,6 +396,23 @@ export default function AnnexureFolder() {
           <Input className="h-8 md:col-span-2" placeholder="Created by (name/email)" value={createdByQ} onChange={(e) => setCreatedByQ(e.target.value)} />
           <div className="md:col-span-4 flex items-center text-muted-foreground">
             {filtered.length} of {entries.length} annexure entries
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="py-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total PO Items</p>
+            <p className="text-xl font-semibold">{poProgress.total}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">PO Created</p>
+            <p className="text-xl font-semibold text-primary">{poProgress.created}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Balance Pending</p>
+            <p className="text-xl font-semibold text-destructive">{poProgress.balance}</p>
           </div>
         </CardContent>
       </Card>
