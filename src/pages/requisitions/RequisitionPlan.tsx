@@ -772,7 +772,9 @@ export default function RequisitionPlan() {
                         {idx === 0 && (
                           <>
                             <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
-                              <div className="text-[10px] text-muted-foreground mb-0.5">[{g.reqNo}]</div>
+                              <div className="text-sm font-semibold leading-tight">{g.fgName}</div>
+                              {g.fgCode && <div className="text-[10px] text-muted-foreground">Code: {g.fgCode}</div>}
+                              <div className="text-[10px] text-muted-foreground mb-0.5">Requisition: {g.reqNo}</div>
                               {g.item ? (
                                 <Input
                                   className="h-7 w-44 text-sm"
@@ -785,6 +787,15 @@ export default function RequisitionPlan() {
                                   }}
                                 />
                               ) : <span className="text-sm">{g.fgLabel}</span>}
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                <span className="text-[10px] text-muted-foreground">Lot:</span>
+                                <Input
+                                  key={`lot-${g.rms.map((x) => x.lot_no || "").join("|")}`}
+                                  className="h-7 w-20 text-sm"
+                                  defaultValue={g.rms.find((x) => (x.lot_no || "").trim())?.lot_no || ""}
+                                  onBlur={(e) => setGroupLot(g.rms, e.target.value.trim() || null)}
+                                />
+                              </div>
                             </td>
                             <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
                               {g.item ? (
