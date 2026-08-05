@@ -879,24 +879,25 @@ export default function RequisitionPlan() {
                         </td>
                         <td className="py-2 px-1 border-r">
                           <Input
-                            className="h-7 w-24 text-sm"
-                            defaultValue={r.lot_no || ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim() || null;
-                              if ((r.lot_no || null) === v) return;
-                              patchRm(r.id, { lot_no: v });
-                            }}
+                            className="h-7 w-24 text-sm bg-muted/50"
+                            value={r.lot_no || ""}
+                            readOnly
+                            title="Set the Lot number once on the Finished Good group"
                           />
                         </td>
                         <td className="py-2 px-1 border-r">
                           <Select
-                            value={r.plan_status || ""}
-                            onValueChange={(v) => patchRm(r.id, { plan_status: v as PlanStatus })}
+                            value={toMergedCategory(r.plan_status as PlanStatus | null)}
+                            onValueChange={(v) =>
+                              patchRm(r.id, {
+                                plan_status: fromMergedCategory(v, r.plan_status as PlanStatus | null, r.material),
+                              })
+                            }
                           >
                             <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
-                              {ACTIVE_STATUSES.map((s) => (
-                                <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                              {MERGED_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                               ))}
                               {r.plan_status === "steel" && (
                                 <SelectItem value="steel">Steel (legacy)</SelectItem>
