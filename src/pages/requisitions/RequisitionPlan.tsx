@@ -945,13 +945,15 @@ export default function RequisitionPlan() {
                 const lotsAvailable = Array.from(new Set(consolidated.map((c) => c.lot_no).filter(Boolean) as string[]));
                 const hasNoLotRows = consolidated.some((c) => !c.lot_no);
                 const eligibleCount = consolidated.filter(isRowSelected).length;
+                const eligibleTotal = consolidated.filter((c) =>
+                  c.lot_no && c.plan_status && c.annexureCount < c.sourceRmIds.length).length;
                 return (
                   <div className="mb-3 rounded border bg-muted/30 p-2.5 text-xs">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="font-medium text-foreground">Select Lot(s) or individual row(s):</span>
                       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setSelectedLots(new Set(lotsAvailable))}>Select all</Button>
                       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setSelectedRowKeys(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
-                      <span className="ml-auto text-muted-foreground">{eligibleCount} row(s) eligible</span>
+                      <span className="ml-auto text-muted-foreground">{eligibleCount} of {eligibleTotal} eligible row(s) selected</span>
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {lotsAvailable.length === 0 ? (
