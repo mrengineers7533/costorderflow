@@ -85,6 +85,29 @@ const REPORT_TITLE: Record<PlanStatus, string> = {
   steel: "Steel List (legacy)",
 };
 
+// --- RM Category display merge: MS + SS sheets show as a single "Sheet" ---
+// Display-only. Stored plan_status keeps sheet_ms / sheet_ss so annexure
+// bucketing, reports and downstream pages are unchanged.
+const MERGED_SHEET = "sheet";
+const MERGED_OPTIONS: { value: string; label: string }[] = [
+  { value: "machine", label: "Machine" },
+  { value: "3p", label: "3P / Third Party" },
+  { value: "pipe", label: "Pipe" },
+  { value: MERGED_SHEET, label: "Sheet" },
+  { value: "sheet_gi", label: "Sheet GI" },
+  { value: "structure", label: "Structure" },
+];
+function toMergedCategory(s: PlanStatus | null | undefined): string {
+  if (s === "sheet_ms" || s === "sheet_ss") return MERGED_SHEET;
+  return s || "";
+}
+/** Resolve a merged selection back to a concrete stored plan_status. */
+function fromMergedCategory(v: string, current: PlanStatus | null | undefined, material: string): PlanStatus {
+  if (v !== MERGED_SHEET) return v as PlanStatus;
+  if (current === "sheet_ms" || current === "sheet_ss") return current;
+  return /\bss\b|stainless/i.test(material || "") ? "sheet_ss" : "sheet_ms";
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
@@ -188,6 +211,13 @@ export default function RequisitionPlan() {
   function patchRm(id: string, patch: Partial<RequisitionRawMaterialRecord>) {
     setRms((prev) => prev.map((x) => x.id === id ? { ...x, ...patch } as RequisitionRawMaterialRecord : x));
     queuePatch("requisition_raw_materials", id, patch as Record<string, unknown>);
+  }
+  /** Apply one Lot number to every RM row of a single Finished Good group. */
+  function setGroupLot(rows: { id: string; lot_no?: string | null }[], lot: string | null) {
+    rows.forEach((r) => {
+      if ((r.lot_no || null) === lot) return;
+      patchRm(r.id, { lot_no: lot } as Partial<RequisitionRawMaterialRecord>);
+    });
   }
 
   async function load() {
@@ -374,7 +404,7 @@ export default function RequisitionPlan() {
   }
 
   // Build flat generated rows grouped by (reqId, fgItemId)
-  type Group = { reqNo: string; item: RequisitionItemRecord | null; fgLabel: string; rms: RequisitionRawMaterialRecord[] };
+  type Group = { reqNo: string; item: RequisitionItemRecord | null; fgLabel: string; fgName: string; fgCode: string; rms: RequisitionRawMaterialRecord[] };
   const groups: Group[] = useMemo(() => {
     const order: string[] = [];
     const buckets = new Map<string, Group>();
@@ -389,6 +419,8 @@ export default function RequisitionPlan() {
           reqNo,
           item: it,
           fgLabel: it?.model_number || it?.description || rm.model_number || "—",
+          fgName: it?.description || it?.model_number || rm.model_number || "—",
+          fgCode: it?.model_number || rm.model_number || "",
           rms: [],
         };
         buckets.set(key, g);
@@ -587,6 +619,16 @@ export default function RequisitionPlan() {
   }
 
   async function forwardToPurchase() {
+    const missing = groups.filter((g) => !g.rms.some((r) => (r.lot_no || "").trim()) || g.rms.some((r) => !(r.lot_no || "").trim()));
+    if (missing.length) {
+      const g = missing[0];
+      toast({
+        title: "Lot Number required",
+        description: `Please enter the Lot Number for Finished Good '${g.fgLabel}' before forwarding.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const { error } = await sb.from("requisitions").update({ status: "in_purchase" }).in("id", ids);
     if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Forwarded to Purchase", description: `${ids.length} requisition(s) marked in_purchase.` });
@@ -737,7 +779,9 @@ export default function RequisitionPlan() {
                         {idx === 0 && (
                           <>
                             <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
-                              <div className="text-[10px] text-muted-foreground mb-0.5">[{g.reqNo}]</div>
+                              <div className="text-sm font-semibold leading-tight">{g.fgName}</div>
+                              {g.fgCode && <div className="text-[10px] text-muted-foreground">Code: {g.fgCode}</div>}
+                              <div className="text-[10px] text-muted-foreground mb-0.5">Requisition: {g.reqNo}</div>
                               {g.item ? (
                                 <Input
                                   className="h-7 w-44 text-sm"
@@ -750,6 +794,15 @@ export default function RequisitionPlan() {
                                   }}
                                 />
                               ) : <span className="text-sm">{g.fgLabel}</span>}
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                <span className="text-[10px] text-muted-foreground">Lot:</span>
+                                <Input
+                                  key={`lot-${g.rms.map((x) => x.lot_no || "").join("|")}`}
+                                  className="h-7 w-20 text-sm"
+                                  defaultValue={g.rms.find((x) => (x.lot_no || "").trim())?.lot_no || ""}
+                                  onBlur={(e) => setGroupLot(g.rms, e.target.value.trim() || null)}
+                                />
+                              </div>
                             </td>
                             <td className="py-2 px-1 align-top border-r" rowSpan={g.rms.length}>
                               {g.item ? (
@@ -826,24 +879,25 @@ export default function RequisitionPlan() {
                         </td>
                         <td className="py-2 px-1 border-r">
                           <Input
-                            className="h-7 w-24 text-sm"
-                            defaultValue={r.lot_no || ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim() || null;
-                              if ((r.lot_no || null) === v) return;
-                              patchRm(r.id, { lot_no: v });
-                            }}
+                            className="h-7 w-24 text-sm bg-muted/50"
+                            value={r.lot_no || ""}
+                            readOnly
+                            title="Set the Lot number once on the Finished Good group"
                           />
                         </td>
                         <td className="py-2 px-1 border-r">
                           <Select
-                            value={r.plan_status || ""}
-                            onValueChange={(v) => patchRm(r.id, { plan_status: v as PlanStatus })}
+                            value={toMergedCategory(r.plan_status as PlanStatus | null)}
+                            onValueChange={(v) =>
+                              patchRm(r.id, {
+                                plan_status: fromMergedCategory(v, r.plan_status as PlanStatus | null, r.material),
+                              })
+                            }
                           >
                             <SelectTrigger className="h-7 w-36 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
-                              {ACTIVE_STATUSES.map((s) => (
-                                <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                              {MERGED_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                               ))}
                               {r.plan_status === "steel" && (
                                 <SelectItem value="steel">Steel (legacy)</SelectItem>
@@ -1002,13 +1056,17 @@ export default function RequisitionPlan() {
                       </td>
                       <td className="py-2 px-2 border-r">
                         <Select
-                          value={c.plan_status || ""}
-                          onValueChange={(v) => bulkPatch(c.sourceRmIds, { plan_status: v as PlanStatus })}
+                          value={toMergedCategory(c.plan_status as PlanStatus | null)}
+                          onValueChange={(v) =>
+                            bulkPatch(c.sourceRmIds, {
+                              plan_status: fromMergedCategory(v, c.plan_status as PlanStatus | null, c.material),
+                            })
+                          }
                         >
                           <SelectTrigger className="h-7 w-40"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
-                            {ACTIVE_STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                            {MERGED_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                             ))}
                             {c.plan_status === "steel" && (
                               <SelectItem value="steel">Steel (legacy)</SelectItem>
