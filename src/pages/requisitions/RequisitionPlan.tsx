@@ -85,6 +85,29 @@ const REPORT_TITLE: Record<PlanStatus, string> = {
   steel: "Steel List (legacy)",
 };
 
+// --- RM Category display merge: MS + SS sheets show as a single "Sheet" ---
+// Display-only. Stored plan_status keeps sheet_ms / sheet_ss so annexure
+// bucketing, reports and downstream pages are unchanged.
+const MERGED_SHEET = "sheet";
+const MERGED_OPTIONS: { value: string; label: string }[] = [
+  { value: "machine", label: "Machine" },
+  { value: "3p", label: "3P / Third Party" },
+  { value: "pipe", label: "Pipe" },
+  { value: MERGED_SHEET, label: "Sheet" },
+  { value: "sheet_gi", label: "Sheet GI" },
+  { value: "structure", label: "Structure" },
+];
+function toMergedCategory(s: PlanStatus | null | undefined): string {
+  if (s === "sheet_ms" || s === "sheet_ss") return MERGED_SHEET;
+  return s || "";
+}
+/** Resolve a merged selection back to a concrete stored plan_status. */
+function fromMergedCategory(v: string, current: PlanStatus | null | undefined, material: string): PlanStatus {
+  if (v !== MERGED_SHEET) return v as PlanStatus;
+  if (current === "sheet_ms" || current === "sheet_ss") return current;
+  return /\bss\b|stainless/i.test(material || "") ? "sheet_ss" : "sheet_ms";
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
