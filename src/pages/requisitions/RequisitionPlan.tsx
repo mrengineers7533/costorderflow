@@ -161,6 +161,7 @@ export default function RequisitionPlan() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // Lot-wise selection state for annexure creation (Raw Materials tab)
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [excludedRowKeys, setExcludedRowKeys] = useState<Set<string>>(new Set());
 
   // ---- Debounced autosave plumbing ----
@@ -525,19 +526,19 @@ export default function RequisitionPlan() {
     return lots ? `${short} • Lot ${lots}` : short;
   }
 
-  // Rows eligible for annexure creation: lot is selected, row not excluded, not already created.
+  // Rows can be selected individually or through their lot. An explicitly
+  // unchecked row remains excluded from a selected lot.
   function isRowSelected(c: { key: string; lot_no: string | null; annexureCount: number; sourceRmIds: string[] }) {
     if (!c.lot_no) return false;
-    if (!selectedLots.has(c.lot_no)) return false;
-    if (excludedRowKeys.has(c.key)) return false;
     if (c.annexureCount >= c.sourceRmIds.length) return false; // fully created already
-    return true;
+    if (selectedRowKeys.has(c.key)) return true;
+    return selectedLots.has(c.lot_no) && !excludedRowKeys.has(c.key);
   }
 
   async function createAnnexure() {
     const eligible = consolidated.filter(isRowSelected);
     if (eligible.length === 0) {
-      toast({ title: "No rows selected", description: "Pick at least one Lot with rows to include.", variant: "destructive" });
+      toast({ title: "No rows selected", description: "Select an individual row or at least one Lot.", variant: "destructive" });
       return;
     }
     // Auto-resolve a missing RM Category from the row's stored category or
@@ -618,6 +619,7 @@ export default function RequisitionPlan() {
       [newAxId]: { created_at: (ax as AnnexureRecord).created_at, lot_numbers: lots },
     }));
     setSelectedLots(new Set());
+    setSelectedRowKeys(new Set());
     setExcludedRowKeys(new Set());
     toast({
       title: "Annexure created",
@@ -978,7 +980,7 @@ export default function RequisitionPlan() {
                 <CardTitle className="text-sm">Raw materials (consolidated)</CardTitle>
                 <p className="text-[11px] text-muted-foreground mt-1">Auto-derived from Generated Requisition. Edit values in the Generated Requisition tab.</p>
               </div>
-              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure for Selected Lots</Button>
+              <Button size="sm" onClick={createAnnexure}><FileText className="mr-1 h-4 w-4" />Create Annexure for Selection</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {(() => {
@@ -988,9 +990,9 @@ export default function RequisitionPlan() {
                 return (
                   <div className="mb-3 rounded border bg-muted/30 p-2.5 text-xs">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <span className="font-medium text-foreground">Select Lot(s) for annexure:</span>
+                      <span className="font-medium text-foreground">Select Lot(s) or individual row(s):</span>
                       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setSelectedLots(new Set(lotsAvailable))}>Select all</Button>
-                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
+                      <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setSelectedLots(new Set()); setSelectedRowKeys(new Set()); setExcludedRowKeys(new Set()); }}>Clear</Button>
                       <span className="ml-auto text-muted-foreground">{eligibleCount} row(s) eligible</span>
                     </div>
                     <div className="flex flex-wrap gap-3">
@@ -1040,19 +1042,27 @@ export default function RequisitionPlan() {
                     const created = c.annexureCount >= c.sourceRmIds.length && c.sourceRmIds.length > 0;
                     const partial = c.annexureCount > 0 && !created;
                     const lotSelected = c.lot_no ? selectedLots.has(c.lot_no) : false;
-                    const rowChecked = lotSelected && !excludedRowKeys.has(c.key) && !created;
+                    const rowChecked = !created && (selectedRowKeys.has(c.key) || (lotSelected && !excludedRowKeys.has(c.key)));
                     return (
                     <tr key={c.key} className={`border-b last:border-0 ${created ? "opacity-60" : ""}`}>
                       <td className="py-2 px-2 border-r">
                         <Checkbox
                           checked={rowChecked}
-                          disabled={created || !c.lot_no || !lotSelected}
+                          disabled={created || !c.lot_no}
                           onCheckedChange={(v) => {
-                            setExcludedRowKeys((prev) => {
-                              const next = new Set(prev);
-                              if (v) next.delete(c.key); else next.add(c.key);
-                              return next;
-                            });
+                            if (lotSelected) {
+                              setExcludedRowKeys((prev) => {
+                                const next = new Set(prev);
+                                if (v) next.delete(c.key); else next.add(c.key);
+                                return next;
+                              });
+                            } else {
+                              setSelectedRowKeys((prev) => {
+                                const next = new Set(prev);
+                                if (v) next.add(c.key); else next.delete(c.key);
+                                return next;
+                              });
+                            }
                           }}
                         />
                       </td>
