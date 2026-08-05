@@ -1,31 +1,50 @@
-## Goal
-Vendor Item Master Excel upload should never drop a row. Every Excel data row gets saved — good rows as usable prices, problem rows as **Pending / Incomplete** records that carry the exact reason and the original Excel data, editable later.
+# Requisition Planning — Sheet category + Finished Good level Lot number
 
-## 1. Database (one migration)
-Add to `vendor_item_prices`:
-- `import_status` — `ok` (default) / `pending` / `error`
-- `import_issues` — list of reasons (e.g. "Vendor not found", "Price missing", "Invalid price format", "Duplicate vendor-item combination")
-- `source_row` — the original Excel row as-is, plus `source_row_no` (Excel line number) and `source_file` (file name)
-- Relax the "must not be blank" rule on Material and Vendor Name so an incomplete row can still be stored (existing rows unaffected).
+Display and entry changes only on the Requisition Planning page (`/requisitions/plan`). No changes to requisition generation, mapping, quantities, consolidation, annexure creation, purchase forwarding, or any stored material data.
 
-Pending rows are saved as **inactive**, which is exactly what the existing pricing/auto-fill logic already ignores — so Purchase, Requisition, Annexure, vendor selection and calculations behave exactly as today.
+## 1. RM Category shows a single "Sheet"
 
-## 2. Parsing (`src/lib/vendors/templates.ts`)
-- No row is ever "skipped". Each non-empty row returns a record plus a list of issues.
-- Issues detected: Vendor Name missing, Material missing, Price missing, Invalid price format, Unit/Size not matched to the vendor's existing entry, Duplicate vendor-item combination inside the same file.
-- Original row values are kept verbatim for later correction.
+- The RM Category dropdown lists **Sheet** in place of the two separate options **Sheet MS** and **Sheet SS**. Sheet GI, Pipe, Structure, 3P, Machine stay exactly as today.
+- Rows already stored as Sheet MS or Sheet SS display as **Sheet**.
+- Stored values are untouched: a Sheet MS row stays Sheet MS in the database, keeps its grade, spec, thickness, size, weight, rate, item code, stock and history, and continues to flow to its existing annexure bucket.
+- When a user picks **Sheet** on a row that already has MS or SS, the stored value is kept as-is. On a row with no category yet, the material name decides it (name containing "SS" stores Sheet SS, otherwise Sheet MS), so downstream annexure splitting keeps working.
+- Annexure Reports tabs, PDFs and downstream pages are unchanged.
 
-## 3. Import apply (`src/pages/admin/AdminVendorTemplates.tsx`)
-- Review dialog now shows three buckets: **Will import (valid)**, **Will import as pending (needs correction)**, **Errors** — nothing labelled "skipped".
-- "Vendor not found" becomes a pending reason, not a skip; the typed vendor name is preserved so it can be linked after the vendor is added.
-- Row-by-row insert/update as today; if the database itself rejects a row, it is retried as an `error` record holding the original Excel row, so the data is still never lost.
-- Summary dialog shows: Total Excel rows, Successfully validated, Imported as incomplete/pending, Rows requiring correction, and the row-wise reason list (with Excel row numbers).
+## 2. Finished Good group header with one Lot input
 
-## 4. Vendor Item Master page (`src/pages/admin/AdminVendorItems.tsx`)
-- New **Import status** badge column: Valid / Pending / Error, with the reasons shown on hover.
-- Filter chips: All / Valid / Needs correction.
-- Edit dialog gains a read-only "Original Excel row" panel and a **Mark as valid** action: on save, if Vendor, Material and a numeric Price are present, the row is set to `ok` + active and issues are cleared; otherwise it stays pending with refreshed reasons.
-- Existing Add / Edit / Delete / Preferred / Active behaviour is unchanged.
+Each Finished Good group in the Generated Requisition table gets a header block showing:
 
-## Unchanged
-Vendor Master, Purchase, Requisition, Annexure, vendor selection, pricing rules, calculations, permissions, notifications, workflows, and all existing stored data.
+```text
+Airlock 250
+Code: 842839
+Requisition: REQ/26-27/0001-R0/002
+Qty: 1.00
+Lot: [ input ]
+```
+
+- Finished Good **name** is shown alongside the existing code — the code is not removed, and the existing editable name/qty/make cells stay.
+- Typing a Lot number in the group input writes that value to every raw-material row of that group in one save.
+- The per-row Lot cells remain visible but become read-only, showing the inherited value.
+
+## 3. Grouping key
+
+Groups are already keyed by requisition id + requisition item id (the Finished Good line), so a Lot entered for one Finished Good in one requisition never touches the same Finished Good in another requisition or another line.
+
+## 4. Persistence and downstream
+
+The Lot number continues to be stored on each `requisition_raw_materials` row exactly as today — only the way it is entered changes. So it survives refresh, re-login and reopening, and flows unchanged into Annexure Folder, Annexure Reports, Purchase forwarding, Purchase Requisition, Purchase and GRN.
+
+## 5. Validation on Forward to Purchase
+
+Before forwarding, check every Finished Good group has a Lot number. If any is missing, block the action and show:
+
+"Please enter the Lot Number for Finished Good 'Airlock 250' before forwarding."
+
+No Lot number is ever auto-copied from another group.
+
+## Technical notes
+
+- File: `src/pages/requisitions/RequisitionPlan.tsx` only.
+- Add a display-level category mapping (`sheet_ms`/`sheet_ss` -> label "Sheet") next to the existing `STATUS_LABEL`; keep `PlanStatus`, `ACTIVE_STATUSES` semantics for reports intact by rendering a merged option list in the Select while resolving the stored value on change.
+- Group-level Lot uses the existing `bulkPatch(sourceRmIds, { lot_no })` style batch update against `g.rms.map(r => r.id)`; row-level Lot inputs switch to read-only display.
+- `forwardToPurchase()` gains a pre-flight check over `groups` for a missing `lot_no`.
