@@ -328,7 +328,7 @@ export default function RawMaterialMaster() {
           </div>
           {isAdmin && rows.length > 0 && (
             <Button variant="destructive" size="sm" onClick={() => setConfirmWipe(true)} disabled={busy}>
-              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete all mappings
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete listed mappings ({filtered.length})
             </Button>
           )}
         </CardContent>
