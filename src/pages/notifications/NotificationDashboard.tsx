@@ -745,28 +745,31 @@ export default function NotificationDashboard() {
             <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete All
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete Filtered ({visible.length})
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete all notifications?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    Delete {visible.length} notification{visible.length === 1 ? "" : "s"}?
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This permanently removes every notification record. Other data
-                    (OA, BOQ, PI, PO, requisitions) is not affected.
+                    Only the notifications currently listed (with the filters applied) are removed.
+                    Notifications outside this view stay. Other data (OA, BOQ, PI, PO, requisitions)
+                    is not affected.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    disabled={deletingAll}
+                    disabled={deletingAll || visible.length === 0}
                     onClick={(e) => {
                       e.preventDefault();
                       deleteAll();
                     }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {deletingAll ? "Deleting…" : "Delete All"}
+                    {deletingAll ? "Deleting…" : "Delete Filtered"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
