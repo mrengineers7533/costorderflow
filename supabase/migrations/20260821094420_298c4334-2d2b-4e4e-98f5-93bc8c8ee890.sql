@@ -1,0 +1,11 @@
+REVOKE EXECUTE ON FUNCTION public.sign_boq_item_doc_by_token(uuid,text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_open_design_review(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.verify_boq_with_token(uuid,text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.verify_boq_items_with_token(uuid,text,jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_design_review_docs_by_token(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_design_review_owner(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.has_open_review_for_boq(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.admin_reset_preview() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sign_boq_item_doc_by_token(uuid,text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.verify_boq_with_token(uuid,text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_design_review_docs_by_token(uuid) TO service_role;
