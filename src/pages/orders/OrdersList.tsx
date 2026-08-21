@@ -20,6 +20,7 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { exportOrderPreviewPdf } from "@/lib/orders/previewExport";
 import { buildOrderXlsx } from "@/lib/orders/excel";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 export default function OrdersList() {
   const navigate = useNavigate();
