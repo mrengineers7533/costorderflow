@@ -26,6 +26,7 @@ import { buildPiXlsx } from "@/lib/pi/excel";
 import type { OrderRecord } from "@/lib/orders/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_date: string; pi_count: number };
 
