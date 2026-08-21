@@ -143,13 +143,9 @@ export async function createPiFromOaItems(
   const status = await fetchOaItemPiStatus(oa.id);
 
   const wantedIds = new Set(selectedItemIds);
-  // For MR format, partial-PI selection happens against the Client Copy
-  // grouped rows (MHE/Fan/Magnet/Spouting + passthrough). Build that view
-  // here so synthesized IDs (e.g. `client-copy-mhe`) resolve correctly.
-  const sourcePool: LineItem[] =
-    oa.format === "MR"
-      ? buildClientCopyItems(oa.line_items || [])
-      : (oa.line_items || []);
+  // Source of truth = the selected OA's own saved line items (all formats).
+  // The Client Copy grouped layout is applied only when rendering the PI.
+  const sourcePool: LineItem[] = oa.line_items || [];
   const sourceItems = sourcePool.filter((it) => wantedIds.has(it.id));
   const filteredItems: LineItem[] = sourceItems.map((it) => {
     const oaQty = Number(it.quantity) || 0;
