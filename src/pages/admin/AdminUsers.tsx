@@ -351,10 +351,12 @@ function EditUserDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 function ResetPasswordDialog({ row, onClose }: { row: Row; onClose: () => void }) {
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
   async function setNewPassword() {
+    setErrMsg(null);
     if (pw.length < 8) {
-      toast.error("Password must be at least 8 characters");
+      setErrMsg("Password must be at least 8 characters");
       return;
     }
     setBusy(true);
@@ -362,16 +364,32 @@ function ResetPasswordDialog({ row, onClose }: { row: Row; onClose: () => void }
       const { data, error } = await supabase.functions.invoke("admin-reset-password", {
         body: { user_id: row.id, new_password: pw },
       });
-      if (error) throw error;
+      if (error) {
+        // Non-2xx responses: read the JSON body for the real reason (e.g. weak password)
+        let msg = error.message || "Failed to reset password";
+        const res = (error as unknown as { context?: Response }).context;
+        if (res && typeof res.json === "function") {
+          try {
+            const body = await res.clone().json();
+            if (body?.error) msg = String(body.error);
+          } catch {
+            /* ignore body parse issues */
+          }
+        }
+        throw new Error(msg);
+      }
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast.success("Password updated");
       onClose();
     } catch (e) {
-      toast.error((e as Error).message || "Failed to reset password");
+      const msg = (e as Error).message || "Failed to reset password";
+      setErrMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
+
 
   async function sendResetEmail() {
     if (!row.email) return;
