@@ -423,11 +423,13 @@ function ResetPasswordDialog({ row, onClose }: { row: Row; onClose: () => void }
               type="text"
               placeholder="Min 8 characters"
               value={pw}
-              onChange={(e) => setPw(e.target.value)}
+              onChange={(e) => { setPw(e.target.value); setErrMsg(null); }}
             />
+            {errMsg && <p className="text-xs text-destructive">{errMsg}</p>}
             <Button className="w-full" onClick={setNewPassword} disabled={busy}>
               {busy ? "Updating…" : "Set new password"}
             </Button>
+
           </div>
           <div className="relative">
             <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
