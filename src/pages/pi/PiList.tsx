@@ -42,6 +42,7 @@ export default function PiList() {
   const [oaSearch, setOaSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ pi: PiRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
   const [refreshTick, setRefreshTick] = useState(0);
   const [piDialogOpen, setPiDialogOpen] = useState(false);
   const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
