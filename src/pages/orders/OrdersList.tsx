@@ -33,7 +33,18 @@ export default function OrdersList() {
   const [showSuperseded, setShowSuperseded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ order: OrderRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("order", confirmDelete.order.id, confirmDelete.isRoot).then((r) => {
+      if (alive) setImpact(r);
+    });
+    return () => { alive = false; };
+  }, [confirmDelete]);
   const [boqCounts, setBoqCounts] = useState<Record<string, number>>({});
   const [piCounts, setPiCounts] = useState<Record<string, number>>({});
 
