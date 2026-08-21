@@ -48,6 +48,17 @@ export default function PiList() {
   const [piDialogOpen, setPiDialogOpen] = useState(false);
   const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
 
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("pi", confirmDelete.pi.id, confirmDelete.isRoot).then((r) => {
+      if (alive) setImpact(r);
+    });
+    return () => { alive = false; };
+  }, [confirmDelete]);
+
+
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
     for (const r of rows) {
