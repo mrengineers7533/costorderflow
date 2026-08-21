@@ -14,7 +14,7 @@ import {
 import { Receipt, Loader2, CheckCircle2, Columns3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { OrderRecord } from "@/lib/orders/types";
-import { buildClientCopyItems } from "@/lib/orders/clientCopy";
+
 import {
   createPiFromOaItems,
   fetchOaItemPiStatus,
