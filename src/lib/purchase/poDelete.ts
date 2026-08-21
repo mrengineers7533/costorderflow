@@ -12,9 +12,12 @@ export async function deletePurchaseOrderCascade(poId: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
+  // Release the raw materials exactly like the existing PO cancel flow does:
+  // clear both the link and the status so PO progress counts stay correct and
+  // the items become re-POable. No other field is touched.
   const { error: rmErr } = await sb
     .from("requisition_raw_materials")
-    .update({ po_id: null })
+    .update({ po_status: null, po_id: null })
     .eq("po_id", poId);
   if (rmErr) throw new Error(`requisition_raw_materials: ${rmErr.message}`);
 
