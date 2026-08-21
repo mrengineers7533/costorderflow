@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.is_design_review_owner(text) TO authenticated;
