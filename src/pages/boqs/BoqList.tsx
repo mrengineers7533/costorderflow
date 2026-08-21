@@ -526,13 +526,20 @@ export default function BoqList() {
             <AlertDialogDescription>
               This will permanently delete <span className="font-mono font-semibold">{confirmDelete?.label}</span>.
               This action cannot be undone.
+              {impact.loading && <span className="block mt-2 text-xs">Checking linked records…</span>}
+              {!impact.loading && impact.dependents.length > 0 && (
+                <span className="block mt-2 text-xs">Also removed: {impact.dependents.join(", ")}.</span>
+              )}
+              {impact.blockReason && (
+                <span className="block mt-2 text-xs font-medium text-destructive">{impact.blockReason}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || impact.loading || !!impact.blockReason}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               <Trash2 className="mr-1 h-4 w-4" />Delete
