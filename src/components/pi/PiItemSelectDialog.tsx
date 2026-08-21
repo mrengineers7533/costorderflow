@@ -58,15 +58,11 @@ export function PiItemSelectDialog({ open, onOpenChange, oa, onCreated }: Props)
       .finally(() => setLoading(false));
   }, [open, oa]);
 
-  // MR uses the Client Copy grouped view (MHE / Fan / Magnet / Spouting +
-  // passthrough rows). Partial PIs are tracked by amount so multiple PIs
-  // can be raised against the same grouped row until its Client Copy total
-  // is fully invoiced. GMS keeps the legacy qty-based flow.
+  // Always show the OA's own saved line items (source of truth). MR keeps its
+  // amount-based partial-PI entry; GMS keeps the qty-based flow. The Client
+  // Copy grouped layout is still applied when rendering the PI document.
   const isMR = oa?.format === "MR";
-  const items = useMemo(
-    () => (isMR ? buildClientCopyItems(oa?.line_items || []) : (oa?.line_items || [])),
-    [oa, isMR],
-  );
+  const items = useMemo(() => oa?.line_items || [], [oa]);
   function totalAmountFor(it: { id: string; quantity: number; unit_rate: number; amount?: number }) {
     const q = Number(it.quantity) || 0;
     const r = Number(it.unit_rate) || 0;
