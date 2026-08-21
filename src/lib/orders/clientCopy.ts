@@ -17,7 +17,7 @@ const GROUP_MAKE: Record<GroupKey, string> = {
   MAGNET: "J. K.",
 };
 
-function detectGroup(desc: string): GroupKey | null {
+export function detectGroup(desc: string): GroupKey | null {
   const d = (desc || "").toLowerCase();
   // Priority: spouting/ducting bucket first so "Fan Accessories" doesn't get caught by FAN.
   if (/\b(spouting|aspiration ducting|pneumatic manifold|ducting|manifold)\b/.test(d)) return "SPOUTING";

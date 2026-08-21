@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
-import { buildClientCopyItems } from "@/lib/orders/clientCopy";
+import { detectGroup } from "@/lib/orders/clientCopy";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
 
@@ -29,10 +29,11 @@ export async function fetchOaItemPiStatus(
   // against earlier revisions are carried forward when the OA is revised.
   const { data: oaRow } = await supabase
     .from("orders")
-    .select("id, parent_order_id")
+    .select("id, parent_order_id, line_items")
     .eq("id", oaId)
     .maybeSingle();
-  const root = (oaRow?.parent_order_id as string | null) || oaId;
+  const root = ((oaRow as any)?.parent_order_id as string | null) || oaId;
+  const oaItems = (((oaRow as any)?.line_items || []) as LineItem[]) || [];
   const { data: family } = await supabase
     .from("orders")
     .select("id")
@@ -47,6 +48,33 @@ export async function fetchOaItemPiStatus(
     .eq("is_current", true);
   if (error) throw error;
   const map: Record<string, OaItemPiStatus> = {};
+  const add = (
+    id: string,
+    qty: number,
+    amt: number,
+    pi: { id: string; pi_number: string },
+  ) => {
+    const existing = map[id];
+    if (!existing) {
+      map[id] = {
+        done: true,
+        pi_number: pi.pi_number,
+        pi_id: pi.id,
+        pi_qty: qty,
+        pi_amount: amt,
+        pi_numbers: [pi.pi_number],
+      };
+    } else {
+      existing.pi_qty += qty;
+      existing.pi_amount += amt;
+      if (!existing.pi_numbers.includes(pi.pi_number)) {
+        existing.pi_numbers.push(pi.pi_number);
+      }
+    }
+  };
+  const lineAmount = (it: LineItem) =>
+    Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0);
+
   for (const pi of ((data || []) as unknown) as Array<{
     id: string;
     pi_number: string;
@@ -60,23 +88,32 @@ export async function fetchOaItemPiStatus(
       if (!item?.id) continue;
       const qty = Number(item.quantity) || 0;
       const amt = Number(item.amount) || qty * (Number(item.unit_rate) || 0);
-      const existing = map[item.id];
-      if (!existing) {
-        map[item.id] = {
-          done: true,
-          pi_number: pi.pi_number,
-          pi_id: pi.id,
-          pi_qty: qty,
-          pi_amount: amt,
-          pi_numbers: [pi.pi_number],
-        };
-      } else {
-        existing.pi_qty += qty;
-        existing.pi_amount += amt;
-        if (!existing.pi_numbers.includes(pi.pi_number)) {
-          existing.pi_numbers.push(pi.pi_number);
+
+      // Legacy PIs created against synthesized Client Copy group rows
+      // (`client-copy-mhe`, `client-copy-spouting`, …). Map the consumed
+      // amount back onto the OA's real line items of that group, in
+      // proportion to each line's amount, so balances stay correct.
+      if (item.id.startsWith("client-copy-")) {
+        const groupKey = item.id.slice("client-copy-".length).toUpperCase();
+        const members = oaItems.filter(
+          (src) => (detectGroup(src.description) || "") === groupKey,
+        );
+        const groupTotal = members.reduce((s, m) => s + lineAmount(m), 0);
+        if (members.length > 0 && groupTotal > 0) {
+          for (const m of members) {
+            const share = lineAmount(m) / groupTotal;
+            const amtShare = amt * share;
+            const rate = Number(m.unit_rate) || 0;
+            const qtyShare = rate > 0
+              ? amtShare / rate
+              : (Number(m.quantity) || 0) * share;
+            add(m.id, qtyShare, amtShare, pi);
+          }
+          continue;
         }
       }
+
+      add(item.id, qty, amt, pi);
     }
   }
   return map;
@@ -106,13 +143,9 @@ export async function createPiFromOaItems(
   const status = await fetchOaItemPiStatus(oa.id);
 
   const wantedIds = new Set(selectedItemIds);
-  // For MR format, partial-PI selection happens against the Client Copy
-  // grouped rows (MHE/Fan/Magnet/Spouting + passthrough). Build that view
-  // here so synthesized IDs (e.g. `client-copy-mhe`) resolve correctly.
-  const sourcePool: LineItem[] =
-    oa.format === "MR"
-      ? buildClientCopyItems(oa.line_items || [])
-      : (oa.line_items || []);
+  // Source of truth = the selected OA's own saved line items (all formats).
+  // The Client Copy grouped layout is applied only when rendering the PI.
+  const sourcePool: LineItem[] = oa.line_items || [];
   const sourceItems = sourcePool.filter((it) => wantedIds.has(it.id));
   const filteredItems: LineItem[] = sourceItems.map((it) => {
     const oaQty = Number(it.quantity) || 0;
