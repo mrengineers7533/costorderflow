@@ -30,6 +30,7 @@ import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { groupBoqsByFamily, stripRevisionSuffix } from "@/lib/boq/familyKey";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 type OaOption = {
   id: string;
