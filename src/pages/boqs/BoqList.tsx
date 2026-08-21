@@ -30,6 +30,7 @@ import { buildBoqXlsx } from "@/lib/boq/excel";
 import { BoqCompareDialog } from "@/components/boqs/BoqCompareDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
 import { groupBoqsByFamily, stripRevisionSuffix } from "@/lib/boq/familyKey";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 type OaOption = {
   id: string;
@@ -58,6 +59,16 @@ export default function BoqList() {
   const [openFamily, setOpenFamily] = useState<Record<string, boolean>>({});
   const [loadingFamily, setLoadingFamily] = useState<Record<string, boolean>>({});
   const [compare, setCompare] = useState<{ from: BoqRecord; to: BoqRecord } | null>(null);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
+
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("boq", confirmDelete.id).then((r) => { if (alive) setImpact(r); });
+    return () => { alive = false; };
+  }, [confirmDelete]);
+
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
@@ -515,13 +526,20 @@ export default function BoqList() {
             <AlertDialogDescription>
               This will permanently delete <span className="font-mono font-semibold">{confirmDelete?.label}</span>.
               This action cannot be undone.
+              {impact.loading && <span className="block mt-2 text-xs">Checking linked records…</span>}
+              {!impact.loading && impact.dependents.length > 0 && (
+                <span className="block mt-2 text-xs">Also removed: {impact.dependents.join(", ")}.</span>
+              )}
+              {impact.blockReason && (
+                <span className="block mt-2 text-xs font-medium text-destructive">{impact.blockReason}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || impact.loading || !!impact.blockReason}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               <Trash2 className="mr-1 h-4 w-4" />Delete

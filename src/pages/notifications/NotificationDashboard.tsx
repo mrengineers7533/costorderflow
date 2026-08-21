@@ -383,21 +383,39 @@ export default function NotificationDashboard() {
     }
   }
 
+  /**
+   * Bulk delete is scoped to exactly the notifications currently in view
+   * (all active filters applied). It removes only app_notifications rows —
+   * their read/email rows are removed by the existing database cascade.
+   * No source document, status, count or routing logic is touched.
+   */
   async function deleteAll() {
-    setDeletingAll(true);
-    const { error } = await supabase
-      .from("app_notifications" as never)
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-    setDeletingAll(false);
-    setConfirmDeleteAll(false);
-    if (error) {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    const ids = visible.map((r) => r.id);
+    if (!ids.length) {
+      setConfirmDeleteAll(false);
       return;
     }
-    setRows([]);
-    setReads([]);
-    toast({ title: "All notifications deleted" });
+    setDeletingAll(true);
+    let failed: string | null = null;
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { error } = await supabase
+        .from("app_notifications" as never)
+        .delete()
+        .in("id", chunk);
+      if (error) { failed = error.message; break; }
+    }
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+    if (failed) {
+      toast({ title: "Delete failed", description: failed, variant: "destructive" });
+      load();
+      return;
+    }
+    const removed = new Set(ids);
+    setRows((r) => r.filter((x) => !removed.has(x.id)));
+    setReads((r) => r.filter((x) => !removed.has(x.notification_id)));
+    toast({ title: `Deleted ${ids.length} notification${ids.length === 1 ? "" : "s"}` });
   }
 
   // Deep-link: open detail dialog when ?id=<uuid> is present.
@@ -727,28 +745,31 @@ export default function NotificationDashboard() {
             <AlertDialog open={confirmDeleteAll} onOpenChange={setConfirmDeleteAll}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete All
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete Filtered ({visible.length})
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete all notifications?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    Delete {visible.length} notification{visible.length === 1 ? "" : "s"}?
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This permanently removes every notification record. Other data
-                    (OA, BOQ, PI, PO, requisitions) is not affected.
+                    Only the notifications currently listed (with the filters applied) are removed.
+                    Notifications outside this view stay. Other data (OA, BOQ, PI, PO, requisitions)
+                    is not affected.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    disabled={deletingAll}
+                    disabled={deletingAll || visible.length === 0}
                     onClick={(e) => {
                       e.preventDefault();
                       deleteAll();
                     }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {deletingAll ? "Deleting…" : "Delete All"}
+                    {deletingAll ? "Deleting…" : "Delete Filtered"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

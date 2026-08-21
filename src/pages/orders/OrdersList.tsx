@@ -20,6 +20,7 @@ import { generateOrderPDF } from "@/lib/orders/pdf";
 import { exportOrderPreviewPdf } from "@/lib/orders/previewExport";
 import { buildOrderXlsx } from "@/lib/orders/excel";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 export default function OrdersList() {
   const navigate = useNavigate();
@@ -32,7 +33,18 @@ export default function OrdersList() {
   const [showSuperseded, setShowSuperseded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ order: OrderRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("order", confirmDelete.order.id, confirmDelete.isRoot).then((r) => {
+      if (alive) setImpact(r);
+    });
+    return () => { alive = false; };
+  }, [confirmDelete]);
   const [boqCounts, setBoqCounts] = useState<Record<string, number>>({});
   const [piCounts, setPiCounts] = useState<Record<string, number>>({});
 
@@ -338,13 +350,24 @@ export default function OrdersList() {
                 ? " along with all of its revisions."
                 : " (this single revision only)."}
               {" "}This action cannot be undone.
+              {impact.loading && <span className="block mt-2 text-xs">Checking linked records…</span>}
+              {!impact.loading && impact.dependents.length > 0 && (
+                <span className="block mt-2 text-xs">
+                  Also removed: {impact.dependents.join(", ")}.
+                </span>
+              )}
+              {impact.blockReason && (
+                <span className="block mt-2 text-xs font-medium text-destructive">
+                  {impact.blockReason}
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || impact.loading || !!impact.blockReason}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               <Trash2 className="mr-1 h-4 w-4" />Delete

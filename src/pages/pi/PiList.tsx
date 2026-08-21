@@ -26,6 +26,7 @@ import { buildPiXlsx } from "@/lib/pi/excel";
 import type { OrderRecord } from "@/lib/orders/types";
 import { PiItemSelectDialog } from "@/components/pi/PiItemSelectDialog";
 import { NotSeenNotifBadge } from "@/components/notifications/NotSeenNotifBadge";
+import { inspectDelete, EMPTY_IMPACT, type DeleteImpact } from "@/lib/delete/guards";
 
 type OaOption = { id: string; oa_number: string; format: "MR" | "GMS"; order_date: string; pi_count: number };
 
@@ -42,9 +43,21 @@ export default function PiList() {
   const [oaSearch, setOaSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ pi: PiRecord; isRoot: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
   const [refreshTick, setRefreshTick] = useState(0);
   const [piDialogOpen, setPiDialogOpen] = useState(false);
   const [piDialogOa, setPiDialogOa] = useState<OrderRecord | null>(null);
+
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("pi", confirmDelete.pi.id, confirmDelete.isRoot).then((r) => {
+      if (alive) setImpact(r);
+    });
+    return () => { alive = false; };
+  }, [confirmDelete]);
+
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
@@ -339,13 +352,20 @@ export default function PiList() {
                 ? " along with all of its revisions."
                 : " (this single revision only)."}
               {" "}This action cannot be undone.
+              {impact.loading && <span className="block mt-2 text-xs">Checking linked records…</span>}
+              {!impact.loading && impact.dependents.length > 0 && (
+                <span className="block mt-2 text-xs">Also removed: {impact.dependents.join(", ")}.</span>
+              )}
+              {impact.blockReason && (
+                <span className="block mt-2 text-xs font-medium text-destructive">{impact.blockReason}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || impact.loading || !!impact.blockReason}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               <Trash2 className="mr-1 h-4 w-4" />Delete
