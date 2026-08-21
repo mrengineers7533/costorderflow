@@ -59,6 +59,16 @@ export default function BoqList() {
   const [openFamily, setOpenFamily] = useState<Record<string, boolean>>({});
   const [loadingFamily, setLoadingFamily] = useState<Record<string, boolean>>({});
   const [compare, setCompare] = useState<{ from: BoqRecord; to: BoqRecord } | null>(null);
+  const [impact, setImpact] = useState<DeleteImpact>(EMPTY_IMPACT);
+
+  useEffect(() => {
+    if (!confirmDelete) { setImpact(EMPTY_IMPACT); return; }
+    let alive = true;
+    setImpact({ ...EMPTY_IMPACT, loading: true });
+    inspectDelete("boq", confirmDelete.id).then((r) => { if (alive) setImpact(r); });
+    return () => { alive = false; };
+  }, [confirmDelete]);
+
 
   const counts = useMemo(() => {
     let mr = 0, gms = 0;
