@@ -102,7 +102,12 @@ export async function fetchOaItemPiStatus(
         if (members.length > 0 && groupTotal > 0) {
           for (const m of members) {
             const share = lineAmount(m) / groupTotal;
-            add(m.id, qty * share, amt * share, pi);
+            const amtShare = amt * share;
+            const rate = Number(m.unit_rate) || 0;
+            const qtyShare = rate > 0
+              ? amtShare / rate
+              : (Number(m.quantity) || 0) * share;
+            add(m.id, qtyShare, amtShare, pi);
           }
           continue;
         }
