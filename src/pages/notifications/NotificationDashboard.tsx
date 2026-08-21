@@ -383,21 +383,39 @@ export default function NotificationDashboard() {
     }
   }
 
+  /**
+   * Bulk delete is scoped to exactly the notifications currently in view
+   * (all active filters applied). It removes only app_notifications rows —
+   * their read/email rows are removed by the existing database cascade.
+   * No source document, status, count or routing logic is touched.
+   */
   async function deleteAll() {
-    setDeletingAll(true);
-    const { error } = await supabase
-      .from("app_notifications" as never)
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-    setDeletingAll(false);
-    setConfirmDeleteAll(false);
-    if (error) {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    const ids = visible.map((r) => r.id);
+    if (!ids.length) {
+      setConfirmDeleteAll(false);
       return;
     }
-    setRows([]);
-    setReads([]);
-    toast({ title: "All notifications deleted" });
+    setDeletingAll(true);
+    let failed: string | null = null;
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { error } = await supabase
+        .from("app_notifications" as never)
+        .delete()
+        .in("id", chunk);
+      if (error) { failed = error.message; break; }
+    }
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+    if (failed) {
+      toast({ title: "Delete failed", description: failed, variant: "destructive" });
+      load();
+      return;
+    }
+    const removed = new Set(ids);
+    setRows((r) => r.filter((x) => !removed.has(x.id)));
+    setReads((r) => r.filter((x) => !removed.has(x.notification_id)));
+    toast({ title: `Deleted ${ids.length} notification${ids.length === 1 ? "" : "s"}` });
   }
 
   // Deep-link: open detail dialog when ?id=<uuid> is present.
