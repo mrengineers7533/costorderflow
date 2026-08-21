@@ -54,7 +54,19 @@ Deno.serve(async (req) => {
     const { error: updErr } = await admin.auth.admin.updateUserById(user_id, {
       password: new_password,
     });
-    if (updErr) return json({ error: updErr.message }, 500);
+    if (updErr) {
+      const msg = updErr.message || "Failed to update password";
+      const weak = /weak|easy to guess|pwned|compromis|password/i.test(msg) &&
+        !/permission|not found|invalid user/i.test(msg);
+      return json(
+        {
+          error: weak
+            ? "That password is too weak or has appeared in a known data breach. Use a longer passphrase with mixed characters."
+            : msg,
+        },
+        weak ? 400 : 500,
+      );
+    }
 
     return json({ ok: true });
   } catch (e) {
