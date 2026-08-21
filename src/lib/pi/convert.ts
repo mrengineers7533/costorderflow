@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getFinancialYear, calcTotals, amountInWords, calcExTurkey, calcExMurthal } from "@/lib/orders/calc";
 import type { LineItem, OrderRecord } from "@/lib/orders/types";
-import { buildClientCopyItems } from "@/lib/orders/clientCopy";
+import { detectGroup } from "@/lib/orders/clientCopy";
 import type { PiRecord } from "./types";
 import { calcPiTotals } from "./calc";
 
