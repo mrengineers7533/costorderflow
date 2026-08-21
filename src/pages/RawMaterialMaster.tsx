@@ -548,10 +548,15 @@ export default function RawMaterialMaster() {
       <AlertDialog open={confirmWipe} onOpenChange={setConfirmWipe}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete ALL Finish Good mappings?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {filtered.length} Finish Good mapping{filtered.length === 1 ? "" : "s"}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This removes every row in the Raw Material Master. Existing requisitions stay intact (they hold their own snapshot).
-              You will need to re-upload the Excel before new requisitions can match Finish Goods.
+              {search.trim()
+                ? "Only the rows matching the current search are removed; everything else stays."
+                : "This removes the rows currently listed in the Raw Material Master."}{" "}
+              Existing requisitions stay intact (they hold their own snapshot).
+              You will need to re-upload the Excel before new requisitions can match those Finish Goods.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -560,11 +565,21 @@ export default function RawMaterialMaster() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async () => {
                 setConfirmWipe(false);
-                const { error } = await sb.from("fg_raw_material_map").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-                if (error) toast({ title: "Wipe failed", description: error.message, variant: "destructive" });
-                else { toast({ title: "All mappings deleted" }); load(); }
+                const ids = filtered.map((r) => r.id);
+                if (!ids.length) return;
+                let failed: string | null = null;
+                for (let i = 0; i < ids.length; i += 200) {
+                  const { error } = await sb
+                    .from("fg_raw_material_map")
+                    .delete()
+                    .in("id", ids.slice(i, i + 200));
+                  if (error) { failed = error.message; break; }
+                }
+                if (failed) toast({ title: "Delete failed", description: failed, variant: "destructive" });
+                else toast({ title: `Deleted ${ids.length} mapping${ids.length === 1 ? "" : "s"}` });
+                load();
               }}>
-              Delete all
+              Delete listed
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
