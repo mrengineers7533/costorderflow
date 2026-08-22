@@ -339,8 +339,8 @@ export async function generateOrderPDF(
     head: [mrCols.map((k) => mrColLabel[k])],
     body: [...itemRows, ...totalsAsBody as never[]],
     theme: "grid",
-    styles: { fontSize: 7.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "top" },
-    headStyles: { fillColor: accent, textColor: 255, halign: "center", fontStyle: "bold" },
+    styles: { fontSize: 7.5, cellPadding: 2.2, lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle", minCellHeight: 7 },
+    headStyles: { fillColor: accent, textColor: 255, halign: "center", valign: "middle", fontStyle: "bold", cellPadding: 2.2, minCellHeight: 8 },
     columnStyles: mrColumnStyles,
     margin: { left: M, right: M },
   }));
@@ -772,7 +772,7 @@ async function renderGmsPdf(
     theme: "grid",
     tableWidth: W - M * 2,
     styles: {
-      fontSize: 7.5, cellPadding: 1.6,
+      fontSize: 7.5, cellPadding: 2.2, minCellHeight: 7,
       lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle",
       textColor: [0, 0, 0],
     },
