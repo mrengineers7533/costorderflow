@@ -386,7 +386,7 @@ export async function generateOrderPDF(
     // Bank + Signature row (two columns)
     const bankBody =
       `OUR BANK DETAILS :-\n${bank.bank_name}\nBRANCH: ${bank.branch}\nC/A A/C NO. ${bank.account_no}\nIFSC CODE: ${bank.ifsc}`;
-    const sigBody = `Yours faithfully\n\n\nM.R. ENGINEERS${order.prepared_by ? `\n${order.prepared_by}` : ""}`;
+    const sigBody = `Yours faithfully\n\n\nM.R. ENGINEERS`;
     autoTable(doc, withPdfTableDefaults({
       startY: y,
       body: [[
