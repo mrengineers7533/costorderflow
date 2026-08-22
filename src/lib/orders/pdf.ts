@@ -772,7 +772,7 @@ async function renderGmsPdf(
     theme: "grid",
     tableWidth: W - M * 2,
     styles: {
-      fontSize: 7.5, cellPadding: 1.6,
+      fontSize: 7.5, cellPadding: 2.2, minCellHeight: 7,
       lineColor: [0, 0, 0], lineWidth: 0.2, valign: "middle",
       textColor: [0, 0, 0],
     },
