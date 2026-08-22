@@ -17,6 +17,7 @@ import { amountInWords, calcLineAmount, calcTotals, detectFormat, displayMake, g
 import { amountInWordsUSD } from "@/lib/orders/calc";
 import { generateOrderPDF } from "@/lib/orders/pdf";
 import { capturePreviewToPdf, findOaPreviewRoot } from "@/lib/orders/previewPdf";
+import { renderOrderPreviewPdf } from "@/lib/orders/previewExport";
 import type { PdfColumnKey } from "@/lib/orders/pdfColumns";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
 import { buildClientCopyItems } from "@/lib/orders/clientCopy";
@@ -706,18 +707,42 @@ export default function OrderEditor() {
     setCurrencyMode(target);
   }
 
+  /** Props shared by the on-screen Live Preview and the off-screen export render. */
+  function buildPreviewProps() {
+    return {
+      oaNumber,
+      format,
+      companyName,
+      billTo,
+      shipTo,
+      sameAsBill,
+      reference,
+      costSheetNumber,
+      orderDate,
+      preparedBy,
+      items: itemsWithAmounts,
+      charges,
+      totals,
+      amountInWords: words,
+      notes,
+      terms,
+      bank: format === "GMS" ? gmsBank : bank,
+      gmsTerms,
+      currencyMode,
+      hiddenColumns: hiddenPdfColumns,
+    };
+  }
+
   async function downloadPDF() {
     const baseName = (oaNumber || "OA").replace(/[/\\]/g, "_");
     const ship = sameAsBill ? billTo : shipTo;
 
-    // Preferred path: rasterise the on-screen Live Preview so the exported
-    // PDF is a pixel-for-pixel match. Falls back to the legacy renderer if
-    // the preview element isn't mounted (e.g. programmatic download).
+    // Preferred path: render the same preview template OFF-SCREEN in export
+    // mode and rasterise that clone. The visible Live Preview is never
+    // modified. Falls back to the legacy renderer if the render fails.
     const tryPreviewCapture = async (suffix: string) => {
-      const root = findOaPreviewRoot();
-      if (!root) return false;
       const filename = `${baseName}${suffix}.pdf`;
-      const res = await capturePreviewToPdf(root, filename);
+      const res = await renderOrderPreviewPdf(buildPreviewProps(), filename);
       return res.ok;
     };
 
