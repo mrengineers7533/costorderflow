@@ -16,7 +16,9 @@ Applies to OA (MR + GMS) and PI **Download / Export / Print output only**. Live 
   - the `preparedBy` line in the MR signature block (`MRPostItems`) and the GMS signature block is not rendered.
 - New shared helper in `src/lib/orders/calc.ts` (or a small `exportFormat.ts`): `roundGrandTotalForExport(n)` = `frac > 0.5 ? ceil : floor`, plus a `formatMoney2(n, locale)` used by both preview-export and the jsPDF route so OA and PI format identically.
 - `src/lib/orders/previewExport.tsx`: pass `exportMode` to the off-screen `OrderPreview` (covers OA list + revisions downloads).
-- `src/pages/orders/OrderEditor.tsx` and `src/pages/pi/PiEditor.tsx`: their Download buttons rasterise the on-screen preview. Set a short-lived `exportMode` state to true, wait one frame, run `capturePreviewToPdf`, then reset to false — so the download uses export formatting while the visible preview returns to normal immediately.
+- `src/pages/orders/OrderEditor.tsx`: its Download button currently rasterises the visible preview. It will instead call the existing off-screen export helper (`exportOrderPreviewPdf`) with the same order data and options, so the visible preview is never modified, re-rendered, or flashed.
+- `src/pages/pi/PiEditor.tsx`: add a PI equivalent of that helper — an off-screen render of `OrderPreview` with `exportMode` and exactly the same props the visible PI preview receives — and capture that clone. The on-screen PI preview stays untouched.
+- No temporary state toggling of any visible component; `exportMode` exists only on off-screen render paths.
 - `src/lib/orders/pdf.ts` (jsPDF fallback used by OA/PI list downloads): already prints 2 decimals; only add the Grand Total rounding so both routes agree, and drop `order.prepared_by` from the "Yours faithfully" signature block. `src/lib/pi/pdf.ts` inherits this automatically.
 
 ## Not touched
