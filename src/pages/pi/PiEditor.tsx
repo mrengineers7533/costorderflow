@@ -14,6 +14,7 @@ import type { PiRecord } from "@/lib/pi/types";
 import { calcPiTotals } from "@/lib/pi/calc";
 import { generatePiPDF } from "@/lib/pi/pdf";
 import { capturePreviewToPdf, findOaPreviewRoot } from "@/lib/orders/previewPdf";
+import { renderOrderPreviewPdf } from "@/lib/orders/previewExport";
 import { fetchPiFamily } from "@/lib/pi/convert";
 import { OrderPreview } from "@/components/orders/OrderPreview";
 import { PdfColumnVisibility } from "@/components/orders/PdfColumnVisibility";
