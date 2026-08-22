@@ -4,6 +4,13 @@ import "@/styles/oa-pdf.css";
 
 export const ORDER_PREVIEW_PDF_WIDTH_PX = 794;
 const PDF_MARGIN_MM = 4;
+/**
+ * Empirically calibrated upward nudge (in `em`) applied ONLY inside the
+ * off-screen capture clone, to counter html2canvas painting text low in
+ * each line box. Live Preview is never affected.
+ */
+const RASTER_TEXT_DROP_EM = 0.6;
+
 
 /**
  * Capture a live-preview DOM element and export it as a paginated A4 PDF.
