@@ -217,15 +217,89 @@ export default function PiEditor() {
     setPi((cur) => cur ? { ...cur, [key]: value } : cur);
   }
 
+  /** Props shared by the on-screen Live Preview and the off-screen export render. */
+  function buildPiPreviewProps() {
+    return {
+      oaNumber: pi!.pi_number,
+      format: pi!.format,
+      companyName: pi!.company_name || "",
+      billTo: pi!.bill_to,
+      shipTo: pi!.ship_to,
+      sameAsBill: JSON.stringify(pi!.bill_to) === JSON.stringify(pi!.ship_to),
+      reference: pi!.reference_oa_number || "",
+      costSheetNumber: "",
+      orderDate: pi!.pi_date,
+      preparedBy: pi!.prepared_by || "",
+      items: buildClientCopyItems(pi!.line_items),
+      charges:
+        pi!.format === "MR"
+          ? {
+              ...pi!.charges,
+              discount_percent: pi!.one_time_discount_percent || 0,
+              apply_discount: !!pi!.apply_discount && totals.one_time_discount_amount > 0,
+              discount_label: "Discount on Basic Total",
+            }
+          : { ...pi!.charges, discount_percent: 0 },
+      totals: {
+        basic_total: totals.basic_total,
+        subtotal: totals.subtotal,
+        grand_total: effectiveGrand,
+        net_payable: effectiveNet,
+      },
+      amountInWords: amountInWords(effectiveNet),
+      notes: pi!.notes || "",
+      terms,
+      bank: pi!.format === "GMS" ? gmsBank : bank,
+      gmsTerms: pi!.format === "GMS" ? gmsTerms : undefined,
+      currencyMode,
+      hiddenColumns: hiddenPdfColumns,
+      docMeta: {
+        title: "Proforma Invoice",
+        numberLabel: pi!.format === "MR" ? "PI Number" : "PI No.",
+        numberValue: pi!.pi_number,
+        refLabel: "Ref. OA No.",
+        refValue: pi!.reference_oa_number || "-",
+        hideFirstPageFooter: pi!.format === "GMS",
+        hideDefaultGrandTotal: pi!.format === "MR" && totals.advance_adjustment_amount > 0,
+        extraTotalsRows: gmsBreakdown
+          ? []
+          : [
+              ...(pi!.format !== "MR" && pi!.apply_discount && totals.one_time_discount_amount > 0
+                ? [
+                    {
+                      label: (pi!.discount_label || "").trim() || "One Time Very Special Discount",
+                      value: totals.one_time_discount_amount,
+                    },
+                    { label: "After Discount", value: totals.basic_after_discount },
+                  ]
+                : []),
+              ...(totals.other_charges_amount > 0
+                ? [{ label: "Other Charges", value: totals.other_charges_amount }]
+                : []),
+              ...(totals.advance_adjustment_amount > 0
+                ? [
+                    { label: "Grand Total", value: totals.gross_invoice_total, bold: true },
+                    {
+                      label:
+                        (pi!.advance_mode || "percent") === "amount"
+                          ? "Advance Adjustment"
+                          : `Advance Adjustment @ ${pi!.advance_adjustment_percent}%`,
+                      value: totals.advance_adjustment_amount,
+                    },
+                    { label: "Net Payable", value: totals.net_payable_pi, bold: true },
+                  ]
+                : []),
+            ],
+      },
+    };
+  }
+
   async function downloadPdf() {
     if (!pi) return;
     try {
       const safe = (pi.pi_number || "PI").replace(/[/\\]/g, "_");
-      const root = findOaPreviewRoot();
-      if (root) {
-        const captured = await capturePreviewToPdf(root, `${safe}.pdf`);
-        if (captured.ok) return;
-      }
+      const captured = await renderOrderPreviewPdf(buildPiPreviewProps(), `${safe}.pdf`);
+      if (captured.ok) return;
       const doc = await generatePiPDF({
         ...pi,
         totals: {
