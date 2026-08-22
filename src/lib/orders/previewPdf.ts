@@ -4,6 +4,13 @@ import "@/styles/oa-pdf.css";
 
 export const ORDER_PREVIEW_PDF_WIDTH_PX = 794;
 const PDF_MARGIN_MM = 4;
+/**
+ * Empirically calibrated upward nudge (in `em`) applied ONLY inside the
+ * off-screen capture clone, to counter html2canvas painting text low in
+ * each line box. Live Preview is never affected.
+ */
+const RASTER_TEXT_DROP_EM = 0.6;
+
 
 /**
  * Capture a live-preview DOM element and export it as a paginated A4 PDF.
@@ -137,11 +144,41 @@ export async function capturePreviewToPdf(
         cell.style.setProperty("padding-top", `${pad.toFixed(2)}px`, "important");
         cell.style.setProperty("padding-bottom", `${pad.toFixed(2)}px`, "important");
         const inner = cell.querySelector<HTMLElement>(".oa-cell-inner");
-        if (inner) inner.style.setProperty("vertical-align", "top", "important");
+        if (inner) {
+          inner.style.setProperty("vertical-align", "top", "important");
+          // html2canvas paints glyphs near the BOTTOM of each line box
+          // instead of honouring the half-leading, so even perfectly
+          // symmetric padding renders text hugging the lower border.
+          // Compensate with a purely visual (relative) upward nudge that
+          // does not change row height or the Live Preview.
+          const fs = parseFloat(window.getComputedStyle(inner).fontSize) || 10;
+          const nudge = fs * RASTER_TEXT_DROP_EM;
+          inner.style.setProperty("position", "relative", "important");
+          inner.style.setProperty("top", `${(-nudge).toFixed(2)}px`, "important");
+        }
       });
+    });
+
+  });
+
+  // Same rasteriser correction for the GMS/EXW totals card, which is built
+  // from vertically-centered grid/flex rows (Base Amount, Landed Price, P&F,
+  // Grand Total, Net Payable) rather than an `.oa-items` table.
+  clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const cs = window.getComputedStyle(el);
+    if (cs.alignItems !== "center") return;
+    if (!/grid|flex/.test(cs.display)) return;
+    Array.from(el.children).forEach((childNode) => {
+      const child = childNode as HTMLElement;
+      if (!child.textContent || !child.textContent.trim()) return;
+      if (child.querySelector("table, img")) return;
+      const fs = parseFloat(window.getComputedStyle(child).fontSize) || 10;
+      child.style.setProperty("position", "relative", "important");
+      child.style.setProperty("top", `${(-fs * RASTER_TEXT_DROP_EM).toFixed(2)}px`, "important");
     });
   });
   await new Promise((r) => requestAnimationFrame(() => r(null)));
+
 
   // Overflow-safe capture width. Some column configurations (e.g. 5-col MR
   // with Rate/Amount hidden and long no-wrap totals like "1,88,59,552.00")
