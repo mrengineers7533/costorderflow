@@ -103,6 +103,46 @@ export async function capturePreviewToPdf(
   });
   await new Promise((r) => requestAnimationFrame(() => r(null)));
 
+  // ---------------------------------------------------------------------
+  // Export-only vertical centering for the OA item + totals table.
+  // html2canvas does not honour `vertical-align: middle` on table cells /
+  // inline-block cell content, so the rasterised text drifts toward the
+  // bottom border even though the Live Preview centres it correctly.
+  // Fix: measure each row in the CLONE and convert the centering into
+  // explicit, symmetric top/bottom padding with top alignment — which
+  // html2canvas renders faithfully. The Live Preview DOM is never touched.
+  // ---------------------------------------------------------------------
+  clone.querySelectorAll<HTMLTableElement>("table.oa-items").forEach((tbl) => {
+    const rows = Array.from(tbl.querySelectorAll<HTMLTableRowElement>("tr"));
+    rows.forEach((tr) => {
+      const cells = Array.from(tr.children) as HTMLElement[];
+      if (!cells.length) return;
+      const rowH = tr.getBoundingClientRect().height;
+      if (!rowH) return;
+      // Content height per cell (tallest cell drives the row height).
+      const measured = cells.map((cell) => {
+        const inner = cell.querySelector<HTMLElement>(".oa-cell-inner");
+        const rect = (inner || cell).getBoundingClientRect();
+        const cs = window.getComputedStyle(cell);
+        const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+        const h = inner ? rect.height : Math.max(rect.height - padY, 0);
+        return { cell, contentH: h, basePad: parseFloat(cs.paddingTop) || 4 };
+      });
+      measured.forEach(({ cell, contentH, basePad }) => {
+        const free = rowH - contentH;
+        // Keep the existing padding as the floor so nothing gets tighter
+        // than the Live Preview; split the remaining space evenly.
+        const pad = Math.max(basePad, free / 2);
+        cell.style.setProperty("vertical-align", "top", "important");
+        cell.style.setProperty("padding-top", `${pad.toFixed(2)}px`, "important");
+        cell.style.setProperty("padding-bottom", `${pad.toFixed(2)}px`, "important");
+        const inner = cell.querySelector<HTMLElement>(".oa-cell-inner");
+        if (inner) inner.style.setProperty("vertical-align", "top", "important");
+      });
+    });
+  });
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+
   // Overflow-safe capture width. Some column configurations (e.g. 5-col MR
   // with Rate/Amount hidden and long no-wrap totals like "1,88,59,552.00")
   // push content past the nominal 794px template width. If we rasterise at
