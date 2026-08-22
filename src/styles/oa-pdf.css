@@ -243,6 +243,48 @@
   clip-path: inset(22% 0 0 0) !important;
 }
 
+/* Signature block: the OA creator name is intentionally omitted from the
+   exported/printed PDF (the "Prepared By" header field still carries it). */
+.oa-pdf-capture .oa-sig-prepared-by {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------------
+   Export-only cell alignment.
+
+   The Live Preview centers cell content with an inline-block
+   `.oa-cell-inner` + `vertical-align: middle`. Browsers resolve that
+   correctly, but html2canvas mis-resolves inline-block middle/baseline
+   alignment and paints the text a few pixels off its cell box — which is
+   what makes exported rows drift onto the borders and overlap.
+
+   Inside the capture clone only, drop the inline-block trick and rely on
+   real table-cell vertical centering with a fixed line-height, explicit
+   padding and a minimum row height. Live Preview rules are untouched.
+   --------------------------------------------------------------------- */
+.oa-pdf-capture table.oa-items th,
+.oa-pdf-capture table.oa-items td {
+  vertical-align: middle !important;
+  line-height: 1.3 !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+
+.oa-pdf-capture table.oa-items tr {
+  min-height: 20px;
+}
+
+.oa-pdf-capture table.oa-items .oa-cell-inner {
+  display: block !important;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.3 !important;
+  vertical-align: baseline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
 /* Root preview padding — mirror `p-5 space-y-4` from OrderPreview. */
 .oa-pdf-capture [data-oa-preview-root] {
   padding: 20px !important;
