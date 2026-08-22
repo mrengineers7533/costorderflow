@@ -926,9 +926,7 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
           />
           <div className="text-right">
             <div className="font-bold tracking-wide">M.R. ENGINEERS</div>
-            {preparedBy && (
-              <div className="oa-sig-prepared-by text-[10px] text-muted-foreground">{preparedBy}</div>
-            )}
+            {preparedBy && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
           </div>
         </div>
       </div>
