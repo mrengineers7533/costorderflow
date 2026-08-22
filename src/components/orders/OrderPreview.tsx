@@ -1,9 +1,11 @@
+import { createContext, useContext } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Download } from "lucide-react";
 import type { Address, Charges, LineItem, OrderFormat, Totals } from "@/lib/orders/types";
 import { calcExMurthal, calcExTurkey, amountInWordsUSD, amountInWords, displayMake } from "@/lib/orders/calc";
+import { moneyDigits, roundGrandTotalForExport } from "@/lib/orders/exportFormat";
 import { visibleColumns, type PdfColumnKey } from "@/lib/orders/pdfColumns";
 import mrLogo from "@/assets/mr-logo.png";
 import gmsLogo from "@/assets/gms-logo.png";
@@ -48,6 +50,13 @@ interface Props {
   currencyMode?: "INR" | "USD";
   /** Columns to hide from the rendered item table (PDF/preview only). */
   hiddenColumns?: PdfColumnKey[];
+  /**
+   * Export/Print rendering mode. Only set on the OFF-SCREEN export clone —
+   * never on the on-screen Live Preview. Shows money with 2 decimals,
+   * rounds the Grand Total to whole rupees and hides the creator name in
+   * the signature block.
+   */
+  exportMode?: boolean;
   docMeta?: {
     title?: string;
     numberLabel?: string;
@@ -61,11 +70,15 @@ interface Props {
   };
 }
 
-const fmt = (n: number) =>
-  `₹ ${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+/** True only inside the off-screen export/print render. */
+const ExportModeContext = createContext(false);
+const useExportMode = () => useContext(ExportModeContext);
 
-const fmtFX = (n: number, symbol: string) =>
-  `${symbol} ${(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+const fmt = (n: number, exportMode?: boolean) =>
+  `₹ ${(n || 0).toLocaleString("en-IN", moneyDigits(exportMode))}`;
+
+const fmtFX = (n: number, symbol: string, exportMode?: boolean) =>
+  `${symbol} ${(n || 0).toLocaleString("en-US", moneyDigits(exportMode))}`;
 
 const TEMPLATE_COL_WEIGHTS: Record<OrderFormat, Record<PdfColumnKey, number>> = {
   MR: {
@@ -142,18 +155,19 @@ export function OrderPreview(p: Props) {
   const itemUsdRate = gmsUsd ? cifRate : (turkeyAlwaysUSD ? turkeyRate : fxRate);
   const itemCurLabel = displayUSDItems ? "USD" : "INR";
   // Currency-aware totals formatter for the unified items+totals table.
+  const md = moneyDigits(p.exportMode);
   const totalFmt = (n: number) =>
     gmsUsd
-      ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+      ? `$ ${((n || 0) / (cifRate || 1)).toLocaleString("en-US", md)}`
       : forcedUsd
-        ? `$ ${(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-        : (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+        ? `$ ${(n || 0).toLocaleString("en-US", md)}`
+        : (n || 0).toLocaleString("en-IN", md);
   const itemFmt = (n: number) =>
     (turkeyAlwaysUSD || gmsUsd)
-      ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", { maximumFractionDigits: 0 })
+      ? ((n || 0) / (itemUsdRate || 1)).toLocaleString("en-US", md)
       : forcedUsd
-        ? (n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })
-        : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", { maximumFractionDigits: 0 });
+        ? (n || 0).toLocaleString("en-US", md)
+        : (n || 0).toLocaleString(isFX ? "en-US" : "en-IN", md);
   const gstAmount = (p.totals.subtotal * (p.charges.gst_percent || 0)) / 100;
   const pfAmount = p.charges.pf_amount > 0
     ? p.charges.pf_amount
@@ -171,6 +185,7 @@ export function OrderPreview(p: Props) {
     || "One Time Very Special Discount";
 
   return (
+    <ExportModeContext.Provider value={!!p.exportMode}>
     <Card className="overflow-hidden order-preview-card">
       <div className="border-b bg-muted/40 px-4 py-2 flex items-center justify-between gap-2 print:hidden">
         <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Live Preview</div>
@@ -406,7 +421,7 @@ export function OrderPreview(p: Props) {
                         <TotalsRow key={`xg${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} format={totalFmt} />
                       ))}
                       {!p.docMeta?.hideDefaultGrandTotal && (
-                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight format={totalFmt} />
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={p.totals.basic_total} highlight format={totalFmt} roundWhole />
                       )}
                     </>
                   ) : (
@@ -435,7 +450,7 @@ export function OrderPreview(p: Props) {
                         <TotalsRow key={`xm${i}`} colSpan={totalsColSpan} label={r.label} value={r.value} highlight={r.bold} />
                       ))}
                       {!p.docMeta?.hideDefaultGrandTotal && (
-                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={grandShown} highlight />
+                        <TotalsRow colSpan={totalsColSpan} label="Grand Total" value={grandShown} highlight roundWhole />
                       )}
                       {p.format === "MR" && p.charges.mr_advance_enabled && (() => {
                         const mode = p.charges.mr_advance_mode || "percent";
@@ -483,7 +498,7 @@ export function OrderPreview(p: Props) {
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Basic Total</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifBasic.toLocaleString(cifLocale, { maximumFractionDigits: 0 })}
+                {cifSym} {cifBasic.toLocaleString(cifLocale, md)}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center border-b">
@@ -493,13 +508,13 @@ export function OrderPreview(p: Props) {
                   : ""}
               </div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifSea.toLocaleString(cifLocale, { maximumFractionDigits: 0 })}
+                {cifSym} {cifSea.toLocaleString(cifLocale, md)}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto] items-center bg-muted/40">
               <div className="px-2 py-1.5 text-right font-bold">EX Work CIF Port</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-40">
-                {cifSym} {cifGrand.toLocaleString(cifLocale, { maximumFractionDigits: 0 })}
+                {cifSym} {cifGrand.toLocaleString(cifLocale, md)}
               </div>
             </div>
             {cifRate > 0 && (
@@ -571,21 +586,21 @@ export function OrderPreview(p: Props) {
               <div className="px-2 py-1.5 text-right font-bold">Price Ex-works {p.charges.currency}</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">{fxSymbol}</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {(p.totals.basic_total || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                {(p.totals.basic_total || 0).toLocaleString("en-US", md)}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto_auto] items-center border-b">
               <div className="px-2 py-1.5 text-right font-bold">Amount in INR @{fxRate}</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {inrAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                {inrAmount.toLocaleString("en-IN", md)}
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto_auto] items-center">
               <div className="px-2 py-1.5 text-right font-bold">Advance Required @ {advancePct}%</div>
               <div className="px-2 py-1.5 border-l text-right font-semibold w-12">₹</div>
               <div className="px-2 py-1.5 border-l text-right font-bold tabular-nums w-32">
-                {advanceAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                {advanceAmount.toLocaleString("en-IN", md)}
               </div>
             </div>
           </div>
@@ -618,7 +633,7 @@ export function OrderPreview(p: Props) {
           />
         )}
 
-        {p.format !== "MR" && p.preparedBy && (
+        {p.format !== "MR" && p.preparedBy && !p.exportMode && (
           <div className="text-xs text-right pt-2 border-t">
             <div className="text-muted-foreground">Prepared by</div>
             <div className="font-medium">{p.preparedBy}</div>
@@ -626,6 +641,7 @@ export function OrderPreview(p: Props) {
         )}
       </div>
     </Card>
+    </ExportModeContext.Provider>
   );
 }
 
@@ -641,16 +657,18 @@ function ExMurthalBlock({
   forceUsdRate?: number;
   forcedUsd?: boolean;
 }) {
+  const exportMode = useExportMode();
+  const md = moneyDigits(exportMode);
   const displayUSD = forcedUsd || forceUsdRate > 0 || (c.display_currency === "USD" && (fxRate || 0) > 0);
   const usdRate = forceUsdRate > 0 ? forceUsdRate : (fxRate || 1);
   const usdSym = forceUsdRate > 0 ? "$" : (fxSymbol || "$");
   const inr = (n: number) =>
-    `₹ ${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    `₹ ${(n || 0).toLocaleString("en-IN", md)}`;
   const usd = (n: number) =>
-    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", md)}`;
   // When toolbar-forced USD: state values are already in USD — show "$ n" without re-dividing.
   const usdDirect = (n: number) =>
-    `$ ${(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    `$ ${(n || 0).toLocaleString("en-US", md)}`;
   const fmtAmt = (n: number) =>
     forcedUsd ? usdDirect(n) : displayUSD ? usd(n) : inr(n);
   // EXW Murthal — when "Amount in INR" rate is set, values up to Landed
@@ -675,7 +693,7 @@ function ExMurthalBlock({
     <div className="border rounded overflow-hidden text-xs">
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
-          <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { maximumFractionDigits: 0 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 italic">Ex-works {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", md)} @ ₹{fxRate}</div>
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{inr(m.base_amount)}</div>
         </div>
       )}
@@ -703,7 +721,7 @@ function ExMurthalBlock({
               <R k="Freight" v={m.freight} />
             )}
             {c.landed_gst_enabled && <R k="GST" v={m.gst} />}
-            <R k="Grand Total" v={m.grand_total} bold />
+            <R k="Grand Total" v={exportMode ? roundGrandTotalForExport(m.grand_total) : m.grand_total} bold />
             {c.landed_discount_enabled && m.discount > 0 && (
               <R k="One-time Discount" v={-m.discount} />
             )}
@@ -729,6 +747,8 @@ function ExTurkeyBlock({
   basicFX: number;
   forceUsdRate?: number;
 }) {
+  const exportMode = useExportMode();
+  const md = moneyDigits(exportMode);
   // Phase 1: when user picks display_currency="USD" on a GMS Turkey OA/PI
   // and a cost-sheet $ rate is set, render the totals block in USD by
   // dividing each INR value by the rate. The math itself stays INR-based.
@@ -737,9 +757,9 @@ function ExTurkeyBlock({
   const usdRate = (fxRate || 0) > 0 ? fxRate : (forceUsdRate || 1);
   const usdSym = "$";
   const inr = (n: number) =>
-    `₹ ${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    `₹ ${(n || 0).toLocaleString("en-IN", md)}`;
   const usd = (n: number) =>
-    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    `${usdSym} ${((n || 0) / (usdRate || 1)).toLocaleString("en-US", md)}`;
   const fmtAmt = (n: number) => (displayUSD ? usd(n) : inr(n));
   const Row = ({ k, v, bold }: { k: string; v: number; bold?: boolean }) => (
     <div className={`grid grid-cols-[1fr_auto] items-center border-b last:border-b-0 ${bold ? "bg-muted/40" : ""}`}>
@@ -778,7 +798,7 @@ function ExTurkeyBlock({
       )}
       {isFX && (
         <div className="grid grid-cols-[1fr_auto] items-center border-b bg-muted/30">
-          <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", { maximumFractionDigits: 0 })} @ ₹{fxRate}</div>
+          <div className="px-2 py-1.5 italic">EXW Turkey {c.currency} {fxSymbol}{basicFX.toLocaleString("en-US", md)} @ ₹{fxRate}</div>
           <div className="px-2 py-1.5 border-l text-right tabular-nums w-40">{fmtAmt(t.base_amount)}</div>
         </div>
       )}
@@ -795,7 +815,7 @@ function ExTurkeyBlock({
       {c.turkey_pf_enabled && <Row k={pfLbl} v={t.pf} />}
       {c.turkey_freight_enabled && t.freight > 0 && <Row k="Freight" v={t.freight} />}
       {c.turkey_gst_enabled && <Row k={gstLbl} v={t.gst} />}
-      <Row k="Grand Total" v={t.grand_total} bold />
+      <Row k="Grand Total" v={exportMode ? roundGrandTotalForExport(t.grand_total) : t.grand_total} bold />
       {c.turkey_discount_enabled && t.discount > 0 && (
         <Row k="One-time Discount" v={-t.discount} />
       )}
@@ -892,6 +912,8 @@ function GMSTermsBlock({
 }
 
 function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankDetails; preparedBy?: string }) {
+  // Export/Print: signature block shows only "Yours faithfully / M.R. ENGINEERS".
+  const hideCreator = useExportMode();
   return (
     <div className="space-y-0 text-[11px] border-t-2 border-foreground mt-2 pdf-keep-group">
       {/* Amount in words band */}
@@ -926,7 +948,7 @@ function MRPostItems({ terms, bank, preparedBy }: { terms?: string; bank?: BankD
           />
           <div className="text-right">
             <div className="font-bold tracking-wide">M.R. ENGINEERS</div>
-            {preparedBy && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
+            {preparedBy && !hideCreator && <div className="text-[10px] text-muted-foreground">{preparedBy}</div>}
           </div>
         </div>
       </div>
@@ -976,22 +998,26 @@ function AddressBlock({ title, addr, fallbackName }: { title: string; addr: Addr
 }
 
 function Line({ k, v, bold }: { k: string; v: number; bold?: boolean }) {
+  const exportMode = useExportMode();
   return (
     <div className={`flex justify-between ${bold ? "font-bold" : ""}`}>
       <span>{k}</span>
-      <span className="tabular-nums">{fmt(v)}</span>
+      <span className="tabular-nums">{fmt(v, exportMode)}</span>
     </div>
   );
 }
 
-function TotalsRow({ label, value, highlight, colSpan = 6, format }: { label: string; value: number; highlight?: boolean; colSpan?: number; format?: (n: number) => string }) {
+function TotalsRow({ label, value, highlight, colSpan = 6, format, roundWhole }: { label: string; value: number; highlight?: boolean; colSpan?: number; format?: (n: number) => string; roundWhole?: boolean }) {
+  const exportMode = useExportMode();
+  // Export-only: the final Grand Total is shown as a whole rupee value.
+  const shown = exportMode && roundWhole ? roundGrandTotalForExport(value) : value;
   return (
     <tr className={highlight ? "bg-yellow-200/70" : ""}>
       <td colSpan={colSpan} className={`border border-foreground px-1.5 py-1 text-right align-middle oa-cell-wrap ${highlight ? "font-bold" : "font-semibold"}`}>
         <div className="oa-cell-inner">{label}</div>
       </td>
       <td className={`border border-foreground px-1.5 py-1 text-right align-middle tabular-nums oa-cell-nowrap ${highlight ? "font-bold" : ""}`}>
-        <div className="oa-cell-inner">{format ? format(value) : value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+        <div className="oa-cell-inner">{format ? format(shown) : shown.toLocaleString("en-IN", moneyDigits(exportMode))}</div>
       </td>
     </tr>
   );
