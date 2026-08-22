@@ -160,7 +160,25 @@ export async function capturePreviewToPdf(
     });
 
   });
+
+  // Same rasteriser correction for the GMS/EXW totals card, which is built
+  // from vertically-centered grid/flex rows (Base Amount, Landed Price, P&F,
+  // Grand Total, Net Payable) rather than an `.oa-items` table.
+  clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const cs = window.getComputedStyle(el);
+    if (cs.alignItems !== "center") return;
+    if (!/grid|flex/.test(cs.display)) return;
+    Array.from(el.children).forEach((childNode) => {
+      const child = childNode as HTMLElement;
+      if (!child.textContent || !child.textContent.trim()) return;
+      if (child.querySelector("table, img")) return;
+      const fs = parseFloat(window.getComputedStyle(child).fontSize) || 10;
+      child.style.setProperty("position", "relative", "important");
+      child.style.setProperty("top", `${(-fs * RASTER_TEXT_DROP_EM).toFixed(2)}px`, "important");
+    });
+  });
   await new Promise((r) => requestAnimationFrame(() => r(null)));
+
 
   // Overflow-safe capture width. Some column configurations (e.g. 5-col MR
   // with Rate/Amount hidden and long no-wrap totals like "1,88,59,552.00")
