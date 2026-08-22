@@ -137,9 +137,21 @@ export async function capturePreviewToPdf(
         cell.style.setProperty("padding-top", `${pad.toFixed(2)}px`, "important");
         cell.style.setProperty("padding-bottom", `${pad.toFixed(2)}px`, "important");
         const inner = cell.querySelector<HTMLElement>(".oa-cell-inner");
-        if (inner) inner.style.setProperty("vertical-align", "top", "important");
+        if (inner) {
+          inner.style.setProperty("vertical-align", "top", "important");
+          // html2canvas paints glyphs near the BOTTOM of each line box
+          // instead of honouring the half-leading, so even perfectly
+          // symmetric padding renders text hugging the lower border.
+          // Compensate with a purely visual (relative) upward nudge that
+          // does not change row height or the Live Preview.
+          const fs = parseFloat(window.getComputedStyle(inner).fontSize) || 10;
+          const nudge = fs * RASTER_TEXT_DROP_EM;
+          inner.style.setProperty("position", "relative", "important");
+          inner.style.setProperty("top", `${(-nudge).toFixed(2)}px`, "important");
+        }
       });
     });
+
   });
   await new Promise((r) => requestAnimationFrame(() => r(null)));
 
